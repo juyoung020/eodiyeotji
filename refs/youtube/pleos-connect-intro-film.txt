@@ -1,0 +1,79 @@
+[00:04] For years, cars have been evolving toward smartphones.
+[00:08] But for most  people, it hasn’t been something they could truly experience.
+[00:11] Now, that experience about to become part of everyday life for all of us.
+[00:16] Introducing Pleos Connect, Hyundai Motor Group’s next-generation infotainment system.
+[00:23] Previous infotainment systems were at their best the moment you first experienced them.
+[00:30] As life evolves and technology advances, expectations rise.
+[00:33] But real experiences still fall short.
+[00:36] However, Pleos Connect is different. From the moment you meet it, it begins to evolve with you.
+[00:43] Because Pleos Connect is always connected to the network, it can be updated whenever needed.
+[00:49] OS updates can improve usability, enhance stability, and even add new features.
+[00:56] Built on AAOS, the Pleos Connect App Market extends the smartphone app ecosystem into the car
+[01:03] and opens up new in-car experiences through specially designed apps.
+[01:08] Maps and driving information are continuously updated in real time.
+[01:13] A mobile-like display and intuitive UX make it easy to use from the start.
+[01:20] And throughout all of this, Gleo, the Agentic AI of Pleos Connect, is there to help.
+[01:26] Let's give it a try.
+[01:28] Gleo, introduce Pleos Connect.
+[01:31] Pleos Connect is Hyundai Motor Group’s next-generation infotainment system,
+[01:34] designed to deliver a new mobility experience.
+[01:37] With integrated control of the vehicle environment,
+[01:40] Pleos Connect will make your driving and daily life easier and more convenient.
+[01:44] Let’s see how Pleos Connect transforms everyday life.
+[01:54] Pleos Connect recognizes you the moment you come nearby.
+[02:00] As soon as you touch the door handle, the doors unlock,
+[02:02] and once you take your seat, your seat position is adjusted automatically.
+[02:06] Thanks to its BLE connection with your smartphone,
+[02:08] it works smoothly even in areas with unstable network coverage.
+[02:11] Now, try telling Gleo, the Agentic AI, where you want to go.
+[02:16] Gleo, take me to 'Songpa Tower'.
+[02:19] 지금 이 시간,
+[02:20] [11.1]It not only finds the best route for you at that very moment,
+[02:24] but if charging is needed, it can even suggest a route that includes a stop at a charging station.
+[02:38] You have arrived at your destination. Ending route guidance.
+[02:42] - Oh, hey.  You’re here.
+- Hi.
+[02:46] I found a really great playlist while I was waiting. Mind if I install the app?
+[02:54] The app ecosystem that has shaped everyday life across devices now extends into the car with Pleos Connect.
+[03:01] Built on AAOS, Pleos Connect makes it easy for existing mobile developers to create apps for vehicles as well.
+[03:07] From apps people already use on mobile devices to apps designed specifically for the in-vehicle experience,
+[03:11] Pleos App Market will continue to make our journeys richer over time.
+[03:17] Gleo, open Essential.
+[03:21] Gleo can also launch third-party apps.
+[03:24] With future updates, Gleo will enable control of third-party app functions.
+[03:30] This is it!
+[03:34] Pleos Connect lets you view multiple types of information at once through a split-screen layout.
+[03:39] And even while driving, you can easily move or close screens using three-finger touch gestures.
+[03:46] It's that simple!
+[03:49] -Let’s go.
+-Okay.
+[04:01] It’s getting pretty warm now.
+[04:03] Gleo, turn the ventilated seat up high and open the window.
+[04:07] This is how Gleo understands the context of the conversation and handles multiple requests at once.
+[04:13] There is no longer any need to ask for each action separately and wait for them one by one.
+[04:17] Gleo, me too.
+[04:19] Just say, “Me too.” Pretty impressive, isn’t it?
+[04:22] With advanced natural language understanding and
+[04:25] Gleo can understand even ambiguous or context-based expressions.
+[04:29] It can also identify where the speaker is sitting, whether they’re in the front passenger or rear seats,
+[04:34] making requests feel more like talking to a real person.
+[04:37] I’ve got a housewarming… Should I bring something?
+[04:39] What should I get?
+[04:41] Let me ask Gleo.
+[04:42] - Gleo!
+- Wait a second.
+[04:44] Yes, I’m listening.
+[04:46] How about flowers? My friend just opened a shop called 'Blooming Day'. It’s nearby.
+[04:52] Gleo, do you know a flower shop called 'Blooming Day' in Jamsil?
+[04:56] Blooming Day in Jamsil was newly registered last Tuesday. There are no reviews yet.
+[05:02] If there is something you want to know, just ask Gleo.
+[05:05] It can quickly give you answers using web search and a wide range of content information.
+[05:10] Gleo, then add that to the route too.
+[05:13] If the search result is a place, it can also be added directly to your navigation route.
+[05:16] With real-time updates,
+[05:19] the navigation system reflects the latest map data and road conditions to guide you on the best route.
+[05:24] Pleos Connect recognizes the user, enables easier and more natural conversations,
+[05:29] and always provides the latest information.
+[05:33] Because it’s in a car, it may feel new, but it can still feel familiar.
+[05:38] But new experiences may emerge in unexpected ways.
+[05:42] Because Pleos Connect will continue to evolve and expand from today onward.
