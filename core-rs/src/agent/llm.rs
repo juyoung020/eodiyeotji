@@ -83,18 +83,26 @@ pub struct Params {
 
 pub struct LlmClient {
     cfg: LlmConfig,
+    /// 연결을 다시 쓰는 클라이언트 (보통 이것)
     http: ureq::Agent,
+    /// 연결을 남기지 않는 클라이언트 — 다시 쓴 연결이 서버 쪽에서 이미 닫혀 실패했을 때 한 번만 새 연결로 다시 보낸다
+    fresh: ureq::Agent,
     url: String,
 }
 
 impl LlmClient {
     pub fn new(cfg: LlmConfig) -> Self {
-        let http = ureq::AgentBuilder::new()
-            .timeout_connect(Duration::from_millis(cfg.connect_timeout_ms.max(200) as u64))
-            .timeout_read(Duration::from_millis(cfg.read_timeout_ms.max(1_000) as u64))
-            .build();
+        let build = |idle: usize| {
+            ureq::AgentBuilder::new()
+                .timeout_connect(Duration::from_millis(cfg.connect_timeout_ms.max(200) as u64))
+                .timeout_read(Duration::from_millis(cfg.read_timeout_ms.max(1_000) as u64))
+                .max_idle_connections(idle)
+                .max_idle_connections_per_host(idle)
+                .build()
+        };
+        let (http, fresh) = (build(4), build(0));
         let url = format!("{}/chat/completions", cfg.base_url.trim().trim_end_matches('/'));
-        Self { cfg, http, url }
+        Self { cfg, http, fresh, url }
     }
 
     pub fn config(&self) -> &LlmConfig {
@@ -146,24 +154,57 @@ impl LlmClient {
         parse_completion(&raw, start.elapsed().as_millis() as u64)
     }
 
+    /// 요청을 보내고 응답 본문 읽개를 돌려준다. 이미 맺어 둔 연결이 서버 쪽에서 닫혀(쉬는 연결 정리, 에뮬레이터 NAT)
+    /// 보내기·첫 응답 읽기에서 끊기면 **새 연결로 한 번만** 다시 보낸다 — 앱 시작 뒤 첫 질문이 "연결할 수 없어요"로
+    /// 끝나던 원인. 연결 자체가 안 되는 것(서버 꺼짐·주소 틀림)은 다시 보내지 않는다 (기다림만 두 배가 된다).
     fn post(&self, body: &Value) -> Result<Box<dyn Read + Send + Sync>, LlmError> {
-        let mut req = self.http.post(&self.url).set("Content-Type", "application/json").set("Accept", "application/json, text/event-stream");
+        let text = body.to_string();
+        let start = Instant::now();
+        match self.send(&self.http, &text) {
+            // 금방 끊긴 것만 (읽기 시간 초과까지 기다린 실패는 서버가 바쁜 것이라 다시 보내도 같다)
+            Err(Sent::Transport(kind, msg)) if retry_on_fresh_connection(kind) && start.elapsed() < Duration::from_millis(1_500) => {
+                super::alog!("[llm] 연결이 끊겨 새 연결로 다시 보냄: {msg}");
+                self.send(&self.fresh, &text).map_err(Sent::into_error)
+            }
+            r => r.map_err(Sent::into_error),
+        }
+    }
+
+    fn send(&self, http: &ureq::Agent, text: &str) -> Result<Box<dyn Read + Send + Sync>, Sent> {
+        let mut req = http.post(&self.url).set("Content-Type", "application/json").set("Accept", "application/json, text/event-stream");
         if !self.cfg.api_key.trim().is_empty() {
             req = req.set("Authorization", &format!("Bearer {}", self.cfg.api_key.trim()));
         }
-        match req.send_string(&body.to_string()) {
+        match req.send_string(text) {
             Ok(resp) => Ok(resp.into_reader()),
             Err(ureq::Error::Status(code, resp)) => {
                 let msg: String = resp.into_string().unwrap_or_default().chars().take(300).collect();
-                if code >= 500 || code == 429 {
-                    Err(LlmError::Unreachable(format!("HTTP {code}: {msg}")))
-                } else {
-                    Err(LlmError::Http(code, msg))
-                }
+                Err(Sent::Status(code, msg))
             }
-            Err(e) => Err(LlmError::Unreachable(e.to_string())),
+            Err(e) => Err(Sent::Transport(e.kind(), e.to_string())),
         }
     }
+}
+
+/// 보내기 실패 (안에서만 쓴다).
+enum Sent {
+    Status(u16, String),
+    Transport(ureq::ErrorKind, String),
+}
+
+impl Sent {
+    fn into_error(self) -> LlmError {
+        match self {
+            Sent::Status(code, msg) if code >= 500 || code == 429 => LlmError::Unreachable(format!("HTTP {code}: {msg}")),
+            Sent::Status(code, msg) => LlmError::Http(code, msg),
+            Sent::Transport(_, msg) => LlmError::Unreachable(msg),
+        }
+    }
+}
+
+/// 새 연결로 다시 보낼 만한 실패인가: 맺어진 연결에서 읽기·쓰기가 끊긴 것(Io)만. 연결 실패·DNS는 아니다.
+fn retry_on_fresh_connection(kind: ureq::ErrorKind) -> bool {
+    matches!(kind, ureq::ErrorKind::Io | ureq::ErrorKind::BadStatus)
 }
 
 /// 스트리밍하지 않은 응답 본문 해석.

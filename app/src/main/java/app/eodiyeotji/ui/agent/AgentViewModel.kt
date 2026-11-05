@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.agent
 
+import android.util.Log
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,11 +11,15 @@ import app.eodiyeotji.core.MemoryHit
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.agent.RecommendedCourse
 import app.eodiyeotji.core.lastKnownLocation
+import app.eodiyeotji.pleos.PleosSpeech
+import app.eodiyeotji.pleos.PleosTts
+import app.eodiyeotji.pleos.SpeechResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -29,6 +34,26 @@ import kotlinx.coroutines.launch
 data class AgentUiState(
     val isDriving: Boolean = false,
     val turn: AgentTurn? = null,
+    val voice: VoiceUi = VoiceUi(),
+)
+
+/** 말로 묻기·답 읽기 상태. */
+@Immutable
+data class VoiceUi(
+    /** 마이크가 듣는 중 */
+    val listening: Boolean = false,
+    /** 지금까지 알아들은 말 (듣는 중에 보인다) */
+    val partial: String = "",
+    /** 목소리 크기 0~1 (듣는 표시가 출렁인다) */
+    val level: Float = 0f,
+    /** 답을 읽는 중 */
+    val speaking: Boolean = false,
+    /** 답 뒤에 이어서 듣는 중 ("응", "2번으로 가자" 같은 한마디) */
+    val followUp: Boolean = false,
+    /** 이어 듣기가 추천 코스 고르기다 ("2번으로 가자") — 아니면 안내 제안 ("응") */
+    val followUpCourses: Boolean = false,
+    /** 잠깐 보이는 안내 ("말씀을 듣지 못했어요" 등) */
+    val note: String? = null,
 )
 
 /** 질문 하나와 그 답. 새 질문을 하면 통째로 바뀐다. */
@@ -84,26 +109,78 @@ sealed interface ActionState {
  * 기억 에이전트 대화 상태.
  * - 에이전트 Flow는 Dispatchers.Default에서 모은다 (UI 스레드는 상태만 받아 그린다).
  * - 새 질문을 하면 이전 질문 수집·행동을 취소한다. 늦게 온 이전 질문 이벤트는 [AgentTurn.id]로 걸러 버린다.
+ * - 말로 묻기: 마이크 → [PleosSpeech]가 듣고 알아들은 말을 [ask]에 넘긴다. 운전 중에는 답을 [PleosTts]로 읽고,
+ *   안내 제안·추천 코스가 있으면 이어서 한 번 더 듣는다 ("응" 한마디로 안내 시작, "2번으로 가자").
+ *   새 질문·마이크·닫기를 하면 읽던 답을 멈춘다.
  */
 @HiltViewModel
 class AgentViewModel @Inject constructor(
     private val agent: AgentPort,
     private val driving: DrivingStatePort,
     private val core: EodiCore,
+    private val speech: PleosSpeech,
+    private val tts: PleosTts,
 ) : ViewModel() {
 
     private val turn = MutableStateFlow<AgentTurn?>(null)
+    private val note = MutableStateFlow<String?>(null)
+    private val followUp = MutableStateFlow(false)
+    private val followUpCourses = MutableStateFlow(false)
 
-    val state: StateFlow<AgentUiState> = combine(turn, driving.isDriving) { t, d -> AgentUiState(isDriving = d, turn = t) }
+    private val voice = combine(speech.state, tts.speaking, followUp, followUpCourses, note) { l, s, f, fc, n ->
+        VoiceUi(listening = l.listening, partial = l.partial, level = l.level, speaking = s, followUp = f && l.listening, followUpCourses = fc, note = n)
+    }
+
+    val state: StateFlow<AgentUiState> = combine(turn, driving.isDriving, voice) { t, d, v -> AgentUiState(isDriving = d, turn = t, voice = v) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AgentUiState(isDriving = driving.isDriving.value))
 
     private var askJob: Job? = null
     private var actionJob: Job? = null
+    private var noteJob: Job? = null
     private var lastId = 0L
+
+    init {
+        viewModelScope.launch { speech.results.collect(::onSpeech) }
+    }
+
+    /** 마이크 버튼: 듣는 중이면 "다 말했다"(지금까지 들은 말로 묻기), 아니면 듣기 시작. 읽던 답은 멈춘다. */
+    fun voice() {
+        if (speech.state.value.listening) {
+            speech.stop()
+        } else {
+            listen(followUp = false)
+        }
+    }
+
+    /** 듣기 취소 (× 버튼). */
+    fun cancelVoice() {
+        followUp.value = false
+        speech.cancel()
+    }
+
+    /** 읽기 멈춤. */
+    fun stopSpeaking() = tts.stop()
+
+    /** Android 인식기로 대신 들어야 하는데 마이크 권한이 없으면 true (화면이 권한을 물은 뒤 [voice]). */
+    fun needsMicPermission(): Boolean = speech.needsMicPermission()
+
+    /** 마이크 권한을 거절당함. */
+    fun micPermissionDenied() = showNote(MSG_NO_MIC)
+
+    /** 지금 답을 다시 읽는다 (정차 중 스피커 버튼). */
+    fun speakAnswer() {
+        turn.value?.takeIf { it.phase == AnswerPhase.Done || it.phase == AnswerPhase.Failed }?.let { t ->
+            tts.speak((t.error ?: t.answer).replace("♥", "하트 "))
+        }
+    }
 
     fun ask(utterance: String) {
         val question = utterance.trim()
         if (question.isEmpty()) return
+        tts.stop()
+        speech.cancel()
+        followUp.value = false
+        note.value = null
         askJob?.cancel()
         actionJob?.cancel()
         val id = ++lastId
@@ -124,7 +201,8 @@ class AgentViewModel @Inject constructor(
             agent.ask(question, context)
                 .catch { e ->
                     if (e is CancellationException) throw e
-                    emit(AgentEvent.Error(e.message ?: e.javaClass.simpleName))
+                    Log.w(TAG, "에이전트 질문 실패", e)
+                    emit(AgentEvent.Error(MSG_FAILED))
                 }
                 .collect { onEvent(id, it) }
         }
@@ -134,7 +212,65 @@ class AgentViewModel @Inject constructor(
     fun clear() {
         askJob?.cancel()
         actionJob?.cancel()
+        tts.stop()
+        speech.cancel()
+        followUp.value = false
         turn.value = null
+    }
+
+    override fun onCleared() {
+        tts.stop()
+        speech.cancel()
+    }
+
+    private fun listen(followUp: Boolean, courses: Boolean = false) {
+        tts.stop()
+        note.value = null
+        this.followUp.value = followUp
+        followUpCourses.value = courses
+        // 이어 듣기는 한마디("응")라 짧게 기다린다
+        if (followUp) speech.start(FOLLOW_UP_LISTEN_MS) else speech.start()
+    }
+
+    private fun onSpeech(r: SpeechResult) {
+        val wasFollowUp = followUp.value
+        followUp.value = false
+        when (r) {
+            is SpeechResult.Final -> ask(r.text)
+            // 답 뒤에 이어 듣다가 아무 말이 없으면 조용히 끝낸다 (운전자가 화면 버튼을 누를 수도 있다)
+            SpeechResult.NoSpeech -> if (!wasFollowUp) showNote(MSG_NO_SPEECH)
+            is SpeechResult.Failed -> if (!wasFollowUp) {
+                showNote(r.message)
+                if (driving.isDriving.value) tts.speak(r.message)
+            }
+        }
+    }
+
+    private fun showNote(text: String) {
+        note.value = text
+        noteJob?.cancel()
+        noteJob = viewModelScope.launch {
+            delay(NOTE_MS)
+            note.value = null
+        }
+    }
+
+    /**
+     * 답이 끝났다: 운전 중이면 짧은 답을 읽고, 이어서 고를 것(안내 제안·추천 코스)이 있으면 한 번 더 듣는다
+     * ("응" → 안내 시작, "2번으로 가자"). 정차 중에는 읽지 않는다 (화면 스피커 버튼으로 [speakAnswer]).
+     */
+    private fun speakIfDriving(id: Long) {
+        if (!driving.isDriving.value) return
+        val t = turn.value?.takeIf { it.id == id } ?: return
+        // 소리로 읽을 글: 화면 기호는 말로 ("♥ 513" → "하트 513")
+        val text = (t.error ?: t.answer).replace("♥", "하트 ")
+        if (text.isBlank()) return
+        val choice = t.error == null && t.action is ActionState.Idle && (t.proposals.isNotEmpty() || t.courses.isNotEmpty())
+        val courses = t.courses.size > 1
+        tts.speak(text) {
+            // 다 읽은 뒤에도 같은 질문 화면이고 운전 중일 때만
+            if (choice && turn.value?.id == id && driving.isDriving.value && !speech.needsMicPermission()) listen(followUp = true, courses = courses)
+        }
     }
 
     fun retry() {
@@ -192,11 +328,17 @@ class AgentViewModel @Inject constructor(
                 if (first) loadMap(id, event.hit.episode.facts.day)
             }
             is AgentEvent.ActionProposal -> updateTurn(id) { it.copy(proposals = it.proposals + event) }
-            AgentEvent.Done -> updateTurn(id) {
-                val t = if (it.coursesFresh) it else it.copy(courses = emptyList(), courseFocus = 0)
-                if (t.phase == AnswerPhase.Failed) t else t.copy(phase = AnswerPhase.Done)
+            AgentEvent.Done -> {
+                updateTurn(id) {
+                    val t = if (it.coursesFresh) it else it.copy(courses = emptyList(), courseFocus = 0)
+                    if (t.phase == AnswerPhase.Failed) t else t.copy(phase = AnswerPhase.Done)
+                }
+                speakIfDriving(id)
             }
-            is AgentEvent.Error -> updateTurn(id) { it.copy(phase = AnswerPhase.Failed, error = event.message) }
+            is AgentEvent.Error -> {
+                updateTurn(id) { it.copy(phase = AnswerPhase.Failed, error = event.message) }
+                speakIfDriving(id)
+            }
         }
     }
 
@@ -219,5 +361,14 @@ class AgentViewModel @Inject constructor(
 
     private inline fun updateTurn(id: Long, crossinline f: (AgentTurn) -> AgentTurn) {
         turn.update { t -> if (t != null && t.id == id) f(t) else t }
+    }
+
+    private companion object {
+        const val TAG = "EodiAgentVm"
+        const val NOTE_MS = 4_000L
+        const val FOLLOW_UP_LISTEN_MS = 7_000L
+        const val MSG_FAILED = "기억을 찾다가 문제가 생겼어요. 다시 물어봐 주세요."
+        const val MSG_NO_SPEECH = "말씀을 듣지 못했어요. 마이크를 누르고 다시 말씀해 주세요."
+        const val MSG_NO_MIC = "마이크 권한이 있어야 말로 물을 수 있어요."
     }
 }

@@ -13,6 +13,32 @@
 //! Kotlin은 `ask`를 백그라운드 스레드에서 부르고, `AgentListener` 콜백을 화면·TTS로 옮기고, `NavAction`을 Pleos 내비로 실행만 한다.
 //! LLM: OpenAI 호환 서버 (개발: 개발 PC의 llama.cpp `llama-server` + Qwen3.5-9B). 서버가 없으면 빠른 길만으로 동작한다.
 
+/// 에이전트 로그. Android에서는 표준 오류(stderr)가 버려지므로 logcat(태그 `EodiRust`)으로, 그 밖(테스트)에서는 stderr로.
+macro_rules! alog {
+    ($($arg:tt)*) => { $crate::agent::log_line(&format!($($arg)*)) };
+}
+pub(crate) use alog;
+
+#[cfg(target_os = "android")]
+pub(crate) fn log_line(msg: &str) {
+    use std::ffi::{c_char, c_int, CString};
+    #[link(name = "log")]
+    extern "C" {
+        fn __android_log_write(prio: c_int, tag: *const c_char, text: *const c_char) -> c_int;
+    }
+    const INFO: c_int = 4;
+    let text = CString::new(msg.replace('\0', " ")).unwrap_or_default();
+    // SAFETY: 두 문자열 모두 NUL로 끝나는 C 문자열이고 호출 동안 살아 있다.
+    unsafe {
+        __android_log_write(INFO, c"EodiRust".as_ptr(), text.as_ptr());
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+pub(crate) fn log_line(msg: &str) {
+    eprintln!("{msg}");
+}
+
 pub mod courses;
 pub mod dates;
 pub mod label;
@@ -30,7 +56,7 @@ mod eval;
 mod tests;
 
 use std::collections::{HashMap, VecDeque};
-use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -154,6 +180,8 @@ pub trait MemoryBackend: Send + Sync {
     fn pending_day_enrichments(&self, limit: u32) -> Result<Vec<DayFacts>, CoreError>;
     fn set_day_enrichment(&self, e: DayEnrichment) -> Result<(), CoreError>;
     fn mark_day_enrichment_failed(&self, day: String, retry_after_ms: i64) -> Result<(), CoreError>;
+    /// 이미 붙은 라벨 중 제목이 [bad]인 날을 다시 대기열에 (반환: 다시 넣은 날 수).
+    fn requeue_day_labels_where(&self, bad: &dyn Fn(&str) -> bool) -> Result<u32, CoreError>;
     /// 추천 코스 상위 [k]개. [from]이 있으면 그 근처 [radius_km] 안 (인기 + 거리), 없으면 전국 인기순
     /// (이때 `distance_km`는 -1 = 모름).
     fn recommend_drive_courses(&self, from: Option<GeoPoint>, radius_km: f64, k: u32) -> Result<Vec<CourseRecommendation>, CoreError>;
@@ -177,6 +205,9 @@ impl MemoryBackend for EodiStore {
     }
     fn mark_day_enrichment_failed(&self, day: String, retry_after_ms: i64) -> Result<(), CoreError> {
         EodiStore::mark_day_enrichment_failed(self, day, retry_after_ms)
+    }
+    fn requeue_day_labels_where(&self, bad: &dyn Fn(&str) -> bool) -> Result<u32, CoreError> {
+        EodiStore::requeue_day_labels_where(self, bad)
     }
     fn recommend_drive_courses(&self, from: Option<GeoPoint>, radius_km: f64, k: u32) -> Result<Vec<CourseRecommendation>, CoreError> {
         match from {
@@ -235,6 +266,8 @@ pub struct MemoryAgent {
     /// 서버가 꺼져 있다고 본 시각까지는 연결하지 않는다 (매 질문마다 연결 대기를 쓰지 않게)
     server_down_until_ms: AtomicI64,
     label_failures: Mutex<HashMap<String, u32>>,
+    /// 이 실행에서 예전 규칙으로 붙은 어색한 제목을 이미 다시 대기열에 넣었나 (`label::label_pending`이 한 번만)
+    label_audit_done: AtomicBool,
 }
 
 #[uniffi::export]
@@ -307,6 +340,7 @@ impl MemoryAgent {
             cancel_gen: AtomicU64::new(0),
             server_down_until_ms: AtomicI64::new(0),
             label_failures: Mutex::new(HashMap::new()),
+            label_audit_done: AtomicBool::new(false),
         })
     }
 
@@ -319,7 +353,8 @@ impl MemoryAgent {
     }
 }
 
-const SERVER_DOWN_COOLDOWN_MS: i64 = 30_000;
+/// 질문 중 LLM 서버에 닿지 않으면 이 동안은 연결을 시도하지 않고 기기 안 검색으로 답한다 (매 질문마다 연결 대기를 쓰지 않게).
+const SERVER_DOWN_COOLDOWN_MS: i64 = 15_000;
 
 fn wall_ms() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)

@@ -328,3 +328,34 @@ fn live_label_one_day() {
     println!("라벨링 {}ms {rep:?} → {:?}", t0.elapsed().as_millis(), backend.saved.lock().unwrap());
     assert_eq!(rep.labeled, 1);
 }
+
+/// 실제 기기 DB 사본(LABEL_DB)의 라벨이 필요한 날을 실제 서버로 라벨링해 제목을 본다 (사본만 바꾼다).
+#[test]
+fn live_label_device_db_copy() {
+    let Ok(path) = std::env::var("LABEL_DB") else { return };
+    if !live() {
+        return;
+    }
+    let store = crate::store::EodiStore::open(path, 540).expect("DB");
+    let n = store.requeue_day_labels_where(&|t: &str| label::title_problem(t, &[]).is_some() || std::env::var("LABEL_ALL").is_ok()).unwrap();
+    println!("다시 라벨링할 날 {n}");
+    let agent = MemoryAgent::new(store.clone(), cfg(&url()));
+    let t0 = Instant::now();
+    let rep = agent.label_pending_days(12, 540);
+    println!("{}ms {rep:?}", t0.elapsed().as_millis());
+}
+
+/// 앱 시작 흐름 재현: 미리 데우기 → 몇 초 쉼(서버가 쉬는 연결을 닫는다) → 첫 질문이 LLM으로 가야 한다.
+#[test]
+fn live_first_question_after_warm_up() {
+    if !live() {
+        return;
+    }
+    let agent = MemoryAgent::with_backend(FakeBackend::new(), cfg(&url()), AgentOptions::default());
+    assert!(agent.warm_up());
+    std::thread::sleep(std::time::Duration::from_secs(7));
+    let t0 = Instant::now();
+    let r = ask(&agent, "엄마랑 갔던 순두부집 어디였지?", ctx(true));
+    println!("첫 질문 {}ms {:?} → {}", t0.elapsed().as_millis(), r.done().source, r.answer());
+    assert_eq!(r.done().source, AnswerSource::Llm, "{}", r.answer());
+}

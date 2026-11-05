@@ -97,6 +97,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.service)
     implementation(libs.pleos.fusedlocation)
     implementation(libs.pleos.navihelper)
+    implementation(libs.pleos.stt)
+    implementation(libs.pleos.tts)
     implementation(libs.maplibre.android)
     implementation(libs.coil.compose)
 
