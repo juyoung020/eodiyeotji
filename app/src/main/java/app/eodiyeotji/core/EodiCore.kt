@@ -148,6 +148,8 @@ data class DaySummary(
     val driveMillis: Long,
     val firstMs: Long,
     val lastMs: Long,
+    /** 그날 이름 있는 머문 곳 앞 3개 (도착 순서). 예: ["경포해변", "초당순두부마을", "안목해변"] */
+    val stopNames: List<String> = emptyList(),
 )
 
 data class TripSummary(
@@ -182,7 +184,14 @@ data class NaviHint(
 )
 
 /** 머문 곳. 하루 마지막 도착지처럼 아직 떠나지 않았으면 leaveMs == arriveMs ([isOpen]). [place]는 아직 모르면 null. */
-data class StaySummary(val center: LatLon, val arriveMs: Long, val leaveMs: Long, val place: PlaceLabel? = null) {
+data class StaySummary(
+    val center: LatLon,
+    val arriveMs: Long,
+    val leaveMs: Long,
+    val place: PlaceLabel? = null,
+    /** 그날 머문 곳 중 몇 번째인지 (1부터, 지도 핀 번호와 같다). */
+    val order: Int = 0,
+) {
     val isOpen: Boolean get() = leaveMs == arriveMs
 }
 
@@ -227,6 +236,7 @@ private fun RDaySummary.toModel() = DaySummary(
     driveMillis = driveMillis,
     firstMs = firstMs,
     lastMs = lastMs,
+    stopNames = stopNames,
 )
 
 private fun RTripSummary.toModel() = TripSummary(
@@ -234,7 +244,7 @@ private fun RTripSummary.toModel() = TripSummary(
     startPlace?.toModel(), endPlace?.toModel(),
 )
 
-private fun RStaySummary.toModel() = StaySummary(center.toModel(), arriveMs, leaveMs, place?.toModel())
+private fun RStaySummary.toModel() = StaySummary(center.toModel(), arriveMs, leaveMs, place?.toModel(), order.toInt())
 
 private fun RPlaceLabel.toModel() = PlaceLabel(
     name, category, address,
