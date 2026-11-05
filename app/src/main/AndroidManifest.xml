@@ -16,6 +16,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- 차량을 켜면(부팅) 앱을 열지 않아도 기록 대기를 시작하기 위해. normal -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- 머문 곳·출발/도착 지점을 실제 장소 이름으로 보여 주려고 지도 API(카카오 로컬·OSM)에 좌표를 묻는다. normal -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 오프라인이면 장소 이름 요청을 멈추고, 다시 연결되면 이어서 묻기 위해 연결 상태를 본다. normal -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:name=".EodiApp"
