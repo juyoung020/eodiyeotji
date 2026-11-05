@@ -94,6 +94,10 @@ pub struct DaySummary {
     /// 그날 머문 곳 중 이름이 있는 것의 이름, 도착 시각순으로 앞에서 최대 3개 (이름 없는 머문 곳은 건너뛴다).
     /// 목록의 "경포해변 · 초당순두부마을 · 안목해변" 한 줄용. 이름이 바뀌면 그 장소가 나오는 날의 요약을 다시 만든다.
     pub stop_names: Vec<String>,
+    /// LLM이 붙인 하루 제목 (예: "비 오는 날 강릉 순두부 원정"). 출퇴근뿐인 날은 규칙 제목 ("평소 출퇴근"). 아직 없으면 None.
+    pub title: Option<String>,
+    /// 하루 태그 (예: "바다", "여행", "가족")
+    pub tags: Vec<String>,
 }
 
 /// 주행 하나.
@@ -258,6 +262,8 @@ impl EodiStore {
                 first_ms: r.get(5)?,
                 last_ms: r.get(6)?,
                 stop_names: split_names(&r.get::<_, String>(7)?),
+                title: None,
+                tags: Vec::new(),
             })
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
@@ -564,6 +570,8 @@ impl DayAcc {
             first_ms,
             last_ms,
             stop_names: self.stays.iter().filter_map(|s| Some(s.place.as_ref()?.name.clone())).take(3).collect(),
+            title: None,
+            tags: Vec::new(),
         }
     }
 

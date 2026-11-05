@@ -394,7 +394,9 @@ fn entries_merge_trips_and_stays_in_time_order() {
             drive_millis: 0,
             first_ms: 0,
             last_ms: 0,
-            stop_names: Vec::new()
+            stop_names: Vec::new(),
+            title: None,
+            tags: Vec::new(),
         }
     );
 }

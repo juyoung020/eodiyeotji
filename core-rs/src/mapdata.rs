@@ -221,6 +221,8 @@ mod tests {
                 first_ms: 0,
                 last_ms: 0,
                 stop_names: Vec::new(),
+                title: None,
+                tags: Vec::new(),
             },
             entries: Vec::new(),
         }
