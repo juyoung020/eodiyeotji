@@ -1,4 +1,4 @@
-//! 에이전트 도구 4개 — 작은 모델은 도구가 많으면 잘못 고른다 → 꼭 필요한 것만, 이름·인자는 짧게
+//! 에이전트 도구 5개 — 작은 모델은 도구가 많으면 잘못 고른다 → 꼭 필요한 것만, 이름·인자는 짧게
 //! (도구 호출 JSON 생성이 LLM 지연의 대부분이라 글자 수가 곧 시간이다).
 //!
 //! | 도구 | 하는 일 | 인자 |
@@ -6,7 +6,8 @@
 //! | `find` | 기억 검색 (Rust search_memories) | q: 낱말 ≤3, from/to: YYYY-MM(-DD), kind |
 //! | `day` | 하루의 에피소드·들른 곳 | d: YYYY-MM-DD |
 //! | `course` | 에피소드 코스 (순서·거리·내비 구간) | id, here: 지금 위치에서 최적 순서 |
-//! | `nav` | 안내 **제안**만 (실행은 운전자 확인 뒤 confirm) | mode: course/place/search, id, stop, kw |
+//! | `courses` | 근처 인기 드라이브 추천 코스 (Rust recommend_drive_courses, 커뮤니티) | q: 테마·지역, km, k |
+//! | `nav` | 안내 **제안**만 (실행은 운전자 확인 뒤 confirm) | mode: course/place/search/pick, id, stop, kw, n |
 //!
 //! 결과는 언제나 `{"ok":true,"data":{…}}` 또는 `{"ok":false,"error":"…"}` 봉투에 담은 데이터이고, 작게 줄인다.
 
@@ -15,6 +16,7 @@ use std::sync::OnceLock;
 
 use serde_json::{json, Value};
 
+use super::courses::{self, CourseState};
 use super::dates::{self, fmt_day, hhmm, local_days, parse_ymd, WEEKDAYS};
 use super::llm::ToolCall;
 use super::{AgentContext, MemoryBackend, NavAction, NavProposal};
@@ -24,6 +26,7 @@ pub const FIND: &str = "find";
 pub const DAY: &str = "day";
 pub const COURSE: &str = "course";
 pub const NAV: &str = "nav";
+pub const COURSES: &str = "courses";
 
 const MAX_TERMS: usize = 3;
 const MAX_HITS: usize = 5;
@@ -48,11 +51,17 @@ pub fn definitions() -> &'static Value {
             }), &["q"]),
             f(DAY, "하루의 들른 곳 보기.", json!({"d":{"type":"string","description":"YYYY-MM-DD"}}), &["d"]),
             f(COURSE, "기억의 코스 순서·거리.", json!({"id":{"type":"integer"},"here":{"type":"boolean","description":"지금 위치에서 가장 짧은 순서"}}), &["id"]),
-            f(NAV, "안내 제안(실행은 운전자 허락 뒤). course=그날 코스, place=한 곳, search=내비 검색.", json!({
-                "mode":{"type":"string","enum":["course","place","search"]},
+            f(COURSES, "근처 인기 드라이브 코스 추천(남들이 공유한 코스). 추천·갈 만한 곳 질문에 쓴다.", json!({
+                "q":{"type":"string","description":"테마·지역 낱말 (예: 바다, 강릉). 없으면 비움"},
+                "km":{"type":"number","description":"반경, 기본 50"},
+                "k":{"type":"integer","description":"개수, 기본 3"}
+            }), &[]),
+            f(NAV, "안내 제안(실행은 운전자 허락 뒤). course=그날 코스, place=한 곳, search=내비 검색, pick=추천 코스 n번.", json!({
+                "mode":{"type":"string","enum":["course","place","search","pick"]},
                 "id":{"type":"integer"},
                 "stop":{"type":"string"},
-                "kw":{"type":"string"}
+                "kw":{"type":"string"},
+                "n":{"type":"integer"}
             }), &["mode"]),
         ])
     })
@@ -63,6 +72,7 @@ fn example(name: &str) -> &'static str {
         FIND => r#"{"q":["바다","해변"],"from":"2025-06","to":"2025-08"}"#,
         DAY => r#"{"d":"2025-08-14"}"#,
         COURSE => r#"{"id":12}"#,
+        COURSES => r#"{"q":"바다"}"#,
         _ => r#"{"mode":"course","id":12}"#,
     }
 }
@@ -93,6 +103,8 @@ pub struct Outcome {
     /// 검색 결과 전체 (후보)
     pub hits: Vec<MemoryHit>,
     pub proposal: Option<NavProposal>,
+    /// 추천 코스 목록·고른 코스가 바뀌었다 (화면에 다시 보낸다)
+    pub courses_changed: bool,
 }
 
 /// 잘못된 인자 → 모델에게 무엇이 틀렸는지 돌려준다.
@@ -102,6 +114,7 @@ pub struct Ctx<'a> {
     pub backend: &'a dyn MemoryBackend,
     pub ctx: &'a AgentContext,
     pub cache: &'a mut ToolCache,
+    pub courses: &'a mut CourseState,
     pub proposal_seq: &'a mut u64,
 }
 
@@ -120,7 +133,8 @@ pub fn run(call: &ToolCall, c: &mut Ctx) -> Outcome {
         DAY => day(call, &args, c),
         COURSE => course(call, &args, c),
         NAV => nav(call, &args, c),
-        other => return fail(call, format!("'{other}' 도구는 없습니다. 쓸 수 있는 도구: {FIND}, {DAY}, {COURSE}, {NAV}")),
+        COURSES => recommend(call, &args, c),
+        other => return fail(call, format!("'{other}' 도구는 없습니다. 쓸 수 있는 도구: {FIND}, {DAY}, {COURSE}, {COURSES}, {NAV}")),
     };
     r.unwrap_or_else(|Bad(m)| fail(call, format!("{m} 예: {}", example(&call.name))))
 }
@@ -160,7 +174,7 @@ fn find(call: &ToolCall, a: &Value, c: &mut Ctx) -> Result<Outcome, Bad> {
         data["hint"] = json!("결과 없음. 다른 동의어로 한 번 더 찾거나, 못 찾았다고 답하세요.");
     }
     let focus = hits.first().map(|h| (h.clone(), c.cache.courses.get(&h.episode.facts.id).map(|x| x.0.clone())));
-    Ok(Outcome { call: call.clone(), ok: true, content: ok_json(data), focus, hits, proposal: None })
+    Ok(Outcome { call: call.clone(), ok: true, content: ok_json(data), focus, hits, proposal: None, courses_changed: false })
 }
 
 fn day(call: &ToolCall, a: &Value, c: &mut Ctx) -> Result<Outcome, Bad> {
@@ -178,7 +192,7 @@ fn day(call: &ToolCall, a: &Value, c: &mut Ctx) -> Result<Outcome, Bad> {
     if list.is_empty() {
         data["hint"] = json!("그날 기록이 없습니다.");
     }
-    Ok(Outcome { call: call.clone(), ok: true, content: ok_json(data), focus: None, hits: vec![], proposal: None })
+    Ok(Outcome { call: call.clone(), ok: true, content: ok_json(data), focus: None, hits: vec![], proposal: None, courses_changed: false })
 }
 
 fn course(call: &ToolCall, a: &Value, c: &mut Ctx) -> Result<Outcome, Bad> {
@@ -193,7 +207,7 @@ fn course(call: &ToolCall, a: &Value, c: &mut Ctx) -> Result<Outcome, Bad> {
         "navi_legs": route.legs.len(),
     });
     let focus = c.cache.episodes.get(&id).map(|h| (h.clone(), Some(route.clone())));
-    Ok(Outcome { call: call.clone(), ok: true, content: ok_json(data), focus, hits: vec![], proposal: None })
+    Ok(Outcome { call: call.clone(), ok: true, content: ok_json(data), focus, hits: vec![], proposal: None, courses_changed: false })
 }
 
 /// 코스를 짠다 (Rust course_route). 지금 위치를 알고 [want]면 최적 순서.
@@ -207,9 +221,48 @@ pub fn plan(id: i64, want: bool, c: &mut Ctx) -> Result<(CourseRoute, bool), Bad
     Ok((r, loc.is_some()))
 }
 
+fn recommend(call: &ToolCall, a: &Value, c: &mut Ctx) -> Result<Outcome, Bad> {
+    let q: Vec<String> = strings(a.get("q"))?.into_iter().filter(|w| !["근처", "드라이브", "코스", "인기", "추천"].contains(&w.as_str())).take(3).collect();
+    let radius = a.get("km").and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.trim().parse().ok()))).filter(|x| *x > 0.0).unwrap_or(courses::DEFAULT_RADIUS_KM).min(500.0);
+    let k = a.get("k").and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.trim().parse().ok()))).unwrap_or(courses::SHOW_K as u64).clamp(1, 5) as usize;
+    let loc = c.ctx.current_location;
+    let f = courses::fetch(c.backend, loc, &q, radius, k, &[]);
+    let scope = if f.no_location { "전국 (지금 위치 모름)".to_string() } else if f.widened { format!("전국 (근처 {}km 안에 없음)", radius.round()) } else { format!("근처 {}km", radius.round()) };
+    let mut data = json!({"scope": scope, "count": f.list.len()});
+    if f.theme_missed {
+        data["hint"] = json!(format!("'{}'에 맞는 코스가 없어 낱말 없이 골랐다. 그렇다고 말하라.", q.join(",")));
+    }
+    let changed = !f.list.is_empty();
+    if changed {
+        *c.courses = CourseState { list: f.list, focus: 0, q, radius_km: radius };
+        data["courses"] = courses::list_json(c.courses);
+        data["next"] = json!("1~3번을 번호·이름·하트 수로 짧게 말하고 1번으로 안내할지 물어라. 고르면 nav mode=pick n.");
+    } else {
+        data["hint"] = json!("공유된 코스가 없다. 없다고 짧게 답하라.");
+    }
+    Ok(Outcome { call: call.clone(), ok: true, content: ok_json(data), focus: None, hits: vec![], proposal: None, courses_changed: changed })
+}
+
 fn nav(call: &ToolCall, a: &Value, c: &mut Ctx) -> Result<Outcome, Bad> {
     let mode = a.get("mode").and_then(Value::as_str).map(str::trim).unwrap_or("").to_lowercase();
+    let mut courses_changed = false;
     let (proposal, focus) = match mode.as_str() {
+        "pick" => {
+            if c.courses.list.is_empty() {
+                return Err(Bad("추천 코스 목록이 없습니다. 먼저 courses를 부르세요.".into()));
+            }
+            let n = a.get("n").or_else(|| a.get("id")).and_then(|v| v.as_i64().or_else(|| v.as_str().and_then(|s| s.trim().parse().ok())))
+                .ok_or_else(|| Bad("mode=pick에는 n(추천 코스 번호, 1부터)이 필요합니다.".into()))?;
+            let len = c.courses.list.len();
+            if n < 1 || n as usize > len {
+                return Err(Bad(format!("n은 1~{len} 사이입니다.")));
+            }
+            c.courses.focus = n as usize - 1;
+            courses_changed = true;
+            let p = courses::shared_proposal(c.proposal_seq, &c.courses.list[c.courses.focus], c.ctx.current_location)
+                .ok_or_else(|| Bad("그 코스에는 들른 곳 정보가 없어 안내할 수 없습니다.".into()))?;
+            (p, None)
+        }
         "course" => {
             let id = episode_id(a)?;
             let (route, _) = match c.cache.courses.get(&id).cloned() {
@@ -238,7 +291,7 @@ fn nav(call: &ToolCall, a: &Value, c: &mut Ctx) -> Result<Outcome, Bad> {
                 .ok_or_else(|| Bad("mode=search에는 kw(검색어)가 필요합니다.".into()))?.chars().take(40).collect();
             (search_proposal(c.proposal_seq, kw), None)
         }
-        _ => return Err(Bad("mode는 course, place, search 중 하나입니다.".into())),
+        _ => return Err(Bad("mode는 course, place, search, pick 중 하나입니다.".into())),
     };
     let data = json!({
         "proposal_id": proposal.id,
@@ -246,12 +299,12 @@ fn nav(call: &ToolCall, a: &Value, c: &mut Ctx) -> Result<Outcome, Bad> {
         "will_do": proposal.summary,
         "next": "운전자에게 이렇게 할지 한 문장으로 물어보세요.",
     });
-    Ok(Outcome { call: call.clone(), ok: true, content: ok_json(data), focus, hits: vec![], proposal: Some(proposal) })
+    Ok(Outcome { call: call.clone(), ok: true, content: ok_json(data), focus, hits: vec![], proposal: Some(proposal), courses_changed })
 }
 
 // ---- 제안 만들기 (빠른 길과 nav가 같이 쓴다) ----
 
-fn next_id(seq: &mut u64) -> String {
+pub(crate) fn next_id(seq: &mut u64) -> String {
     *seq += 1;
     format!("p{seq}")
 }
@@ -327,7 +380,7 @@ fn ok_json(data: Value) -> String {
 }
 
 fn fail(call: &ToolCall, error: String) -> Outcome {
-    Outcome { call: call.clone(), ok: false, content: json!({"ok": false, "error": error}).to_string(), focus: None, hits: vec![], proposal: None }
+    Outcome { call: call.clone(), ok: false, content: json!({"ok": false, "error": error}).to_string(), focus: None, hits: vec![], proposal: None, courses_changed: false }
 }
 
 // ---- 인자 읽기 (작은 모델이 문자열·숫자를 섞어 보내도 받아 준다) ----

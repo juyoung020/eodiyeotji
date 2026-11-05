@@ -24,6 +24,7 @@ class MemoryAgentPort @Inject constructor(private val bridge: AgentBridge) : Age
             when (e) {
                 is BridgeEvent.AnswerDelta -> emit(AgentEvent.AnswerDelta(e.text))
                 is BridgeEvent.Recommendation -> emit(AgentEvent.Recommendation(e.hit, e.course))
+                is BridgeEvent.CourseRecommendations -> emit(AgentEvent.CourseRecommendations(e.courses, e.focus))
                 is BridgeEvent.ActionProposal -> {
                     proposals[e.proposal.id] = e.proposal
                     emit(AgentEvent.ActionProposal(e.proposal.id, buttonTitle(e.proposal.action), e.proposal.summary))
@@ -43,6 +44,7 @@ class MemoryAgentPort @Inject constructor(private val bridge: AgentBridge) : Age
 
     private fun buttonTitle(action: AgentNavAction) = when (action) {
         is AgentNavAction.Course -> "이 코스로 안내"
+        is AgentNavAction.SharedCourse -> "'${action.title}' 코스로 안내"
         is AgentNavAction.Place -> "${action.stop.name}로 안내"
         is AgentNavAction.Search -> "내비에서 찾기"
     }

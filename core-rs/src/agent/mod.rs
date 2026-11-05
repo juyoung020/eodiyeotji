@@ -7,9 +7,13 @@
 //!    빠른 길 결과는 [상황]에 데이터로 넣어 LLM이 검색 도구를 다시 부르지 않아도 되게 한다.
 //! 3. **안내는 제안만:** `confirm(proposal_id)`(또는 다음 말 "응/안내해줘")이 있어야 실제 내비 명령(`NavAction`)을 돌려준다.
 //!
+//! 근처 추천 코스(`courses` 모듈)도 빠른 길로 푼다: "여기 근처 드라이브 추천코스" → 커뮤니티 인기 코스 상위 k개 목록 + 1번 안내 제안.
+//! 목록은 세션에 남아 "2번으로 가자"·"더 가까운 데"·"바다 쪽은?"을 규칙으로 바로 푼다 (LLM 없이).
+//!
 //! Kotlin은 `ask`를 백그라운드 스레드에서 부르고, `AgentListener` 콜백을 화면·TTS로 옮기고, `NavAction`을 Pleos 내비로 실행만 한다.
 //! LLM: OpenAI 호환 서버 (개발: 개발 PC의 llama.cpp `llama-server` + Qwen3.5-9B). 서버가 없으면 빠른 길만으로 동작한다.
 
+pub mod courses;
 pub mod dates;
 pub mod label;
 pub mod llm;
@@ -18,6 +22,8 @@ mod runner;
 pub mod tools;
 pub mod words;
 
+#[cfg(test)]
+mod course_tests;
 #[cfg(test)]
 mod eval;
 #[cfg(test)]
@@ -30,6 +36,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::Value;
 
+use crate::community::{CommunitySort, CourseRecommendation};
 use crate::ffi::GeoPoint;
 use crate::memory::{CourseLeg, CourseRoute, DayEnrichment, DayFacts, Episode, MemoryHit, MemoryQuery, StopFact};
 use crate::store::{CoreError, EodiStore};
@@ -54,6 +61,8 @@ pub struct AgentContext {
 pub enum NavAction {
     /// 코스: 구간마다 경유지 ≤ 2 + 목적지. 첫 구간을 요청하고, 도착(onDestinationArrived)하면 다음 구간.
     Course { episode_id: i64, title: String, legs: Vec<CourseLeg> },
+    /// 커뮤니티 추천 코스 (공유된 코스 [post_id]). 구간 규칙은 [NavAction::Course]와 같다.
+    SharedCourse { post_id: String, title: String, legs: Vec<CourseLeg> },
     /// 들른 곳 한 곳으로 안내
     Place { stop: StopFact },
     /// 차량 내비 장소 검색 화면을 이 낱말로 연다
@@ -125,6 +134,9 @@ pub trait AgentListener: Send + Sync {
     fn on_answer_delta(&self, text: String);
     /// 추천 카드 (같은 질문에서 여러 번 오면 마지막이 최신). 코스를 짰으면 [course] 포함.
     fn on_recommendation(&self, hit: MemoryHit, course: Option<CourseRoute>);
+    /// 근처 추천 코스 목록 (순서 = 순위, 1번이 맨 앞). [focus]: 지금 이야기하는(안내를 제안한) 코스의 자리 (0부터).
+    /// 후속 말("2번으로 가자", "바다 쪽은?")로 목록이 바뀌거나 고른 코스가 바뀌면 다시 온다 (마지막이 최신).
+    fn on_course_recommendations(&self, courses: Vec<CourseRecommendation>, focus: u32);
     /// 안내 제안 ("그 코스로 안내할까요?"). 운전자가 "예"하면 `confirm(proposal.id)`.
     fn on_action_proposal(&self, proposal: NavProposal);
     /// 운전자가 말로 "응/안내해줘"라고 확인함 → Kotlin이 [action]을 바로 실행한다.
@@ -142,6 +154,9 @@ pub trait MemoryBackend: Send + Sync {
     fn pending_day_enrichments(&self, limit: u32) -> Result<Vec<DayFacts>, CoreError>;
     fn set_day_enrichment(&self, e: DayEnrichment) -> Result<(), CoreError>;
     fn mark_day_enrichment_failed(&self, day: String, retry_after_ms: i64) -> Result<(), CoreError>;
+    /// 추천 코스 상위 [k]개. [from]이 있으면 그 근처 [radius_km] 안 (인기 + 거리), 없으면 전국 인기순
+    /// (이때 `distance_km`는 -1 = 모름).
+    fn recommend_drive_courses(&self, from: Option<GeoPoint>, radius_km: f64, k: u32) -> Result<Vec<CourseRecommendation>, CoreError>;
 }
 
 impl MemoryBackend for EodiStore {
@@ -162,6 +177,15 @@ impl MemoryBackend for EodiStore {
     }
     fn mark_day_enrichment_failed(&self, day: String, retry_after_ms: i64) -> Result<(), CoreError> {
         EodiStore::mark_day_enrichment_failed(self, day, retry_after_ms)
+    }
+    fn recommend_drive_courses(&self, from: Option<GeoPoint>, radius_km: f64, k: u32) -> Result<Vec<CourseRecommendation>, CoreError> {
+        match from {
+            Some(p) => EodiStore::recommend_drive_courses(self, p, radius_km, k),
+            None => Ok(EodiStore::community_courses(self, CommunitySort::Popular, None, k)?
+                .into_iter()
+                .map(|post| CourseRecommendation { score: post.hearts as f64, distance_km: -1.0, post })
+                .collect()),
+        }
     }
 }
 
@@ -193,6 +217,10 @@ pub(crate) struct Session {
     pub candidates: Vec<MemoryHit>,
     pub tools: tools::ToolCache,
     pub proposal_seq: u64,
+    /// 지금 이야기하는 추천 코스 목록·고른 자리·찾은 조건 (후속 "2번으로 가자", "더 가까운 데", "바다 쪽은?"용)
+    pub courses: courses::CourseState,
+    /// 바로 앞 질문이 추천 코스 이야기였나 (번호 말을 코스 번호로 읽을지)
+    pub course_topic: bool,
 }
 
 #[derive(uniffi::Object)]

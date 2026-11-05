@@ -11,6 +11,7 @@ use std::time::Instant;
 
 use serde_json::{json, Value};
 
+use super::courses;
 use super::dates::{self, fmt_day, local_days, parse_ymd, DayRange};
 use super::llm::{LlmError, Params};
 use super::tools::{self, Ctx};
@@ -32,8 +33,8 @@ const EMPTY_ANSWER: &str = "죄송해요, 답을 정리하지 못했어요. 다�
 const NOT_FOUND: &str = "기록에서 비슷한 곳을 찾지 못했어요.";
 
 /// 질문 한 번의 진행 상태.
-struct Turn<'a> {
-    l: &'a dyn AgentListener,
+pub(crate) struct Turn<'a> {
+    pub l: &'a dyn AgentListener,
     start: Instant,
     answer: String,
     first_text_ms: Option<u64>,
@@ -43,13 +44,19 @@ struct Turn<'a> {
     /// 이번 질문에서 새로 생긴 대화 (끝까지 가야 세션에 넣는다 → 중간 실패로 대화가 깨지지 않는다)
     msgs: Vec<Value>,
     last_focus: Option<(i64, bool)>,
+    /// 이번 질문에서 추천 코스 목록 / 기억 카드를 보였나 (다음 질문의 번호 말을 코스 번호로 읽을지 정한다)
+    pub(crate) course_shown: bool,
+    memory_shown: bool,
 }
 
 impl Turn<'_> {
     fn ms(&self) -> u64 {
         self.start.elapsed().as_millis() as u64
     }
-    fn say(&mut self, text: &str) {
+    pub(crate) fn answer_text(&self) -> &str {
+        &self.answer
+    }
+    pub(crate) fn say(&mut self, text: &str) {
         if text.is_empty() {
             return;
         }
@@ -68,7 +75,16 @@ impl Turn<'_> {
         if self.to_rec_ms.is_none() {
             self.to_rec_ms = Some(self.ms());
         }
+        self.memory_shown = true;
         self.l.on_recommendation(hit.clone(), course);
+    }
+    /// 추천 코스 목록 (같은 질문에서 다시 보내면 화면이 마지막 것으로 바꾼다).
+    pub(crate) fn courses(&mut self, st: &courses::CourseState) {
+        if self.to_rec_ms.is_none() {
+            self.to_rec_ms = Some(self.ms());
+        }
+        self.course_shown = true;
+        self.l.on_course_recommendations(st.list.clone(), st.focus as u32);
     }
 }
 
@@ -76,7 +92,7 @@ impl MemoryAgent {
     pub(crate) fn run_turn(&self, utterance: &str, ctx: &AgentContext, l: &dyn AgentListener) {
         let gen = self.cancel_gen.load(Ordering::SeqCst);
         let mut s = self.session.lock().unwrap_or_else(|e| e.into_inner());
-        let mut t = Turn { l, start: Instant::now(), answer: String::new(), first_text_ms: None, to_rec_ms: None, llm_calls: 0, llm_ms: 0, msgs: vec![], last_focus: None };
+        let mut t = Turn { l, start: Instant::now(), answer: String::new(), first_text_ms: None, to_rec_ms: None, llm_calls: 0, llm_ms: 0, msgs: vec![], last_focus: None, course_shown: false, memory_shown: false };
         if ctx.now_ms - s.last_activity_ms > SESSION_IDLE_MS {
             *s = Session::default();
             *self.pending.lock().unwrap_or_else(|e| e.into_inner()) = None;
@@ -107,13 +123,25 @@ impl MemoryAgent {
             }
         }
 
-        // 2) 빠른 길: 규칙으로 날짜·검색어 → 기기 검색 (수 ms)
+        // 2) 추천 코스: "근처 드라이브 코스 추천", 목록이 있으면 "2번으로 가자"·"더 가까운 데"·"바다 쪽은?" (규칙, 수 ms)
+        if self.opts.fast_path {
+            if let Some(intent) = courses::detect(u, s.course_topic, s.courses.list.len()) {
+                if self.course_fast_path(&mut s, &mut t, intent, ctx) {
+                    return self.finish(&mut s, t, u, AnswerSource::FastPath);
+                }
+            }
+        }
+
+        // 3) 빠른 길: 규칙으로 날짜·검색어 → 기기 검색 (수 ms)
         let tz = ctx.tz_offset_minutes;
         let today = local_days(ctx.now_ms, tz);
         let parsed = words::parse(u);
         let range = dates::parse_korean_range(u, today);
         let mut fast_hits: Vec<MemoryHit> = vec![];
-        if self.opts.fast_path && (!parsed.terms.is_empty() || range.is_some()) {
+        // 추천 코스 이야기 중의 규칙 밖 후속 말("그 중에 제일 짧은 걸로")은 기억 검색 없이 LLM이 목록을 보고 푼다.
+        // 날짜 말이나 "갔던·였지" 같은 지난 일 말이 있으면 기억 질문이다.
+        let course_follow_up = s.course_topic && !s.courses.list.is_empty() && range.is_none() && !courses::is_past(u);
+        if self.opts.fast_path && !course_follow_up && (!parsed.terms.is_empty() || range.is_some()) {
             let (from_ms, to_ms) = range.map(|r| r.to_ms(tz)).map_or((None, None), |(a, b)| (Some(a), Some(b)));
             let q = MemoryQuery { terms: parsed.terms.clone(), from_ms, to_ms, kinds: vec![], limit: 5 };
             fast_hits = self.backend.search_memories(q).unwrap_or_default();
@@ -149,9 +177,16 @@ impl MemoryAgent {
             return self.finish(&mut s, t, u, AnswerSource::Fallback);
         }
 
-        // 3) LLM 도구 루프
+        // 4) LLM 도구 루프
+        let course_topic_before = s.course_topic;
+        let pending_before = self.pending.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|p| p.id.clone());
         match self.llm_loop(&mut s, &mut t, u, ctx, range, &fast_hits, gen) {
-            Ok(()) => self.finish(&mut s, t, u, AnswerSource::Llm),
+            Ok(()) => {
+                if (course_topic_before || t.course_shown) && !t.memory_shown {
+                    self.course_proposal_from_answer(&mut s, &mut t, ctx, pending_before);
+                }
+                self.finish(&mut s, t, u, AnswerSource::Llm)
+            }
             Err(LlmError::Cancelled) => l.on_error("취소했어요.".into()),
             Err(e) => {
                 eprintln!("[agent] LLM 실패: {e}");
@@ -185,7 +220,7 @@ impl MemoryAgent {
         // 안내 제안: 들른 곳이 여럿이면 코스, 하나면 그곳
         let mut proposal: Option<NavProposal> = None;
         if f.stops.len() > 1 {
-            let mut c = Ctx { backend: self.backend.as_ref(), ctx, cache: &mut s.tools, proposal_seq: &mut s.proposal_seq };
+            let mut c = Ctx { backend: self.backend.as_ref(), ctx, cache: &mut s.tools, courses: &mut s.courses, proposal_seq: &mut s.proposal_seq };
             if let Ok((route, _)) = tools::plan(f.id, true, &mut c) {
                 let p = tools::course_proposal(&mut s.proposal_seq, f.id, &title, &route);
                 t.recommend(top, Some(route));
@@ -274,7 +309,7 @@ impl MemoryAgent {
             }));
             // 도구는 기기 안 Rust라 수 ms → 차례로 실행 (저장소 연결이 하나라 동시에 돌려도 빨라지지 않는다)
             let outcomes: Vec<_> = calls.iter().map(|c| {
-                let mut cx = Ctx { backend: self.backend.as_ref(), ctx, cache: &mut s.tools, proposal_seq: &mut s.proposal_seq };
+                let mut cx = Ctx { backend: self.backend.as_ref(), ctx, cache: &mut s.tools, courses: &mut s.courses, proposal_seq: &mut s.proposal_seq };
                 tools::run(c, &mut cx)
             }).collect();
             for o in &outcomes {
@@ -285,6 +320,9 @@ impl MemoryAgent {
                 if let Some((hit, course)) = &o.focus {
                     s.focus = Some(hit.clone());
                     t.recommend(hit, course.clone());
+                }
+                if o.courses_changed {
+                    t.courses(&s.courses);
                 }
                 if let Some(p) = &o.proposal {
                     *self.pending.lock().unwrap_or_else(|e| e.into_inner()) = Some(p.clone());
@@ -304,6 +342,11 @@ impl MemoryAgent {
     }
 
     fn finish(&self, s: &mut Session, t: Turn, u: &str, source: AnswerSource) {
+        if t.course_shown {
+            s.course_topic = true;
+        } else if t.memory_shown {
+            s.course_topic = false;
+        }
         let mut msgs = t.msgs;
         if msgs.is_empty() {
             // 빠른 길·확인·대체 답: 사용자 말과 답만 남긴다 (찾은 기억은 다음 [상황]에 들어간다)
@@ -381,6 +424,12 @@ fn context_block(ctx: &AgentContext, range: Option<DayRange>, s: &Session, fast_
         if !others.is_empty() {
             b.push_str(&format!("다른 후보(데이터): {}\n", Value::Array(others)));
         }
+    }
+    if s.course_topic && !s.courses.list.is_empty() {
+        b.push_str(&format!(
+            "추천 코스 목록(데이터, 번호로 고르면 nav mode=pick n): {}\n지금 고른 코스: {}번\n",
+            courses::list_json(&s.courses), s.courses.focus + 1
+        ));
     }
     if let Some(p) = pending {
         b.push_str(&format!("확인 대기 중인 안내 제안: {}\n", p.summary));
