@@ -18,45 +18,38 @@
 ## [Unreleased]
 
 ### Added
-- 들른 곳 대표 사진: 추천 카드에서 들른 곳을 누르면 구글 지도의 그곳 사진(최대 6장)을 넘겨 봄, 올린 사람 표시. 장소 찾기·결과 저장(30일)은 Rust, 이미지는 Coil 캐시 (`core-rs/src/photos.rs`, `app/.../place/PlacePhotoRepository.kt`, `ui/place/PlacePhotoGallery.kt`)
-- 기억 에이전트 연결: 타임라인 머리의 "어디였지? 물어보세요" → 질문·답·추천 카드(지도·코스) → "이 코스로 안내"로 차량 내비 경유지 안내까지. 주행 중(운전자 주의 분산 제약)에는 타임라인을 감추고 에이전트 주행 화면만 보임. 디버그용 시연 데이터 넣기 수신기 (`app/.../ui/agent/MemoryAgentPort.kt`, `CarDrivingStatePort.kt`, `ui/home/HomeScreen.kt`)
-- 기억 에이전트(Rust): 날짜·검색어 규칙으로 기기 안에서 바로 답하는 빠른 길 + 필요할 때만 Qwen3.5-9B 도구 호출(도구 4개, 잘못된 호출 되돌려 주기, 3번 실패하면 멈춤, 안내는 운전자 확인 뒤에만) + 하루 제목 라벨링 (`core-rs/src/agent/`, `app/.../agent/`)
-- 기억 코어: 주행·머문 곳을 출근길·퇴근길·볼일·나들이·여행 에피소드로 묶고, 집·회사 추정, AI 하루 라벨링 대기열, 한국어 부분 일치 검색(0.2ms), 코스 최적 순서, 1년치 시연 데이터 (`core-rs/src/memory/`, `core-rs/src/course.rs`)
-- 화면 디자인: Pleos 색·글자 크기 토큰, 세로 타임라인 상세, 날짜 목록에 하루 제목·들른 곳, 빈 화면·오류 화면, 새 앱 아이콘 (`app/.../ui/theme/` 외)
-- 기억 에이전트용 LLM 서버: Qwen3.5-9B를 llama.cpp로 띄우는 스크립트, 도구 호출 0.5~0.9초 (`scripts/llm/start-llm.ps1`, `docs/70_기억_검색_설계.md`)
-- 장소 이름: 머문 곳·출발/도착을 좌표 대신 실제 장소 이름으로 표시. 출처 우선순위 차량 내비 > 카카오 로컬 > OSM, 가까운 지점은 한 장소로 묶어 한 번만 조회 (`core-rs/src/places.rs`, `app/.../place/`)
-- 차량 내비 연동(NaviHelper): 목적지·경유지를 기록의 장소 이름으로, 차량 내비 장소 검색 화면 열기(`SearchPlace`)·장소 상세 팝업 (`app/.../pleos/PleosNavi.kt`)
-- 지도 핀에 머문 곳 순서 번호·장소 이름, 날짜별 들른 곳 요약 데이터 (`stop_names`)
-- 세팅 문서에 Pleos 에뮬레이터를 Android Studio 없이 명령줄(sdkmanager·avdmanager)로 설치하는 방법 추가 (`docs/50_개발환경_세팅.md` 7-2-1)
-- 지도: 하루 상세 위에 그날 주행 경로·머문 곳 핀을 MapLibre로 그림. 항목을 누르면 지도에서 강조·이동, 지도를 누르면 항목 선택 (`app/.../ui/map/`)
-- 오프라인 지도: 서울·서울→강릉 고속도로·강릉 구간을 기기 안 지도 파일(PMTiles 60MB)과 한글 지명 스타일로 만들고 에뮬레이터에 넣는 스크립트 (`scripts/map/`, `app/src/main/assets/map/`)
-- Rust가 하루치 지도 데이터(GeoJSON·화면 범위·항목별 범위)를 만들어 줌 (`core-rs/src/mapdata.rs`)
-- 자동 기록: 기어가 P를 벗어나면(또는 시동 ON) 주행을 시작해 Pleos 위치를 10초마다 묶어 저장하고, P로 돌아오면 마감. 앱을 안 열어도 부팅 때부터 동작 (`app/.../record/`, `pleos/`)
-- 기록 저장소: Rust SQLite에 위치를 저장하고 주행·머문 곳·날짜별 요약을 증분 계산 (1년치 날짜 목록 0.1ms) (`core-rs/src/store.rs`)
-- 타임라인 화면: 날짜별 목록(최신순) + 하루 상세(주행·머문 곳 시간순), 넓은 창은 나란히·좁은 창은 한 장씩, 기록이 바뀌면 자동 갱신 (`app/.../ui/timeline/`)
-- 시연 주행 재생: 실제 도로 경로(강릉 하루 코스, 서울→강릉 여행, 서울 짧은 코스)를 에뮬레이터에 재생 (`scripts/replay.ps1`, `scripts/demo-routes/`)
-- Android 앱 뼈대: Compose · Hilt · Pleos Maven, minSdk 28. 첫 화면에서 Rust 코어 연결과 하루 경로(점 1만 개) 단순화 시간을 보여 줌 (`app/`)
-- Rust 코어를 UniFFI로 Kotlin에 연결: Gradle 빌드가 에뮬레이터·실차용 `.so`와 Kotlin 바인딩을 자동으로 만듦 (`core-rs/src/ffi.rs`)
-- 개발 환경 세팅 문서: 설치 구성·버전, 환경 변수, Pleos Maven 설정, 빌드 방법, 검증 결과, 수동 단계 (`docs/50_개발환경_세팅.md`)
-- 팀원용 한 번에 설치 스크립트: JDK·Android SDK·NDK·Rust·cargo-ndk 설치·검증, 이미 있으면 건너뜀 (`scripts/setup-dev.ps1`)
-- 에뮬레이터 실행 스크립트: cold boot + RAM 파일 안 만들기 + Virtual Console 포트 연결 (`scripts/emu.ps1`)
-- 차량 상태 조작 스크립트: 기어·속도·위치를 명령으로 바꿔 주행/정차 전환 재현 (`scripts/vc.ps1`)
-- 세팅 문서에 에뮬레이터 실측 동작(앱 영역 크기, 주행 상태, 주행 중 일반 앱 차단, 시동 항목 없음)과 데스크톱 설치 기록 추가 (`docs/50_개발환경_세팅.md`)
-- 접수양식 02장 ①~⑥ 기획서 초안 v0 (`docs/00_plan.md`)
-- 개발 순서(MVP): 단계별 시연 목표, 자르는 순서, 위험 요소, 데일리 칸 (`docs/00_plan.md`)
+- 자동 기록: 기어가 P를 벗어나면(또는 시동 ON) 주행을 시작해 Pleos 위치를 10초마다 묶어 저장하고, P로 돌아오면 마감. 앱을 열지 않아도 부팅 때부터 동작 (`app/.../record/`)
+- 기록 저장소: Rust SQLite에 위치를 저장하고 주행·머문 곳·날짜별 요약을 증분 계산, 1년치 날짜 목록 0.1ms (`core-rs/src/store.rs`)
+- 타임라인: 날짜별 목록(하루 제목·들른 곳) + 하루 상세(주행·머문 곳 시간순). 넓은 창은 나란히, 좁은 창은 한 장씩, 기록이 바뀌면 자동 갱신 (`app/.../ui/timeline/`)
+- 지도: 하루 상세 위에 그날 경로와 머문 곳 핀(순서 번호·이름)을 MapLibre로 그림. 항목을 누르면 지도가 그곳으로, 지도를 누르면 항목 선택. 그릴 데이터는 Rust가 만듦 (`app/.../ui/map/`, `core-rs/src/mapdata.rs`)
+- 오프라인 지도: 서울·서울→강릉 고속도로·강릉 구간 지도 파일(PMTiles 60MB)과 한글 지명 스타일, 에뮬레이터에 넣는 스크립트 (`scripts/map/`)
+- 장소 이름: 머문 곳·출발·도착을 좌표 대신 실제 가게·명소 이름으로(예: 광장시장, 경복궁). 출처 우선순위 차량 내비 > 카카오 로컬 > OSM, 한 지점 약 50ms, 가까운 지점은 한 장소로 묶어 한 번만 조회 (`core-rs/src/places.rs`, `app/.../place/`)
+- 차량 내비 연동(NaviHelper): 목적지·경유지 이름을 기록에 반영, 코스 안내(경유지 2개씩 구간), 내비 장소 검색 화면·장소 상세 열기 (`app/.../pleos/PleosNavi.kt`)
+- 기억: 주행·머문 곳을 출근길·퇴근길·볼일·나들이·여행으로 묶고 집·회사를 추정, 한국어 부분 일치 검색(0.2ms), 코스를 지금 위치에서 가장 짧은 순서로 (`core-rs/src/memory/`, `core-rs/src/course.rs`)
+- 기억 에이전트: "1년 전에 간 바다 어디였지?"처럼 물으면 날짜·검색어 규칙으로 기기 안에서 바로 답하고, 필요할 때만 로컬 LLM(Qwen3.5-9B)이 도구를 골라 씀. 안내는 운전자가 "응"이라고 한 뒤에만. 하루 제목은 LLM이 하루 한 번 붙임 (`core-rs/src/agent/`)
+- 기억 에이전트 화면: 타임라인 위 "어디였지? 물어보세요" → 답 + 추천 카드(그날 지도·들른 곳) → "이 코스로 안내"로 차량 내비 경유지 안내. 주행 중에는 타임라인을 감추고 큰 카드 한 장만 보임 (`app/.../ui/agent/`, `ui/home/`)
+- 들른 곳 대표 사진: 추천 카드에서 들른 곳을 누르면 구글 지도의 그곳 사진(최대 6장)을 넘겨 봄, 올린 사람 표시. 결과는 기기에 30일 저장 (`core-rs/src/photos.rs`, `app/.../place/PlacePhotoRepository.kt`)
+- 화면 디자인: Pleos 색·글자 크기·간격 토큰, 빈 화면·오류 화면, 앱 아이콘(지나온 점선 길 → 위치 핀 + 반짝임)과 알림 아이콘 (`app/.../ui/theme/`, `res/`)
+- Android 앱 뼈대: Compose · Hilt · Pleos Maven, minSdk 28. Rust 코어를 UniFFI로 연결하고 Gradle이 에뮬레이터·실차용 `.so`와 Kotlin 바인딩을 자동으로 만듦 (`app/`, `core-rs/src/ffi.rs`)
+- 개발 도구: 한 번에 설치(`scripts/setup-dev.ps1`), 에뮬레이터 실행(`emu.ps1`), 기어·속도·위치 조작(`vc.ps1`), 실제 도로 경로 재생(`replay.ps1`, `demo-routes/`), LLM 서버 실행(`scripts/llm/start-llm.ps1`), 디버그 빌드용 1년치 시연 기록 넣기
+- 개발 환경 세팅 문서: 설치 구성·버전, Android Studio 없이 명령줄로 에뮬레이터 설치, 빌드 방법, 에뮬레이터 실측 동작(주행 중 일반 앱 차단, 시동 항목 없음 등) (`docs/50_개발환경_세팅.md`)
+- 기억·검색·에이전트 설계 문서 (`docs/70_기억_검색_설계.md`)
+- 기획서 v1(업무 모드, 실제 방문 기준 장소 순위)과 공식 접수양식(docx) 옮김, 개발 순서(MVP)와 위험 요소 (`docs/00_plan.md`, `submission/`)
+- 팀원 소통 폴더: 작업 보고·질문·같이 정할 것을 이슈 대신 파일로 남김 (`docs/소통/`)
 
 ### Changed
-- 앱 아이콘: Gemini로 그린 "지나온 점선 길 → 위치 핀 + 반짝임" 그림으로 교체(Pleos 둥근 사각형 틀에 맞춤), 알림 아이콘은 따로 분리 (`res/mipmap-*/ic_launcher_foreground.png`, `res/drawable/ic_notification.xml`)
-- 장소 이름 찾기를 빠르게: 주행이 끝나면 바로, 요청을 동시에 보내 한 지점 약 50ms. 출발·도착도 가게·명소 이름으로 (예: 광장시장, 경복궁)
-- 앱 화면이 두 개 뜨지 않게 MainActivity를 한 개로 유지 (`launchMode=singleTask`)
+- README: 팀명 Car-pe Diem(카-르페디엠) 확정, 검토 항목 R1~R7 반영
 - 공모전 자료를 `docs/contest/`로 모으고, 백로그를 `docs/00_plan.md`로 이름 바꿔 docs 맨 위에 둠
-- CLAUDE.md에 Git 규칙 명시: 작업 전 pull, 큰 작업 단위로 커밋·푸시, AI 기여자 표시 금지
 - 계획에서 일정(날짜·스프린트 기간·간트 차트)을 빼고 순서만 남김 (`docs/00_plan.md`, `README.md`)
+- CLAUDE.md 작업 규칙: 작업 전 pull, 큰 작업 단위로 커밋·푸시, AI 기여자 표시 금지, GitHub 이슈는 버그·문의용, 네트워크는 쓰되 빠르게·막히지 않게
 - GitHub 저장소 이름을 `hmg-app-contest` → `eodiyeotji`로 바꾸고 설명·토픽 정리
 - 빈 폴더(`src/`, `presentation/`, `submission/`)에 용도 안내 README를 넣어 저장소에 올라가게 함
 
 ### Fixed
-- 세팅 문서의 Rust 빌드 안내 수정: `cargo ndk -o app/src/main/jniLibs`로 직접 넣으면 Gradle 결과물과 겹쳐 빌드가 실패하므로, `gradlew assembleDebug` 하나로 빌드하도록 바꿈 (`docs/50_개발환경_세팅.md`)
+- 세팅 문서의 Rust 빌드 안내: `cargo ndk -o app/src/main/jniLibs`로 직접 넣으면 Gradle 결과물과 겹쳐 빌드가 실패하므로 `gradlew assembleDebug` 하나로 빌드하도록 바꿈 (`docs/50_개발환경_세팅.md`)
+
+### Security
+- 개인정보가 들어간 제출용 양식(`submission/*_개인정보*`)과 Office 임시 잠금 파일(`~$*`)이 저장소에 올라가지 않게 함 (`.gitignore`)
 
 ## [0.1.0] - 2026-11-05
 
@@ -78,5 +71,5 @@
 - AI·팀원 공통 작업 규칙 (`CLAUDE.md`)
 - 변경 이력 파일 (`CHANGELOG.md`)
 
-[unreleased]: https://github.com/juyoung020/eodiyeotji/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/juyoung020/eodiyeotji/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/juyoung020/eodiyeotji/releases/tag/v0.1.0
