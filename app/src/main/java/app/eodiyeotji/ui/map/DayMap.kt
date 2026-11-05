@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -29,13 +27,18 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.eodiyeotji.R
 import app.eodiyeotji.core.DayMapData
+import app.eodiyeotji.ui.theme.EodiTheme
+import app.eodiyeotji.ui.theme.MapInk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.maplibre.android.LibraryLoader
@@ -92,7 +95,7 @@ fun DayMap(
     val options = baseOptions
     if (options == null) {
         // 미리보기에는 네이티브 지도가 없다 → 자리만 잡는다
-        Box(modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh).semantics { contentDescription = description })
+        Box(modifier.background(EodiTheme.colors.surfaceHigh).semantics { contentDescription = description })
         return
     }
     DayMapContent(data, selectedKey, onSelectKey, options, modifier.semantics { contentDescription = description })
@@ -108,19 +111,20 @@ private fun DayMapContent(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current.density
-    val colors = MaterialTheme.colorScheme
-    val palette = remember(colors) {
+    // 경로·핀 색은 라이트 바탕 지도에 맞춘 고정값(MapInk), 지도 파일이 없을 때의 바탕색만 테마를 따른다
+    val loadingBackground = EodiTheme.colors.surfaceHigh
+    val palette = remember(loadingBackground) {
         MapPalette(
-            trip = colors.primary.toArgb(),
-            casing = colors.surface.toArgb(),
-            stay = colors.tertiary.toArgb(),
-            openStay = colors.primary.toArgb(),
-            selectedStroke = colors.onSurface.toArgb(),
-            background = colors.surfaceContainerHigh.toArgb(),
-            onStay = colors.onTertiary.toArgb(),
-            onOpenStay = colors.onPrimary.toArgb(),
-            label = colors.onSurface.toArgb(),
-            labelHalo = colors.surface.toArgb(),
+            trip = MapInk.trip.toArgb(),
+            casing = MapInk.casing.toArgb(),
+            stay = MapInk.stay.toArgb(),
+            openStay = MapInk.here.toArgb(),
+            selectedStroke = MapInk.selectedStroke.toArgb(),
+            background = loadingBackground.toArgb(),
+            onStay = MapInk.onMarker.toArgb(),
+            onOpenStay = MapInk.onMarker.toArgb(),
+            label = MapInk.label.toArgb(),
+            labelHalo = MapInk.labelHalo.toArgb(),
         )
     }
 
@@ -158,12 +162,12 @@ private fun DayMapContent(
         when (style) {
             MapStyleSpec.Fallback -> MapNotice(
                 stringResource(R.string.map_offline_missing),
-                Modifier.align(Alignment.TopStart).padding(12.dp),
+                Modifier.align(Alignment.TopStart).padding(16.dp),
             )
             // 지도 데이터 출처 표시 (OSM 라이선스). 지도 파일을 쓸 때 항상 보인다.
             is MapStyleSpec.Offline -> MapNotice(
                 stringResource(R.string.map_attribution),
-                Modifier.align(Alignment.BottomEnd).padding(8.dp),
+                Modifier.align(Alignment.BottomEnd).padding(12.dp),
                 small = true,
             )
             null -> Unit
@@ -171,21 +175,22 @@ private fun DayMapContent(
     }
 }
 
+/** 지도 위 작은 안내 (출처 · 지도 파일 없음). 지도 위에서도 읽히게 반투명 흰 바탕 + 진한 글자. */
 @Composable
 private fun MapNotice(text: String, modifier: Modifier = Modifier, small: Boolean = false) {
-    Surface(
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-        shape = RoundedCornerShape(8.dp),
-        modifier = modifier,
-    ) {
-        Text(
-            text,
-            style = if (small) MaterialTheme.typography.labelMedium else MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-        )
-    }
+    Text(
+        text,
+        style = if (small) MapNoticeSmall else EodiTheme.type.caption,
+        color = MapInk.label.copy(alpha = 0.78f),
+        maxLines = 1,
+        modifier = modifier
+            .background(MapInk.casing.copy(alpha = 0.86f), RoundedCornerShape(10.dp))
+            .padding(horizontal = 12.dp, vertical = 5.dp),
+    )
 }
+
+/** 출처 표시 글자: 지도를 가리지 않게 작지만 차 안에서 읽히는 크기. */
+private val MapNoticeSmall = TextStyle(fontSize = 16.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
 
 /**
  * MapView 하나를 만들고 화면 생명주기를 그대로 넘긴다.

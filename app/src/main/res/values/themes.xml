@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 화면은 Compose 테마(ui/theme)가 그린다. 이 테마는 시작 순간의 창 배경만 맡는다. -->
-    <style name="Theme.Eodiyeotji" parent="android:Theme.Material.NoActionBar" />
+    <!-- 화면은 Compose 테마(ui/theme)가 그린다. 이 테마는 시작 순간의 창 바탕만 맡는다 (첫 프레임 전 깜빡임 방지).
+         다크는 values-night/themes.xml -->
+    <style name="Theme.Eodiyeotji" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+        <item name="android:colorAccent">@color/brand_blue</item>
+    </style>
 </resources>

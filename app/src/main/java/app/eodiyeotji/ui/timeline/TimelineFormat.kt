@@ -38,6 +38,46 @@ internal fun dayLabel(day: String, today: LocalDate): String {
     }
 }
 
+/** "오늘" / "어제", 그 밖의 날은 null. */
+@Composable
+@ReadOnlyComposable
+internal fun relativeDayName(day: String, today: LocalDate): String? = when (LocalDate.parse(day)) {
+    today -> stringResource(R.string.timeline_today)
+    today.minusDays(1) -> stringResource(R.string.timeline_yesterday)
+    else -> null
+}
+
+/** 하루 상세 제목: "11월 5일 목요일", 다른 해는 "2025년 12월 24일 수요일". */
+@Composable
+@ReadOnlyComposable
+internal fun dayTitle(day: String, today: LocalDate): String =
+    formatDay(day, today, R.string.day_title_pattern, R.string.day_title_pattern_year)
+
+/** 날짜 목록 행 제목: "11월 4일", 다른 해는 "2025년 12월 24일" (요일은 타일에). */
+@Composable
+@ReadOnlyComposable
+internal fun dayListTitle(day: String, today: LocalDate): String =
+    formatDay(day, today, R.string.day_list_pattern, R.string.day_list_pattern_year)
+
+@Composable
+@ReadOnlyComposable
+private fun formatDay(day: String, today: LocalDate, thisYear: Int, otherYear: Int): String {
+    val date = LocalDate.parse(day)
+    val pattern = stringResource(if (date.year == today.year) thisYear else otherYear)
+    return date.format(DateTimeFormatter.ofPattern(pattern, LocalConfiguration.current.locales[0]))
+}
+
+/** 목록 날짜 타일 아래 칸: 짧은 요일 "목". */
+@Composable
+@ReadOnlyComposable
+internal fun weekdayShort(day: String): String =
+    LocalDate.parse(day).format(
+        DateTimeFormatter.ofPattern(stringResource(R.string.day_tile_weekday_pattern), LocalConfiguration.current.locales[0]),
+    )
+
+/** 목록 날짜 타일 위 칸: 날짜(일) 숫자. */
+internal fun dayOfMonthText(day: String): String = LocalDate.parse(day).dayOfMonth.toString()
+
 /** "주행 2회 · 머문 곳 1곳 · 42.3km · 1시간 20분" (머문 곳이 없으면 그 칸은 뺀다). */
 @Composable
 @ReadOnlyComposable

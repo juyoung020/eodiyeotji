@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 화면 디자인 (ui/timeline 머리 · 통계 칸 · 상태 화면). 기존 문구는 strings_timeline.xml -->
+
+    <!-- 하루 상세 통계 칸: 위는 값, 아래는 이름 -->
+    <string name="stat_trips_label">주행</string>
+    <string name="stat_stays_label">머문 곳</string>
+    <string name="stat_distance_label">거리</string>
+    <string name="stat_drive_label">운전 시간</string>
+    <string name="stat_trips_value">%1$d회</string>
+    <string name="stat_stays_value">%1$d곳</string>
+
+    <!-- 목록 행 왼쪽 날짜 타일: 일(숫자) 아래 요일. java.time 패턴 -->
+    <string name="day_tile_weekday_pattern" translatable="false">E</string>
+    <!-- 하루 상세 제목. 예: 11월 5일 목요일 -->
+    <string name="day_title_pattern" translatable="false">M월 d일 EEEE</string>
+    <string name="day_title_pattern_year" translatable="false">yyyy년 M월 d일 EEEE</string>
+    <!-- 날짜 목록 행 제목 (요일은 왼쪽 타일에 있다). 예: 11월 4일 -->
+    <string name="day_list_pattern" translatable="false">M월 d일</string>
+    <string name="day_list_pattern_year" translatable="false">yyyy년 M월 d일</string>
+
+    <!-- 좁은 창 상세의 뒤로 버튼 (아이콘만 보이고 읽어 주기용) -->
+    <string name="timeline_back_description">날짜 목록으로 돌아가기</string>
+    <!-- 아직 머무는 곳 표시 -->
+    <string name="entry_here">지금 여기</string>
+    <string name="entry_now">지금</string>
+    <!-- 항목 시각 열 아래 칸: 끝난 시각. 예: ~ 09:32 -->
+    <string name="entry_until">~ %1$s</string>
+
+    <string name="timeline_failed_title">기록을 불러오지 못했어요</string>
+    <string name="timeline_list_title">날짜별 기록</string>
+</resources>

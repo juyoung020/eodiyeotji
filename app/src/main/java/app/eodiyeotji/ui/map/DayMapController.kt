@@ -163,33 +163,39 @@ internal class DayMapController(
         val firstSymbol = s.layers.firstOrNull { it is SymbolLayer }?.id
         fun addLine(layer: Layer) = if (firstSymbol != null) s.addLayerBelow(layer, firstSymbol) else s.addLayer(layer)
 
-        addLine(LineLayer(TRIP_CASING, SOURCE_ID).withFilter(isTrip).withProperties(*roundLine, lineWidth(10f)))
-        addLine(LineLayer(TRIP_LINE, SOURCE_ID).withFilter(isTrip).withProperties(*roundLine, lineWidth(6f)))
-        addLine(LineLayer(TRIP_SEL_CASING, SOURCE_ID).withFilter(NOTHING).withProperties(*roundLine, lineWidth(14f)))
-        addLine(LineLayer(TRIP_SEL, SOURCE_ID).withFilter(NOTHING).withProperties(*roundLine, lineWidth(9f)))
+        addLine(LineLayer(TRIP_CASING, SOURCE_ID).withFilter(isTrip).withProperties(*roundLine, lineWidth(12f)))
+        addLine(LineLayer(TRIP_LINE, SOURCE_ID).withFilter(isTrip).withProperties(*roundLine, lineWidth(7f)))
+        addLine(LineLayer(TRIP_SEL_CASING, SOURCE_ID).withFilter(NOTHING).withProperties(*roundLine, lineWidth(18f)))
+        addLine(LineLayer(TRIP_SEL, SOURCE_ID).withFilter(NOTHING).withProperties(*roundLine, lineWidth(11f)))
 
         // 아직 머무는 곳(= 지금 차가 있는 곳)은 큰 핀 + 옅은 후광으로 구분한다
         s.addLayer(
             CircleLayer(STAY_HALO, SOURCE_ID)
                 .withFilter(all(isStay, isOpen))
-                .withProperties(circleRadius(24f), circleOpacity(HALO_OPACITY)),
+                .withProperties(circleRadius(28f), circleOpacity(HALO_OPACITY)),
         )
         // 순서 숫자가 들어가는 핀(order 있음)은 숫자가 들어갈 만큼 키운다
         val radius = switchCase(
-            isOpen, switchCase(hasOrder, literal(14f), literal(12f)),
-            switchCase(hasOrder, literal(12f), literal(9f)),
+            isOpen, switchCase(hasOrder, literal(16f), literal(13f)),
+            switchCase(hasOrder, literal(14f), literal(11f)),
         )
         val selRadius = switchCase(
-            isOpen, switchCase(hasOrder, literal(18f), literal(16f)),
-            switchCase(hasOrder, literal(16f), literal(13f)),
+            isOpen, switchCase(hasOrder, literal(20f), literal(18f)),
+            switchCase(hasOrder, literal(19f), literal(16f)),
         )
+        val selHaloRadius = switchCase(isOpen, literal(34f), switchCase(hasOrder, literal(32f), literal(29f)))
         s.addLayer(
             CircleLayer(STAY, SOURCE_ID).withFilter(isStay)
-                .withProperties(circleRadius(radius), circleStrokeWidth(3f)),
+                .withProperties(circleRadius(radius), circleStrokeWidth(3.5f)),
+        )
+        // 고른 핀 뒤 옅은 후광 (핀 색, 원 레이어라 글자 레이어처럼 끌기를 느리게 하지 않는다)
+        s.addLayer(
+            CircleLayer(STAY_SEL_HALO, SOURCE_ID).withFilter(NOTHING)
+                .withProperties(circleRadius(selHaloRadius), circleOpacity(SEL_HALO_OPACITY)),
         )
         s.addLayer(
             CircleLayer(STAY_SEL, SOURCE_ID).withFilter(NOTHING)
-                .withProperties(circleRadius(selRadius), circleStrokeWidth(4f)),
+                .withProperties(circleRadius(selRadius), circleStrokeWidth(4.5f)),
         )
 
         // 핀 안 순서 숫자: 핀과 한 몸이라 겹침 검사 없이 항상 그린다 (숫자만 → 글꼴 0-255 범위 하나)
@@ -242,6 +248,7 @@ internal class DayMapController(
         s.getLayer(STAY_HALO)?.setProperties(circleColor(p.openStay))
         s.getLayer(STAY)?.setProperties(circleColor(stayColor), circleStrokeColor(p.casing))
         s.getLayer(STAY_SEL)?.setProperties(circleColor(stayColor), circleStrokeColor(p.selectedStroke))
+        s.getLayer(STAY_SEL_HALO)?.setProperties(circleColor(stayColor))
         s.getLayer(STAY_NUM)?.setProperties(textColor(switchCase(isOpen, color(p.onOpenStay), color(p.onStay))))
         s.getLayer(STAY_NAME)?.setProperties(textColor(p.label), textHaloColor(p.labelHalo))
         s.getLayer(STAY_NAME_SEL)?.setProperties(textColor(p.label), textHaloColor(p.labelHalo))
@@ -256,6 +263,7 @@ internal class DayMapController(
         s.getLayer(TRIP_SEL_CASING)?.let { (it as LineLayer).setFilter(all(isTrip, pick)) }
         s.getLayer(TRIP_SEL)?.let { (it as LineLayer).setFilter(all(isTrip, pick)) }
         s.getLayer(STAY_SEL)?.let { (it as CircleLayer).setFilter(all(isStay, pick)) }
+        s.getLayer(STAY_SEL_HALO)?.let { (it as CircleLayer).setFilter(all(isStay, pick)) }
         // 고른 곳 이름은 강조 레이어로 옮기고 보통 이름 레이어에서는 뺀다 (두 번 그리지 않게)
         s.getLayer(STAY_NAME_SEL)?.let { (it as SymbolLayer).setFilter(all(isStay, hasName, pick)) }
         s.getLayer(STAY_NAME)?.let { (it as SymbolLayer).setFilter(all(isStay, hasName, not(pick))) }
@@ -337,6 +345,7 @@ internal class DayMapController(
         const val STAY_HALO = "eodi-stay-open-halo"
         const val STAY = "eodi-stay"
         const val STAY_SEL = "eodi-stay-sel"
+        const val STAY_SEL_HALO = "eodi-stay-sel-halo"
         const val STAY_NUM = "eodi-stay-order"
         const val STAY_NAME = "eodi-stay-name"
         const val STAY_NAME_SEL = "eodi-stay-name-sel"
@@ -349,7 +358,8 @@ internal class DayMapController(
         val NOTHING: Expression = literal(false)
 
         const val DIMMED_OPACITY = 0.35f
-        const val HALO_OPACITY = 0.25f
+        const val HALO_OPACITY = 0.22f
+        const val SEL_HALO_OPACITY = 0.28f
         const val FIT_PADDING_DP = 56f
         const val TOUCH_RADIUS_DP = 38f
         const val MAX_FIT_ZOOM = 16.0

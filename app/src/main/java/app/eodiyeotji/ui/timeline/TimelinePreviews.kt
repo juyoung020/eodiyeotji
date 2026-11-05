@@ -80,8 +80,8 @@ private val LoadedDetail = DetailState.Loaded(SampleDays.first(), NamedEntries)
 private val UnnamedDetail = DetailState.Loaded(SampleDays.first(), UnnamedEntries)
 
 @Composable
-private fun PreviewScreen(state: TimelineUiState) {
-    EodiTheme {
+private fun PreviewScreen(state: TimelineUiState, dark: Boolean = false) {
+    EodiTheme(darkTheme = dark) {
         TimelineScreen(
             state = state,
             onSelectDay = {},
@@ -120,3 +120,11 @@ private fun WidePreview() = PreviewScreen(TimelineUiState(days = LoadedDays, det
 @Preview(name = "불러오는 중", widthDp = 841, heightDp = 1210)
 @Composable
 private fun LoadingPreview() = PreviewScreen(TimelineUiState())
+
+@Preview(name = "목록 + 상세 (넓은 창, 다크)", widthDp = 1682, heightDp = 1210)
+@Composable
+private fun WideDarkPreview() = PreviewScreen(TimelineUiState(days = LoadedDays, detail = LoadedDetail), dark = true)
+
+@Preview(name = "불러오기 실패", widthDp = 841, heightDp = 1210)
+@Composable
+private fun FailedPreview() = PreviewScreen(TimelineUiState(days = DaysState.Failed("database is locked")))
