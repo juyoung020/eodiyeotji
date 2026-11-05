@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.map
 
+import android.graphics.Bitmap
 import android.graphics.RectF
 import android.util.Log
 import androidx.compose.runtime.Immutable
@@ -14,6 +15,8 @@ import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.expressions.Expression.all
+import org.maplibre.android.style.expressions.Expression.any
+import org.maplibre.android.style.expressions.Expression.concat
 import org.maplibre.android.style.expressions.Expression.color
 import org.maplibre.android.style.expressions.Expression.eq
 import org.maplibre.android.style.expressions.Expression.get
@@ -31,6 +34,12 @@ import org.maplibre.android.style.layers.PropertyFactory.circleRadius
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeOpacity
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth
+import org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap
+import org.maplibre.android.style.layers.PropertyFactory.iconAnchor
+import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
+import org.maplibre.android.style.layers.PropertyFactory.iconImage
+import org.maplibre.android.style.layers.PropertyFactory.iconOffset
+import org.maplibre.android.style.layers.PropertyFactory.iconOpacity
 import org.maplibre.android.style.layers.PropertyFactory.lineCap
 import org.maplibre.android.style.layers.PropertyFactory.lineColor
 import org.maplibre.android.style.layers.PropertyFactory.lineJoin
@@ -77,6 +86,7 @@ internal data class MapPalette(
  *   MapLibre가 파싱·타일링을 자기 작업 스레드에서 한다.
  * - 같은 날이 다시 읽히면 소스 데이터만 바꾸고, 날이 바뀌었을 때만 카메라를 범위에 맞춘다(애니메이션 없이 한 번에).
  * - 선택 강조는 데이터를 다시 넣지 않고 강조 레이어의 filter와 나머지의 투명도만 바꾼다.
+ * - 정차한 곳 대표 사진은 핀 위에 네모 상자 아이콘으로 띄운다 ([setPhotos], 키마다 스타일 이미지 하나).
  * - 머문 곳 핀에는 그날 순서(GeoJSON `order`)를 핀 안에, 이름(`name`)을 핀 옆에 띄운다. 글자 레이어는 에뮬레이터에서
  *   지도 끌기를 느리게 하므로 머문 곳(하루 몇 개)에만 쓰고, 이름은 서로 겹치면 빼고(text-allow-overlap=false)
  *   멀리서 볼 때(줌 [NAME_MIN_ZOOM] 미만)는 숨긴다. 고른 머문 곳 이름만 크게, 겹쳐도 보이게 따로 그린다.
@@ -99,6 +109,7 @@ internal class DayMapController(
     private var fittedDay: String? = null
     private var selected: String? = null
     private var palette: MapPalette? = null
+    private var photos: Map<String, Bitmap> = emptyMap()
 
     init {
         mapView.addOnDidFailLoadingMapListener { msg ->
@@ -140,6 +151,13 @@ internal class DayMapController(
     fun setData(d: DayMapData?) {
         data = d
         applyData()
+    }
+
+    /** 정차한 곳 사진 상자 (키 = 머문 곳 키 `s<도착 ms>`). 없는 곳은 상자 없이 핀만. */
+    fun setPhotos(p: Map<String, Bitmap>) {
+        if (p == photos) return
+        photos = p
+        style?.let { applyPhotos(it) }
     }
 
     fun setSelection(key: String?) {
@@ -234,9 +252,28 @@ internal class DayMapController(
             ),
         )
 
+        // 정차한 곳 사진 상자: 핀 바로 위, 꼬리가 핀을 가리킨다. 몇 개뿐이라 겹쳐도 다 보인다.
+        s.addLayer(
+            SymbolLayer(STAY_PHOTO, SOURCE_ID).withFilter(NOTHING).withProperties(
+                iconImage(concat(literal(PHOTO_IMAGE_PREFIX), get("key"))),
+                iconAnchor(Property.ICON_ANCHOR_BOTTOM),
+                iconOffset(arrayOf(0f, -PHOTO_PIN_LIFT_DP)),
+                iconAllowOverlap(true),
+                iconIgnorePlacement(true),
+            ),
+        )
+
         palette?.let { applyPalette(s, it) }
         applySelection(s)
+        applyPhotos(s)
         applyData()
+    }
+
+    private fun applyPhotos(s: Style) {
+        photos.forEach { (key, bmp) -> s.addImage(PHOTO_IMAGE_PREFIX + key, bmp) }
+        val layer = s.getLayer(STAY_PHOTO) as? SymbolLayer ?: return
+        val keys = photos.keys.map { eq(get("key"), literal(it)) }
+        layer.setFilter(if (keys.isEmpty()) NOTHING else all(isStay, any(*keys.toTypedArray())))
     }
 
     private fun applyPalette(s: Style, p: MapPalette) {
@@ -274,6 +311,7 @@ internal class DayMapController(
         // 숫자는 고른 핀(강조 원 위)만 진하게, 나머지는 원과 같이 흐리게
         s.getLayer(STAY_NUM)?.setProperties(textOpacity(if (key == null) literal(1f) else switchCase(pick, literal(1f), literal(dim))))
         s.getLayer(STAY_NAME)?.setProperties(textOpacity(dim))
+        s.getLayer(STAY_PHOTO)?.setProperties(iconOpacity(if (key == null) literal(1f) else switchCase(pick, literal(1f), literal(dim))))
     }
 
     private fun applyData() {
@@ -296,7 +334,9 @@ internal class DayMapController(
         mapView.doOnLayout {
             val bounds = LatLngBounds.from(b.maxLat, b.maxLon, b.minLat, b.minLon)
             val pad = (FIT_PADDING_DP * density).toInt()
-            val cam = m.getCameraForLatLngBounds(bounds, intArrayOf(pad, pad, pad, pad)) ?: return@doOnLayout
+            // 위쪽은 핀 위 사진 상자(높이 약 88dp)가 잘리지 않게 더 띄운다
+            val top = ((FIT_PADDING_DP + PHOTO_TOP_EXTRA_DP) * density).toInt()
+            val cam = m.getCameraForLatLngBounds(bounds, intArrayOf(pad, top, pad, pad)) ?: return@doOnLayout
             val pos = CameraPosition.Builder(cam).zoom(min(cam.zoom, MAX_FIT_ZOOM)).build()
             m.moveCamera(CameraUpdateFactory.newCameraPosition(pos))
         }
@@ -326,7 +366,7 @@ internal class DayMapController(
         val p = m.projection.toScreenLocation(latLng)
         val r = TOUCH_RADIUS_DP * density
         val box = RectF(p.x - r, p.y - r, p.x + r, p.y + r)
-        val key = m.queryRenderedFeatures(box, STAY_SEL, STAY, STAY_NAME_SEL, STAY_NAME).firstNotNullOfOrNull { it.keyOrNull() }
+        val key = m.queryRenderedFeatures(box, STAY_PHOTO, STAY_SEL, STAY, STAY_NAME_SEL, STAY_NAME).firstNotNullOfOrNull { it.keyOrNull() }
             ?: m.queryRenderedFeatures(box, TRIP_SEL, TRIP_LINE).firstNotNullOfOrNull { it.keyOrNull() }
         onSelectKey(key)
         return true
@@ -349,6 +389,8 @@ internal class DayMapController(
         const val STAY_NUM = "eodi-stay-order"
         const val STAY_NAME = "eodi-stay-name"
         const val STAY_NAME_SEL = "eodi-stay-name-sel"
+        const val STAY_PHOTO = "eodi-stay-photo"
+        const val PHOTO_IMAGE_PREFIX = "eodi-photo-"
 
         /** 앱 assets 글꼴 이름 (scripts/map/README.md 스타일 약속). 한글은 기기 글꼴(localIdeographFontFamily)로 그린다. */
         const val FONT_REGULAR = "NotoSans-Regular"
@@ -361,6 +403,7 @@ internal class DayMapController(
         const val HALO_OPACITY = 0.22f
         const val SEL_HALO_OPACITY = 0.28f
         const val FIT_PADDING_DP = 56f
+        const val PHOTO_TOP_EXTRA_DP = 80f
         const val TOUCH_RADIUS_DP = 38f
         const val MAX_FIT_ZOOM = 16.0
         const val MAX_ZOOM = 18.0

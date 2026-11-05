@@ -23,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -48,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import app.eodiyeotji.R
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.ui.map.DayMap
+import app.eodiyeotji.ui.map.MapPhotoPin
 import app.eodiyeotji.ui.place.PlacePhotoGallery
 import app.eodiyeotji.ui.place.PlaceThumbnail
 import java.time.LocalDate
@@ -86,7 +88,13 @@ internal fun RecommendationCard(
                 when {
                     photoStop != null -> PlacePhotoGallery(photoStop, Modifier.fillMaxSize())
                     !rec.mapLoaded -> Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerHigh))
-                    map?.bounds != null -> DayMap(data = map, selectedKey = null, onSelectKey = {}, modifier = Modifier.fillMaxSize())
+                    map?.bounds != null -> DayMap(
+                        data = map,
+                        selectedKey = null,
+                        onSelectKey = {},
+                        modifier = Modifier.fillMaxSize(),
+                        photoPins = remember(stops) { stops.map { MapPhotoPin("s${it.arriveMs}", it.name, it.address, it.lat, it.lon) } },
+                    )
                     else -> CourseSketch(stops, selectedStop, Modifier.fillMaxSize())
                 }
                 if (stops.isNotEmpty()) {

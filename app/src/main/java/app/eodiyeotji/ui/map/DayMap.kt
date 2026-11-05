@@ -1,5 +1,10 @@
 package app.eodiyeotji.ui.map
 
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
+import app.eodiyeotji.place.PlacePhotoRepository
 import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.res.Configuration
@@ -84,6 +89,7 @@ fun DayMap(
     selectedKey: String?,
     onSelectKey: (String?) -> Unit,
     modifier: Modifier = Modifier,
+    photoPins: List<MapPhotoPin> = emptyList(),
 ) {
     val description = stringResource(R.string.map_content_description)
     val inPreview = LocalInspectionMode.current
@@ -98,7 +104,7 @@ fun DayMap(
         Box(modifier.background(EodiTheme.colors.surfaceHigh).semantics { contentDescription = description })
         return
     }
-    DayMapContent(data, selectedKey, onSelectKey, options, modifier.semantics { contentDescription = description })
+    DayMapContent(data, selectedKey, onSelectKey, photoPins, options, modifier.semantics { contentDescription = description })
 }
 
 @Composable
@@ -106,6 +112,7 @@ private fun DayMapContent(
     data: DayMapData?,
     selectedKey: String?,
     onSelectKey: (String?) -> Unit,
+    photoPins: List<MapPhotoPin>,
     baseOptions: MapLibreMapOptions,
     modifier: Modifier,
 ) {
@@ -156,6 +163,16 @@ private fun DayMapContent(
     LaunchedEffect(controller, palette) { controller.setPalette(palette) }
     LaunchedEffect(controller, data) { controller.setData(data) }
     LaunchedEffect(controller, selectedKey) { controller.setSelection(selectedKey) }
+    // 정차한 곳 사진 상자: 사진을 받아 상자 그림으로 만든 뒤(백그라운드) 지도에 얹는다
+    LaunchedEffect(controller, photoPins) {
+        if (photoPins.isEmpty()) {
+            controller.setPhotos(emptyMap())
+            return@LaunchedEffect
+        }
+        val repo = EntryPointAccessors.fromApplication(context.applicationContext, MapPhotoEntryPoint::class.java).photos()
+        val icons = withContext(Dispatchers.Default) { loadPhotoPinIcons(context.applicationContext, repo, photoPins, density) }
+        controller.setPhotos(icons)
+    }
 
     Box(modifier) {
         AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
@@ -248,4 +265,10 @@ private fun rememberMapViewWithLifecycle(context: Context, baseOptions: MapLibre
         }
     }
     return mapView
+}
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+internal interface MapPhotoEntryPoint {
+    fun photos(): PlacePhotoRepository
 }

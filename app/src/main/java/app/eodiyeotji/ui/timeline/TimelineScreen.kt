@@ -45,6 +45,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
@@ -71,6 +72,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.BuildConfig
 import app.eodiyeotji.R
 import app.eodiyeotji.ui.place.PlaceThumbnail
+import app.eodiyeotji.ui.map.MapPhotoPin
 import app.eodiyeotji.core.DayEntry
 import app.eodiyeotji.core.DaySummary
 import app.eodiyeotji.core.PlaceSource
@@ -431,11 +433,21 @@ private fun DayDetailCard(
     ) {
         Column(Modifier.fillMaxSize()) {
             DetailHeader(summary, today, onBack)
+            val loaded = detail as? DetailState.Loaded
+            // 정차한 곳 사진 상자 (이름을 찾은 머문 곳만)
+            val photoPins = remember(loaded?.entries) {
+                loaded?.entries.orEmpty().mapNotNull { e ->
+                    val stay = (e as? DayEntry.Stay)?.stay ?: return@mapNotNull null
+                    val p = stay.place?.takeIf { it.name.isNotBlank() } ?: return@mapNotNull null
+                    MapPhotoPin("s${stay.arriveMs}", p.name, p.address, stay.center.lat, stay.center.lon)
+                }
+            }
             DayMap(
-                data = (detail as? DetailState.Loaded)?.map,
+                data = loaded?.map,
                 selectedKey = selectedEntry,
                 onSelectKey = onMapSelect,
                 modifier = Modifier.fillMaxWidth().weight(MapWeight),
+                photoPins = photoPins,
             )
             Box(Modifier.fillMaxWidth().weight(1f - MapWeight)) {
                 when (detail) {
