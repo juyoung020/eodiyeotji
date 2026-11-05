@@ -1,0 +1,11 @@
+{
+  "name": "seoul-short",
+  "title": "서울 짧은 시내 주행(빠른 확인용): 서울시청 → 광장시장 → 경복궁",
+  "start": "서울시청",
+  "segments": [
+    { "type": "drive", "from": "서울시청", "to": "광장시장", "file": "legs/seoul-cityhall__gwangjang.csv", "distance_m": 2235, "duration_s": 191 },
+    { "type": "stop", "place": "광장시장", "minutes": 12 },
+    { "type": "drive", "from": "광장시장", "to": "경복궁 주차장", "file": "legs/gwangjang__gyeongbokgung.csv", "distance_m": 2998, "duration_s": 262 },
+    { "type": "stop", "place": "경복궁 주차장", "minutes": 10 }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "gangneung-day",
+  "title": "강릉 하루: 강릉역 → 경포해변 → 초당순두부마을 → 안목 커피거리",
+  "start": "강릉역",
+  "segments": [
+    { "type": "drive", "from": "강릉역", "to": "경포해변", "file": "legs/gangneung-stn__gyeongpo.csv", "distance_m": 5446, "duration_s": 525 },
+    { "type": "stop", "place": "경포해변", "minutes": 60 },
+    { "type": "drive", "from": "경포해변", "to": "초당순두부마을", "file": "legs/gyeongpo__chodang.csv", "distance_m": 1989, "duration_s": 207 },
+    { "type": "stop", "place": "초당순두부마을", "minutes": 50 },
+    { "type": "drive", "from": "초당순두부마을", "to": "안목 커피거리", "file": "legs/chodang__anmok.csv", "distance_m": 3786, "duration_s": 375 },
+    { "type": "stop", "place": "안목 커피거리", "minutes": 40 }
+  ]
+}
