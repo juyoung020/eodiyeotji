@@ -1,6 +1,7 @@
 package app.eodiyeotji.ui.timeline
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,6 +52,7 @@ import app.eodiyeotji.R
 import app.eodiyeotji.core.DayEntry
 import app.eodiyeotji.core.DaySummary
 import app.eodiyeotji.ui.home.CoreStatusLine
+import app.eodiyeotji.ui.map.DayMap
 import java.time.LocalDate
 
 /** 이 폭 이상이면 목록과 상세를 나란히 둔다 (Pleos 넓은 창 1682dp, 나눈 창 약 841dp). */
@@ -60,6 +62,9 @@ private val WideBreakpoint = 1200.dp
 private val TouchMin = 76.dp
 
 private val PagePadding = 32.dp
+
+/** 상세 화면에서 지도가 차지하는 높이 비율 (나머지는 항목 목록). */
+private const val MapWeight = 0.45f
 
 /** 타임라인 진입점 (정차 중 화면). */
 @Composable
@@ -71,6 +76,8 @@ fun TimelineRoute(viewModel: TimelineViewModel = hiltViewModel()) {
         onBack = viewModel::clearSelection,
         onRetry = viewModel::reload,
         onWideChange = viewModel::setWide,
+        onEntryClick = viewModel::toggleEntry,
+        onMapSelect = viewModel::selectEntry,
         status = { CoreStatusLine() },
     )
 }
@@ -86,6 +93,8 @@ fun TimelineScreen(
     onBack: () -> Unit,
     onRetry: () -> Unit,
     onWideChange: (Boolean) -> Unit,
+    onEntryClick: (String) -> Unit,
+    onMapSelect: (String?) -> Unit,
     status: @Composable () -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -117,6 +126,9 @@ fun TimelineScreen(
                             DayDetailPane(
                                 detail = state.detail,
                                 today = days.today,
+                                selectedEntry = state.selectedEntry,
+                                onEntryClick = onEntryClick,
+                                onMapSelect = onMapSelect,
                                 onBack = null,
                                 modifier = Modifier.weight(0.58f).fillMaxHeight(),
                             )
@@ -126,6 +138,9 @@ fun TimelineScreen(
                             DayDetailPane(
                                 detail = state.detail,
                                 today = days.today,
+                                selectedEntry = state.selectedEntry,
+                                onEntryClick = onEntryClick,
+                                onMapSelect = onMapSelect,
                                 onBack = onBack,
                                 modifier = Modifier.fillMaxSize(),
                             )
@@ -224,11 +239,19 @@ private fun DayRow(s: DaySummary, today: LocalDate, selected: Boolean, onSelect:
 
 // ---------------------------------------------------------------- 하루 상세
 
-/** [onBack]이 있으면(좁은 창) 위에 "목록으로" 버튼을 둔다. 시스템 뒤로 가기는 TimelineScreen의 BackHandler가 맡는다. */
+/**
+ * [onBack]이 있으면(좁은 창) 위에 "목록으로" 버튼을 둔다. 시스템 뒤로 가기는 TimelineScreen의 BackHandler가 맡는다.
+ *
+ * 날 제목 아래에 지도(남은 높이의 약 45%), 그 아래에 항목 목록. 지도는 불러오는 중에도 자리를 지켜서
+ * 날을 바꿀 때 MapView를 새로 만들지 않는다. 항목을 누르면 지도에서 강조하고, 지도를 누르면 그 항목을 고른다.
+ */
 @Composable
 private fun DayDetailPane(
     detail: DetailState,
     today: LocalDate,
+    selectedEntry: String?,
+    onEntryClick: (String) -> Unit,
+    onMapSelect: (String?) -> Unit,
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
@@ -240,38 +263,61 @@ private fun DayDetailPane(
             }
             Spacer(Modifier.height(20.dp))
         }
-        if (summary != null) {
-            Text(
-                dayLabel(summary.day, today),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                daySummaryLine(summary),
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(20.dp))
-        }
-        when (detail) {
-            DetailState.None -> Unit
-            is DetailState.Loading -> LoadingPane(Modifier.fillMaxSize())
-            is DetailState.Failed -> CenteredText(stringResource(R.string.timeline_failed, detail.message))
-            is DetailState.Loaded ->
-                if (detail.entries.isEmpty()) {
-                    CenteredText(stringResource(R.string.timeline_detail_empty))
-                } else {
-                    EntryList(detail.entries)
-                }
+        if (summary == null) return@Column
+        Text(
+            dayLabel(summary.day, today),
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            daySummaryLine(summary),
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(16.dp))
+        DayMap(
+            data = (detail as? DetailState.Loaded)?.map,
+            selectedKey = selectedEntry,
+            onSelectKey = onMapSelect,
+            modifier = Modifier.fillMaxWidth().weight(MapWeight),
+        )
+        Spacer(Modifier.height(16.dp))
+        Box(Modifier.fillMaxWidth().weight(1f - MapWeight)) {
+            when (detail) {
+                DetailState.None -> Unit
+                is DetailState.Loading -> LoadingPane(Modifier.fillMaxSize())
+                is DetailState.Failed -> CenteredText(stringResource(R.string.timeline_failed, detail.message))
+                is DetailState.Loaded ->
+                    if (detail.entries.isEmpty()) {
+                        CenteredText(stringResource(R.string.timeline_detail_empty))
+                    } else {
+                        EntryList(detail.entries, selectedEntry, onEntryClick)
+                    }
+            }
         }
     }
 }
 
+/** 고른 항목이 화면 밖이면(지도에서 고른 경우) 보이게 굴린다. 이미 다 보이면 그대로 둔다. */
 @Composable
-private fun EntryList(entries: List<DayEntry>) {
+private fun EntryList(entries: List<DayEntry>, selectedKey: String?, onClick: (String) -> Unit) {
+    val listState = rememberLazyListState()
+    LaunchedEffect(selectedKey, entries) {
+        val key = selectedKey ?: return@LaunchedEffect
+        val info = listState.layoutInfo
+        val shown = info.visibleItemsInfo.firstOrNull { it.key == key }
+        val fullyShown = shown != null &&
+            shown.offset >= info.viewportStartOffset &&
+            shown.offset + shown.size <= info.viewportEndOffset - info.afterContentPadding
+        if (!fullyShown) {
+            val index = entries.indexOfFirst { it.key == key }
+            if (index >= 0) listState.animateScrollToItem(index)
+        }
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = PaddingValues(bottom = PagePadding),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -280,6 +326,8 @@ private fun EntryList(entries: List<DayEntry>) {
             key = { it.key },
             contentType = { if (it is DayEntry.Trip) "trip" else "stay" },
         ) { e ->
+            val key = e.key
+            val selected = key == selectedKey
             when (e) {
                 is DayEntry.Trip -> EntryRow(
                     marker = MaterialTheme.colorScheme.primary,
@@ -291,6 +339,8 @@ private fun EntryList(entries: List<DayEntry>) {
                         durationText(e.trip.endMs - e.trip.startMs),
                     ),
                     sub = stringResource(R.string.timeline_from_to, coordText(e.trip.start), coordText(e.trip.end)),
+                    selected = selected,
+                    onClick = { onClick(key) },
                 )
                 is DayEntry.Stay -> EntryRow(
                     marker = MaterialTheme.colorScheme.tertiary,
@@ -306,17 +356,29 @@ private fun EntryList(entries: List<DayEntry>) {
                         stringResource(R.string.timeline_stay_line, durationText(e.stay.leaveMs - e.stay.arriveMs))
                     },
                     sub = coordText(e.stay.center),
+                    selected = selected,
+                    onClick = { onClick(key) },
                 )
             }
         }
     }
 }
 
-/** 왼쪽 색 막대(주행 = primary, 머문 곳 = tertiary) + 시간 · 요약 · 좌표. */
+/** 왼쪽 색 막대(주행 = primary, 머문 곳 = tertiary) + 시간 · 요약 · 좌표. 고른 항목은 바탕색으로 표시. */
 @Composable
-private fun EntryRow(marker: Color, kind: String, time: String, main: String, sub: String) {
+private fun EntryRow(
+    marker: Color,
+    kind: String,
+    time: String,
+    main: String,
+    sub: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
+        onClick = onClick,
+        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+        border = if (selected) BorderStroke(3.dp, marker) else null,
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {

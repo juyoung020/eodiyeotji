@@ -1,8 +1,10 @@
 package app.eodiyeotji.ui.timeline
 
+import android.util.Log
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.eodiyeotji.core.DayMapData
 import app.eodiyeotji.core.DaySummary
 import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.DayEntry
@@ -47,7 +49,8 @@ internal val DayEntry.key: String
 sealed interface DetailState {
     data object None : DetailState
     data class Loading(val summary: DaySummary) : DetailState
-    data class Loaded(val summary: DaySummary, val entries: List<DayEntry>) : DetailState
+    /** [map]은 그날 지도 데이터. 지도만 못 읽었으면 null이고 목록은 그대로 보인다. */
+    data class Loaded(val summary: DaySummary, val entries: List<DayEntry>, val map: DayMapData? = null) : DetailState
     data class Failed(val summary: DaySummary, val message: String) : DetailState
 }
 
@@ -66,6 +69,8 @@ data class TimelineUiState(
     /** 사용자가 고른 날. 좁은 창에서는 이 값이 있으면 상세 화면을 보여 준다. */
     val selectedDay: String? = null,
     val detail: DetailState = DetailState.None,
+    /** 상세에서 고른 항목 키([DayEntry.key]). 목록과 지도가 같이 강조한다. 날이 바뀌면 지운다. */
+    val selectedEntry: String? = null,
 )
 
 /**
@@ -84,6 +89,7 @@ class TimelineViewModel @Inject constructor(
     private val reloadRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val selectedDay = MutableStateFlow<String?>(null)
     private val wide = MutableStateFlow(false)
+    private val selectedEntry = MutableStateFlow<String?>(null)
 
     /** 다시 읽을 때: 구독 시작 1번 + 수동 재시도 + 기록 변경(위치 묶음이 연달아 들어오므로 잠깐 모은다). */
     private val refresh: Flow<Unit> = merge(
@@ -113,16 +119,20 @@ class TimelineViewModel @Inject constructor(
         .transformLatest { s ->
             if (s == null) {
                 shownDay = null
+                selectedEntry.value = null
                 emit(DetailState.None)
                 return@transformLatest
             }
-            if (shownDay != s.day) emit(DetailState.Loading(s))
+            if (shownDay != s.day) {
+                selectedEntry.value = null
+                emit(DetailState.Loading(s))
+            }
             shownDay = s.day
             emit(loadDetail(s))
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), DetailState.None)
 
-    val state: StateFlow<TimelineUiState> = combine(days, selectedDay, detail, ::TimelineUiState)
+    val state: StateFlow<TimelineUiState> = combine(days, selectedDay, detail, selectedEntry, ::TimelineUiState)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), TimelineUiState())
 
     fun select(day: String) {
@@ -131,6 +141,16 @@ class TimelineViewModel @Inject constructor(
 
     fun clearSelection() {
         selectedDay.value = null
+    }
+
+    /** 상세 목록에서 항목을 누를 때: 고르고, 이미 고른 항목을 다시 누르면 해제. */
+    fun toggleEntry(key: String) {
+        selectedEntry.value = if (selectedEntry.value == key) null else key
+    }
+
+    /** 지도에서 경로·핀을 누를 때 (빈 곳이면 null → 해제). */
+    fun selectEntry(key: String?) {
+        selectedEntry.value = key
     }
 
     /** 화면이 창 폭이 바뀔 때마다 알려 준다 (Pleos는 실행 중에 창 크기가 바뀐다). */
@@ -153,14 +173,25 @@ class TimelineViewModel @Inject constructor(
     private suspend fun loadDetail(s: DaySummary): DetailState = try {
         // 주행·머문 곳은 Rust가 시간순으로 섞어서 준다 (Kotlin에서 정렬하지 않는다).
         val d = core.dayDetail(s.day)
-        DetailState.Loaded(d.summary, d.entries)
+        DetailState.Loaded(d.summary, d.entries, loadMap(s.day))
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         DetailState.Failed(s, e.message ?: e.javaClass.simpleName)
     }
 
+    /** 지도 데이터는 목록과 따로 실패할 수 있다 → 실패하면 지도만 비우고 목록은 보여 준다. */
+    private suspend fun loadMap(day: String): DayMapData? = try {
+        core.dayMap(day)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w(TAG, "지도 데이터 불러오기 실패 ($day)", e)
+        null
+    }
+
     private companion object {
+        const val TAG = "EodiTimeline"
         const val REFRESH_DEBOUNCE_MS = 300L
         const val STOP_TIMEOUT_MS = 5_000L
     }

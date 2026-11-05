@@ -56,6 +56,8 @@ private fun PreviewScreen(state: TimelineUiState) {
             onBack = {},
             onRetry = {},
             onWideChange = {},
+            onEntryClick = {},
+            onMapSelect = {},
             status = { CoreStatusText(SampleStatus) },
         )
     }

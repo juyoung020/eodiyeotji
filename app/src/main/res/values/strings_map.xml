@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 하루 지도 (ui/map) -->
+    <string name="map_content_description">그날의 주행 경로와 머문 곳 지도</string>
+    <!-- 기기에 오프라인 지도 파일이 없을 때 지도 구석에 작게 띄운다. 경로와 핀은 그대로 그려진다 -->
+    <string name="map_offline_missing">오프라인 지도 파일 없음</string>
+    <!-- 지도 데이터 출처 (OpenStreetMap 라이선스 표시) -->
+    <string name="map_attribution" translatable="false">© OpenStreetMap 기여자 · Protomaps</string>
+</resources>
