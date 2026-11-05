@@ -49,12 +49,12 @@ use crate::places::{self, PlaceLabel, REF_END, REF_START, REF_STAY};
 use crate::trip::{self, DriveMark, MarkKind, Segmenter, Stay, TripConfig};
 
 /// DB 구조 버전 (`PRAGMA user_version`). 구조를 바꾸면 올리고 `migrate`에 단계를 추가한다.
-const SCHEMA_VERSION: i32 = 2;
+pub(crate) const SCHEMA_VERSION: i32 = 3;
 /// 이보다 정확도가 나쁜(m) 점은 버린다.
 pub const MAX_ACCURACY_M: f32 = 100.0;
 /// 지도에 넘길 경로의 단순화 허용 오차(m).
 pub const PATH_TOLERANCE_M: f64 = 5.0;
-const DAY_MS: i64 = 86_400_000;
+pub(crate) const DAY_MS: i64 = 86_400_000;
 
 /// 위치 한 점 (FusedLocation `LocationData`에서 필요한 값만).
 #[derive(Debug, Clone, Copy, PartialEq, uniffi::Record)]
@@ -247,10 +247,11 @@ impl EodiStore {
     /// 기록(주행 또는 머문 곳)이 있는 날을 최신순으로 최대 `limit`개. 1년치(365일)도 100ms 이내.
     pub fn day_summaries(&self, limit: u32) -> Result<Vec<DaySummary>, CoreError> {
         let mut conn = self.lock()?;
-        self.flush(&mut conn)?;
+        self.flush_all(&mut conn)?;
         let mut st = conn.prepare_cached(
-            "SELECT day, trip_count, stay_count, distance_m, drive_millis, first_ms, last_ms, stop_names
-             FROM day_summary ORDER BY day DESC LIMIT ?1",
+            "SELECT s.day, s.trip_count, s.stay_count, s.distance_m, s.drive_millis, s.first_ms, s.last_ms, s.stop_names,
+                    coalesce(m.title, m.rule_title), CASE WHEN m.title IS NULL THEN '' ELSE m.tags END
+             FROM day_summary s LEFT JOIN day_memory m ON m.day = s.day ORDER BY s.day DESC LIMIT ?1",
         )?;
         let rows = st.query_map([limit], |r| {
             Ok(DaySummary {
@@ -262,8 +263,8 @@ impl EodiStore {
                 first_ms: r.get(5)?,
                 last_ms: r.get(6)?,
                 stop_names: split_names(&r.get::<_, String>(7)?),
-                title: None,
-                tags: Vec::new(),
+                title: r.get(8)?,
+                tags: split_names(&r.get::<_, Option<String>>(9)?.unwrap_or_default()),
             })
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
@@ -280,9 +281,10 @@ impl EodiStore {
     pub fn day_detail(&self, day: String) -> Result<DayDetail, CoreError> {
         let d = parse_day(&day).ok_or_else(|| CoreError::InvalidInput(format!("day {day:?}")))?;
         let mut conn = self.lock()?;
-        self.flush(&mut conn)?;
+        self.flush_all(&mut conn)?;
         let acc = self.collect_days(&conn, d, d, true)?.remove(&d).unwrap_or_default();
-        let summary = acc.summary(d);
+        let mut summary = acc.summary(d);
+        (summary.title, summary.tags) = crate::memory::day_title(&conn, d)?;
         let entries = acc.entries();
         Ok(DayDetail { day: format_day(d), trips: acc.trips, stays: acc.stays, summary, entries })
     }
@@ -297,8 +299,8 @@ impl EodiStore {
 
 // ---- 내부 구현 ----
 
-const KIND_START: i64 = 0;
-const KIND_END: i64 = 1;
+pub(crate) const KIND_START: i64 = 0;
+pub(crate) const KIND_END: i64 = 1;
 
 const SCHEMA_V1: &str = "
 CREATE TABLE meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL) WITHOUT ROWID;
@@ -357,13 +359,18 @@ fn migrate(conn: &mut Connection) -> Result<(), CoreError> {
             mark_dirty(&tx, a, b)?;
         }
     }
-    // 다음 버전은 여기에: if version < 3 { ... }
+    if version < 3 {
+        // 기억(에피소드·AI 라벨·검색 색인). 기존 날은 다음 조회 때 에피소드를 만든다 (원본·주행은 그대로).
+        tx.execute_batch(crate::memory::SCHEMA_V3)?;
+        tx.execute("INSERT OR IGNORE INTO memory_dirty_day (day) SELECT day FROM day_summary", [])?;
+    }
+    // 다음 버전은 여기에: if version < 4 { ... }
     tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     tx.commit()?;
     Ok(())
 }
 
-fn mark_dirty(conn: &Connection, lo: i64, hi: i64) -> rusqlite::Result<()> {
+pub(crate) fn mark_dirty(conn: &Connection, lo: i64, hi: i64) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO dirty (id, lo_ms, hi_ms) VALUES (1, ?1, ?2)
          ON CONFLICT (id) DO UPDATE SET lo_ms = min(lo_ms, excluded.lo_ms), hi_ms = max(hi_ms, excluded.hi_ms)",
@@ -488,9 +495,9 @@ fn stay_summary(s: &Stay, place: Option<PlaceLabel>) -> StaySummary {
 }
 
 /// day_summary.stop_names 칸의 구분자 (이름에 들어갈 일이 없는 제어 문자).
-const STOP_SEP: char = '\u{1f}';
+pub(crate) const STOP_SEP: char = '\u{1f}';
 
-fn split_names(s: &str) -> Vec<String> {
+pub(crate) fn split_names(s: &str) -> Vec<String> {
     if s.is_empty() {
         Vec::new()
     } else {
@@ -498,7 +505,7 @@ fn split_names(s: &str) -> Vec<String> {
     }
 }
 
-fn join_names(names: &[String]) -> String {
+pub(crate) fn join_names(names: &[String]) -> String {
     let mut out = String::new();
     for (i, n) in names.iter().enumerate() {
         if i > 0 {
@@ -542,6 +549,9 @@ fn ended_after(conn: &Connection, seg_end: i64) -> rusqlite::Result<bool> {
         .optional()?
         .is_some())
 }
+
+/// 하루의 주행(출발 시각순)·머문 곳(도착 시각순). 에피소드 계산용 (`day_records`).
+pub(crate) type DayRecords = (Vec<TripSummary>, Vec<StaySummary>);
 
 /// 하루치 모음 (계산 중간값).
 #[derive(Default)]
@@ -598,12 +608,12 @@ impl EodiStore {
     }
 
     /// UTC 시각 → 현지 날짜 번호 (1970-01-01 = 0).
-    fn local_day(&self, t_ms: i64) -> i64 {
+    pub(crate) fn local_day(&self, t_ms: i64) -> i64 {
         (t_ms + self.tz_ms()).div_euclid(DAY_MS)
     }
 
     /// 현지 날짜 번호 → 그날 0시의 UTC 시각.
-    fn day_start_ms(&self, day: i64) -> i64 {
+    pub(crate) fn day_start_ms(&self, day: i64) -> i64 {
         day * DAY_MS - self.tz_ms()
     }
 
@@ -620,6 +630,11 @@ impl EodiStore {
                 [self.tz_offset_minutes],
             )?;
             tx.execute("DELETE FROM day_summary", [])?;
+            // 날짜 번호가 바뀌므로 지금 에피소드가 있는 날도 다시 만든다 (새 날짜는 refresh_days가 표시한다).
+            tx.execute(
+                "INSERT OR IGNORE INTO memory_dirty_day (day) SELECT day FROM episode UNION SELECT day FROM day_place_dwell",
+                [],
+            )?;
             let range: (Option<i64>, Option<i64>) =
                 tx.query_row("SELECT min(start_ms), max(end_ms) FROM trip", [], |r| Ok((r.get(0)?, r.get(1)?)))?;
             if let (Some(t0), Some(t1)) = range {
@@ -868,8 +883,15 @@ impl EodiStore {
     }
 
     /// 현지 날짜 d0..=d1의 day_summary 줄을 trip 표에서 다시 만든다.
-    fn refresh_days(&self, conn: &Connection, d0: i64, d1: i64) -> Result<(), CoreError> {
+    /// 그날들의 에피소드도 다음 조회 때 다시 만들도록 표시한다 (`memory_dirty_day`).
+    pub(crate) fn refresh_days(&self, conn: &Connection, d0: i64, d1: i64) -> Result<(), CoreError> {
         let days = self.collect_days(conn, d0, d1, false)?;
+        {
+            let mut st = conn.prepare_cached("INSERT OR IGNORE INTO memory_dirty_day (day) VALUES (?1)")?;
+            for d in d0..=d1 {
+                st.execute([d])?;
+            }
+        }
         conn.execute("DELETE FROM day_summary WHERE day BETWEEN ?1 AND ?2", [d0, d1])?;
         let mut st = conn.prepare_cached(
             "INSERT INTO day_summary (day, trip_count, stay_count, distance_m, drive_millis, first_ms, last_ms, stop_names)
@@ -889,6 +911,22 @@ impl EodiStore {
             ])?;
         }
         Ok(())
+    }
+
+    /// 밀린 주행 계산(`flush`)과 밀린 에피소드 계산(`memory::flush_memory`)을 차례로 반영한다.
+    pub(crate) fn flush_all(&self, conn: &mut Connection) -> Result<(), CoreError> {
+        self.flush(conn)?;
+        crate::memory::flush_memory(self, conn, false)
+    }
+
+    /// 현지 날짜 d0..=d1의 주행(경로 없이)·머문 곳을 날짜별로 (에피소드 계산용). 기록 없는 날은 빠진다.
+    pub(crate) fn day_records(
+        &self,
+        conn: &Connection,
+        d0: i64,
+        d1: i64,
+    ) -> Result<BTreeMap<i64, DayRecords>, CoreError> {
+        Ok(self.collect_days(conn, d0, d1, false)?.into_iter().map(|(d, a)| (d, (a.trips, a.stays))).collect())
     }
 
     /// 현지 날짜 d0..=d1에 속한 주행(출발 날짜)과 머문 곳(도착 날짜)을 날짜별로 모은다. 기록 없는 날은 빠진다.
@@ -997,7 +1035,7 @@ impl EodiStore {
 }
 
 /// 현지 날짜 번호 → "YYYY-MM-DD" (그레고리력, Howard Hinnant의 civil_from_days).
-fn format_day(day: i64) -> String {
+pub(crate) fn format_day(day: i64) -> String {
     let z = day + 719_468;
     let era = z.div_euclid(146_097);
     let doe = z.rem_euclid(146_097);
@@ -1011,7 +1049,7 @@ fn format_day(day: i64) -> String {
 }
 
 /// 연·월·일 → 날짜 번호 (days_from_civil).
-fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+pub(crate) fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
     let y = if m <= 2 { y - 1 } else { y };
     let era = y.div_euclid(400);
     let yoe = y - era * 400;
@@ -1022,7 +1060,7 @@ fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
 }
 
 /// "YYYY-MM-DD" → 날짜 번호. 형식이 틀리거나 없는 날짜(2월 30일 등)면 None.
-fn parse_day(s: &str) -> Option<i64> {
+pub(crate) fn parse_day(s: &str) -> Option<i64> {
     let b = s.as_bytes();
     if b.len() != 10 || b[4] != b'-' || b[7] != b'-' {
         return None;

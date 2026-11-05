@@ -357,6 +357,7 @@ fn v1_database_is_migrated_without_losing_records() {
         store.ingest(drive(at(15, 0), 120, 36.0, 128.0, 1e-4)).unwrap();
         // 버전 1로 되돌린다: 버전 2에서 더한 표·칸을 지우고 user_version = 1
         let c = store.lock().unwrap();
+        c.execute_batch(crate::memory::DROP_V3).unwrap();
         c.execute_batch("DROP TABLE place; DROP TABLE trip_place; DROP TABLE navi_hint; ALTER TABLE day_summary DROP COLUMN stop_names; PRAGMA user_version = 1;").unwrap();
         (days, detail)
     };
@@ -376,7 +377,7 @@ fn v1_database_is_migrated_without_losing_records() {
 
     let store = db.open();
     let v: i32 = store.lock().unwrap().pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(v, 2);
+    assert_eq!(v, crate::store::SCHEMA_VERSION);
     assert_eq!(store.fix_count().unwrap(), 1320);
     let days = store.day_summaries(10).unwrap();
     assert_eq!(days[0].trip_count, before_days[0].trip_count + 1, "밀려 있던 변경도 반영");
