@@ -7,6 +7,19 @@
         <receiver
             android:name=".record.NaviDebugReceiver"
             android:exported="true" />
+
+        <!-- 기억 에이전트 화면만 띄워 보기 (가짜 에이전트, 사용법은 ui/agent/AgentDebugActivity.kt).
+             주행 화면도 확인하므로 주행 중 사용 화면(DO)으로 선언한다. -->
+        <activity
+            android:name=".ui.agent.AgentDebugActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:resizeableActivity="true"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="distractionOptimized"
+                android:value="true" />
+        </activity>
     </application>
 
 </manifest>
