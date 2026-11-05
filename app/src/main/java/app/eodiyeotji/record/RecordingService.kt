@@ -16,7 +16,9 @@ import app.eodiyeotji.BuildConfig
 import app.eodiyeotji.R
 import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.LocationFix
+import app.eodiyeotji.core.NaviHint
 import app.eodiyeotji.pleos.PleosLocationSource
+import app.eodiyeotji.pleos.PleosNavi
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
@@ -41,6 +43,8 @@ import kotlinx.coroutines.withContext
  * 흐름: 기어·시동 신호([VehicleDriveSignals]) → 판단([DriveRule]) → 디바운스 →
  *   주행 시작: markDriveStart → Pleos 위치를 모아 10초 또는 30개마다 묶어서 [EodiCore.ingest]
  *   주행 끝: 위치 수신 중지 → 남은 묶음 저장 → markDriveEnd
+ * 주행 중에는 차량 내비([PleosNavi])도 듣는다: 목적지·경유지 도착 이벤트와, 주행이 끝날 때 남아 있는 목적지·경유지를
+ *   [EodiCore.addNaviHint]로 넘긴다 → Rust가 가까운 도착 지점·머문 곳의 이름으로 쓴다 ([NaviSession]). 내비가 없으면 건너뛴다.
  * 주차 중에는 위치 SDK를 켜지 않는다. 차량 신호 콜백 하나만 걸어 두고 기다린다 (CPU 0에 가깝다).
  * 모든 작업은 Dispatchers.Default/IO에서 한다.
  *
@@ -63,9 +67,13 @@ class RecordingService : LifecycleService() {
     @Inject lateinit var location: PleosLocationSource
     @Inject lateinit var vehicle: VehicleDriveSignals
     @Inject lateinit var journal: SessionJournal
+    @Inject lateinit var navi: PleosNavi
 
     private var running = false
     private var foregroundOk = false
+
+    /** 주행 중 마지막 위치. 내비 도착 이벤트에 좌표가 없을 때 대신 쓴다. */
+    @Volatile private var lastFix: LocationFix? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -98,6 +106,9 @@ class RecordingService : LifecycleService() {
 
         var recovered = journal.read()
         var session: Job? = null
+        var naviSession: NaviSession? = null
+        val naviAvailable = navi.isAvailable()
+        Log.i(TAG, "차량 내비 연동: ${if (naviAvailable) "사용" else "내비 서비스 없음 → 건너뜀"}")
 
         vehicle.signals().toDriveEdges().debounced().collect { edge ->
             // 직전 프로세스가 기록 중에 죽었으면: 아직 주행 중이면 이어서, 이미 주차면 끝 표시만 한다.
@@ -106,6 +117,7 @@ class RecordingService : LifecycleService() {
                 if (edge.active) {
                     Log.i(TAG, "주행 기록 이어서 (시작 ${open.startMs})")
                     session = lifecycleScope.startCollecting()
+                    if (naviAvailable) naviSession = lifecycleScope.startNavi()
                 } else {
                     safely("markDriveEnd(복구)") { core.markDriveEnd(open.lastFixMs) }
                     journal.close()
@@ -120,14 +132,27 @@ class RecordingService : LifecycleService() {
                 safely("markDriveStart") { core.markDriveStart(edge.tMs) }
                 journal.open(edge.tMs)
                 session = lifecycleScope.startCollecting()
+                if (naviAvailable) naviSession = lifecycleScope.startNavi()
             } else if (!edge.active && current != null) {
                 current.cancelAndJoin() // 위치 수신 중지 + 남은 묶음 저장까지 끝난 뒤 돌아온다
                 session = null
                 safely("markDriveEnd") { core.markDriveEnd(edge.tMs) }
                 journal.close()
                 Log.i(TAG, "주행 끝 t=${edge.tMs}")
+                naviSession?.let { safely("내비 마감") { it.finish(edge.tMs) } }
+                naviSession = null
+                lastFix = null
             }
         }
+    }
+
+    /** 주행 중에만 도는 내비 듣기. 힌트는 받는 즉시 Rust에 넘긴다 (드물게 오므로 묶지 않는다). */
+    private fun CoroutineScope.startNavi(): NaviSession = NaviSession(navi, this, { lastFix }) { hint -> sendNaviHint(hint) }
+
+    private suspend fun sendNaviHint(hint: NaviHint) {
+        // 장소 이름은 개인 기록이라 릴리즈 로그에는 남기지 않는다
+        if (BuildConfig.DEBUG) Log.d(TAG, "addNaviHint $hint") else Log.i(TAG, "addNaviHint")
+        safely("addNaviHint") { core.addNaviHint(hint) }
     }
 
     /** 주행 중에만 도는 수집 작업. 위치와 10초 타이머를 한 줄로 받아 순서대로 처리한다 (잠금 없이 순서 보장). */
@@ -141,6 +166,7 @@ class RecordingService : LifecycleService() {
                 when (item) {
                     is Tick.Fix -> {
                         buffer += item.fix
+                        lastFix = item.fix
                         if (buffer.size >= BATCH_SIZE) flush(buffer, "${BATCH_SIZE}개")
                     }
                     Tick.Timer -> flush(buffer, "10초")

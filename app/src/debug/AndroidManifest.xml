@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 디버그 빌드에만 들어가는 것. 릴리즈 APK에는 없다. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- 에뮬레이터에서 adb로 내비 연동 확인 (사용법은 record/NaviDebugReceiver.kt) -->
+        <receiver
+            android:name=".record.NaviDebugReceiver"
+            android:exported="true" />
+    </application>
+
+</manifest>
