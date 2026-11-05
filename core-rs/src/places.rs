@@ -252,7 +252,7 @@ CREATE TABLE navi_hint (
 ) WITHOUT ROWID;
 ";
 
-fn now_ms() -> i64 {
+pub(crate) fn now_ms() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
 }
 
@@ -278,7 +278,7 @@ fn place_exists(conn: &Connection, id: i64) -> rusqlite::Result<bool> {
 
 /// 이름을 저장한다 (우선순위가 같거나 높을 때만). 이름이 생기면 다시 시도 대기는 지운다.
 /// 반환: 실제로 바뀌었는지 (같은 이름을 다시 받으면 false).
-fn set_label(conn: &Connection, id: i64, l: &PlaceLabel) -> rusqlite::Result<bool> {
+pub(crate) fn set_label(conn: &Connection, id: i64, l: &PlaceLabel) -> rusqlite::Result<bool> {
     let n = conn.prepare_cached(
         "UPDATE place SET name = ?2, category = ?3, address = ?4, source = ?5, retry_at_ms = 0
          WHERE id = ?1 AND (source IS NULL OR source >= ?5)
