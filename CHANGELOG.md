@@ -18,6 +18,8 @@
 ## [Unreleased]
 
 ### Added
+- 개발 환경 세팅 문서: 설치 구성·버전, 환경 변수, Pleos Maven 설정, 빌드 방법, 검증 결과, 수동 단계 (`docs/50_개발환경_세팅.md`)
+- 팀원용 한 번에 설치 스크립트: JDK·Android SDK·NDK·Rust·cargo-ndk 설치·검증, 이미 있으면 건너뜀 (`scripts/setup-dev.ps1`)
 - 접수양식 02장 ①~⑥ 기획서 초안 v0 (`docs/00_plan.md`)
 - 개발 순서(MVP): 단계별 시연 목표, 자르는 순서, 위험 요소, 데일리 칸 (`docs/00_plan.md`)
 
