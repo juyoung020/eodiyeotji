@@ -18,6 +18,9 @@
 ## [Unreleased]
 
 ### Added
+- 장소 이름: 머문 곳·출발/도착을 좌표 대신 실제 장소 이름으로 표시. 출처 우선순위 차량 내비 > 카카오 로컬 > OSM, 가까운 지점은 한 장소로 묶어 한 번만 조회 (`core-rs/src/places.rs`, `app/.../place/`)
+- 차량 내비 연동(NaviHelper): 목적지·경유지를 기록의 장소 이름으로, 차량 내비 장소 검색 화면 열기(`SearchPlace`)·장소 상세 팝업 (`app/.../pleos/PleosNavi.kt`)
+- 지도 핀에 머문 곳 순서 번호·장소 이름, 날짜별 들른 곳 요약 데이터 (`stop_names`)
 - 세팅 문서에 Pleos 에뮬레이터를 Android Studio 없이 명령줄(sdkmanager·avdmanager)로 설치하는 방법 추가 (`docs/50_개발환경_세팅.md` 7-2-1)
 - 지도: 하루 상세 위에 그날 주행 경로·머문 곳 핀을 MapLibre로 그림. 항목을 누르면 지도에서 강조·이동, 지도를 누르면 항목 선택 (`app/.../ui/map/`)
 - 오프라인 지도: 서울·서울→강릉 고속도로·강릉 구간을 기기 안 지도 파일(PMTiles 60MB)과 한글 지명 스타일로 만들고 에뮬레이터에 넣는 스크립트 (`scripts/map/`, `app/src/main/assets/map/`)
