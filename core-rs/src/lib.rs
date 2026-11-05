@@ -8,6 +8,7 @@ uniffi::setup_scaffolding!();
 pub mod course;
 pub mod ffi;
 pub mod geo;
+pub mod store;
 pub mod trip;
 
 pub use geo::{Fix, Point};
