@@ -19,6 +19,7 @@
 
 ### Added
 - 접수양식 02장 ①~⑥ 기획서 초안 v0 (`docs/00_plan.md`)
+- 개발 일일 플랜(MVP): 1차 제출까지 날짜별 목표, 2차 PT까지 주 단위 목표, 자르는 순서, 위험 요소, 데일리 칸 (`docs/00_plan.md`)
 
 ### Changed
 - 공모전 자료를 `docs/contest/`로 모으고, 백로그를 `docs/00_plan.md`로 이름 바꿔 docs 맨 위에 둠
