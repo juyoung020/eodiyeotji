@@ -5,7 +5,7 @@ AI 코딩 도구(Claude Code, Codex, Cursor 등)와 팀원 모두가 따르는 �
 ## 프로젝트
 - **앱:** 어디였지 — 차가 이동을 자동으로 기록하고, AI가 하루를 요약하고, 말로 찾고, 지나가면 회상하고, 코스로 공유하는 Pleos Connect(현대차그룹 Android Automotive) 앱
 - **공모전:** 현대자동차그룹 차량용 앱 개발 공모전 2026. 1차 마감 **11/15 23:59**, 2차 PT **12/3–4** (에뮬레이터에서 **실제로 동작하는 앱 시연 필수**)
-- **할 일 기준:** `docs/plan.md` (백로그 · 스프린트). 작업을 시작하면 담당자를 적고, 끝나면 체크한다
+- **할 일 기준:** `docs/00_plan.md` (백로그 · 스프린트). 작업을 시작하면 담당자를 적고, 끝나면 체크한다
 - **아이디어 · 기능 설명:** `README.md` / **구조 상세:** `docs/60_앱_아키텍처.md`
 
 ## 핵심 원칙: 가장 빠른 구조
@@ -45,7 +45,7 @@ AI 코딩 도구(Claude Code, Codex, Cursor 등)와 팀원 모두가 따르는 �
 
 ## Pleos 플랫폼 사실 (틀리기 쉬운 것)
 - 공식 SDK 5종: **Vehicle, NaviHelper, FusedLocation, TextToSpeech, SpeechToText**. 개발 중에는 매니페스트에 권한 선언만 하면 쓸 수 있다.
-- **LLM SDK는 공식 목록에 없다** → LLM은 **외부 API**로 쓴다 (설명회에서 외부 API · 인터넷 사용 허용, `docs/16_설명회_다시보기_정리.md`).
+- **LLM SDK는 공식 목록에 없다** → LLM은 **외부 API**로 쓴다 (설명회에서 외부 API · 인터넷 사용 허용, `docs/contest/16_설명회_다시보기_정리.md`).
 - 속도 · 기어 · 연료 · **시동 상태(`IGNITION_STATE`)** 같은 표준 데이터는 Pleos SDK가 아니라 **AAOS 표준 Car API**(`CarPropertyManager`)로 읽는다.
 - NaviHelper 경유지는 **최대 2개** → 코스는 `course::split_legs`로 구간을 나누고, 도착(`onDestinationArrived`)하면 다음 구간을 요청한다.
 - Vehicle · FusedLocation은 차종마다 지원이 다르다 → `checkXxxCapabilities()` / `isSupported()`로 확인한 뒤 기능을 켠다.
@@ -57,7 +57,7 @@ AI 코딩 도구(Claude Code, Codex, Cursor 등)와 팀원 모두가 따르는 �
 |---|---|
 | SDK별로 할 수 있는 것 (요약) | `docs/31_API_한눈에보기.md` |
 | 모든 클래스 · 메서드 · 권한 | `docs/30_API_전체목록.md` → 상세는 `refs/pleos-docs/connect-sdk/` |
-| 심사 기준 | `docs/40_평가기준_정리.md` |
+| 심사 기준 | `docs/contest/40_평가기준_정리.md` |
 | 개발 환경 설치 · 에뮬레이터 | `docs/50_개발환경_세팅.md` |
 | 공식 샘플 코드 | `refs/github/pleos-sample-{vehicle,navi,fusedlocation}-app/` |
 | 주행 규제 · 운전자 주의 분산 | `refs/pleos-docs/guides/pleos-only/vehicle-app-planning-guide/`, `vehicle-app-developer-guide/` |

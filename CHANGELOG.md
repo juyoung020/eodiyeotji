@@ -17,6 +17,9 @@
 
 ## [Unreleased]
 
+### Changed
+- 공모전 자료를 `docs/contest/`로 모으고, 백로그를 `docs/00_plan.md`로 이름 바꿔 docs 맨 위에 둠
+
 ## [0.1.0] - 2026-11-05
 
 ### Added
