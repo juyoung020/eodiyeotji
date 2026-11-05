@@ -7,6 +7,12 @@
     <!-- ===== 권한 (앱마켓 심사: 쓰는 것만, 이유와 함께) ===== -->
     <!-- 차량 위치(Pleos FusedLocation): 이동 경로 자동 기록의 원천 데이터. dangerous → 첫 실행에 한 번만 묻는다 -->
     <uses-permission android:name="pleos.car.permission.FUSED_LOCATION" />
+    <!-- 내비 목적지·경유지 조회(NaviHelper get*Info)·도착 이벤트: 들른 곳을 좌표 대신 실제 장소 이름으로 보여 주기 위해. normal -->
+    <uses-permission android:name="pleos.car.permission.NAVI_ROUTE" />
+    <!-- 내비 경로 요청(NaviHelper requestRoute): 기록한 장소를 골라 "그곳으로 안내"하기 위해. normal -->
+    <uses-permission android:name="pleos.car.permission.NAVI_ROUTE_SEARCH" />
+    <!-- 내비 화면 열기(NaviHelper requestNavigationScreen): 장소 이름을 내비 검색 화면으로 넘겨 공식 장소를 고르게 하기 위해. normal -->
+    <uses-permission android:name="pleos.car.permission.NAVI_CUSTOM_MAP" />
     <!-- 기어(GEAR_SELECTION·CURRENT_GEAR)·시동(IGNITION_STATE) 읽기: 주행 시작·끝을 자동으로 알기 위해. normal → 묻지 않는다 -->
     <uses-permission android:name="android.car.permission.CAR_POWERTRAIN" />
     <!-- 앱 화면이 없어도 주행 기록을 이어가는 포그라운드 서비스. normal -->

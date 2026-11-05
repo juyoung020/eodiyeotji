@@ -26,3 +26,6 @@ captures/
 scripts/map/tools/
 scripts/map/out/
 scripts/map/style/node_modules/
+
+# Word·Excel이 파일을 열 때 만드는 임시 잠금 파일
+~$*
