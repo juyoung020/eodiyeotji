@@ -20,6 +20,9 @@
 ### Added
 - 개발 환경 세팅 문서: 설치 구성·버전, 환경 변수, Pleos Maven 설정, 빌드 방법, 검증 결과, 수동 단계 (`docs/50_개발환경_세팅.md`)
 - 팀원용 한 번에 설치 스크립트: JDK·Android SDK·NDK·Rust·cargo-ndk 설치·검증, 이미 있으면 건너뜀 (`scripts/setup-dev.ps1`)
+- 에뮬레이터 실행 스크립트: cold boot + RAM 파일 안 만들기 + Virtual Console 포트 연결 (`scripts/emu.ps1`)
+- 차량 상태 조작 스크립트: 기어·속도·위치를 명령으로 바꿔 주행/정차 전환 재현 (`scripts/vc.ps1`)
+- 세팅 문서에 에뮬레이터 실측 동작(앱 영역 크기, 주행 상태, 주행 중 일반 앱 차단, 시동 항목 없음)과 데스크톱 설치 기록 추가 (`docs/50_개발환경_세팅.md`)
 - 접수양식 02장 ①~⑥ 기획서 초안 v0 (`docs/00_plan.md`)
 - 개발 순서(MVP): 단계별 시연 목표, 자르는 순서, 위험 요소, 데일리 칸 (`docs/00_plan.md`)
 
