@@ -1,0 +1,4 @@
+# 글꼴(.pbf)·아이콘(.png)은 이진 파일. 작은 .pbf는 NUL 바이트가 없어 git이 글로 오인하고
+# core.autocrlf=true 에서 줄바꿈을 바꿔 파일을 망가뜨린다 → 줄바꿈 변환을 끈다.
+*.pbf binary
+*.png binary

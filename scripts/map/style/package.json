@@ -1,0 +1,16 @@
+{
+  "name": "eodiyeotji-map-style",
+  "private": true,
+  "description": "어디였지 오프라인 지도 스타일(app/src/main/assets/map) 생성기",
+  "type": "module",
+  "scripts": {
+    "generate": "node generate.mjs",
+    "check": "node generate.mjs --check"
+  },
+  "dependencies": {
+    "@protomaps/basemaps": "5.7.2"
+  },
+  "devDependencies": {
+    "@maplibre/maplibre-gl-style-spec": "24.4.1"
+  }
+}

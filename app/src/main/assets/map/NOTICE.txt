@@ -1,0 +1,8 @@
+어디였지 오프라인 지도 — 출처와 라이선스
+
+지도 데이터: © OpenStreetMap contributors, Open Database License (ODbL) 1.0 — https://www.openstreetmap.org/copyright
+지도 타일 · 스타일: Protomaps basemap (https://github.com/protomaps/basemaps) — 코드 BSD-3-Clause, 디자인 CC0 (LICENSE-protomaps-basemaps.md)
+글꼴: Noto Sans © The Noto Project Authors — SIL Open Font License 1.1 (fonts/OFL.txt)
+아이콘: protomaps/basemaps-assets 스프라이트, Mapzen tangrams/icons 파생 — MIT (sprites/LICENSE-tangrams-icons.md)
+
+앱 화면에 표시할 문구: © OpenStreetMap contributors · Protomaps
