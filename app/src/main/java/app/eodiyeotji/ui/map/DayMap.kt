@@ -6,6 +6,7 @@ import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import app.eodiyeotji.place.PlacePhotoRepository
 import android.content.ComponentCallbacks2
+import android.graphics.Bitmap
 import android.content.Context
 import android.content.res.Configuration
 import androidx.compose.foundation.background
@@ -131,7 +132,6 @@ private fun DayMapContent(
             onStay = MapInk.onMarker.toArgb(),
             onOpenStay = MapInk.onMarker.toArgb(),
             label = MapInk.label.toArgb(),
-            labelHalo = MapInk.labelHalo.toArgb(),
         )
     }
 
@@ -163,15 +163,22 @@ private fun DayMapContent(
     LaunchedEffect(controller, palette) { controller.setPalette(palette) }
     LaunchedEffect(controller, data) { controller.setData(data) }
     LaunchedEffect(controller, selectedKey) { controller.setSelection(selectedKey) }
-    // 정차한 곳 사진 상자: 사진을 받아 상자 그림으로 만든 뒤(백그라운드) 지도에 얹는다
-    LaunchedEffect(controller, photoPins) {
+    // 머문 곳 카드·주행 글·깃발: 지도 데이터에서 Rust가 만든 글을 꺼내(백그라운드) 그림으로 그려 얹는다.
+    // 사진은 따로 받아 오고(같은 곳은 캐시), 오면 카드를 사진 든 것으로 다시 그린다 → 카드가 먼저 뜨고 사진이 채워진다.
+    val marks by produceState<MapMarks?>(initialValue = null, data) {
+        value = data?.let { d -> withContext(Dispatchers.Default) { parseMapMarks(d.geojson) } }
+    }
+    val stayPhotos by produceState<Map<String, Bitmap>>(initialValue = emptyMap(), photoPins) {
         if (photoPins.isEmpty()) {
-            controller.setPhotos(emptyMap())
-            return@LaunchedEffect
+            value = emptyMap()
+            return@produceState
         }
         val repo = EntryPointAccessors.fromApplication(context.applicationContext, MapPhotoEntryPoint::class.java).photos()
-        val icons = withContext(Dispatchers.Default) { loadPhotoPinIcons(context.applicationContext, repo, photoPins, density) }
-        controller.setPhotos(icons)
+        value = withContext(Dispatchers.Default) { loadStayPhotos(context.applicationContext, repo, photoPins, density) }
+    }
+    LaunchedEffect(controller, marks, stayPhotos, palette) {
+        val m = marks
+        controller.setIcons(m?.let { withContext(Dispatchers.Default) { buildMarkerIcons(it, stayPhotos, palette, density) } })
     }
 
     Box(modifier) {

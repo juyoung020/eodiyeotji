@@ -1,6 +1,5 @@
 package app.eodiyeotji.ui.map
 
-import android.graphics.Bitmap
 import android.graphics.RectF
 import android.util.Log
 import androidx.compose.runtime.Immutable
@@ -16,14 +15,19 @@ import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.expressions.Expression.all
 import org.maplibre.android.style.expressions.Expression.any
-import org.maplibre.android.style.expressions.Expression.concat
+import org.maplibre.android.style.expressions.Expression.coalesce
 import org.maplibre.android.style.expressions.Expression.color
+import org.maplibre.android.style.expressions.Expression.concat
 import org.maplibre.android.style.expressions.Expression.eq
 import org.maplibre.android.style.expressions.Expression.get
 import org.maplibre.android.style.expressions.Expression.has
+import org.maplibre.android.style.expressions.Expression.interpolate
+import org.maplibre.android.style.expressions.Expression.linear
 import org.maplibre.android.style.expressions.Expression.literal
 import org.maplibre.android.style.expressions.Expression.not
+import org.maplibre.android.style.expressions.Expression.stop
 import org.maplibre.android.style.expressions.Expression.switchCase
+import org.maplibre.android.style.expressions.Expression.zoom
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.Layer
 import org.maplibre.android.style.layers.LineLayer
@@ -40,24 +44,25 @@ import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
 import org.maplibre.android.style.layers.PropertyFactory.iconImage
 import org.maplibre.android.style.layers.PropertyFactory.iconOffset
 import org.maplibre.android.style.layers.PropertyFactory.iconOpacity
+import org.maplibre.android.style.layers.PropertyFactory.iconPadding
+import org.maplibre.android.style.layers.PropertyFactory.iconRotationAlignment
+import org.maplibre.android.style.layers.PropertyFactory.iconSize
+import org.maplibre.android.style.layers.PropertyFactory.lineBlur
 import org.maplibre.android.style.layers.PropertyFactory.lineCap
 import org.maplibre.android.style.layers.PropertyFactory.lineColor
 import org.maplibre.android.style.layers.PropertyFactory.lineJoin
 import org.maplibre.android.style.layers.PropertyFactory.lineOpacity
 import org.maplibre.android.style.layers.PropertyFactory.lineWidth
+import org.maplibre.android.style.layers.PropertyFactory.symbolPlacement
+import org.maplibre.android.style.layers.PropertyFactory.symbolSortKey
+import org.maplibre.android.style.layers.PropertyFactory.symbolSpacing
 import org.maplibre.android.style.layers.PropertyFactory.textAllowOverlap
 import org.maplibre.android.style.layers.PropertyFactory.textColor
 import org.maplibre.android.style.layers.PropertyFactory.textField
 import org.maplibre.android.style.layers.PropertyFactory.textFont
-import org.maplibre.android.style.layers.PropertyFactory.textHaloColor
-import org.maplibre.android.style.layers.PropertyFactory.textHaloWidth
 import org.maplibre.android.style.layers.PropertyFactory.textIgnorePlacement
-import org.maplibre.android.style.layers.PropertyFactory.textLetterSpacing
-import org.maplibre.android.style.layers.PropertyFactory.textMaxWidth
 import org.maplibre.android.style.layers.PropertyFactory.textOpacity
-import org.maplibre.android.style.layers.PropertyFactory.textRadialOffset
 import org.maplibre.android.style.layers.PropertyFactory.textSize
-import org.maplibre.android.style.layers.PropertyFactory.textVariableAnchor
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import kotlin.math.min
@@ -74,9 +79,8 @@ internal data class MapPalette(
     /** 핀 안 순서 숫자 (머문 곳 · 지금 있는 곳 핀 위) */
     val onStay: Int,
     val onOpenStay: Int,
-    /** 핀 옆 이름 글자와 그 테두리(후광) */
+    /** 카드 이름 글자, 출발·도착 깃발 바탕 */
     val label: Int,
-    val labelHalo: Int,
 )
 
 /**
@@ -86,10 +90,13 @@ internal data class MapPalette(
  *   MapLibre가 파싱·타일링을 자기 작업 스레드에서 한다.
  * - 같은 날이 다시 읽히면 소스 데이터만 바꾸고, 날이 바뀌었을 때만 카메라를 범위에 맞춘다(애니메이션 없이 한 번에).
  * - 선택 강조는 데이터를 다시 넣지 않고 강조 레이어의 filter와 나머지의 투명도만 바꾼다.
- * - 정차한 곳 대표 사진은 핀 위에 네모 상자 아이콘으로 띄운다 ([setPhotos], 키마다 스타일 이미지 하나).
- * - 머문 곳 핀에는 그날 순서(GeoJSON `order`)를 핀 안에, 이름(`name`)을 핀 옆에 띄운다. 글자 레이어는 에뮬레이터에서
- *   지도 끌기를 느리게 하므로 머문 곳(하루 몇 개)에만 쓰고, 이름은 서로 겹치면 빼고(text-allow-overlap=false)
- *   멀리서 볼 때(줌 [NAME_MIN_ZOOM] 미만)는 숨긴다. 고른 머문 곳 이름만 크게, 겹쳐도 보이게 따로 그린다.
+ * - 경로: 그림자 · 흰 테두리 · 경로색 선 위에 진행 방향 흰 화살표(선 따라 일정 간격), 주행 가운데에 "12분 · 4.9km" 알약,
+ *   머문 곳이 아닌 출발·도착 지점에는 깃발.
+ * - 머문 곳: 순서 숫자 핀 + 그 위 말풍선 카드(대표 사진·이름·"18분 정차", [setIcons]). 카드끼리 겹치면 순서가 빠른
+ *   카드가 이기고, 빠진 곳은 남는 자리가 있으면 작은 사진 말풍선으로, 그마저 겹치면 순서 핀만 남는다.
+ *   고른 곳 카드는 늘 보인다.
+ * - 아이콘은 전부 미리 그린 그림이다. 글자 레이어(글꼴 모양 잡기)는 에뮬레이터에서 지도 끌기를 느리게 해서
+ *   핀 안 숫자 하나만 쓴다.
  */
 internal class DayMapController(
     private val mapView: MapView,
@@ -109,7 +116,8 @@ internal class DayMapController(
     private var fittedDay: String? = null
     private var selected: String? = null
     private var palette: MapPalette? = null
-    private var photos: Map<String, Bitmap> = emptyMap()
+    private var icons: MarkerIcons? = null
+    private var addedImages: Set<String> = emptySet()
 
     init {
         mapView.addOnDidFailLoadingMapListener { msg ->
@@ -135,10 +143,11 @@ internal class DayMapController(
         pendingStyleJson = null
         if (json == styleJson) return
         styleJson = json
-        // 스타일을 바꾸면 소스·레이어가 사라진다 → 새 스타일이 뜨면 처음부터 다시 얹는다
+        // 스타일을 바꾸면 소스·레이어·이미지가 사라진다 → 새 스타일이 뜨면 처음부터 다시 얹는다
         style = null
         source = null
         appliedData = null
+        addedImages = emptySet()
         m.setStyle(Style.Builder().fromJson(json)) { s -> onStyleLoaded(s) }
     }
 
@@ -153,11 +162,11 @@ internal class DayMapController(
         applyData()
     }
 
-    /** 정차한 곳 사진 상자 (키 = 머문 곳 키 `s<도착 ms>`). 없는 곳은 상자 없이 핀만. */
-    fun setPhotos(p: Map<String, Bitmap>) {
-        if (p == photos) return
-        photos = p
-        style?.let { applyPhotos(it) }
+    /** 카드·작은 사진·주행 글·깃발 그림 ([buildMarkerIcons]). 지금 지도 데이터와 같은 날 것일 때만 보인다. */
+    fun setIcons(i: MarkerIcons?) {
+        if (i === icons) return
+        icons = i
+        style?.let { applyIcons(it) }
     }
 
     fun setSelection(key: String?) {
@@ -174,17 +183,34 @@ internal class DayMapController(
         val src = GeoJsonSource(SOURCE_ID, EMPTY_GEOJSON)
         s.addSource(src)
         source = src
+        s.addImage(MapIconId.ARROW, arrowIcon(density))
 
         val roundLine = arrayOf(lineJoin(Property.LINE_JOIN_ROUND), lineCap(Property.LINE_CAP_ROUND))
 
-        // 경로는 바탕 지도의 글자(심볼) 아래에 깐다 → 길 이름이 경로에 가리지 않는다. 핀은 맨 위.
+        // 경로는 바탕 지도의 글자(심볼) 아래에 깐다 → 길 이름이 경로에 가리지 않는다. 핀·카드는 맨 위.
         val firstSymbol = s.layers.firstOrNull { it is SymbolLayer }?.id
         fun addLine(layer: Layer) = if (firstSymbol != null) s.addLayerBelow(layer, firstSymbol) else s.addLayer(layer)
 
-        addLine(LineLayer(TRIP_CASING, SOURCE_ID).withFilter(isTrip).withProperties(*roundLine, lineWidth(12f)))
-        addLine(LineLayer(TRIP_LINE, SOURCE_ID).withFilter(isTrip).withProperties(*roundLine, lineWidth(7f)))
-        addLine(LineLayer(TRIP_SEL_CASING, SOURCE_ID).withFilter(NOTHING).withProperties(*roundLine, lineWidth(18f)))
-        addLine(LineLayer(TRIP_SEL, SOURCE_ID).withFilter(NOTHING).withProperties(*roundLine, lineWidth(11f)))
+        addLine(
+            LineLayer(TRIP_SHADOW, SOURCE_ID).withFilter(isTrip)
+                .withProperties(*roundLine, lineWidth(widthByZoom(SHADOW_W)), lineBlur(4f), lineColor(SHADOW_COLOR)),
+        )
+        addLine(LineLayer(TRIP_CASING, SOURCE_ID).withFilter(isTrip).withProperties(*roundLine, lineWidth(widthByZoom(CASING_W))))
+        addLine(LineLayer(TRIP_LINE, SOURCE_ID).withFilter(isTrip).withProperties(*roundLine, lineWidth(widthByZoom(LINE_W))))
+        addLine(LineLayer(TRIP_SEL_CASING, SOURCE_ID).withFilter(NOTHING).withProperties(*roundLine, lineWidth(widthByZoom(SEL_CASING_W))))
+        addLine(LineLayer(TRIP_SEL, SOURCE_ID).withFilter(NOTHING).withProperties(*roundLine, lineWidth(widthByZoom(SEL_LINE_W))))
+        // 진행 방향 화살표: 선을 따라 일정 간격, 다른 글자와 자리 다툼 없이 (아주 멀리서는 숨김, 선 굵기 따라 크기)
+        addLine(
+            SymbolLayer(TRIP_ARROW, SOURCE_ID).withFilter(isTrip).withProperties(
+                symbolPlacement(Property.SYMBOL_PLACEMENT_LINE),
+                symbolSpacing(ARROW_SPACING_DP),
+                iconImage(MapIconId.ARROW),
+                iconSize(interpolate(linear(), zoom(), stop(ARROW_MIN_ZOOM, 0.75f), stop(13, 1f), stop(17, 1.3f))),
+                iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
+                iconAllowOverlap(true),
+                iconIgnorePlacement(true),
+            ).apply { minZoom = ARROW_MIN_ZOOM },
+        )
 
         // 아직 머무는 곳(= 지금 차가 있는 곳)은 큰 핀 + 옅은 후광으로 구분한다
         s.addLayer(
@@ -215,6 +241,11 @@ internal class DayMapController(
             CircleLayer(STAY_SEL, SOURCE_ID).withFilter(NOTHING)
                 .withProperties(circleRadius(selRadius), circleStrokeWidth(4.5f)),
         )
+        // 출발·도착 지점 점 (머문 곳이 아닐 때만 Rust가 넣는다)
+        s.addLayer(
+            CircleLayer(END_DOT, SOURCE_ID).withFilter(isEnd)
+                .withProperties(circleRadius(7f), circleStrokeWidth(4f)),
+        )
 
         // 핀 안 순서 숫자: 핀과 한 몸이라 겹침 검사 없이 항상 그린다 (숫자만 → 글꼴 0-255 범위 하나)
         s.addLayer(
@@ -226,54 +257,71 @@ internal class DayMapController(
                 textIgnorePlacement(true),
             ),
         )
-        // 핀 옆 이름: 오른쪽 → 왼쪽 → 위 → 아래 중 빈 자리에, 자리가 없으면 뺀다
-        val nameLayout = arrayOf(
-            textField(get("name")),
-            textFont(arrayOf(FONT_REGULAR)),
-            textVariableAnchor(NAME_ANCHORS),
-            textRadialOffset(NAME_OFFSET_EM),
-            textMaxWidth(NAME_MAX_WIDTH_EM),
-            textLetterSpacing(HANGUL_LETTER_SPACING),
-            textHaloWidth(2f),
-        )
+        // 주행 가운데 글: 선 위 가운데. 카드와 겹치면 빠진다(카드가 먼저 자리를 잡는다).
         s.addLayer(
-            SymbolLayer(STAY_NAME, SOURCE_ID).withFilter(all(isStay, hasName)).withProperties(
-                *nameLayout,
-                textSize(NAME_SIZE),
-                textAllowOverlap(false),
-            ).apply { minZoom = NAME_MIN_ZOOM },
+            SymbolLayer(TRIP_LABEL, SOURCE_ID).withFilter(NOTHING).withProperties(
+                iconImage(concat(literal(MapIconId.LABEL), get("key"))),
+                iconAllowOverlap(false),
+                iconPadding(4f),
+            ).apply { minZoom = LABEL_MIN_ZOOM },
         )
-        // 고른 머문 곳 이름: 더 크게, 줌·겹침과 상관없이 항상
+        // 출발·도착 깃발: 점 바로 위
         s.addLayer(
-            SymbolLayer(STAY_NAME_SEL, SOURCE_ID).withFilter(NOTHING).withProperties(
-                *nameLayout,
-                textSize(NAME_SEL_SIZE),
-                textAllowOverlap(true),
-            ),
-        )
-
-        // 정차한 곳 사진 상자: 핀 바로 위, 꼬리가 핀을 가리킨다. 몇 개뿐이라 겹쳐도 다 보인다.
-        s.addLayer(
-            SymbolLayer(STAY_PHOTO, SOURCE_ID).withFilter(NOTHING).withProperties(
-                iconImage(concat(literal(PHOTO_IMAGE_PREFIX), get("key"))),
+            SymbolLayer(END_FLAG, SOURCE_ID).withFilter(NOTHING).withProperties(
+                iconImage(concat(literal(MapIconId.END), get("role"))),
                 iconAnchor(Property.ICON_ANCHOR_BOTTOM),
-                iconOffset(arrayOf(0f, -PHOTO_PIN_LIFT_DP)),
+                iconOffset(arrayOf(0f, -END_LIFT_DP)),
                 iconAllowOverlap(true),
                 iconIgnorePlacement(true),
             ),
         )
+        // 카드가 빠진 곳의 작은 사진 말풍선: 카드 다음 순서로 자리를 잡는다. 제 카드나 다른 카드·말풍선과 겹치면
+        // 빠지므로 카드가 보이는 곳에는 안 그려진다.
+        val calloutLayout = arrayOf(
+            iconAnchor(Property.ICON_ANCHOR_BOTTOM),
+            iconOffset(arrayOf(0f, -CALLOUT_PIN_LIFT_DP)),
+            symbolSortKey(coalesce(get("order"), literal(NO_ORDER_SORT))),
+        )
+        s.addLayer(
+            SymbolLayer(STAY_MINI, SOURCE_ID).withFilter(NOTHING).withProperties(
+                *calloutLayout,
+                iconImage(concat(literal(MapIconId.MINI), get("key"))),
+                iconAllowOverlap(false),
+                iconPadding(2f),
+            ),
+        )
+        // 카드: 겹치면 순서가 빠른 것만 (symbol-sort-key = 순서)
+        s.addLayer(
+            SymbolLayer(STAY_CARD, SOURCE_ID).withFilter(NOTHING).withProperties(
+                *calloutLayout,
+                iconImage(concat(literal(MapIconId.CARD), get("key"))),
+                iconAllowOverlap(false),
+                iconPadding(2f),
+            ),
+        )
+        // 고른 곳 카드: 겹침과 상관없이 맨 위에 늘 (다른 카드가 이 자리를 피한다)
+        s.addLayer(
+            SymbolLayer(STAY_CARD_SEL, SOURCE_ID).withFilter(NOTHING).withProperties(
+                *calloutLayout,
+                iconImage(concat(literal(MapIconId.CARD), get("key"))),
+                iconAllowOverlap(true),
+            ),
+        )
 
         palette?.let { applyPalette(s, it) }
+        applyIcons(s)
         applySelection(s)
-        applyPhotos(s)
         applyData()
     }
 
-    private fun applyPhotos(s: Style) {
-        photos.forEach { (key, bmp) -> s.addImage(PHOTO_IMAGE_PREFIX + key, bmp) }
-        val layer = s.getLayer(STAY_PHOTO) as? SymbolLayer ?: return
-        val keys = photos.keys.map { eq(get("key"), literal(it)) }
-        layer.setFilter(if (keys.isEmpty()) NOTHING else all(isStay, any(*keys.toTypedArray())))
+    /** 새 그림을 스타일에 넣고(같은 이름은 덮어씀) 이제 안 쓰는 그림은 뺀다. */
+    private fun applyIcons(s: Style) {
+        val i = icons
+        val now = i?.images?.keys.orEmpty()
+        (addedImages - now).forEach { s.removeImage(it) }
+        i?.images?.forEach { (id, bmp) -> s.addImage(id, bmp) }
+        addedImages = now
+        applyFilters(s)
     }
 
     private fun applyPalette(s: Style, p: MapPalette) {
@@ -286,32 +334,52 @@ internal class DayMapController(
         s.getLayer(STAY)?.setProperties(circleColor(stayColor), circleStrokeColor(p.casing))
         s.getLayer(STAY_SEL)?.setProperties(circleColor(stayColor), circleStrokeColor(p.selectedStroke))
         s.getLayer(STAY_SEL_HALO)?.setProperties(circleColor(stayColor))
+        s.getLayer(END_DOT)?.setProperties(circleColor(p.casing), circleStrokeColor(p.label))
         s.getLayer(STAY_NUM)?.setProperties(textColor(switchCase(isOpen, color(p.onOpenStay), color(p.onStay))))
-        s.getLayer(STAY_NAME)?.setProperties(textColor(p.label), textHaloColor(p.labelHalo))
-        s.getLayer(STAY_NAME_SEL)?.setProperties(textColor(p.label), textHaloColor(p.labelHalo))
     }
 
-    /** 고른 항목은 강조 레이어로 위에 다시 그리고, 나머지는 살짝 흐리게. */
+    /**
+     * 그림 레이어의 filter: 그림이 지금 지도 데이터(같은 GeoJSON)로 그린 것일 때만 켠다
+     * (날이 바뀐 직후 옛 그림 이름을 찾지 않게). 고른 곳 카드는 강조 레이어로 옮긴다.
+     */
+    private fun applyFilters(s: Style) {
+        val i = icons
+        val ready = i != null && appliedData != null && i.geojson == appliedData?.geojson
+        val pick = pick()
+        fun SymbolLayer.filter(e: Expression) = setFilter(if (ready) e else NOTHING)
+        (s.getLayer(STAY_CARD) as? SymbolLayer)?.filter(all(isStay, not(pick)))
+        (s.getLayer(STAY_CARD_SEL) as? SymbolLayer)?.filter(all(isStay, pick))
+        val minis = i?.miniKeys.orEmpty().map { eq(get("key"), literal(it)) }
+        (s.getLayer(STAY_MINI) as? SymbolLayer)?.filter(if (minis.isEmpty()) NOTHING else all(isStay, any(*minis.toTypedArray())))
+        (s.getLayer(TRIP_LABEL) as? SymbolLayer)?.filter(isLabel)
+        (s.getLayer(END_FLAG) as? SymbolLayer)?.filter(isEnd)
+    }
+
+    private fun pick(): Expression = selected?.let { eq(get("key"), literal(it)) } ?: NOTHING
+
+    /** 고른 항목은 강조 레이어로 위에 다시 그리고, 나머지는 살짝 흐리게. 카드는 글을 읽을 수 있게 흐리게 하지 않는다. */
     private fun applySelection(s: Style) {
         val key = selected
-        val pick = if (key == null) NOTHING else eq(get("key"), literal(key))
+        val pick = pick()
         val dim = if (key == null) 1f else DIMMED_OPACITY
+        val keepPicked = if (key == null) literal(1f) else switchCase(pick, literal(1f), literal(dim))
         // 종류도 같이 걸러야 한다: 원 레이어는 선의 꼭짓점마다 원을 찍는다
         s.getLayer(TRIP_SEL_CASING)?.let { (it as LineLayer).setFilter(all(isTrip, pick)) }
         s.getLayer(TRIP_SEL)?.let { (it as LineLayer).setFilter(all(isTrip, pick)) }
         s.getLayer(STAY_SEL)?.let { (it as CircleLayer).setFilter(all(isStay, pick)) }
         s.getLayer(STAY_SEL_HALO)?.let { (it as CircleLayer).setFilter(all(isStay, pick)) }
-        // 고른 곳 이름은 강조 레이어로 옮기고 보통 이름 레이어에서는 뺀다 (두 번 그리지 않게)
-        s.getLayer(STAY_NAME_SEL)?.let { (it as SymbolLayer).setFilter(all(isStay, hasName, pick)) }
-        s.getLayer(STAY_NAME)?.let { (it as SymbolLayer).setFilter(all(isStay, hasName, not(pick))) }
+        s.getLayer(TRIP_SHADOW)?.setProperties(lineOpacity(dim))
         s.getLayer(TRIP_CASING)?.setProperties(lineOpacity(dim))
         s.getLayer(TRIP_LINE)?.setProperties(lineOpacity(dim))
+        s.getLayer(TRIP_ARROW)?.setProperties(iconOpacity(keepPicked))
+        s.getLayer(TRIP_LABEL)?.setProperties(iconOpacity(keepPicked))
+        s.getLayer(END_DOT)?.setProperties(circleOpacity(dim), circleStrokeOpacity(dim))
+        s.getLayer(END_FLAG)?.setProperties(iconOpacity(dim))
         s.getLayer(STAY)?.setProperties(circleOpacity(dim), circleStrokeOpacity(dim))
         s.getLayer(STAY_HALO)?.setProperties(circleOpacity(HALO_OPACITY * dim))
         // 숫자는 고른 핀(강조 원 위)만 진하게, 나머지는 원과 같이 흐리게
-        s.getLayer(STAY_NUM)?.setProperties(textOpacity(if (key == null) literal(1f) else switchCase(pick, literal(1f), literal(dim))))
-        s.getLayer(STAY_NAME)?.setProperties(textOpacity(dim))
-        s.getLayer(STAY_PHOTO)?.setProperties(iconOpacity(if (key == null) literal(1f) else switchCase(pick, literal(1f), literal(dim))))
+        s.getLayer(STAY_NUM)?.setProperties(textOpacity(keepPicked))
+        applyFilters(s)
     }
 
     private fun applyData() {
@@ -320,11 +388,23 @@ internal class DayMapController(
         if (d !== appliedData) {
             src.setGeoJson(d?.geojson ?: EMPTY_GEOJSON)
             appliedData = d
+            style?.let { applyFilters(it) }
         }
         if (d != null && d.day != fittedDay) {
             fittedDay = d.day
             fitCamera(d)
         }
+    }
+
+    /**
+     * 화면 맞춤 여백: 위는 핀 위 카드 높이만큼, 옆은 카드 반 너비만큼 더 띄운다 (지도 폭의 일부까지만).
+     * 순서: 왼쪽, 위, 오른쪽, 아래 (px).
+     */
+    private fun fitPadding(): IntArray {
+        val base = FIT_PADDING_DP * density
+        val side = min(CALLOUT_HALF_WIDTH_DP * density, mapView.width * MAX_SIDE_PAD_FRACTION).coerceAtLeast(base)
+        val top = min((FIT_PADDING_DP + CALLOUT_TOP_EXTRA_DP) * density, mapView.height * MAX_TOP_PAD_FRACTION).coerceAtLeast(base)
+        return intArrayOf(side.toInt(), top.toInt(), side.toInt(), base.toInt())
     }
 
     /** 그날 경로·핀 전체가 보이게 맞춘다. 범위가 한 점이면 너무 확대되지 않게 [MAX_FIT_ZOOM]에서 멈춘다. */
@@ -333,10 +413,7 @@ internal class DayMapController(
         val m = map ?: return
         mapView.doOnLayout {
             val bounds = LatLngBounds.from(b.maxLat, b.maxLon, b.minLat, b.minLon)
-            val pad = (FIT_PADDING_DP * density).toInt()
-            // 위쪽은 핀 위 사진 상자(높이 약 88dp)가 잘리지 않게 더 띄운다
-            val top = ((FIT_PADDING_DP + PHOTO_TOP_EXTRA_DP) * density).toInt()
-            val cam = m.getCameraForLatLngBounds(bounds, intArrayOf(pad, top, pad, pad)) ?: return@doOnLayout
+            val cam = m.getCameraForLatLngBounds(bounds, fitPadding()) ?: return@doOnLayout
             val pos = CameraPosition.Builder(cam).zoom(min(cam.zoom, MAX_FIT_ZOOM)).build()
             m.moveCamera(CameraUpdateFactory.newCameraPosition(pos))
         }
@@ -351,23 +428,27 @@ internal class DayMapController(
         val b = data?.entryBounds?.get(key) ?: return
         val visible = m.projection.visibleRegion.latLngBounds
         if (visible.contains(LatLng(b.minLat, b.minLon)) && visible.contains(LatLng(b.maxLat, b.maxLon))) return
-        val pad = (FIT_PADDING_DP * density).toInt()
         val target = if (b.minLat == b.maxLat && b.minLon == b.maxLon) {
             CameraUpdateFactory.newLatLngZoom(LatLng(b.minLat, b.minLon), MAX_FIT_ZOOM.coerceAtMost(m.cameraPosition.zoom.coerceAtLeast(REVEAL_MIN_ZOOM)))
         } else {
-            CameraUpdateFactory.newLatLngBounds(LatLngBounds.from(b.maxLat, b.maxLon, b.minLat, b.minLon), pad)
+            val p = fitPadding()
+            CameraUpdateFactory.newLatLngBounds(LatLngBounds.from(b.maxLat, b.maxLon, b.minLat, b.minLon), p[0], p[1], p[2], p[3])
         }
         m.easeCamera(target, REVEAL_MS)
     }
 
-    /** 지도를 누르면 손가락 크기(76dp) 안의 핀(이름 글자 포함) → 경로 순서로 찾아 그 항목을 고른다. 빈 곳이면 선택 해제. */
+    /**
+     * 지도를 누르면 그 자리의 카드·사진 말풍선 → 손가락 크기(76dp) 안의 핀 → 주행 글·깃발 → 경로 순서로 찾아
+     * 그 항목을 고른다. 빈 곳이면 선택 해제.
+     */
     private fun onMapClick(m: MapLibreMap, latLng: LatLng): Boolean {
         if (style == null) return false
         val p = m.projection.toScreenLocation(latLng)
         val r = TOUCH_RADIUS_DP * density
         val box = RectF(p.x - r, p.y - r, p.x + r, p.y + r)
-        val key = m.queryRenderedFeatures(box, STAY_PHOTO, STAY_SEL, STAY, STAY_NAME_SEL, STAY_NAME).firstNotNullOfOrNull { it.keyOrNull() }
-            ?: m.queryRenderedFeatures(box, TRIP_SEL, TRIP_LINE).firstNotNullOfOrNull { it.keyOrNull() }
+        val key = m.queryRenderedFeatures(p, STAY_CARD_SEL, STAY_CARD, STAY_MINI).firstNotNullOfOrNull { it.keyOrNull() }
+            ?: m.queryRenderedFeatures(box, STAY_SEL, STAY).firstNotNullOfOrNull { it.keyOrNull() }
+            ?: m.queryRenderedFeatures(box, TRIP_LABEL, END_FLAG, END_DOT, TRIP_SEL, TRIP_LINE).firstNotNullOfOrNull { it.keyOrNull() }
         onSelectKey(key)
         return true
     }
@@ -378,54 +459,71 @@ internal class DayMapController(
     private companion object {
         const val TAG = "EodiMap"
         const val SOURCE_ID = "eodi-day"
+        const val TRIP_SHADOW = "eodi-trip-shadow"
         const val TRIP_CASING = "eodi-trip-casing"
         const val TRIP_LINE = "eodi-trip"
         const val TRIP_SEL_CASING = "eodi-trip-sel-casing"
         const val TRIP_SEL = "eodi-trip-sel"
+        const val TRIP_ARROW = "eodi-trip-arrow"
+        const val TRIP_LABEL = "eodi-trip-label"
+        const val END_DOT = "eodi-end-dot"
+        const val END_FLAG = "eodi-end-flag"
         const val STAY_HALO = "eodi-stay-open-halo"
         const val STAY = "eodi-stay"
         const val STAY_SEL = "eodi-stay-sel"
         const val STAY_SEL_HALO = "eodi-stay-sel-halo"
         const val STAY_NUM = "eodi-stay-order"
-        const val STAY_NAME = "eodi-stay-name"
-        const val STAY_NAME_SEL = "eodi-stay-name-sel"
-        const val STAY_PHOTO = "eodi-stay-photo"
-        const val PHOTO_IMAGE_PREFIX = "eodi-photo-"
+        const val STAY_MINI = "eodi-stay-mini"
+        const val STAY_CARD = "eodi-stay-card"
+        const val STAY_CARD_SEL = "eodi-stay-card-sel"
 
-        /** 앱 assets 글꼴 이름 (scripts/map/README.md 스타일 약속). 한글은 기기 글꼴(localIdeographFontFamily)로 그린다. */
-        const val FONT_REGULAR = "NotoSans-Regular"
+        /** 앱 assets 글꼴 이름 (scripts/map/README.md 스타일 약속). */
         const val FONT_MEDIUM = "NotoSans-Medium"
 
         const val EMPTY_GEOJSON = """{"type":"FeatureCollection","features":[]}"""
         val NOTHING: Expression = literal(false)
 
+        /** 경로 굵기(dp, 줌 13 기준). 멀리서는 가늘게, 가까이서는 굵게 ([widthByZoom]). */
+        const val LINE_W = 7f
+        const val CASING_W = 11.5f
+        const val SHADOW_W = 15f
+        const val SEL_LINE_W = 10f
+        const val SEL_CASING_W = 15f
+        const val SHADOW_COLOR = 0x47000000
+
+        fun widthByZoom(w: Float): Expression =
+            interpolate(linear(), zoom(), stop(8, w * 0.75f), stop(13, w), stop(17, w * 1.4f))
+
+        const val ARROW_SPACING_DP = 90f
+        const val ARROW_MIN_ZOOM = 7f
+        const val LABEL_MIN_ZOOM = 6f
+        const val NO_ORDER_SORT = 999
+
+        /** 카드 꼬리 끝이 핀 위 가장자리에 닿게 올리는 거리(dp) / 깃발을 점 위로 올리는 거리 */
+        const val CALLOUT_PIN_LIFT_DP = 15f
+        const val END_LIFT_DP = 8f
+
+        /** 카드(높이 80dp + 꼬리 12dp + 핀 위 15dp)가 화면 위에서 잘리지 않게 / 카드 반 너비(최대 약 130dp) */
+        const val CALLOUT_TOP_EXTRA_DP = 110f
+        const val CALLOUT_HALF_WIDTH_DP = 130f
+        const val MAX_SIDE_PAD_FRACTION = 0.22f
+        const val MAX_TOP_PAD_FRACTION = 0.35f
+
         const val DIMMED_OPACITY = 0.35f
         const val HALO_OPACITY = 0.22f
         const val SEL_HALO_OPACITY = 0.28f
         const val FIT_PADDING_DP = 56f
-        const val PHOTO_TOP_EXTRA_DP = 80f
         const val TOUCH_RADIUS_DP = 38f
         const val MAX_FIT_ZOOM = 16.0
         const val MAX_ZOOM = 18.0
         const val REVEAL_MIN_ZOOM = 14.0
         const val REVEAL_MS = 400
 
-        const val NAME_SIZE = 15f
-        const val NAME_SEL_SIZE = 19f
-        const val NAME_MIN_ZOOM = 11f
-        const val NAME_OFFSET_EM = 1.1f
-        const val NAME_MAX_WIDTH_EM = 9f
-
-        /** 바탕 지도 한글 라벨과 같은 글자 간격 (scripts/map/README.md "글자") */
-        const val HANGUL_LETTER_SPACING = -0.08f
-        val NAME_ANCHORS = arrayOf(
-            Property.TEXT_ANCHOR_LEFT, Property.TEXT_ANCHOR_RIGHT, Property.TEXT_ANCHOR_TOP, Property.TEXT_ANCHOR_BOTTOM,
-        )
-
         val isTrip: Expression = eq(get("kind"), literal("trip"))
         val isStay: Expression = eq(get("kind"), literal("stay"))
+        val isLabel: Expression = eq(get("kind"), literal("trip_label"))
+        val isEnd: Expression = eq(get("kind"), literal("endpoint"))
         val isOpen: Expression = eq(get("open"), literal(true))
         val hasOrder: Expression = has("order")
-        val hasName: Expression = has("name")
     }
 }
