@@ -265,7 +265,7 @@ fn stay_after_a_trip_that_crosses_midnight_counts_on_the_arrival_day() {
     assert_eq!(days[0].day, "2026-11-05");
     assert_eq!((days[0].trip_count, days[0].stay_count, days[0].first_ms, days[0].last_ms), (0, 1, arrive, arrive));
     let d5 = store.day_detail("2026-11-05".into()).unwrap();
-    assert_eq!(d5.stays, vec![StaySummary { center: GeoPoint { lat, lon }, arrive_ms: arrive, leave_ms: arrive, place: None }]);
+    assert_eq!(d5.stays, vec![StaySummary { center: GeoPoint { lat, lon }, arrive_ms: arrive, leave_ms: arrive, place: None, order: 1 }]);
 
     // 아침에 같은 자리에서 출발 → 머문 곳이 00:10~08:30으로 닫힌다
     let leave = kst(2026, 11, 5, 8, 30);
@@ -295,7 +295,7 @@ fn parking_between_trips_is_a_stay() {
     store.ingest(b).unwrap();
     let d = store.day_detail("2026-11-05".into()).unwrap();
     assert_eq!(d.trips.len(), 3);
-    assert_eq!(d.stays, vec![StaySummary { center: GeoPoint { lat, lon }, arrive_ms: a_end, leave_ms: b_start, place: None }]);
+    assert_eq!(d.stays, vec![StaySummary { center: GeoPoint { lat, lon }, arrive_ms: a_end, leave_ms: b_start, place: None, order: 1 }]);
     assert_eq!((d.summary.trip_count, d.summary.stay_count), (3, 1));
 }
 
@@ -333,7 +333,7 @@ fn last_arrival_is_an_open_stay_only_after_an_end_signal() {
 
     store.mark_drive_event(DriveEvent::End, end + 2 * SEC).unwrap();
     let d = store.day_detail("2026-11-05".into()).unwrap();
-    assert_eq!(d.stays, vec![StaySummary { center: GeoPoint { lat, lon }, arrive_ms: end, leave_ms: end, place: None }]);
+    assert_eq!(d.stays, vec![StaySummary { center: GeoPoint { lat, lon }, arrive_ms: end, leave_ms: end, place: None, order: 1 }]);
 
     // 다음 날 아침 같은 자리에서 출발: 밤새 주차는 도착한 날(11/5)의 머문 곳, 11/6에는 주행만
     let leave = kst(2026, 11, 6, 8, 0);
@@ -393,7 +393,8 @@ fn entries_merge_trips_and_stays_in_time_order() {
             distance_m: 0.0,
             drive_millis: 0,
             first_ms: 0,
-            last_ms: 0
+            last_ms: 0,
+            stop_names: Vec::new()
         }
     );
 }
@@ -643,6 +644,23 @@ fn perf_year_of_driving() {
     }
     let build = started.elapsed();
 
+    // 장소 이름: 대기 장소를 다 받아 이름을 붙인다 (이름이 붙은 상태에서 조회 시간을 잰다).
+    let s = Instant::now();
+    let pending = store.pending_places(100_000).unwrap();
+    let pending_ms = s.elapsed().as_secs_f64() * 1e3;
+    let s = Instant::now();
+    for (i, q) in pending.iter().enumerate() {
+        let label = crate::places::PlaceLabel {
+            name: format!("장소 {i}"),
+            category: String::new(),
+            address: String::new(),
+            source: crate::places::PlaceSource::Kakao,
+        };
+        store.set_place_name(crate::places::PlaceName { id: q.id, label }).unwrap();
+    }
+    let naming_ms = s.elapsed().as_secs_f64() * 1e3;
+    println!("pending_places {}개 {pending_ms:.3}ms, 이름 저장 전체 {naming_ms:.1}ms", pending.len());
+
     let s = Instant::now();
     let days = store.day_summaries(400).unwrap();
     let summaries_ms = s.elapsed().as_secs_f64() * 1e3;
@@ -694,6 +712,8 @@ fn perf_year_of_driving() {
 
     assert_eq!(days.len(), 365);
     assert_eq!(detail.trips.len(), 2);
+    assert!(detail.trips.iter().all(|t| t.start_place.is_some() && t.end_place.is_some()));
+    assert!(days.iter().filter(|d| d.stay_count > 0).all(|d| !d.stop_names.is_empty()));
     assert!(summaries_ms < 100.0, "day_summaries {summaries_ms}ms");
     assert!(detail_ms < 50.0, "day_detail {detail_ms}ms");
 }

@@ -9,6 +9,7 @@
 //!    바뀐 범위를 감싸는 기존 주행들만 지우고, 그 구간의 점을 시간순으로 읽으며 주행을 다시 나눠 `trip` 표에 넣고,
 //!    영향받은 날의 `day_summary` 줄만 고친다. 그래서 1년치가 쌓여도 조회는 표 몇 줄 읽기다.
 //!    주행 중에 화면이 매번 조회하면 지금 달리는 주행 하나(최대 수천 점)만 다시 계산한다.
+//!    다시 만든 주행의 출발·도착·머문 곳은 같은 자리에서 장소에 이어 이름을 붙인다 (`places` 모듈).
 //!
 //! # 주행(trip)
 //! - 위치 점을 시간순으로 놓고, 이웃한 두 점 사이 공백이 5분 이상이거나 그 사이에 주행 시작·끝 신호가 있으면 끊는다
@@ -44,10 +45,11 @@ use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::ffi::GeoPoint;
 use crate::geo::{self, Fix, Point};
+use crate::places::{self, PlaceLabel, REF_END, REF_START, REF_STAY};
 use crate::trip::{self, DriveMark, MarkKind, Segmenter, Stay, TripConfig};
 
 /// DB 구조 버전 (`PRAGMA user_version`). 구조를 바꾸면 올리고 `migrate`에 단계를 추가한다.
-const SCHEMA_VERSION: i32 = 1;
+const SCHEMA_VERSION: i32 = 2;
 /// 이보다 정확도가 나쁜(m) 점은 버린다.
 pub const MAX_ACCURACY_M: f32 = 100.0;
 /// 지도에 넘길 경로의 단순화 허용 오차(m).
@@ -89,6 +91,9 @@ pub struct DaySummary {
     /// 그날 주행의 시작·끝과 머문 곳 도착 시각 중 가장 이른 것 / 가장 늦은 것.
     pub first_ms: i64,
     pub last_ms: i64,
+    /// 그날 머문 곳 중 이름이 있는 것의 이름, 도착 시각순으로 앞에서 최대 3개 (이름 없는 머문 곳은 건너뛴다).
+    /// 목록의 "경포해변 · 초당순두부마을 · 안목해변" 한 줄용. 이름이 바뀌면 그 장소가 나오는 날의 요약을 다시 만든다.
+    pub stop_names: Vec<String>,
 }
 
 /// 주행 하나.
@@ -114,6 +119,8 @@ pub struct StaySummary {
     pub leave_ms: i64,
     /// 장소 이름 (아직 모르면 None, `places` 모듈)
     pub place: Option<crate::places::PlaceLabel>,
+    /// 그날 머문 곳 중 몇 번째인지 (도착 시각순, 1부터). 지도 GeoJSON의 `order`와 같다.
+    pub order: u32,
 }
 
 /// 하루 타임라인의 한 칸: 주행 또는 머문 곳.
@@ -238,7 +245,7 @@ impl EodiStore {
         let mut conn = self.lock()?;
         self.flush(&mut conn)?;
         let mut st = conn.prepare_cached(
-            "SELECT day, trip_count, stay_count, distance_m, drive_millis, first_ms, last_ms
+            "SELECT day, trip_count, stay_count, distance_m, drive_millis, first_ms, last_ms, stop_names
              FROM day_summary ORDER BY day DESC LIMIT ?1",
         )?;
         let rows = st.query_map([limit], |r| {
@@ -250,6 +257,7 @@ impl EodiStore {
                 drive_millis: r.get(4)?,
                 first_ms: r.get(5)?,
                 last_ms: r.get(6)?,
+                stop_names: split_names(&r.get::<_, String>(7)?),
             })
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
@@ -331,7 +339,19 @@ fn migrate(conn: &mut Connection) -> Result<(), CoreError> {
     if version < 1 {
         tx.execute_batch(SCHEMA_V1)?;
     }
-    // 다음 버전은 여기에: if version < 2 { ... }
+    if version < 2 {
+        tx.execute_batch(places::SCHEMA_V2)?;
+        // stop_names = DaySummary.stop_names를 STOP_SEP로 이은 것
+        tx.execute_batch("ALTER TABLE day_summary ADD COLUMN stop_names TEXT NOT NULL DEFAULT '';")?;
+        // 버전 1에서 올릴 때: 계산된 주행을 다음 조회 때 전부 다시 계산해 지점을 장소에 잇는다.
+        // 원본(fix, drive_event)은 건드리지 않는다. 새 DB면 점이 없어 아무 일도 없다.
+        let range: (Option<i64>, Option<i64>) =
+            tx.query_row("SELECT min(t_ms), max(t_ms) FROM fix", [], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        if let (Some(a), Some(b)) = range {
+            mark_dirty(&tx, a, b)?;
+        }
+    }
+    // 다음 버전은 여기에: if version < 3 { ... }
     tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     tx.commit()?;
     Ok(())
@@ -432,7 +452,7 @@ fn encode_stays(stays: &[Stay]) -> Vec<u8> {
     b
 }
 
-fn decode_stays(b: &[u8]) -> Vec<Stay> {
+pub(crate) fn decode_stays(b: &[u8]) -> Vec<Stay> {
     b.as_chunks::<32>()
         .0
         .iter()
@@ -456,8 +476,65 @@ fn gp(p: Point) -> GeoPoint {
     GeoPoint { lat: p.lat, lon: p.lon }
 }
 
-fn stay_summary(s: &Stay) -> StaySummary {
-    StaySummary { center: gp(s.center), arrive_ms: s.arrive_ms, leave_ms: s.leave_ms, place: None }
+fn stay_summary(s: &Stay, place: Option<PlaceLabel>) -> StaySummary {
+    // order는 하루치를 다 모은 뒤 매긴다 (collect_days).
+    StaySummary { center: gp(s.center), arrive_ms: s.arrive_ms, leave_ms: s.leave_ms, place, order: 0 }
+}
+
+/// day_summary.stop_names 칸의 구분자 (이름에 들어갈 일이 없는 제어 문자).
+const STOP_SEP: char = '\u{1f}';
+
+fn split_names(s: &str) -> Vec<String> {
+    if s.is_empty() {
+        Vec::new()
+    } else {
+        s.split(STOP_SEP).map(str::to_owned).collect()
+    }
+}
+
+fn join_names(names: &[String]) -> String {
+    let mut out = String::new();
+    for (i, n) in names.iter().enumerate() {
+        if i > 0 {
+            out.push(STOP_SEP);
+        }
+        out.extend(n.chars().map(|c| if c == STOP_SEP { ' ' } else { c }));
+    }
+    out
+}
+
+/// `link_places`가 보는 바로 앞 주행. `place` = 도착점의 장소 (아직 안 이었으면 None).
+struct PrevTrip {
+    seg_start: i64,
+    seg_end: i64,
+    start_ms: i64,
+    end_ms: i64,
+    end: Point,
+    place: Option<i64>,
+}
+
+impl PrevTrip {
+    /// 도착점의 장소. 뒤에 주행이 있어 끝난 것이 확실하므로, 아직 안 이었으면 지금 잇는다.
+    fn ensure_place(&mut self, tx: &Connection, span: &mut Span) -> rusqlite::Result<i64> {
+        if let Some(id) = self.place {
+            return Ok(id);
+        }
+        let id = places::assign_place(tx, self.end, false)?;
+        places::link(tx, self.seg_start, REF_END, self.end_ms, id)?;
+        span.add(self.start_ms);
+        span.add(self.end_ms);
+        self.place = Some(id);
+        Ok(id)
+    }
+}
+
+/// `seg_end` 이후에 주행 끝 신호가 있는지.
+fn ended_after(conn: &Connection, seg_end: i64) -> rusqlite::Result<bool> {
+    Ok(conn
+        .prepare_cached("SELECT 1 FROM drive_event WHERE kind = ?1 AND t_ms >= ?2 LIMIT 1")?
+        .query_row(params![KIND_END, seg_end], |_| Ok(()))
+        .optional()?
+        .is_some())
 }
 
 /// 하루치 모음 (계산 중간값).
@@ -486,6 +563,7 @@ impl DayAcc {
             drive_millis: self.trips.iter().map(|t| t.end_ms - t.start_ms).sum(),
             first_ms,
             last_ms,
+            stop_names: self.stays.iter().filter_map(|s| Some(s.place.as_ref()?.name.clone())).take(3).collect(),
         }
     }
 
@@ -503,7 +581,7 @@ impl DayAcc {
 }
 
 impl EodiStore {
-    fn lock(&self) -> Result<MutexGuard<'_, Connection>, CoreError> {
+    pub(crate) fn lock(&self) -> Result<MutexGuard<'_, Connection>, CoreError> {
         self.conn.lock().map_err(|e| CoreError::Db(e.to_string()))
     }
 
@@ -549,7 +627,7 @@ impl EodiStore {
     /// 주행 경계는 이웃한 두 점(과 그 사이 신호)만 보고 정해지므로, 바뀐 범위 [a, b] 바깥의 경계는 그대로다.
     /// 그래서 a보다 앞에서 시작한 마지막 주행의 시작(lo)부터, b보다 뒤에서 끝나는 첫 주행의 끝(hi)까지만
     /// 지우고 다시 나누면 전체를 처음부터 다시 나눈 것과 같다.
-    fn flush(&self, conn: &mut Connection) -> Result<(), CoreError> {
+    pub(crate) fn flush(&self, conn: &mut Connection) -> Result<(), CoreError> {
         let dirty: Option<(i64, i64)> =
             conn.query_row("SELECT lo_ms, hi_ms FROM dirty WHERE id = 1", [], |r| Ok((r.get(0)?, r.get(1)?))).optional()?;
         let Some((a, b)) = dirty else { return Ok(()) };
@@ -579,6 +657,7 @@ impl EodiStore {
             }
         }
         tx.execute("DELETE FROM trip WHERE seg_start BETWEEN ?1 AND ?2", [lo, hi])?;
+        tx.execute("DELETE FROM trip_place WHERE seg_start BETWEEN ?1 AND ?2", [lo, hi])?;
 
         // 창 안의 신호 + 창 바로 앞 신호 하나 (창 첫 구간이 주차 중인지 판단하는 데 필요).
         let marks: Vec<DriveMark> = {
@@ -641,11 +720,142 @@ impl EodiStore {
                 touched.add(t.end_ms);
             }
         }
+        // 지점을 장소에 잇고, 그 주행 근처 시각의 내비 힌트를 다시 짝짓는다.
+        let renamed = match self.link_places(&tx, &built, lo, hi)? {
+            Some((t0, t1)) => places::apply_hints_between(&tx, t0, t1.saturating_add(places::HINT_AFTER_ARRIVAL_MS))?,
+            None => Vec::new(),
+        };
         tx.execute("DELETE FROM dirty", [])?;
         if let Some((t0, t1)) = touched.range() {
             self.refresh_days(&tx, self.local_day(t0), self.local_day(t1))?;
         }
+        // 힌트로 이름이 바뀐 장소는 다른 날에도 나올 수 있다 (그날들의 stop_names).
+        self.refresh_place_days(&tx, &renamed)?;
         tx.commit()?;
+        Ok(())
+    }
+
+    /// 다시 만든 주행(`built`, 창 [lo, hi] 안)의 지점을 장소에 잇는다 (규칙은 `places` 모듈 설명).
+    /// 창 바로 앞 주행의 도착점과 창 바로 뒤 주행의 출발점도 창 안 주행에 따라 달라지므로 같이 고친다.
+    /// 반환: 잇기가 바뀐 주행들의 시각 범위 (내비 힌트를 다시 짝지을 범위).
+    fn link_places(
+        &self,
+        tx: &Connection,
+        built: &[TripRow],
+        lo: i64,
+        hi: i64,
+    ) -> Result<Option<(i64, i64)>, CoreError> {
+        let mut span = Span::default();
+        let mut prev: Option<PrevTrip> = tx
+            .query_row(
+                "SELECT seg_start, seg_end, start_ms, end_ms, end_lat, end_lon FROM trip
+                 WHERE seg_start < ?1 ORDER BY seg_start DESC LIMIT 1",
+                [lo],
+                |r| {
+                    Ok(PrevTrip {
+                        seg_start: r.get(0)?,
+                        seg_end: r.get(1)?,
+                        start_ms: r.get(2)?,
+                        end_ms: r.get(3)?,
+                        end: Point { lat: r.get(4)?, lon: r.get(5)? },
+                        place: None,
+                    })
+                },
+            )
+            .optional()?;
+        if let Some(p) = prev.as_mut() {
+            p.place = places::linked(tx, p.seg_start, REF_END, p.end_ms)?;
+        }
+        let next: Option<(i64, Point, i64)> = tx
+            .query_row(
+                "SELECT seg_start, start_lat, start_lon, start_ms FROM trip WHERE seg_start > ?1 ORDER BY seg_start LIMIT 1",
+                [hi],
+                |r| Ok((r.get(0)?, Point { lat: r.get(1)?, lon: r.get(2)? }, r.get(3)?)),
+            )
+            .optional()?;
+
+        for (k, t) in built.iter().enumerate() {
+            // 출발점: 앞 주행 끝 자리에 머물다 떠났으면 그 머문 곳의 장소, 아니면 가까운 장소.
+            let start_place = match prev.as_mut() {
+                Some(pv) => {
+                    let pid = pv.ensure_place(tx, &mut span)?;
+                    if trip::between_stay(pv.end, pv.end_ms, t.start, t.start_ms, &self.cfg).is_some() {
+                        places::mark_stay(tx, pid)?;
+                        pid
+                    } else {
+                        places::assign_place(tx, t.start, false)?
+                    }
+                }
+                None => places::assign_place(tx, t.start, false)?,
+            };
+            places::link(tx, t.seg_start, REF_START, t.start_ms, start_place)?;
+            // 끝난 것이 확실한 주행만 도착점·마지막 머문 곳을 잇는다 (달리는 중이면 끝 자리가 계속 움직인다).
+            let settled = k + 1 < built.len() || next.is_some() || ended_after(tx, t.seg_end)?;
+            for s in &t.stays {
+                if settled || s.leave_ms < t.end_ms {
+                    let id = places::assign_place(tx, s.center, true)?;
+                    places::link(tx, t.seg_start, REF_STAY, s.arrive_ms, id)?;
+                }
+            }
+            let place = if settled {
+                let id = places::assign_place(tx, t.end, false)?;
+                places::link(tx, t.seg_start, REF_END, t.end_ms, id)?;
+                Some(id)
+            } else {
+                None
+            };
+            span.add(t.start_ms);
+            span.add(t.end_ms);
+            prev = Some(PrevTrip {
+                seg_start: t.seg_start,
+                seg_end: t.seg_end,
+                start_ms: t.start_ms,
+                end_ms: t.end_ms,
+                end: t.end,
+                place,
+            });
+        }
+
+        match (next, prev.as_mut()) {
+            // 창 뒤 주행의 출발점: 창 안 마지막 주행(또는 창 앞 주행)과의 관계가 바뀌었을 수 있다.
+            (Some((seg, start, start_ms)), pv) => {
+                let id = match pv {
+                    Some(pv) => {
+                        let pid = pv.ensure_place(tx, &mut span)?;
+                        if trip::between_stay(pv.end, pv.end_ms, start, start_ms, &self.cfg).is_some() {
+                            places::mark_stay(tx, pid)?;
+                            pid
+                        } else {
+                            places::assign_place(tx, start, false)?
+                        }
+                    }
+                    None => places::assign_place(tx, start, false)?,
+                };
+                places::link(tx, seg, REF_START, start_ms, id)?;
+            }
+            // 전체 마지막 주행 뒤에 끝 신호가 있으면 그 도착점은 "지금 머무는 중"인 머문 곳이다.
+            (None, Some(pv)) => {
+                if ended_after(tx, pv.seg_end)? {
+                    let pid = pv.ensure_place(tx, &mut span)?;
+                    places::mark_stay(tx, pid)?;
+                }
+            }
+            (None, None) => {}
+        }
+        Ok(span.range())
+    }
+
+    /// 이름이 바뀐 장소들이 나오는 날의 요약(stop_names)을 다시 만든다.
+    /// 장소에 이어진 지점의 첫 날~마지막 날을 한 번에 다시 만든다 (이름은 장소마다 보통 한 번만 바뀐다).
+    pub(crate) fn refresh_place_days(&self, conn: &Connection, ids: &[i64]) -> Result<(), CoreError> {
+        for &id in ids {
+            let range: (Option<i64>, Option<i64>) = conn
+                .prepare_cached("SELECT min(t_ms), max(t_ms) FROM trip_place WHERE place_id = ?1")?
+                .query_row([id], |r| Ok((r.get(0)?, r.get(1)?)))?;
+            if let (Some(t0), Some(t1)) = range {
+                self.refresh_days(conn, self.local_day(t0), self.local_day(t1))?;
+            }
+        }
         Ok(())
     }
 
@@ -654,12 +864,21 @@ impl EodiStore {
         let days = self.collect_days(conn, d0, d1, false)?;
         conn.execute("DELETE FROM day_summary WHERE day BETWEEN ?1 AND ?2", [d0, d1])?;
         let mut st = conn.prepare_cached(
-            "INSERT INTO day_summary (day, trip_count, stay_count, distance_m, drive_millis, first_ms, last_ms)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO day_summary (day, trip_count, stay_count, distance_m, drive_millis, first_ms, last_ms, stop_names)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )?;
         for (d, acc) in &days {
             let s = acc.summary(*d);
-            st.execute(params![d, s.trip_count, s.stay_count, s.distance_m, s.drive_millis, s.first_ms, s.last_ms])?;
+            st.execute(params![
+                d,
+                s.trip_count,
+                s.stay_count,
+                s.distance_m,
+                s.drive_millis,
+                s.first_ms,
+                s.last_ms,
+                join_names(&s.stop_names)
+            ])?;
         }
         Ok(())
     }
@@ -720,11 +939,16 @@ impl EodiStore {
             _ => false,
         };
 
+        // 장소 이름 (쿼리 한 번으로 그 주행들의 이름 전부). 요약의 stop_names에도 쓴다.
+        let labels = places::labels_between(conn, from, de)?;
+        let label = |seg: i64, kind: i64, t: i64| labels.get(&(seg, kind, t)).cloned();
+
         let next_starts: Vec<Option<(Point, i64)>> =
             (0..trips.len()).map(|k| trips.get(k + 1).map(|n| (n.start, n.start_ms)).or(next)).collect();
         let mut days: BTreeMap<i64, DayAcc> = BTreeMap::new();
         let in_range = |t: i64| Some(self.local_day(t)).filter(|d| (d0..=d1).contains(d));
         for (t, next_start) in trips.iter_mut().zip(next_starts) {
+            let end_place = label(t.seg_start, REF_END, t.end_ms);
             if let Some(d) = in_range(t.start_ms) {
                 days.entry(d).or_default().trips.push(TripSummary {
                     start_ms: t.start_ms,
@@ -733,19 +957,31 @@ impl EodiStore {
                     start: gp(t.start),
                     end: gp(t.end),
                     path: std::mem::take(&mut t.path).into_iter().map(gp).collect(),
-                    start_place: None,
-                    end_place: None,
+                    start_place: label(t.seg_start, REF_START, t.start_ms),
+                    end_place: end_place.clone(),
                 });
             }
+            for s in &t.stays {
+                if let Some(d) = in_range(s.arrive_ms) {
+                    days.entry(d).or_default().stays.push(stay_summary(s, label(t.seg_start, REF_STAY, s.arrive_ms)));
+                }
+            }
+            // 주행 사이 머문 곳·지금 머무는 중인 곳은 중심이 이 주행의 도착점이라 도착점의 장소 이름을 쓴다.
             let after = match next_start {
                 Some((p, leave)) => trip::between_stay(t.end, t.end_ms, p, leave, &self.cfg),
                 None if ended => Some(Stay { center: t.end, arrive_ms: t.end_ms, leave_ms: t.end_ms }),
                 None => None,
             };
-            for s in t.stays.iter().chain(after.as_ref()) {
+            if let Some(s) = after {
                 if let Some(d) = in_range(s.arrive_ms) {
-                    days.entry(d).or_default().stays.push(stay_summary(s));
+                    days.entry(d).or_default().stays.push(stay_summary(&s, end_place));
                 }
+            }
+        }
+        // 머문 곳은 도착 시각순으로 쌓였다 → 하루 안 순서를 매긴다.
+        for acc in days.values_mut() {
+            for (i, s) in acc.stays.iter_mut().enumerate() {
+                s.order = i as u32 + 1;
             }
         }
         Ok(days)
