@@ -21,6 +21,9 @@ interface PlaceProvider {
     val name: String
 
     suspend fun lookup(q: PlaceQuery): Lookup
+
+    /** 연결을 미리 열어 둔다 (DNS·TLS). 실패해도 조용히 넘어간다. */
+    suspend fun warmUp() {}
 }
 
 sealed interface Lookup {
@@ -28,18 +31,27 @@ sealed interface Lookup {
     data object NotFound : Lookup
 }
 
-/** 2xx가 아닌 HTTP 응답. */
-class HttpStatusException(val code: Int, message: String) : IOException("HTTP $code: $message") {
+/** 2xx가 아닌 HTTP 응답. [body]는 오류 본문 앞부분. */
+class HttpStatusException(val code: Int, val body: String) : IOException("HTTP $code: $body") {
     /** 키가 없거나 틀림 → 이 출처는 앱이 다시 켜질 때까지 쓰지 않는다 */
     val isAuthError: Boolean get() = code == 401 || code == 403
-    /** 요청이 너무 많음·서버 과부하 → 잠시 쉬고 다시 */
-    val isRateLimited: Boolean get() = code == 429 || code == 503
+
+    /** 요청이 너무 많음·서버 과부하 → 잠시 쉬고 다시. 카카오는 한도 초과를 400 + `"code":-10`으로 알린다 */
+    val isRateLimited: Boolean get() = code == 429 || code == 503 || (code == 400 && KAKAO_LIMIT.containsMatchIn(body))
+
+    private companion object {
+        val KAKAO_LIMIT = Regex("\"code\"\\s*:\\s*-10\\b")
+    }
 }
 
 /** 블로킹 HTTP GET (응답 본문 문자열). 테스트에서는 저장해 둔 응답 파일로 바꿔 끼운다. */
 fun interface HttpGetter {
     @Throws(IOException::class)
     fun get(url: String, headers: Map<String, String>): String
+
+    /** 연결만 열어 두는 가벼운 HEAD (연결 미리 열기용). 기본은 아무것도 안 함. */
+    @Throws(IOException::class)
+    fun head(url: String) {}
 }
 
 // ---- org.json 도우미 (Android 판은 null 값을 "null" 문자열로 돌려주므로 직접 거른다) ----
