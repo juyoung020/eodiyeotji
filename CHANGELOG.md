@@ -25,6 +25,7 @@
 - 공모전 자료를 `docs/contest/`로 모으고, 백로그를 `docs/00_plan.md`로 이름 바꿔 docs 맨 위에 둠
 - CLAUDE.md에 Git 규칙 명시: 작업 전 pull, 큰 작업 단위로 커밋·푸시, AI 기여자 표시 금지
 - 계획에서 일정(날짜·스프린트 기간·간트 차트)을 빼고 순서만 남김 (`docs/00_plan.md`, `README.md`)
+- GitHub 저장소 이름을 `hmg-app-contest` → `eodiyeotji`로 바꾸고 설명·토픽 정리
 
 ## [0.1.0] - 2026-11-05
 
@@ -46,5 +47,5 @@
 - AI·팀원 공통 작업 규칙 (`CLAUDE.md`)
 - 변경 이력 파일 (`CHANGELOG.md`)
 
-[unreleased]: https://github.com/juyoung020/hmg-app-contest/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/juyoung020/hmg-app-contest/releases/tag/v0.1.0
+[unreleased]: https://github.com/juyoung020/eodiyeotji/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/juyoung020/eodiyeotji/releases/tag/v0.1.0
