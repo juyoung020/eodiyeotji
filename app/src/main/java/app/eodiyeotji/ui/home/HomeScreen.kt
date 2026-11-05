@@ -1,15 +1,19 @@
 package app.eodiyeotji.ui.home
 
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
+import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.timeline.TimelineRoute
 import java.util.Locale
 
@@ -19,7 +23,7 @@ fun HomeRoute() {
     TimelineRoute()
 }
 
-/** 데모용 Rust 코어 상태 한 줄: 버전 + 하루 경로(점 1만 개) 단순화 시간. 헤더 구석에 작게 둔다. */
+/** 개발용 Rust 코어 상태 한 줄: 버전 + 하루 경로(점 1만 개) 단순화 시간. 디버그 빌드에서만 머리 구석에 작게 둔다. */
 @Composable
 fun CoreStatusLine(modifier: Modifier = Modifier, viewModel: HomeViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -37,12 +41,15 @@ fun CoreStatusText(state: CoreUiState, modifier: Modifier = Modifier) {
             String.format(Locale.ROOT, "%.2f", state.status.elapsedMicros / 1000.0),
         )
     }
+    val c = EodiTheme.colors
     Text(
         text,
-        style = MaterialTheme.typography.titleSmall,
-        color = if (state is CoreUiState.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+        style = EodiTheme.type.caption,
+        color = if (state is CoreUiState.Failed) c.error else c.textTertiary,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        modifier = modifier,
+        modifier = modifier
+            .background(c.surface, RoundedCornerShape(12.dp))
+            .padding(horizontal = 14.dp, vertical = 8.dp),
     )
 }
