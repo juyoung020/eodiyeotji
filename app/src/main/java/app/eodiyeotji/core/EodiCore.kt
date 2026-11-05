@@ -5,6 +5,10 @@ import app.eodiyeotji.core.rust.DriveEvent
 import app.eodiyeotji.core.rust.EodiStore
 import app.eodiyeotji.core.rust.GeoFix
 import app.eodiyeotji.core.rust.coreSelfCheck
+import app.eodiyeotji.core.rust.parseGooglePlacePhotos
+import app.eodiyeotji.core.rust.placePhotoKey
+import app.eodiyeotji.core.rust.placePhotoQuery
+import app.eodiyeotji.core.rust.PlacePhotos as RPlacePhotos
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.util.TimeZone
@@ -181,7 +185,29 @@ class EodiCore @Inject constructor(
     }
 
     suspend fun fixCount(): Long = withContext(Dispatchers.IO) { store.fixCount().toLong() }
+
+    /**
+     * 들른 곳 대표 사진 (구글 Places). 기기에 저장해 둔 것(30일 이내)이 있으면 그것을, 없으면 [fetch]로
+     * 구글 Text Search 응답(JSON)을 받아 Rust가 골라 저장한 뒤 돌려준다. [fetch]에는 검색어가 넘어간다.
+     * 키·검색어 만들기, 응답 고르기, 저장은 모두 Rust(`core-rs/src/photos.rs`).
+     */
+    suspend fun placePhotos(
+        name: String, address: String, lat: Double, lon: Double,
+        fetch: suspend (query: String) -> String,
+    ): PlacePhotos {
+        val key = placePhotoKey(name, lat, lon)
+        withContext(Dispatchers.IO) { store.cachedPlacePhotos(key, System.currentTimeMillis()) }?.let { return it.toModel() }
+        val json = fetch(placePhotoQuery(name, address))
+        return withContext(Dispatchers.IO) {
+            val parsed = parseGooglePlacePhotos(json)
+            store.savePlacePhotos(key, parsed, System.currentTimeMillis())
+            parsed.toModel()
+        }
+    }
 }
+
+private fun RPlacePhotos.toModel() =
+    PlacePhotos(found, photos.map { PlacePhoto(it.name, it.widthPx.toInt(), it.heightPx.toInt(), it.author) })
 
 // ---- 화면·서비스에 넘기는 불변 값 (Rust 바인딩의 record는 var라서 그대로 쓰지 않는다) ----
 
@@ -210,6 +236,12 @@ data class DaySummary(
     val title: String? = null,
     val tags: List<String> = emptyList(),
 )
+
+/** 들른 곳 사진 한 장 ([name] = 구글 사진 리소스 이름, [author] = 올린 사람 — 사진과 함께 보여 준다). */
+data class PlacePhoto(val name: String, val widthPx: Int, val heightPx: Int, val author: String)
+
+/** 한 장소의 사진들. [found]가 false면 구글에서 그 장소를 못 찾음. */
+data class PlacePhotos(val found: Boolean, val photos: List<PlacePhoto>)
 
 // ---- 기억 모델 (core-rs/src/memory.rs와 같은 의미) ----
 

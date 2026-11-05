@@ -7,6 +7,13 @@ val kakaoRestApiKey: String = Properties().let { props ->
     (props.getProperty("KAKAO_REST_API_KEY") ?: System.getenv("KAKAO_REST_API_KEY") ?: "").filter { it.isLetterOrDigit() }
 }
 
+// 구글 Places API (New) 키 (들른 곳 대표 사진, place/PlacePhotoRepository.kt). 구글 클라우드 프로젝트 eodiyeotji에서 Places API (New)만 허용.
+// local.properties의 GOOGLE_PLACES_API_KEY → 환경 변수 → 없으면 빈 값(사진 끔)
+val googlePlacesApiKey: String = Properties().let { props ->
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { props.load(it) }
+    (props.getProperty("GOOGLE_PLACES_API_KEY") ?: System.getenv("GOOGLE_PLACES_API_KEY") ?: "").filter { it.isLetterOrDigit() || it == '_' || it == '-' }
+}
+
 // 기억 에이전트·하루 라벨링 LLM (agent/). OpenAI 호환 Chat Completions 서버 (개발: 개발 PC의 llama.cpp llama-server + Qwen3.5-9B).
 // local.properties → 환경 변수 → 기본값. 에뮬레이터에서 개발 PC는 10.0.2.2 로 보인다.
 val llmProps: Properties = Properties().also { props ->
@@ -42,6 +49,7 @@ android {
         // Pleos 에뮬레이터(x86_64)와 실차(arm64)만 만든다
         ndk { abiFilters += listOf("x86_64", "arm64-v8a") }
         buildConfigField("String", "KAKAO_REST_API_KEY", "\"$kakaoRestApiKey\"")
+        buildConfigField("String", "GOOGLE_PLACES_API_KEY", "\"$googlePlacesApiKey\"")
         buildConfigField("String", "LLM_BASE_URL", "\"$llmBaseUrl\"")
         buildConfigField("String", "LLM_MODEL", "\"$llmModel\"")
         buildConfigField("String", "LLM_API_KEY", "\"$llmApiKey\"")
@@ -90,6 +98,7 @@ dependencies {
     implementation(libs.pleos.fusedlocation)
     implementation(libs.pleos.navihelper)
     implementation(libs.maplibre.android)
+    implementation(libs.coil.compose)
 
     implementation(libs.jna) { artifact { type = "aar" } }
 

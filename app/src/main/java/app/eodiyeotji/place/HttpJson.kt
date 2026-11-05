@@ -41,6 +41,30 @@ object PlatformHttp : HttpGetter {
         }
     }
 
+    /** JSON 본문 POST (구글 Places Text Search 등). 2xx가 아니면 [HttpStatusException]. IO 스레드에서. */
+    fun postJson(url: String, body: String, headers: Map<String, String>): String {
+        val conn = open(url, "POST")
+        try {
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            conn.setRequestProperty("Accept", "application/json")
+            headers.forEach { (k, v) -> conn.setRequestProperty(k, v) }
+            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            val code = conn.responseCode
+            if (code !in 200..299) {
+                val err = runCatching { conn.errorStream?.use { it.readBytes().toString(Charsets.UTF_8) } }.getOrNull()
+                throw HttpStatusException(code, err?.take(200) ?: conn.responseMessage.orEmpty())
+            }
+            return conn.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
+        } catch (e: IOException) {
+            conn.disconnect()
+            throw e
+        } catch (e: RuntimeException) {
+            conn.disconnect()
+            throw IOException(e)
+        }
+    }
+
     override fun head(url: String) {
         val conn = open(url, "HEAD")
         try {

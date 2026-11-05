@@ -357,6 +357,7 @@ fn v1_database_is_migrated_without_losing_records() {
         store.ingest(drive(at(15, 0), 120, 36.0, 128.0, 1e-4)).unwrap();
         // 버전 1로 되돌린다: 버전 2에서 더한 표·칸을 지우고 user_version = 1
         let c = store.lock().unwrap();
+        c.execute_batch(crate::photos::DROP_V4).unwrap();
         c.execute_batch(crate::memory::DROP_V3).unwrap();
         c.execute_batch("DROP TABLE place; DROP TABLE trip_place; DROP TABLE navi_hint; ALTER TABLE day_summary DROP COLUMN stop_names; PRAGMA user_version = 1;").unwrap();
         (days, detail)

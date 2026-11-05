@@ -1,0 +1,88 @@
+package app.eodiyeotji.ui.place
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.eodiyeotji.core.PlacePhoto
+import app.eodiyeotji.core.StopFact
+import app.eodiyeotji.place.PlacePhotoRepository
+import coil.compose.AsyncImage
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
+
+/**
+ * 들른 곳 대표 사진 (구글 지도에서 가게를 찾으면 뜨는 사진들). 옆으로 넘겨 본다.
+ * 사진 곁에 올린 사람 이름과 Google 표시를 둔다 (구글 Places 약관). 사진이 없으면 안내 글.
+ */
+@Composable
+fun PlacePhotoGallery(stop: StopFact, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val repo = remember { EntryPointAccessors.fromApplication(context.applicationContext, PhotoEntryPoint::class.java).photos() }
+    val photos by produceState<List<PlacePhoto>?>(null, stop.name, stop.lat, stop.lon) { value = repo.photos(stop) }
+    Box(modifier.background(Color(0xFF1B1D21)), contentAlignment = Alignment.Center) {
+        val list = photos
+        when {
+            list == null -> CircularProgressIndicator(color = Color.White)
+            list.isEmpty() -> Text("이곳은 사진이 없어요", color = Color(0xFFBBBBBB), fontSize = 18.sp)
+            else -> {
+                val pager = rememberPagerState { list.size }
+                HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { i ->
+                    AsyncImage(
+                        model = repo.imageUrl(list[i], MAX_PX),
+                        contentDescription = stop.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                val author = list[pager.currentPage].author
+                Text(
+                    if (author.isBlank()) "Google" else "사진: $author · Google",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(12.dp)
+                        .background(Color(0x80000000), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
+                )
+                Text(
+                    "${pager.currentPage + 1} / ${list.size}",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp)
+                        .background(Color(0x80000000), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
+                )
+            }
+        }
+    }
+}
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+internal interface PhotoEntryPoint {
+    fun photos(): PlacePhotoRepository
+}
+
+/** 받을 사진 크기(긴 변 px): 카드 위쪽 칸(최대 약 1100×400dp)을 채우는 정도. */
+private const val MAX_PX = 1200

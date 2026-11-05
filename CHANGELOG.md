@@ -18,6 +18,7 @@
 ## [Unreleased]
 
 ### Added
+- 들른 곳 대표 사진: 추천 카드에서 들른 곳을 누르면 구글 지도의 그곳 사진(최대 6장)을 넘겨 봄, 올린 사람 표시. 장소 찾기·결과 저장(30일)은 Rust, 이미지는 Coil 캐시 (`core-rs/src/photos.rs`, `app/.../place/PlacePhotoRepository.kt`, `ui/place/PlacePhotoGallery.kt`)
 - 기억 에이전트 연결: 타임라인 머리의 "어디였지? 물어보세요" → 질문·답·추천 카드(지도·코스) → "이 코스로 안내"로 차량 내비 경유지 안내까지. 주행 중(운전자 주의 분산 제약)에는 타임라인을 감추고 에이전트 주행 화면만 보임. 디버그용 시연 데이터 넣기 수신기 (`app/.../ui/agent/MemoryAgentPort.kt`, `CarDrivingStatePort.kt`, `ui/home/HomeScreen.kt`)
 - 기억 에이전트(Rust): 날짜·검색어 규칙으로 기기 안에서 바로 답하는 빠른 길 + 필요할 때만 Qwen3.5-9B 도구 호출(도구 4개, 잘못된 호출 되돌려 주기, 3번 실패하면 멈춤, 안내는 운전자 확인 뒤에만) + 하루 제목 라벨링 (`core-rs/src/agent/`, `app/.../agent/`)
 - 기억 코어: 주행·머문 곳을 출근길·퇴근길·볼일·나들이·여행 에피소드로 묶고, 집·회사 추정, AI 하루 라벨링 대기열, 한국어 부분 일치 검색(0.2ms), 코스 최적 순서, 1년치 시연 데이터 (`core-rs/src/memory/`, `core-rs/src/course.rs`)

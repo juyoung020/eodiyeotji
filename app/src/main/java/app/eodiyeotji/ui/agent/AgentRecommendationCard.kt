@@ -23,10 +23,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
@@ -43,13 +48,14 @@ import androidx.compose.ui.unit.sp
 import app.eodiyeotji.R
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.ui.map.DayMap
+import app.eodiyeotji.ui.place.PlacePhotoGallery
 import java.time.LocalDate
 
 private val CardShape = RoundedCornerShape(32.dp)
 
 /**
  * 추천 카드: 지도(그날 경로) + 종류·날짜 + 제목 + 요약 + 들른 곳 번호 칩.
- * 칩을 누르면 그곳이 "여기만 가기" 대상이 된다.
+ * 칩을 누르면 그곳이 "여기만 가기" 대상이 되고, 위쪽이 그곳 대표 사진(구글 지도 사진)으로 바뀐다.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -63,6 +69,7 @@ internal fun RecommendationCard(
 ) {
     val facts = rec.hit.episode.facts
     val stops = rec.stops
+    var showPhotos by rememberSaveable(facts.id) { mutableStateOf(false) }
     Surface(
         shape = CardShape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -71,12 +78,35 @@ internal fun RecommendationCard(
         modifier = modifier.fillMaxWidth(),
     ) {
         Column {
+            // 위쪽: 지도 ↔ 고른 곳 대표 사진 (들른 곳 칩을 누르면 사진으로 바뀐다)
+            val photoStop = stops.getOrNull(selectedStop)?.takeIf { showPhotos }
             Box(Modifier.fillMaxWidth().height(mapHeight).clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))) {
                 val map = rec.map
                 when {
+                    photoStop != null -> PlacePhotoGallery(photoStop, Modifier.fillMaxSize())
                     !rec.mapLoaded -> Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerHigh))
                     map?.bounds != null -> DayMap(data = map, selectedKey = null, onSelectKey = {}, modifier = Modifier.fillMaxSize())
                     else -> CourseSketch(stops, selectedStop, Modifier.fillMaxSize())
+                }
+                if (stops.isNotEmpty()) {
+                    MediaToggle(
+                        photos = photoStop != null,
+                        onChange = { showPhotos = it },
+                        modifier = Modifier.align(Alignment.TopEnd).padding(14.dp),
+                    )
+                }
+                if (photoStop != null) {
+                    Text(
+                        "${selectedStop + 1}  ${photoStop.name}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.align(Alignment.TopStart).padding(14.dp)
+                            .background(Color(0x99000000), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                    )
                 }
             }
             Column(Modifier.padding(start = 28.dp, end = 28.dp, top = 24.dp, bottom = 28.dp)) {
@@ -118,9 +148,33 @@ internal fun RecommendationCard(
                     Spacer(Modifier.height(20.dp))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         stops.forEachIndexed { i, stop ->
-                            StopChip(i + 1, stop, selected = i == selectedStop, onClick = { onSelectStop(i) })
+                            StopChip(i + 1, stop, selected = i == selectedStop, onClick = { onSelectStop(i); showPhotos = true })
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/** 지도 | 사진 전환 (카드 위쪽 오른편). */
+@Composable
+private fun MediaToggle(photos: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier.background(Color(0xE6FFFFFF), CircleShape).padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        listOf(false to "지도", true to "사진").forEach { (value, label) ->
+            val on = value == photos
+            Surface(
+                onClick = { onChange(value) },
+                shape = CircleShape,
+                color = if (on) MaterialTheme.colorScheme.primary else Color.Transparent,
+                contentColor = if (on) MaterialTheme.colorScheme.onPrimary else Color(0xFF333333),
+                modifier = Modifier.heightIn(min = 48.dp),
+            ) {
+                Box(Modifier.padding(horizontal = 20.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
+                    Text(label, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
