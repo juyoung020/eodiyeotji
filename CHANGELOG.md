@@ -18,6 +18,7 @@
 ## [Unreleased]
 
 ### Added
+- 세팅 문서에 Pleos 에뮬레이터를 Android Studio 없이 명령줄(sdkmanager·avdmanager)로 설치하는 방법 추가 (`docs/50_개발환경_세팅.md` 7-2-1)
 - 지도: 하루 상세 위에 그날 주행 경로·머문 곳 핀을 MapLibre로 그림. 항목을 누르면 지도에서 강조·이동, 지도를 누르면 항목 선택 (`app/.../ui/map/`)
 - 오프라인 지도: 서울·서울→강릉 고속도로·강릉 구간을 기기 안 지도 파일(PMTiles 60MB)과 한글 지명 스타일로 만들고 에뮬레이터에 넣는 스크립트 (`scripts/map/`, `app/src/main/assets/map/`)
 - Rust가 하루치 지도 데이터(GeoJSON·화면 범위·항목별 범위)를 만들어 줌 (`core-rs/src/mapdata.rs`)
