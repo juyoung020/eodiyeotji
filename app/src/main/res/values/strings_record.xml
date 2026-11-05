@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 자동 기록 서비스 (record/) -->
+    <string name="record_channel_name">자동 기록</string>
+    <string name="record_notification_text">출발하면 이동을 자동으로 기록해요</string>
+</resources>

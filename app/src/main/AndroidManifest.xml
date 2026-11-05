@@ -4,6 +4,19 @@
     <!-- 차량 앱 표시 (Android Automotive) -->
     <uses-feature android:name="android.hardware.type.automotive" android:required="true" />
 
+    <!-- ===== 권한 (앱마켓 심사: 쓰는 것만, 이유와 함께) ===== -->
+    <!-- 차량 위치(Pleos FusedLocation): 이동 경로 자동 기록의 원천 데이터. dangerous → 첫 실행에 한 번만 묻는다 -->
+    <uses-permission android:name="pleos.car.permission.FUSED_LOCATION" />
+    <!-- 기어(GEAR_SELECTION·CURRENT_GEAR)·시동(IGNITION_STATE) 읽기: 주행 시작·끝을 자동으로 알기 위해. normal → 묻지 않는다 -->
+    <uses-permission android:name="android.car.permission.CAR_POWERTRAIN" />
+    <!-- 앱 화면이 없어도 주행 기록을 이어가는 포그라운드 서비스. normal -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- 포그라운드 서비스 종류 specialUse (이유는 record/RecordingService.kt KDoc). normal.
+         location 종류는 쓰지도 않는 Android 위치 권한을 추가로 요구해서 고르지 않았다 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- 차량을 켜면(부팅) 앱을 열지 않아도 기록 대기를 시작하기 위해. normal -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <application
         android:name=".EodiApp"
         android:allowBackup="false"
@@ -22,6 +35,26 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 자동 기록: 주행(기어 P 해제·시동)을 감지해 위치를 모아 Rust 코어에 저장 -->
+        <service
+            android:name=".record.RecordingService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Automatic trip logging: while the vehicle is in gear, records the car's position from the Pleos FusedLocation SDK so the driver can review past trips. Idle (vehicle signal listener only) while parked." />
+        </service>
+
+        <!-- 부팅·앱 업데이트 직후 기록 서비스 켜기 (시스템 브로드캐스트만 받는다) -->
+        <receiver
+            android:name=".record.RecordingBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
