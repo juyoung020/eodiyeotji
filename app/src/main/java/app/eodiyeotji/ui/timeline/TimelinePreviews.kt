@@ -37,9 +37,20 @@ private val PalacePlace = PlaceLabel("경복궁", "", "서울 종로구 사직�
 private val BukchonPlace = PlaceLabel("북촌한옥마을", "관광명소", "", PlaceSource.KAKAO)
 
 private val SampleDays = listOf(
-    DaySummary("2026-11-07", 4, 3, 42_300.0, 80 * 60_000L, ms(PreviewToday, 9, 10), ms(PreviewToday, 15, 20)),
-    DaySummary("2026-11-06", 1, 0, 12_400.0, 32 * 60_000L, ms(PreviewToday.minusDays(1), 18, 5), ms(PreviewToday.minusDays(1), 18, 37)),
-    DaySummary("2026-11-04", 3, 2, 87_900.0, 155 * 60_000L, ms(PreviewToday.minusDays(3), 7, 40), ms(PreviewToday.minusDays(3), 21, 12)),
+    DaySummary(
+        "2026-11-07", 4, 3, 42_300.0, 80 * 60_000L, ms(PreviewToday, 9, 10), ms(PreviewToday, 15, 20),
+        stopNames = listOf("광장시장", "경복궁", "북촌한옥마을"),
+        title = "종로 시장 구경하고 고궁 산책",
+        tags = listOf("나들이", "맛집", "가족"),
+    ),
+    DaySummary(
+        "2026-11-06", 1, 0, 12_400.0, 32 * 60_000L, ms(PreviewToday.minusDays(1), 18, 5), ms(PreviewToday.minusDays(1), 18, 37),
+        title = "평소 퇴근",
+    ),
+    DaySummary(
+        "2026-11-04", 3, 2, 87_900.0, 155 * 60_000L, ms(PreviewToday.minusDays(3), 7, 40), ms(PreviewToday.minusDays(3), 21, 12),
+        stopNames = listOf("경포해변", "초당순두부마을", "안목해변"),
+    ),
     DaySummary("2026-11-01", 1, 1, 640.0, 4 * 60_000L, ms(PreviewToday.minusDays(6), 14, 0), ms(PreviewToday.minusDays(6), 15, 30)),
     DaySummary("2025-12-24", 2, 1, 120_000.0, 120 * 60_000L, ms(LocalDate.of(2025, 12, 24), 10, 0), ms(LocalDate.of(2025, 12, 24), 19, 0)),
 )
