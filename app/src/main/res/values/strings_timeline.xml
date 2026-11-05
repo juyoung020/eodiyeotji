@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 타임라인 화면 (ui/timeline, ui/home) -->
+    <string name="timeline_today">오늘</string>
+    <string name="timeline_yesterday">어제</string>
+    <!-- 예: 오늘 · 11월 7일 (금) -->
+    <string name="timeline_relative_date">%1$s · %2$s</string>
+    <!-- java.time 날짜 패턴. 올해는 연도를 빼고, 다른 해는 붙인다 -->
+    <string name="timeline_date_pattern" translatable="false">M월 d일 (E)</string>
+    <string name="timeline_date_pattern_year" translatable="false">yyyy년 M월 d일 (E)</string>
+
+    <string name="timeline_trips">주행 %1$d회</string>
+    <string name="timeline_stays">머문 곳 %1$d곳</string>
+    <string name="timeline_km">%1$skm</string>
+    <string name="timeline_m">%1$dm</string>
+    <string name="timeline_hours_minutes">%1$d시간 %2$d분</string>
+    <string name="timeline_hours">%1$d시간</string>
+    <string name="timeline_minutes">%1$d분</string>
+    <string name="timeline_under_minute">1분 미만</string>
+    <string name="timeline_time_range">%1$s – %2$s</string>
+
+    <string name="timeline_loading">기록을 불러오는 중…</string>
+    <string name="timeline_empty_title">아직 기록이 없어요</string>
+    <string name="timeline_empty_body">시동을 걸고 출발하면 이동이 자동으로 기록돼요.\n따로 누를 버튼은 없어요. 주차하면 여기에 날짜별로 정리돼요.</string>
+    <string name="timeline_failed">기록을 불러오지 못했어요\n%1$s</string>
+    <string name="timeline_retry">다시 불러오기</string>
+    <string name="timeline_back">‹ 목록으로</string>
+
+    <string name="timeline_kind_trip">주행</string>
+    <string name="timeline_kind_stay">머문 곳</string>
+    <!-- 예: 주행 12.4km · 32분 -->
+    <string name="timeline_trip_line">주행 %1$s · %2$s</string>
+    <!-- 예: 머문 곳 1시간 23분 -->
+    <string name="timeline_stay_line">머문 곳 %1$s</string>
+    <string name="timeline_from_to">%1$s → %2$s</string>
+    <string name="timeline_detail_empty">이 날은 보여 줄 주행이 없어요</string>
+
+    <!-- 데모용 Rust 코어 상태 한 줄 -->
+    <string name="core_status_line">Rust 코어 v%1$s · 경로 단순화 %2$s ms</string>
+</resources>
