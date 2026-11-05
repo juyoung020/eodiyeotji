@@ -66,6 +66,7 @@ dependencies {
 
     implementation(libs.androidx.lifecycle.service)
     implementation(libs.pleos.fusedlocation)
+    implementation(libs.pleos.navihelper)
     implementation(libs.maplibre.android)
 
     implementation(libs.jna) { artifact { type = "aar" } }
