@@ -32,6 +32,8 @@
     <string name="timeline_trip_line">주행 %1$s · %2$s</string>
     <!-- 예: 머문 곳 1시간 23분 -->
     <string name="timeline_stay_line">머문 곳 %1$s</string>
+    <string name="timeline_stay_open">도착 · 아직 머무는 중</string>
+    <string name="timeline_stay_open_time">%1$s 도착</string>
     <string name="timeline_from_to">%1$s → %2$s</string>
     <string name="timeline_detail_empty">이 날은 보여 줄 주행이 없어요</string>
 

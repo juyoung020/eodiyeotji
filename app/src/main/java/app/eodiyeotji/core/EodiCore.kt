@@ -16,8 +16,11 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.withContext
 import app.eodiyeotji.core.rust.DayDetail as RDayDetail
+import app.eodiyeotji.core.rust.DayEntry as RDayEntry
 import app.eodiyeotji.core.rust.DaySummary as RDaySummary
 import app.eodiyeotji.core.rust.GeoPoint as RGeoPoint
+import app.eodiyeotji.core.rust.StaySummary as RStaySummary
+import app.eodiyeotji.core.rust.TripSummary as RTripSummary
 
 /**
  * Rust 코어(eodi-core) 입구. 앱의 다른 코드는 Rust 바인딩(app.eodiyeotji.core.rust)을 직접 부르지 않고 여기를 거친다.
@@ -110,9 +113,25 @@ data class TripSummary(
     val path: List<LatLon>,
 )
 
-data class StaySummary(val center: LatLon, val arriveMs: Long, val leaveMs: Long)
+/** 머문 곳. 하루 마지막 도착지처럼 아직 떠나지 않았으면 leaveMs == arriveMs ([isOpen]). */
+data class StaySummary(val center: LatLon, val arriveMs: Long, val leaveMs: Long) {
+    val isOpen: Boolean get() = leaveMs == arriveMs
+}
 
-data class DayDetail(val day: String, val trips: List<TripSummary>, val stays: List<StaySummary>)
+/** 하루 상세 한 줄. Rust가 시간순으로 섞어서 준다. */
+sealed interface DayEntry {
+    data class Trip(val trip: TripSummary) : DayEntry
+    data class Stay(val stay: StaySummary) : DayEntry
+}
+
+/** 하루 상세. [entries]는 주행·머문 곳을 시간순으로 섞은 목록, [trips]·[stays]는 종류별 목록(지도용). */
+data class DayDetail(
+    val day: String,
+    val summary: DaySummary,
+    val entries: List<DayEntry>,
+    val trips: List<TripSummary>,
+    val stays: List<StaySummary>,
+)
 
 private fun RGeoPoint.toModel() = LatLon(lat, lon)
 
@@ -126,10 +145,20 @@ private fun RDaySummary.toModel() = DaySummary(
     lastMs = lastMs,
 )
 
+private fun RTripSummary.toModel() =
+    TripSummary(startMs, endMs, distanceM, start.toModel(), end.toModel(), path.map { it.toModel() })
+
+private fun RStaySummary.toModel() = StaySummary(center.toModel(), arriveMs, leaveMs)
+
 private fun RDayDetail.toModel() = DayDetail(
     day = day,
-    trips = trips.map {
-        TripSummary(it.startMs, it.endMs, it.distanceM, it.start.toModel(), it.end.toModel(), it.path.map { p -> p.toModel() })
+    summary = summary.toModel(),
+    entries = entries.map {
+        when (it) {
+            is RDayEntry.Trip -> DayEntry.Trip(it.trip.toModel())
+            is RDayEntry.Stay -> DayEntry.Stay(it.stay.toModel())
+        }
     },
-    stays = stays.map { StaySummary(it.center.toModel(), it.arriveMs, it.leaveMs) },
+    trips = trips.map { it.toModel() },
+    stays = stays.map { it.toModel() },
 )

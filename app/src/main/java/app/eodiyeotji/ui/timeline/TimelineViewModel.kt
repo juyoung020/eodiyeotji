@@ -3,16 +3,13 @@ package app.eodiyeotji.ui.timeline
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import app.eodiyeotji.core.DayDetail
 import app.eodiyeotji.core.DaySummary
 import app.eodiyeotji.core.EodiCore
-import app.eodiyeotji.core.StaySummary
-import app.eodiyeotji.core.TripSummary
+import app.eodiyeotji.core.DayEntry
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.LocalDate
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
@@ -28,7 +25,6 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformLatest
-import kotlinx.coroutines.withContext
 
 /** 날짜 목록 상태. 목록은 Rust가 최신순으로 정렬해서 준 그대로다. */
 @Immutable
@@ -39,26 +35,19 @@ sealed interface DaysState {
     data class Loaded(val days: List<DaySummary>, val today: LocalDate) : DaysState
 }
 
-/** 하루 상세의 한 줄: 주행 또는 머문 곳. */
-@Immutable
-sealed interface TimelineEntry {
-    val key: String
-
-    data class Trip(val trip: TripSummary) : TimelineEntry {
-        override val key: String get() = "t${trip.startMs}"
+/** LazyColumn 키 (주행은 시작 시각, 머문 곳은 도착 시각). */
+internal val DayEntry.key: String
+    get() = when (this) {
+        is DayEntry.Trip -> "t${trip.startMs}"
+        is DayEntry.Stay -> "s${stay.arriveMs}"
     }
-
-    data class Stay(val stay: StaySummary) : TimelineEntry {
-        override val key: String get() = "s${stay.arriveMs}"
-    }
-}
 
 /** 오른쪽(넓은 창) 또는 단독(좁은 창)으로 보이는 하루 상세. */
 @Immutable
 sealed interface DetailState {
     data object None : DetailState
     data class Loading(val summary: DaySummary) : DetailState
-    data class Loaded(val summary: DaySummary, val entries: List<TimelineEntry>) : DetailState
+    data class Loaded(val summary: DaySummary, val entries: List<DayEntry>) : DetailState
     data class Failed(val summary: DaySummary, val message: String) : DetailState
 }
 
@@ -162,8 +151,9 @@ class TimelineViewModel @Inject constructor(
     }
 
     private suspend fun loadDetail(s: DaySummary): DetailState = try {
+        // 주행·머문 곳은 Rust가 시간순으로 섞어서 준다 (Kotlin에서 정렬하지 않는다).
         val d = core.dayDetail(s.day)
-        DetailState.Loaded(s, withContext(Dispatchers.Default) { interleave(d) })
+        DetailState.Loaded(d.summary, d.entries)
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
@@ -174,19 +164,4 @@ class TimelineViewModel @Inject constructor(
         const val REFRESH_DEBOUNCE_MS = 300L
         const val STOP_TIMEOUT_MS = 5_000L
     }
-}
-
-/**
- * 주행·머문 곳 두 목록(각각 시간순)을 시간순 한 줄로 합친다.
- * TODO(계약): Rust day_detail이 시간순으로 섞은 한 목록을 주면 이 병합을 지운다 (CLAUDE.md 원칙 1).
- */
-internal fun interleave(d: DayDetail): List<TimelineEntry> {
-    val out = ArrayList<TimelineEntry>(d.trips.size + d.stays.size)
-    var i = 0
-    var j = 0
-    while (i < d.trips.size || j < d.stays.size) {
-        val takeTrip = j >= d.stays.size || (i < d.trips.size && d.trips[i].startMs <= d.stays[j].arriveMs)
-        if (takeTrip) out += TimelineEntry.Trip(d.trips[i++]) else out += TimelineEntry.Stay(d.stays[j++])
-    }
-    return out
 }

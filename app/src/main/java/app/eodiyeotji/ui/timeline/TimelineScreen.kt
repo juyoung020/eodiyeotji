@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
+import app.eodiyeotji.core.DayEntry
 import app.eodiyeotji.core.DaySummary
 import app.eodiyeotji.ui.home.CoreStatusLine
 import java.time.LocalDate
@@ -268,7 +269,7 @@ private fun DayDetailPane(
 }
 
 @Composable
-private fun EntryList(entries: List<TimelineEntry>) {
+private fun EntryList(entries: List<DayEntry>) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = PagePadding),
@@ -277,10 +278,10 @@ private fun EntryList(entries: List<TimelineEntry>) {
         items(
             entries,
             key = { it.key },
-            contentType = { if (it is TimelineEntry.Trip) "trip" else "stay" },
+            contentType = { if (it is DayEntry.Trip) "trip" else "stay" },
         ) { e ->
             when (e) {
-                is TimelineEntry.Trip -> EntryRow(
+                is DayEntry.Trip -> EntryRow(
                     marker = MaterialTheme.colorScheme.primary,
                     kind = stringResource(R.string.timeline_kind_trip),
                     time = timeRangeText(e.trip.startMs, e.trip.endMs),
@@ -291,11 +292,19 @@ private fun EntryList(entries: List<TimelineEntry>) {
                     ),
                     sub = stringResource(R.string.timeline_from_to, coordText(e.trip.start), coordText(e.trip.end)),
                 )
-                is TimelineEntry.Stay -> EntryRow(
+                is DayEntry.Stay -> EntryRow(
                     marker = MaterialTheme.colorScheme.tertiary,
                     kind = stringResource(R.string.timeline_kind_stay),
-                    time = timeRangeText(e.stay.arriveMs, e.stay.leaveMs),
-                    main = stringResource(R.string.timeline_stay_line, durationText(e.stay.leaveMs - e.stay.arriveMs)),
+                    time = if (e.stay.isOpen) {
+                        stringResource(R.string.timeline_stay_open_time, clockText(e.stay.arriveMs))
+                    } else {
+                        timeRangeText(e.stay.arriveMs, e.stay.leaveMs)
+                    },
+                    main = if (e.stay.isOpen) {
+                        stringResource(R.string.timeline_stay_open)
+                    } else {
+                        stringResource(R.string.timeline_stay_line, durationText(e.stay.leaveMs - e.stay.arriveMs))
+                    },
                     sub = coordText(e.stay.center),
                 )
             }

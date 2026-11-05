@@ -3,7 +3,7 @@ package app.eodiyeotji.ui.timeline
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import app.eodiyeotji.core.CoreStatus
-import app.eodiyeotji.core.DayDetail
+import app.eodiyeotji.core.DayEntry
 import app.eodiyeotji.core.DaySummary
 import app.eodiyeotji.core.LatLon
 import app.eodiyeotji.core.StaySummary
@@ -35,19 +35,17 @@ private val SampleDays = listOf(
     DaySummary("2025-12-24", 2, 1, 120_000.0, 120 * 60_000L, ms(LocalDate.of(2025, 12, 24), 10, 0), ms(LocalDate.of(2025, 12, 24), 19, 0)),
 )
 
-private val SampleDetail = DayDetail(
-    day = "2026-11-07",
-    trips = listOf(
-        TripSummary(ms(PreviewToday, 9, 10), ms(PreviewToday, 9, 42), 12_400.0, Home, Cafe, listOf(Home, Cafe)),
-        TripSummary(ms(PreviewToday, 11, 5), ms(PreviewToday, 11, 53), 29_900.0, Cafe, Park, listOf(Cafe, Park)),
-    ),
-    stays = listOf(StaySummary(Cafe, ms(PreviewToday, 9, 42), ms(PreviewToday, 11, 5))),
+private val SampleEntries = listOf(
+    DayEntry.Trip(TripSummary(ms(PreviewToday, 9, 10), ms(PreviewToday, 9, 42), 12_400.0, Home, Cafe, listOf(Home, Cafe))),
+    DayEntry.Stay(StaySummary(Cafe, ms(PreviewToday, 9, 42), ms(PreviewToday, 11, 5))),
+    DayEntry.Trip(TripSummary(ms(PreviewToday, 11, 5), ms(PreviewToday, 11, 53), 29_900.0, Cafe, Park, listOf(Cafe, Park))),
+    DayEntry.Stay(StaySummary(Park, ms(PreviewToday, 11, 53), ms(PreviewToday, 11, 53))),
 )
 
 private val SampleStatus = CoreUiState.Ready(CoreStatus(version = "0.1.0", pointsIn = 10_000, pointsOut = 412, elapsedMicros = 1_840))
 
 private val LoadedDays = DaysState.Loaded(SampleDays, PreviewToday)
-private val LoadedDetail = DetailState.Loaded(SampleDays.first(), interleave(SampleDetail))
+private val LoadedDetail = DetailState.Loaded(SampleDays.first(), SampleEntries)
 
 @Composable
 private fun PreviewScreen(state: TimelineUiState) {
