@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 장소 이름 표시 (ui/timeline 상세 항목, ui/map 핀 라벨) -->
+
+    <!-- 이름이 아직 없는 항목의 둘째 줄. 이름은 기기가 내비·지도 검색으로 뒤에서 채운다 -->
+    <string name="place_pending">장소 이름 찾는 중…</string>
+
+    <!-- 주행: 출발·도착 중 한쪽만 이름을 알 때. 둘 다 알면 timeline_from_to(“서울시청 → 광장시장”) -->
+    <string name="place_trip_from">%1$s에서 출발</string>
+    <string name="place_trip_to">%1$s 도착</string>
+
+    <!-- 아직 떠나지 않은 머문 곳 (예: 광장시장 · 지금 여기) -->
+    <string name="place_stay_here">%1$s · 지금 여기</string>
+
+    <!-- 이름이 차량 내비 목적지·경유지에서 왔을 때 붙는 작은 표시 -->
+    <string name="place_source_navi">내비</string>
+    <string name="place_source_navi_description">차량 내비 목적지에서 가져온 이름</string>
+</resources>

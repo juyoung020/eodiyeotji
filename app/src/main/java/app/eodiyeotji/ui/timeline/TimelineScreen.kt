@@ -42,6 +42,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,6 +54,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
 import app.eodiyeotji.core.DayEntry
 import app.eodiyeotji.core.DaySummary
+import app.eodiyeotji.core.PlaceSource
+import app.eodiyeotji.core.StaySummary
+import app.eodiyeotji.core.TripSummary
 import app.eodiyeotji.ui.home.CoreStatusLine
 import app.eodiyeotji.ui.map.DayMap
 import java.time.LocalDate
@@ -329,49 +335,81 @@ private fun EntryList(entries: List<DayEntry>, selectedKey: String?, onClick: (S
             val key = e.key
             val selected = key == selectedKey
             when (e) {
-                is DayEntry.Trip -> EntryRow(
-                    marker = MaterialTheme.colorScheme.primary,
-                    kind = stringResource(R.string.timeline_kind_trip),
-                    time = timeRangeText(e.trip.startMs, e.trip.endMs),
-                    main = stringResource(
-                        R.string.timeline_trip_line,
-                        distanceText(e.trip.distanceM),
-                        durationText(e.trip.endMs - e.trip.startMs),
-                    ),
-                    sub = stringResource(R.string.timeline_from_to, coordText(e.trip.start), coordText(e.trip.end)),
-                    selected = selected,
-                    onClick = { onClick(key) },
-                )
-                is DayEntry.Stay -> EntryRow(
-                    marker = MaterialTheme.colorScheme.tertiary,
-                    kind = stringResource(R.string.timeline_kind_stay),
-                    time = if (e.stay.isOpen) {
-                        stringResource(R.string.timeline_stay_open_time, clockText(e.stay.arriveMs))
-                    } else {
-                        timeRangeText(e.stay.arriveMs, e.stay.leaveMs)
-                    },
-                    main = if (e.stay.isOpen) {
-                        stringResource(R.string.timeline_stay_open)
-                    } else {
-                        stringResource(R.string.timeline_stay_line, durationText(e.stay.leaveMs - e.stay.arriveMs))
-                    },
-                    sub = coordText(e.stay.center),
-                    selected = selected,
-                    onClick = { onClick(key) },
-                )
+                is DayEntry.Trip -> TripRow(e.trip, selected, onClick = { onClick(key) })
+                is DayEntry.Stay -> StayRow(e.stay, selected, onClick = { onClick(key) })
             }
         }
     }
 }
 
-/** 왼쪽 색 막대(주행 = primary, 머문 곳 = tertiary) + 시간 · 요약 · 좌표. 고른 항목은 바탕색으로 표시. */
+/** 주행: 제목은 "출발 → 도착" 이름, 둘째 줄은 거리 · 시간. 이름을 하나도 모르면 제목이 거리 · 시간이 된다. */
+@Composable
+private fun TripRow(trip: TripSummary, selected: Boolean, onClick: () -> Unit) {
+    val places = tripPlacesText(trip)
+    EntryRow(
+        marker = MaterialTheme.colorScheme.primary,
+        kind = stringResource(R.string.timeline_kind_trip),
+        time = timeRangeText(trip.startMs, trip.endMs),
+        main = places ?: stringResource(
+            R.string.timeline_trip_line,
+            distanceText(trip.distanceM),
+            durationText(trip.endMs - trip.startMs),
+        ),
+        sub = if (places != null) tripStatsText(trip) else stringResource(R.string.place_pending),
+        navi = trip.hasNaviPlace,
+        selected = selected,
+        onClick = onClick,
+    )
+}
+
+/** 머문 곳: 제목은 장소 이름(아직 머무는 중이면 "· 지금 여기"), 둘째 줄은 분류 · 머문 시간. */
+@Composable
+private fun StayRow(stay: StaySummary, selected: Boolean, onClick: () -> Unit) {
+    val place = stay.place?.takeIf { it.name.isNotBlank() }
+    val main: String
+    val sub: String?
+    when {
+        place != null -> {
+            main = if (stay.isOpen) stringResource(R.string.place_stay_here, place.name) else place.name
+            sub = stayDetailText(stay, place)
+        }
+        stay.isOpen -> {
+            main = stringResource(R.string.timeline_stay_open)
+            sub = stringResource(R.string.place_pending)
+        }
+        else -> {
+            main = stringResource(R.string.timeline_stay_line, durationText(stay.leaveMs - stay.arriveMs))
+            sub = stringResource(R.string.place_pending)
+        }
+    }
+    EntryRow(
+        marker = MaterialTheme.colorScheme.tertiary,
+        kind = stringResource(R.string.timeline_kind_stay),
+        time = if (stay.isOpen) {
+            stringResource(R.string.timeline_stay_open_time, clockText(stay.arriveMs))
+        } else {
+            timeRangeText(stay.arriveMs, stay.leaveMs)
+        },
+        main = main,
+        sub = sub,
+        navi = place?.source == PlaceSource.NAVI,
+        selected = selected,
+        onClick = onClick,
+    )
+}
+
+/**
+ * 왼쪽 색 막대(주행 = primary, 머문 곳 = tertiary) + 시간 · 종류 · 제목 · 둘째 줄. 고른 항목은 바탕색으로 표시.
+ * [navi]면 종류 옆에 작은 "내비" 표시(이름이 차량 내비 목적지에서 옴).
+ */
 @Composable
 private fun EntryRow(
     marker: Color,
     kind: String,
     time: String,
     main: String,
-    sub: String,
+    sub: String?,
+    navi: Boolean,
     selected: Boolean,
     onClick: () -> Unit,
 ) {
@@ -397,17 +435,47 @@ private fun EntryRow(
                     Text(time, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.width(12.dp))
                     Text(kind, style = MaterialTheme.typography.titleMedium, color = marker)
+                    if (navi) {
+                        Spacer(Modifier.width(10.dp))
+                        NaviTag()
+                    }
                 }
-                Text(main, style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    sub,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    main,
+                    style = MaterialTheme.typography.headlineSmall,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (sub != null) {
+                    Text(
+                        sub,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
+    }
+}
+
+/** 이름 출처가 차량 내비일 때 붙는 작은 테두리 표시. 눌리지 않는 장식이라 터치 크기 기준과 무관하다. */
+@Composable
+private fun NaviTag() {
+    val description = stringResource(R.string.place_source_navi_description)
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        color = Color.Transparent,
+        modifier = Modifier.semantics { contentDescription = description },
+    ) {
+        Text(
+            stringResource(R.string.place_source_navi),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp).clearAndSetSemantics { },
+        )
     }
 }
 

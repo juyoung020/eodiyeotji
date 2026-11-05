@@ -117,6 +117,10 @@ private fun DayMapContent(
             openStay = colors.primary.toArgb(),
             selectedStroke = colors.onSurface.toArgb(),
             background = colors.surfaceContainerHigh.toArgb(),
+            onStay = colors.onTertiary.toArgb(),
+            onOpenStay = colors.onPrimary.toArgb(),
+            label = colors.onSurface.toArgb(),
+            labelHalo = colors.surface.toArgb(),
         )
     }
 

@@ -17,7 +17,9 @@ import org.maplibre.android.style.expressions.Expression.all
 import org.maplibre.android.style.expressions.Expression.color
 import org.maplibre.android.style.expressions.Expression.eq
 import org.maplibre.android.style.expressions.Expression.get
+import org.maplibre.android.style.expressions.Expression.has
 import org.maplibre.android.style.expressions.Expression.literal
+import org.maplibre.android.style.expressions.Expression.not
 import org.maplibre.android.style.expressions.Expression.switchCase
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.Layer
@@ -34,6 +36,19 @@ import org.maplibre.android.style.layers.PropertyFactory.lineColor
 import org.maplibre.android.style.layers.PropertyFactory.lineJoin
 import org.maplibre.android.style.layers.PropertyFactory.lineOpacity
 import org.maplibre.android.style.layers.PropertyFactory.lineWidth
+import org.maplibre.android.style.layers.PropertyFactory.textAllowOverlap
+import org.maplibre.android.style.layers.PropertyFactory.textColor
+import org.maplibre.android.style.layers.PropertyFactory.textField
+import org.maplibre.android.style.layers.PropertyFactory.textFont
+import org.maplibre.android.style.layers.PropertyFactory.textHaloColor
+import org.maplibre.android.style.layers.PropertyFactory.textHaloWidth
+import org.maplibre.android.style.layers.PropertyFactory.textIgnorePlacement
+import org.maplibre.android.style.layers.PropertyFactory.textLetterSpacing
+import org.maplibre.android.style.layers.PropertyFactory.textMaxWidth
+import org.maplibre.android.style.layers.PropertyFactory.textOpacity
+import org.maplibre.android.style.layers.PropertyFactory.textRadialOffset
+import org.maplibre.android.style.layers.PropertyFactory.textSize
+import org.maplibre.android.style.layers.PropertyFactory.textVariableAnchor
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import kotlin.math.min
@@ -47,6 +62,12 @@ internal data class MapPalette(
     val openStay: Int,
     val selectedStroke: Int,
     val background: Int,
+    /** 핀 안 순서 숫자 (머문 곳 · 지금 있는 곳 핀 위) */
+    val onStay: Int,
+    val onOpenStay: Int,
+    /** 핀 옆 이름 글자와 그 테두리(후광) */
+    val label: Int,
+    val labelHalo: Int,
 )
 
 /**
@@ -56,6 +77,9 @@ internal data class MapPalette(
  *   MapLibre가 파싱·타일링을 자기 작업 스레드에서 한다.
  * - 같은 날이 다시 읽히면 소스 데이터만 바꾸고, 날이 바뀌었을 때만 카메라를 범위에 맞춘다(애니메이션 없이 한 번에).
  * - 선택 강조는 데이터를 다시 넣지 않고 강조 레이어의 filter와 나머지의 투명도만 바꾼다.
+ * - 머문 곳 핀에는 그날 순서(GeoJSON `order`)를 핀 안에, 이름(`name`)을 핀 옆에 띄운다. 글자 레이어는 에뮬레이터에서
+ *   지도 끌기를 느리게 하므로 머문 곳(하루 몇 개)에만 쓰고, 이름은 서로 겹치면 빼고(text-allow-overlap=false)
+ *   멀리서 볼 때(줌 [NAME_MIN_ZOOM] 미만)는 숨긴다. 고른 머문 곳 이름만 크게, 겹쳐도 보이게 따로 그린다.
  */
 internal class DayMapController(
     private val mapView: MapView,
@@ -150,14 +174,58 @@ internal class DayMapController(
                 .withFilter(all(isStay, isOpen))
                 .withProperties(circleRadius(24f), circleOpacity(HALO_OPACITY)),
         )
-        val openRadius = switchCase(isOpen, literal(12f), literal(9f))
+        // 순서 숫자가 들어가는 핀(order 있음)은 숫자가 들어갈 만큼 키운다
+        val radius = switchCase(
+            isOpen, switchCase(hasOrder, literal(14f), literal(12f)),
+            switchCase(hasOrder, literal(12f), literal(9f)),
+        )
+        val selRadius = switchCase(
+            isOpen, switchCase(hasOrder, literal(18f), literal(16f)),
+            switchCase(hasOrder, literal(16f), literal(13f)),
+        )
         s.addLayer(
             CircleLayer(STAY, SOURCE_ID).withFilter(isStay)
-                .withProperties(circleRadius(openRadius), circleStrokeWidth(3f)),
+                .withProperties(circleRadius(radius), circleStrokeWidth(3f)),
         )
         s.addLayer(
             CircleLayer(STAY_SEL, SOURCE_ID).withFilter(NOTHING)
-                .withProperties(circleRadius(switchCase(isOpen, literal(16f), literal(13f))), circleStrokeWidth(4f)),
+                .withProperties(circleRadius(selRadius), circleStrokeWidth(4f)),
+        )
+
+        // 핀 안 순서 숫자: 핀과 한 몸이라 겹침 검사 없이 항상 그린다 (숫자만 → 글꼴 0-255 범위 하나)
+        s.addLayer(
+            SymbolLayer(STAY_NUM, SOURCE_ID).withFilter(all(isStay, hasOrder)).withProperties(
+                textField(Expression.toString(get("order"))),
+                textFont(arrayOf(FONT_MEDIUM)),
+                textSize(switchCase(isOpen, literal(15f), literal(14f))),
+                textAllowOverlap(true),
+                textIgnorePlacement(true),
+            ),
+        )
+        // 핀 옆 이름: 오른쪽 → 왼쪽 → 위 → 아래 중 빈 자리에, 자리가 없으면 뺀다
+        val nameLayout = arrayOf(
+            textField(get("name")),
+            textFont(arrayOf(FONT_REGULAR)),
+            textVariableAnchor(NAME_ANCHORS),
+            textRadialOffset(NAME_OFFSET_EM),
+            textMaxWidth(NAME_MAX_WIDTH_EM),
+            textLetterSpacing(HANGUL_LETTER_SPACING),
+            textHaloWidth(2f),
+        )
+        s.addLayer(
+            SymbolLayer(STAY_NAME, SOURCE_ID).withFilter(all(isStay, hasName)).withProperties(
+                *nameLayout,
+                textSize(NAME_SIZE),
+                textAllowOverlap(false),
+            ).apply { minZoom = NAME_MIN_ZOOM },
+        )
+        // 고른 머문 곳 이름: 더 크게, 줌·겹침과 상관없이 항상
+        s.addLayer(
+            SymbolLayer(STAY_NAME_SEL, SOURCE_ID).withFilter(NOTHING).withProperties(
+                *nameLayout,
+                textSize(NAME_SEL_SIZE),
+                textAllowOverlap(true),
+            ),
         )
 
         palette?.let { applyPalette(s, it) }
@@ -174,6 +242,9 @@ internal class DayMapController(
         s.getLayer(STAY_HALO)?.setProperties(circleColor(p.openStay))
         s.getLayer(STAY)?.setProperties(circleColor(stayColor), circleStrokeColor(p.casing))
         s.getLayer(STAY_SEL)?.setProperties(circleColor(stayColor), circleStrokeColor(p.selectedStroke))
+        s.getLayer(STAY_NUM)?.setProperties(textColor(switchCase(isOpen, color(p.onOpenStay), color(p.onStay))))
+        s.getLayer(STAY_NAME)?.setProperties(textColor(p.label), textHaloColor(p.labelHalo))
+        s.getLayer(STAY_NAME_SEL)?.setProperties(textColor(p.label), textHaloColor(p.labelHalo))
     }
 
     /** 고른 항목은 강조 레이어로 위에 다시 그리고, 나머지는 살짝 흐리게. */
@@ -185,10 +256,16 @@ internal class DayMapController(
         s.getLayer(TRIP_SEL_CASING)?.let { (it as LineLayer).setFilter(all(isTrip, pick)) }
         s.getLayer(TRIP_SEL)?.let { (it as LineLayer).setFilter(all(isTrip, pick)) }
         s.getLayer(STAY_SEL)?.let { (it as CircleLayer).setFilter(all(isStay, pick)) }
+        // 고른 곳 이름은 강조 레이어로 옮기고 보통 이름 레이어에서는 뺀다 (두 번 그리지 않게)
+        s.getLayer(STAY_NAME_SEL)?.let { (it as SymbolLayer).setFilter(all(isStay, hasName, pick)) }
+        s.getLayer(STAY_NAME)?.let { (it as SymbolLayer).setFilter(all(isStay, hasName, not(pick))) }
         s.getLayer(TRIP_CASING)?.setProperties(lineOpacity(dim))
         s.getLayer(TRIP_LINE)?.setProperties(lineOpacity(dim))
         s.getLayer(STAY)?.setProperties(circleOpacity(dim), circleStrokeOpacity(dim))
         s.getLayer(STAY_HALO)?.setProperties(circleOpacity(HALO_OPACITY * dim))
+        // 숫자는 고른 핀(강조 원 위)만 진하게, 나머지는 원과 같이 흐리게
+        s.getLayer(STAY_NUM)?.setProperties(textOpacity(if (key == null) literal(1f) else switchCase(pick, literal(1f), literal(dim))))
+        s.getLayer(STAY_NAME)?.setProperties(textOpacity(dim))
     }
 
     private fun applyData() {
@@ -235,13 +312,13 @@ internal class DayMapController(
         m.easeCamera(target, REVEAL_MS)
     }
 
-    /** 지도를 누르면 손가락 크기(76dp) 안의 핀 → 경로 순서로 찾아 그 항목을 고른다. 빈 곳이면 선택 해제. */
+    /** 지도를 누르면 손가락 크기(76dp) 안의 핀(이름 글자 포함) → 경로 순서로 찾아 그 항목을 고른다. 빈 곳이면 선택 해제. */
     private fun onMapClick(m: MapLibreMap, latLng: LatLng): Boolean {
         if (style == null) return false
         val p = m.projection.toScreenLocation(latLng)
         val r = TOUCH_RADIUS_DP * density
         val box = RectF(p.x - r, p.y - r, p.x + r, p.y + r)
-        val key = m.queryRenderedFeatures(box, STAY_SEL, STAY).firstNotNullOfOrNull { it.keyOrNull() }
+        val key = m.queryRenderedFeatures(box, STAY_SEL, STAY, STAY_NAME_SEL, STAY_NAME).firstNotNullOfOrNull { it.keyOrNull() }
             ?: m.queryRenderedFeatures(box, TRIP_SEL, TRIP_LINE).firstNotNullOfOrNull { it.keyOrNull() }
         onSelectKey(key)
         return true
@@ -260,6 +337,13 @@ internal class DayMapController(
         const val STAY_HALO = "eodi-stay-open-halo"
         const val STAY = "eodi-stay"
         const val STAY_SEL = "eodi-stay-sel"
+        const val STAY_NUM = "eodi-stay-order"
+        const val STAY_NAME = "eodi-stay-name"
+        const val STAY_NAME_SEL = "eodi-stay-name-sel"
+
+        /** 앱 assets 글꼴 이름 (scripts/map/README.md 스타일 약속). 한글은 기기 글꼴(localIdeographFontFamily)로 그린다. */
+        const val FONT_REGULAR = "NotoSans-Regular"
+        const val FONT_MEDIUM = "NotoSans-Medium"
 
         const val EMPTY_GEOJSON = """{"type":"FeatureCollection","features":[]}"""
         val NOTHING: Expression = literal(false)
@@ -273,8 +357,22 @@ internal class DayMapController(
         const val REVEAL_MIN_ZOOM = 14.0
         const val REVEAL_MS = 400
 
+        const val NAME_SIZE = 15f
+        const val NAME_SEL_SIZE = 19f
+        const val NAME_MIN_ZOOM = 11f
+        const val NAME_OFFSET_EM = 1.1f
+        const val NAME_MAX_WIDTH_EM = 9f
+
+        /** 바탕 지도 한글 라벨과 같은 글자 간격 (scripts/map/README.md "글자") */
+        const val HANGUL_LETTER_SPACING = -0.08f
+        val NAME_ANCHORS = arrayOf(
+            Property.TEXT_ANCHOR_LEFT, Property.TEXT_ANCHOR_RIGHT, Property.TEXT_ANCHOR_TOP, Property.TEXT_ANCHOR_BOTTOM,
+        )
+
         val isTrip: Expression = eq(get("kind"), literal("trip"))
         val isStay: Expression = eq(get("kind"), literal("stay"))
         val isOpen: Expression = eq(get("open"), literal(true))
+        val hasOrder: Expression = has("order")
+        val hasName: Expression = has("name")
     }
 }

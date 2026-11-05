@@ -32,6 +32,7 @@ internal object MapStyleSource {
     private const val STYLE_ASSET = "map/style.json"
     private const val MAP_FILE = "map/korea-demo.pmtiles"
     private const val PLACEHOLDER = "{{PMTILES_URL}}"
+    private const val GLYPHS = "asset://map/fonts/{fontstack}/{range}.pbf"
 
     suspend fun resolve(context: Context): MapStyleSpec = withContext(Dispatchers.IO) {
         val file = mapFile(context)
@@ -61,10 +62,13 @@ internal object MapStyleSource {
         return File(context.filesDir, MAP_FILE).takeIf { it.isFile && it.length() > 0 }
     }
 
-    /** 지도 파일이 없을 때 쓰는 스타일: 바탕색 한 장 (네트워크 없이 바로 뜬다). */
+    /**
+     * 지도 파일이 없을 때 쓰는 스타일: 바탕색 한 장 (네트워크 없이 바로 뜬다).
+     * 글꼴(glyphs)은 APK 안 것을 가리킨다 → 지도 파일이 없어도 머문 곳 순서 숫자·이름이 그려진다.
+     */
     fun fallbackJson(backgroundArgb: Int): String {
         val rgb = String.format(Locale.ROOT, "#%06X", backgroundArgb and 0xFFFFFF)
-        return """{"version":8,"name":"eodi-fallback","sources":{},"layers":[""" +
+        return """{"version":8,"name":"eodi-fallback","glyphs":"$GLYPHS","sources":{},"layers":[""" +
             """{"id":"background","type":"background","paint":{"background-color":"$rgb"}}]}"""
     }
 }
