@@ -80,7 +80,8 @@ cargo clippy --all-targets -- -D warnings   # 경고 0 유지
 ```
 - Kotlin에 공개할 Rust 함수는 `core-rs/src/ffi.rs`에만 `#[uniffi::export]`로 둔다. Kotlin에서는 `app.eodiyeotji.core.EodiCore`를 거쳐 부른다.
 - Rust 결과물(`.so`)과 바인딩은 `app/build/` 아래에 생기고 git에 올리지 않는다.
-- 에뮬레이터 실행 · 차량 상태 조작은 `scripts/emu.ps1`, `scripts/vc.ps1` (`docs/50_개발환경_세팅.md` 7-3).
+- 에뮬레이터 실행 · 차량 상태 조작 · 시연 경로 재생은 `scripts/emu.ps1`, `scripts/vc.ps1`, `scripts/replay.ps1` (`docs/50_개발환경_세팅.md` 7-3).
+- 오프라인 지도 파일은 git에 없다 → `scripts/map/build-map.ps1`로 만들고 `push-map.ps1`로 에뮬레이터에 넣는다. 지도에 그릴 데이터(GeoJSON·범위)는 Rust `mapdata.rs`가 만들고 Kotlin은 MapLibre에 그대로 넘긴다.
 
 ## Git 규칙 (반드시 지킨다)
 1. **작업 시작 전에 항상 `git pull`** 한다. 다른 사람이 올린 변경은 덮어쓰지 않는다.

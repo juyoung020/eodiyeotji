@@ -18,6 +18,9 @@
 ## [Unreleased]
 
 ### Added
+- 지도: 하루 상세 위에 그날 주행 경로·머문 곳 핀을 MapLibre로 그림. 항목을 누르면 지도에서 강조·이동, 지도를 누르면 항목 선택 (`app/.../ui/map/`)
+- 오프라인 지도: 서울·서울→강릉 고속도로·강릉 구간을 기기 안 지도 파일(PMTiles 60MB)과 한글 지명 스타일로 만들고 에뮬레이터에 넣는 스크립트 (`scripts/map/`, `app/src/main/assets/map/`)
+- Rust가 하루치 지도 데이터(GeoJSON·화면 범위·항목별 범위)를 만들어 줌 (`core-rs/src/mapdata.rs`)
 - 자동 기록: 기어가 P를 벗어나면(또는 시동 ON) 주행을 시작해 Pleos 위치를 10초마다 묶어 저장하고, P로 돌아오면 마감. 앱을 안 열어도 부팅 때부터 동작 (`app/.../record/`, `pleos/`)
 - 기록 저장소: Rust SQLite에 위치를 저장하고 주행·머문 곳·날짜별 요약을 증분 계산 (1년치 날짜 목록 0.1ms) (`core-rs/src/store.rs`)
 - 타임라인 화면: 날짜별 목록(최신순) + 하루 상세(주행·머문 곳 시간순), 넓은 창은 나란히·좁은 창은 한 장씩, 기록이 바뀌면 자동 갱신 (`app/.../ui/timeline/`)
@@ -33,6 +36,7 @@
 - 개발 순서(MVP): 단계별 시연 목표, 자르는 순서, 위험 요소, 데일리 칸 (`docs/00_plan.md`)
 
 ### Changed
+- 앱 화면이 두 개 뜨지 않게 MainActivity를 한 개로 유지 (`launchMode=singleTask`)
 - 공모전 자료를 `docs/contest/`로 모으고, 백로그를 `docs/00_plan.md`로 이름 바꿔 docs 맨 위에 둠
 - CLAUDE.md에 Git 규칙 명시: 작업 전 pull, 큰 작업 단위로 커밋·푸시, AI 기여자 표시 금지
 - 계획에서 일정(날짜·스프린트 기간·간트 차트)을 빼고 순서만 남김 (`docs/00_plan.md`, `README.md`)

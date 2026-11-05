@@ -302,6 +302,7 @@
 
 ## 완료
 
+- [x] 개발 순서 4단계 지도: MapLibre + 오프라인 지도 파일(서울·강릉 구간), 단순화 경로·머문 곳 핀, 항목↔지도 선택 (주영, 11/05)
 - [x] D3·D5·D11 개발 순서 2·3단계: 자동 기록(기어·시동 → FusedLocation 묶음 → Rust SQLite) + 날짜별 타임라인 화면, 시연 경로 재생 `scripts/replay.ps1` (주영, 11/05)
 - [x] D1 Android Studio + Pleos Connect 에뮬레이터 설치 — 데스크톱, 2차 PT 시연 PC 후보 (주영, 11/05)
 - [x] D10 뼈대: Android 프로젝트 + Rust 코어 UniFFI 연결 + cargo-ndk를 Gradle 빌드에 연결 (주영, 11/05) — 개발 순서 1단계
