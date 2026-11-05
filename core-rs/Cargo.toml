@@ -11,6 +11,7 @@ name = "eodi_core"
 [dependencies]
 uniffi = "0.32"
 thiserror = "2"
+rusqlite = { version = "0.41.1", features = ["bundled"] }
 
 [features]
 # Kotlin 바인딩 생성기(호스트에서만 실행). 앱에 들어가는 .so에는 포함되지 않는다.

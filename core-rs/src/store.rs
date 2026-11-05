@@ -1,12 +1,56 @@
 //! 기록 저장소 (Kotlin에 공개되는 `EodiStore` 객체).
 //!
-//! 계약(시그니처·의미)은 이 파일의 doc 주석이 기준이다. 구현은 SQLite(rusqlite, bundled)로 한다.
+//! 계약(시그니처·의미)은 이 파일의 doc 주석이 기준이다. 구현은 SQLite(rusqlite, bundled — FTS5·R-tree 포함)다.
 //!
-//! [계약 단계 껍데기] 지금은 메모리에만 쌓고, 조회는 빈 결과를 돌려준다. 실제 구현으로 교체될 예정.
+//! # 데이터가 흐르는 길
+//! 1. `ingest` / `mark_drive_event`는 원본(위치 점, 주행 신호)만 저장하고 "바뀐 시간 범위"(`dirty`)를 넓힌다.
+//!    주행 나누기는 하지 않으므로 묶음 하나가 1ms 안팎이고, 점이 아무리 쌓여도 저장 비용은 묶음 크기에만 비례한다.
+//! 2. 조회(`day_summaries` / `day_detail`)가 오면 먼저 밀린 범위만 다시 계산한다(`flush`):
+//!    바뀐 범위를 감싸는 기존 주행들만 지우고, 그 구간의 점을 시간순으로 읽으며 주행을 다시 나눠 `trip` 표에 넣고,
+//!    영향받은 날의 `day_summary` 줄만 고친다. 그래서 1년치가 쌓여도 조회는 표 몇 줄 읽기다.
+//!    주행 중에 화면이 매번 조회하면 지금 달리는 주행 하나(최대 수천 점)만 다시 계산한다.
+//!
+//! # 주행(trip)
+//! - 위치 점을 시간순으로 놓고, 이웃한 두 점 사이 공백이 5분 이상이거나 그 사이에 주행 시작·끝 신호가 있으면 끊는다
+//!   (`trip::is_cut`: 시작 신호 시각의 점은 새 주행, 끝 신호 시각의 점은 앞 주행에 들어간다).
+//! - 끊긴 구간마다 혼자 튀는 점(GPS 점프, 시속 252km 초과처럼 보이는 점)을 빼고(`geo::drop_spikes`),
+//!   남은 점이 2개 미만이면 주행으로 치지 않는다 (점은 지우지 않고 남겨 둔다).
+//! - `start_ms`/`end_ms` = 남은 첫·마지막 점 시각, `distance_m` = 점 사이 대원 거리 합,
+//!   `path` = `geo::simplify`(허용 오차 5m)로 줄인 점.
+//! - 주행은 **시작 시각의 현지 날짜**에 속한다 (자정을 넘겨도 출발한 날).
+//!
+//! # 머문 곳(stay)
+//! 앱은 기어가 P가 아닐 때만 위치를 기록하므로, 주차는 점이 모인 곳이 아니라 "주행과 주행 사이의 공백"으로 나타난다.
+//! - (가) 주행 사이: 다음 주행이 앞 주행 끝 자리에서 300m 안에서 시작하고 공백이 10분 이상이면,
+//!   앞 주행 끝 자리에 머문 곳 하나 (도착 = 앞 주행 `end_ms`, 떠남 = 다음 주행 `start_ms`, 중심 = 앞 주행 끝 점).
+//!   다음 주행이 다음 날이어도 같다 (밤새 주차 = 도착한 날의 머문 곳 하나).
+//!   멀리서 다시 출발했거나 공백이 10분 미만이면 머문 곳이 아니다.
+//! - (나) 주행 안: `trip::detect_stays` (반경 150m 안에서 10분 이상, 드라이브스루·픽업 대기 등).
+//! - (다) 마지막 도착: 전체 기록의 마지막 주행 뒤에 끝 신호(`DriveEvent::End`)가 있으면, 아직 다음 주행이 없어도
+//!   그 끝 자리를 "지금 머무는 중"인 머문 곳으로 둔다. 이때 `leave_ms == arrive_ms`다.
+//!   끝 신호가 없으면(아직 달리는 중이거나 신호를 못 받음) 머문 곳을 만들지 않고, 다음 주행이 오면 (가)로 정해진다.
+//! - 머문 곳은 **도착 시각의 현지 날짜**에 속한다. 그래서 자정을 넘긴 주행 뒤의 머문 곳만 있는 날
+//!   (주행 0개, 머문 곳 1개 이상)도 생길 수 있고, 그런 날도 `day_summaries`에 나온다.
+//!
+//! # 하루(day)
+//! 현지 날짜는 `open`에 준 `tz_offset_minutes` 기준이다. 다른 오프셋으로 다시 열면 날짜별 요약을 전부 다시 만든다.
 
-use std::sync::{Arc, Mutex};
+use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex, MutexGuard};
+
+use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::ffi::GeoPoint;
+use crate::geo::{self, Fix, Point};
+use crate::trip::{self, DriveMark, MarkKind, Segmenter, Stay, TripConfig};
+
+/// DB 구조 버전 (`PRAGMA user_version`). 구조를 바꾸면 올리고 `migrate`에 단계를 추가한다.
+const SCHEMA_VERSION: i32 = 1;
+/// 이보다 정확도가 나쁜(m) 점은 버린다.
+pub const MAX_ACCURACY_M: f32 = 100.0;
+/// 지도에 넘길 경로의 단순화 허용 오차(m).
+pub const PATH_TOLERANCE_M: f64 = 5.0;
+const DAY_MS: i64 = 86_400_000;
 
 /// 위치 한 점 (FusedLocation `LocationData`에서 필요한 값만).
 #[derive(Debug, Clone, Copy, PartialEq, uniffi::Record)]
@@ -31,13 +75,16 @@ pub enum DriveEvent {
 pub struct DaySummary {
     /// 현지 날짜 "YYYY-MM-DD" (open 때 받은 tz_offset_minutes 기준)
     pub day: String,
+    /// 그날 출발한 주행 수
     pub trip_count: u32,
+    /// 그날 도착한 머문 곳 수
     pub stay_count: u32,
-    /// 그날 모든 주행 거리 합 (m)
+    /// 그날 출발한 모든 주행의 거리 합 (m)
     pub distance_m: f64,
-    /// 그날 주행 시간 합 (ms)
+    /// 그날 출발한 주행 시간(end_ms - start_ms) 합 (ms)
     pub drive_millis: i64,
-    /// 그날 첫 위치 / 마지막 위치 시각 (UTC epoch ms)
+    /// 그날 첫 위치 / 마지막 위치 시각 (UTC epoch ms).
+    /// 그날 주행의 시작·끝과 머문 곳 도착 시각 중 가장 이른 것 / 가장 늦은 것.
     pub first_ms: i64,
     pub last_ms: i64,
 }
@@ -54,7 +101,7 @@ pub struct TripSummary {
     pub path: Vec<GeoPoint>,
 }
 
-/// 머문 곳 하나.
+/// 머문 곳 하나. `leave_ms == arrive_ms`면 아직 머무는 중(다음 주행이 아직 없음).
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct StaySummary {
     pub center: GeoPoint,
@@ -62,12 +109,25 @@ pub struct StaySummary {
     pub leave_ms: i64,
 }
 
-/// 하루 상세 (시간순).
+/// 하루 타임라인의 한 칸: 주행 또는 머문 곳.
+#[derive(Debug, Clone, PartialEq, uniffi::Enum)]
+pub enum DayEntry {
+    Trip { trip: TripSummary },
+    Stay { stay: StaySummary },
+}
+
+/// 하루 상세 (trips는 출발 시각순, stays는 도착 시각순).
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct DayDetail {
     pub day: String,
     pub trips: Vec<TripSummary>,
     pub stays: Vec<StaySummary>,
+    /// 그날 요약. `day_summaries`가 그날에 돌려주는 값과 같다.
+    /// 기록이 없는 날은 개수·합계가 0이고 first_ms = last_ms = 0.
+    pub summary: DaySummary,
+    /// trips와 stays를 한 줄로 합친 타임라인. 주행은 `start_ms`, 머문 곳은 `arrive_ms` 기준 시간순이고,
+    /// 같은 시각이면 주행이 먼저다 (주행 첫 점에서 시작한 주행 안 머문 곳). 화면은 이 순서대로 그리기만 한다.
+    pub entries: Vec<DayEntry>,
 }
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]
@@ -79,52 +139,631 @@ pub enum CoreError {
     InvalidInput(String),
 }
 
-/// 기기 안 기록 저장소. 한 앱에서 하나만 열어 계속 쓴다. 여러 스레드에서 불러도 안전해야 한다.
+impl From<rusqlite::Error> for CoreError {
+    fn from(e: rusqlite::Error) -> Self {
+        CoreError::Db(e.to_string())
+    }
+}
+
+/// 기기 안 기록 저장소. 한 앱에서 하나만 열어 계속 쓴다. 여러 스레드에서 불러도 안전하다
+/// (연결 하나를 Mutex로 감싸 한 번에 한 호출씩 처리).
 #[derive(uniffi::Object)]
 pub struct EodiStore {
-    #[allow(dead_code)]
     tz_offset_minutes: i32,
-    fixes: Mutex<Vec<GeoFix>>,
+    cfg: TripConfig,
+    conn: Mutex<Connection>,
 }
 
 #[uniffi::export]
 impl EodiStore {
     /// DB 파일을 열거나 만든다. `tz_offset_minutes`: 날짜를 나눌 현지 시간대 (한국 = 540).
+    ///
+    /// 처음이면 표를 만들고, 예전 버전 DB면 올린다. 앱보다 새 버전의 DB면 `CoreError::Db`.
+    /// 지난번과 다른 시간대로 열면 날짜별 요약을 새 시간대로 다시 만든다.
     #[uniffi::constructor]
     pub fn open(path: String, tz_offset_minutes: i32) -> Result<Arc<Self>, CoreError> {
         if path.is_empty() {
             return Err(CoreError::InvalidInput("empty path".into()));
         }
-        Ok(Arc::new(Self { tz_offset_minutes, fixes: Mutex::new(Vec::new()) }))
+        if !(-24 * 60..=24 * 60).contains(&tz_offset_minutes) {
+            return Err(CoreError::InvalidInput(format!("tz_offset_minutes {tz_offset_minutes}")));
+        }
+        let mut conn = Connection::open(&path)?;
+        // WAL: 쓰기 중에도 읽기가 막히지 않고, 커밋마다 fsync하지 않아 묶음 저장이 빠르다.
+        conn.query_row("PRAGMA journal_mode = WAL", [], |r| r.get::<_, String>(0))?;
+        conn.pragma_update(None, "synchronous", "NORMAL")?;
+        migrate(&mut conn)?;
+        let store = Self { tz_offset_minutes, cfg: TripConfig::default(), conn: Mutex::new(conn) };
+        store.apply_timezone()?;
+        Ok(Arc::new(store))
     }
 
-    /// 위치 묶음을 저장한다 (수 초~수십 개 단위로 부른다). 시간순이 아니어도 되고, 같은 시각 중복은 무시한다.
-    /// 정확도가 나쁜 점(accuracy_m > 100) 같은 노이즈는 여기서 거른다. 반환: 실제로 저장한 점 수.
+    /// 위치 묶음을 저장한다 (수 초~수십 개 단위로 부른다). 반환: 실제로 저장한 점 수.
+    ///
+    /// - 시간순이 아니어도 된다. 이미 지난 시각의 점이 늦게 와도 그 부분의 주행·머문 곳이 다시 계산된다.
+    /// - 같은 시각(`t_ms`)의 점이 이미 있으면 무시한다 (먼저 들어온 점이 남는다).
+    /// - 노이즈는 저장하지 않는다: `accuracy_m > 100`(또는 NaN), 좌표가 NaN·무한대·범위 밖(위도 ±90, 경도 ±180),
+    ///   (0, 0) 좌표, `t_ms <= 0`. 정확도 0(모름)은 받는다.
+    /// - 혼자 튀는 점(GPS 점프)은 저장은 하되 주행 계산에서 뺀다 (앞뒤 점이 있어야 판단할 수 있어서).
     pub fn ingest(&self, fixes: Vec<GeoFix>) -> Result<u32, CoreError> {
-        let n = fixes.len() as u32;
-        self.fixes.lock().map_err(|e| CoreError::Db(e.to_string()))?.extend(fixes);
-        Ok(n)
+        let mut conn = self.lock()?;
+        let tx = conn.transaction()?;
+        let mut stored = 0u32;
+        let mut span = Span::default();
+        {
+            let mut st =
+                tx.prepare_cached("INSERT OR IGNORE INTO fix (t_ms, lat, lon, accuracy_m) VALUES (?1, ?2, ?3, ?4)")?;
+            for f in fixes.iter().filter(|f| is_clean(f)) {
+                if st.execute(params![f.t_ms, f.lat, f.lon, f.accuracy_m])? == 1 {
+                    stored += 1;
+                    span.add(f.t_ms);
+                }
+            }
+        }
+        if let Some((lo, hi)) = span.range() {
+            mark_dirty(&tx, lo, hi)?;
+        }
+        tx.commit()?;
+        Ok(stored)
     }
 
-    /// 주행 시작·끝 신호를 기록한다. 주행 나누기에서 위치 공백 기준과 함께 경계로 쓴다.
+    /// 주행 시작·끝 신호를 기록한다. 주행 나누기에서 위치 공백 기준과 함께 경계로 쓴다 (`trip::is_cut`).
+    /// 같은 시각·같은 종류의 신호는 한 번만 저장한다. 위치보다 늦게 와도 된다. `t_ms <= 0`이면 `InvalidInput`.
     pub fn mark_drive_event(&self, event: DriveEvent, t_ms: i64) -> Result<(), CoreError> {
-        let _ = (event, t_ms);
+        if t_ms <= 0 {
+            return Err(CoreError::InvalidInput(format!("t_ms {t_ms}")));
+        }
+        let mut conn = self.lock()?;
+        let tx = conn.transaction()?;
+        let kind = match event {
+            DriveEvent::Start => KIND_START,
+            DriveEvent::End => KIND_END,
+        };
+        if tx.execute("INSERT OR IGNORE INTO drive_event (t_ms, kind) VALUES (?1, ?2)", params![t_ms, kind])? == 1 {
+            mark_dirty(&tx, t_ms, t_ms)?;
+        }
+        tx.commit()?;
         Ok(())
     }
 
-    /// 기록이 있는 날을 최신순으로 최대 `limit`개. 1년치(365일)도 100ms 이내.
+    /// 기록(주행 또는 머문 곳)이 있는 날을 최신순으로 최대 `limit`개. 1년치(365일)도 100ms 이내.
     pub fn day_summaries(&self, limit: u32) -> Result<Vec<DaySummary>, CoreError> {
-        let _ = limit;
-        Ok(Vec::new())
+        let mut conn = self.lock()?;
+        self.flush(&mut conn)?;
+        let mut st = conn.prepare_cached(
+            "SELECT day, trip_count, stay_count, distance_m, drive_millis, first_ms, last_ms
+             FROM day_summary ORDER BY day DESC LIMIT ?1",
+        )?;
+        let rows = st.query_map([limit], |r| {
+            Ok(DaySummary {
+                day: format_day(r.get(0)?),
+                trip_count: r.get(1)?,
+                stay_count: r.get(2)?,
+                distance_m: r.get(3)?,
+                drive_millis: r.get(4)?,
+                first_ms: r.get(5)?,
+                last_ms: r.get(6)?,
+            })
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
     }
 
-    /// 하루 상세. 기록이 없는 날이면 빈 trips/stays.
+    /// 하루 상세 (`day` = "YYYY-MM-DD"). 기록이 없는 날이면 빈 trips/stays. 날짜 형식이 틀리면 `InvalidInput`.
+    /// 점 1만 개인 날도 50ms 이내 (경로는 저장할 때 이미 단순화돼 있다).
     pub fn day_detail(&self, day: String) -> Result<DayDetail, CoreError> {
-        Ok(DayDetail { day, trips: Vec::new(), stays: Vec::new() })
+        let d = parse_day(&day).ok_or_else(|| CoreError::InvalidInput(format!("day {day:?}")))?;
+        let mut conn = self.lock()?;
+        self.flush(&mut conn)?;
+        let acc = self.collect_days(&conn, d, d, true)?.remove(&d).unwrap_or_default();
+        let summary = acc.summary(d);
+        let entries = acc.entries();
+        Ok(DayDetail { day: format_day(d), trips: acc.trips, stays: acc.stays, summary, entries })
     }
 
     /// 저장된 위치 점 수 (디버그·검증용).
     pub fn fix_count(&self) -> Result<u64, CoreError> {
-        Ok(self.fixes.lock().map_err(|e| CoreError::Db(e.to_string()))?.len() as u64)
+        let conn = self.lock()?;
+        let n: i64 = conn.query_row("SELECT count(*) FROM fix", [], |r| r.get(0))?;
+        Ok(n as u64)
     }
 }
+
+// ---- 내부 구현 ----
+
+const KIND_START: i64 = 0;
+const KIND_END: i64 = 1;
+
+const SCHEMA_V1: &str = "
+CREATE TABLE meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL) WITHOUT ROWID;
+-- 원본 위치. t_ms가 rowid라 시간순 범위 읽기가 가장 빠르고, 같은 시각 중복은 여기서 막힌다.
+CREATE TABLE fix (t_ms INTEGER PRIMARY KEY, lat REAL NOT NULL, lon REAL NOT NULL, accuracy_m REAL NOT NULL);
+-- 원본 주행 신호. kind 0 = 시작, 1 = 끝.
+CREATE TABLE drive_event (t_ms INTEGER NOT NULL, kind INTEGER NOT NULL, PRIMARY KEY (t_ms, kind)) WITHOUT ROWID;
+-- 계산된 주행. seg_start/seg_end = 끊긴 구간의 첫·마지막 점(튄 점 포함), start_ms/end_ms = 남은 점 기준.
+-- path = 단순화한 경로(f64 위도·경도), stays = 주행 안 머문 곳(f64 위도·경도, i64 도착·떠남).
+CREATE TABLE trip (
+    seg_start INTEGER PRIMARY KEY,
+    seg_end INTEGER NOT NULL,
+    start_ms INTEGER NOT NULL,
+    end_ms INTEGER NOT NULL,
+    distance_m REAL NOT NULL,
+    start_lat REAL NOT NULL,
+    start_lon REAL NOT NULL,
+    end_lat REAL NOT NULL,
+    end_lon REAL NOT NULL,
+    path BLOB NOT NULL,
+    stays BLOB NOT NULL
+);
+CREATE INDEX trip_seg_end ON trip (seg_end);
+-- 날짜별 요약 (day = 1970-01-01부터 센 현지 날짜 번호).
+CREATE TABLE day_summary (
+    day INTEGER PRIMARY KEY,
+    trip_count INTEGER NOT NULL,
+    stay_count INTEGER NOT NULL,
+    distance_m REAL NOT NULL,
+    drive_millis INTEGER NOT NULL,
+    first_ms INTEGER NOT NULL,
+    last_ms INTEGER NOT NULL
+);
+-- 아직 trip/day_summary에 반영하지 않은 원본 변경의 시간 범위 (한 줄).
+CREATE TABLE dirty (id INTEGER PRIMARY KEY CHECK (id = 1), lo_ms INTEGER NOT NULL, hi_ms INTEGER NOT NULL);
+";
+
+fn migrate(conn: &mut Connection) -> Result<(), CoreError> {
+    let version: i32 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
+    if version > SCHEMA_VERSION {
+        return Err(CoreError::Db(format!("DB 버전 {version}이 앱({SCHEMA_VERSION})보다 새롭다")));
+    }
+    let tx = conn.transaction()?;
+    if version < 1 {
+        tx.execute_batch(SCHEMA_V1)?;
+    }
+    // 다음 버전은 여기에: if version < 2 { ... }
+    tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+    tx.commit()?;
+    Ok(())
+}
+
+fn mark_dirty(conn: &Connection, lo: i64, hi: i64) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO dirty (id, lo_ms, hi_ms) VALUES (1, ?1, ?2)
+         ON CONFLICT (id) DO UPDATE SET lo_ms = min(lo_ms, excluded.lo_ms), hi_ms = max(hi_ms, excluded.hi_ms)",
+        params![lo, hi],
+    )?;
+    Ok(())
+}
+
+fn is_clean(f: &GeoFix) -> bool {
+    f.t_ms > 0
+        && f.lat.is_finite()
+        && f.lon.is_finite()
+        && (-90.0..=90.0).contains(&f.lat)
+        && (-180.0..=180.0).contains(&f.lon)
+        && !(f.lat == 0.0 && f.lon == 0.0)
+        && f.accuracy_m <= MAX_ACCURACY_M // NaN이면 false
+}
+
+/// 시각 범위를 넓혀 가며 모은다.
+#[derive(Default)]
+struct Span(Option<(i64, i64)>);
+
+impl Span {
+    fn add(&mut self, t: i64) {
+        self.0 = Some(match self.0 {
+            Some((lo, hi)) => (lo.min(t), hi.max(t)),
+            None => (t, t),
+        });
+    }
+
+    fn range(&self) -> Option<(i64, i64)> {
+        self.0
+    }
+}
+
+/// trip 표 한 줄.
+struct TripRow {
+    seg_start: i64,
+    seg_end: i64,
+    start_ms: i64,
+    end_ms: i64,
+    distance_m: f64,
+    start: Point,
+    end: Point,
+    path: Vec<Point>,
+    stays: Vec<Stay>,
+}
+
+/// 끊긴 구간 하나로 주행을 만든다. 튄 점을 빼고 2개 미만이 남으면 주행이 아니다.
+fn build_trip(seg: &[Fix], cfg: &TripConfig) -> Option<TripRow> {
+    let kept = geo::drop_spikes(seg, cfg.max_speed_mps);
+    let (first, last) = (*kept.first()?, *kept.last()?);
+    if kept.len() < 2 {
+        return None;
+    }
+    let pts: Vec<Point> = kept.iter().map(Fix::point).collect();
+    let path = geo::simplify(&pts, PATH_TOLERANCE_M).into_iter().map(|i| pts[i]).collect();
+    Some(TripRow {
+        seg_start: seg[0].t_ms,
+        seg_end: seg[seg.len() - 1].t_ms,
+        start_ms: first.t_ms,
+        end_ms: last.t_ms,
+        distance_m: geo::path_length_m(&kept),
+        start: first.point(),
+        end: last.point(),
+        path,
+        stays: trip::detect_stays(&kept, cfg),
+    })
+}
+
+fn encode_points(pts: &[Point]) -> Vec<u8> {
+    let mut b = Vec::with_capacity(pts.len() * 16);
+    for p in pts {
+        b.extend_from_slice(&p.lat.to_le_bytes());
+        b.extend_from_slice(&p.lon.to_le_bytes());
+    }
+    b
+}
+
+fn decode_points(b: &[u8]) -> Vec<Point> {
+    b.as_chunks::<16>().0.iter().map(|c| Point { lat: f64_at(c, 0), lon: f64_at(c, 8) }).collect()
+}
+
+fn encode_stays(stays: &[Stay]) -> Vec<u8> {
+    let mut b = Vec::with_capacity(stays.len() * 32);
+    for s in stays {
+        b.extend_from_slice(&s.center.lat.to_le_bytes());
+        b.extend_from_slice(&s.center.lon.to_le_bytes());
+        b.extend_from_slice(&s.arrive_ms.to_le_bytes());
+        b.extend_from_slice(&s.leave_ms.to_le_bytes());
+    }
+    b
+}
+
+fn decode_stays(b: &[u8]) -> Vec<Stay> {
+    b.as_chunks::<32>()
+        .0
+        .iter()
+        .map(|c| Stay {
+            center: Point { lat: f64_at(c, 0), lon: f64_at(c, 8) },
+            arrive_ms: i64_at(c, 16),
+            leave_ms: i64_at(c, 24),
+        })
+        .collect()
+}
+
+fn f64_at(c: &[u8], i: usize) -> f64 {
+    f64::from_le_bytes(c[i..i + 8].try_into().expect("8 bytes"))
+}
+
+fn i64_at(c: &[u8], i: usize) -> i64 {
+    i64::from_le_bytes(c[i..i + 8].try_into().expect("8 bytes"))
+}
+
+fn gp(p: Point) -> GeoPoint {
+    GeoPoint { lat: p.lat, lon: p.lon }
+}
+
+fn stay_summary(s: &Stay) -> StaySummary {
+    StaySummary { center: gp(s.center), arrive_ms: s.arrive_ms, leave_ms: s.leave_ms }
+}
+
+/// 하루치 모음 (계산 중간값).
+#[derive(Default)]
+struct DayAcc {
+    trips: Vec<TripSummary>,
+    stays: Vec<StaySummary>,
+}
+
+impl DayAcc {
+    /// 기록이 없으면 개수·합계 0, first_ms = last_ms = 0.
+    fn summary(&self, day: i64) -> DaySummary {
+        let times = self
+            .trips
+            .iter()
+            .flat_map(|t| [t.start_ms, t.end_ms])
+            .chain(self.stays.iter().map(|s| s.arrive_ms));
+        let (first_ms, last_ms) = times
+            .fold(None, |acc: Option<(i64, i64)>, t| Some(acc.map_or((t, t), |(a, b)| (a.min(t), b.max(t)))))
+            .unwrap_or((0, 0));
+        DaySummary {
+            day: format_day(day),
+            trip_count: self.trips.len() as u32,
+            stay_count: self.stays.len() as u32,
+            distance_m: self.trips.iter().map(|t| t.distance_m).sum(),
+            drive_millis: self.trips.iter().map(|t| t.end_ms - t.start_ms).sum(),
+            first_ms,
+            last_ms,
+        }
+    }
+
+    /// 주행·머문 곳을 시간순 한 줄로 (같은 시각이면 주행 먼저).
+    fn entries(&self) -> Vec<DayEntry> {
+        let mut keyed: Vec<(i64, u8, DayEntry)> = self
+            .trips
+            .iter()
+            .map(|t| (t.start_ms, 0, DayEntry::Trip { trip: t.clone() }))
+            .chain(self.stays.iter().map(|s| (s.arrive_ms, 1, DayEntry::Stay { stay: s.clone() })))
+            .collect();
+        keyed.sort_by_key(|(t, k, _)| (*t, *k));
+        keyed.into_iter().map(|(_, _, e)| e).collect()
+    }
+}
+
+impl EodiStore {
+    fn lock(&self) -> Result<MutexGuard<'_, Connection>, CoreError> {
+        self.conn.lock().map_err(|e| CoreError::Db(e.to_string()))
+    }
+
+    fn tz_ms(&self) -> i64 {
+        self.tz_offset_minutes as i64 * 60_000
+    }
+
+    /// UTC 시각 → 현지 날짜 번호 (1970-01-01 = 0).
+    fn local_day(&self, t_ms: i64) -> i64 {
+        (t_ms + self.tz_ms()).div_euclid(DAY_MS)
+    }
+
+    /// 현지 날짜 번호 → 그날 0시의 UTC 시각.
+    fn day_start_ms(&self, day: i64) -> i64 {
+        day * DAY_MS - self.tz_ms()
+    }
+
+    /// 지난번에 연 시간대와 다르면 날짜별 요약을 전부 다시 만든다 (주행 자체는 시간대와 무관).
+    fn apply_timezone(&self) -> Result<(), CoreError> {
+        let mut conn = self.lock()?;
+        let tx = conn.transaction()?;
+        let stored: Option<i64> = tx
+            .query_row("SELECT value FROM meta WHERE key = 'tz_offset_minutes'", [], |r| r.get(0))
+            .optional()?;
+        if stored != Some(self.tz_offset_minutes as i64) {
+            tx.execute(
+                "INSERT OR REPLACE INTO meta (key, value) VALUES ('tz_offset_minutes', ?1)",
+                [self.tz_offset_minutes],
+            )?;
+            tx.execute("DELETE FROM day_summary", [])?;
+            let range: (Option<i64>, Option<i64>) =
+                tx.query_row("SELECT min(start_ms), max(end_ms) FROM trip", [], |r| Ok((r.get(0)?, r.get(1)?)))?;
+            if let (Some(t0), Some(t1)) = range {
+                self.refresh_days(&tx, self.local_day(t0), self.local_day(t1))?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// 밀린 원본 변경(`dirty`)을 trip·day_summary에 반영한다.
+    ///
+    /// 주행 경계는 이웃한 두 점(과 그 사이 신호)만 보고 정해지므로, 바뀐 범위 [a, b] 바깥의 경계는 그대로다.
+    /// 그래서 a보다 앞에서 시작한 마지막 주행의 시작(lo)부터, b보다 뒤에서 끝나는 첫 주행의 끝(hi)까지만
+    /// 지우고 다시 나누면 전체를 처음부터 다시 나눈 것과 같다.
+    fn flush(&self, conn: &mut Connection) -> Result<(), CoreError> {
+        let dirty: Option<(i64, i64)> =
+            conn.query_row("SELECT lo_ms, hi_ms FROM dirty WHERE id = 1", [], |r| Ok((r.get(0)?, r.get(1)?))).optional()?;
+        let Some((a, b)) = dirty else { return Ok(()) };
+        let tx = conn.transaction()?;
+        let lo: i64 = tx
+            .query_row("SELECT max(seg_start) FROM trip WHERE seg_start < ?1", [a], |r| r.get::<_, Option<i64>>(0))?
+            .unwrap_or(i64::MIN);
+        let hi: i64 = tx
+            .query_row("SELECT min(seg_end) FROM trip WHERE seg_end > ?1", [b], |r| r.get::<_, Option<i64>>(0))?
+            .unwrap_or(i64::MAX);
+
+        // 다시 계산할 날짜 범위: 지우는 주행, 새로 만든 주행, 그리고 창 바로 앞 주행의 끝
+        // (그 뒤의 주행 사이 머문 곳은 창 안 첫 주행의 출발에 따라 달라진다).
+        let mut touched = Span::default();
+        let prev_end: Option<i64> = tx
+            .query_row("SELECT end_ms FROM trip WHERE seg_start < ?1 ORDER BY seg_start DESC LIMIT 1", [lo], |r| r.get(0))
+            .optional()?;
+        if let Some(t) = prev_end {
+            touched.add(t);
+        }
+        {
+            let mut st = tx.prepare("SELECT start_ms, end_ms FROM trip WHERE seg_start BETWEEN ?1 AND ?2")?;
+            let mut q = st.query([lo, hi])?;
+            while let Some(r) = q.next()? {
+                touched.add(r.get(0)?);
+                touched.add(r.get(1)?);
+            }
+        }
+        tx.execute("DELETE FROM trip WHERE seg_start BETWEEN ?1 AND ?2", [lo, hi])?;
+
+        let marks: Vec<DriveMark> = {
+            let mut st = tx.prepare("SELECT t_ms, kind FROM drive_event WHERE t_ms BETWEEN ?1 AND ?2 ORDER BY t_ms")?;
+            let rows = st.query_map([lo, hi], |r| {
+                let kind = if r.get::<_, i64>(1)? == KIND_START { MarkKind::Start } else { MarkKind::End };
+                Ok(DriveMark { t_ms: r.get(0)?, kind })
+            })?;
+            rows.collect::<Result<_, _>>()?
+        };
+
+        // 점은 시간순으로 흘려 읽으며 구간이 끊길 때마다 주행을 만든다 (한 번에 주행 하나만 메모리에).
+        let mut built = Vec::new();
+        {
+            let mut st = tx.prepare("SELECT t_ms, lat, lon FROM fix WHERE t_ms BETWEEN ?1 AND ?2 ORDER BY t_ms")?;
+            let mut q = st.query([lo, hi])?;
+            let mut seg = Segmenter::new(&marks, self.cfg);
+            while let Some(r) = q.next()? {
+                let f = Fix { t_ms: r.get(0)?, lat: r.get(1)?, lon: r.get(2)? };
+                if let Some(done) = seg.push(f) {
+                    built.extend(build_trip(&done, &self.cfg));
+                }
+            }
+            if let Some(done) = seg.finish() {
+                built.extend(build_trip(&done, &self.cfg));
+            }
+        }
+        {
+            let mut st = tx.prepare(
+                "INSERT INTO trip (seg_start, seg_end, start_ms, end_ms, distance_m,
+                                   start_lat, start_lon, end_lat, end_lon, path, stays)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            )?;
+            for t in &built {
+                st.execute(params![
+                    t.seg_start,
+                    t.seg_end,
+                    t.start_ms,
+                    t.end_ms,
+                    t.distance_m,
+                    t.start.lat,
+                    t.start.lon,
+                    t.end.lat,
+                    t.end.lon,
+                    encode_points(&t.path),
+                    encode_stays(&t.stays),
+                ])?;
+                touched.add(t.start_ms);
+                touched.add(t.end_ms);
+            }
+        }
+        tx.execute("DELETE FROM dirty", [])?;
+        if let Some((t0, t1)) = touched.range() {
+            self.refresh_days(&tx, self.local_day(t0), self.local_day(t1))?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// 현지 날짜 d0..=d1의 day_summary 줄을 trip 표에서 다시 만든다.
+    fn refresh_days(&self, conn: &Connection, d0: i64, d1: i64) -> Result<(), CoreError> {
+        let days = self.collect_days(conn, d0, d1, false)?;
+        conn.execute("DELETE FROM day_summary WHERE day BETWEEN ?1 AND ?2", [d0, d1])?;
+        let mut st = conn.prepare_cached(
+            "INSERT INTO day_summary (day, trip_count, stay_count, distance_m, drive_millis, first_ms, last_ms)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        )?;
+        for (d, acc) in &days {
+            let s = acc.summary(*d);
+            st.execute(params![d, s.trip_count, s.stay_count, s.distance_m, s.drive_millis, s.first_ms, s.last_ms])?;
+        }
+        Ok(())
+    }
+
+    /// 현지 날짜 d0..=d1에 속한 주행(출발 날짜)과 머문 곳(도착 날짜)을 날짜별로 모은다. 기록 없는 날은 빠진다.
+    fn collect_days(
+        &self,
+        conn: &Connection,
+        d0: i64,
+        d1: i64,
+        with_path: bool,
+    ) -> Result<BTreeMap<i64, DayAcc>, CoreError> {
+        let (ds, de) = (self.day_start_ms(d0), self.day_start_ms(d1 + 1));
+        // 범위 직전 주행도 읽는다: 자정을 넘긴 주행 안의 머문 곳, 그 뒤 주행 사이 머문 곳이 범위에 들 수 있다.
+        let from: i64 = conn
+            .query_row("SELECT max(seg_start) FROM trip WHERE seg_start < ?1", [ds], |r| r.get::<_, Option<i64>>(0))?
+            .unwrap_or(ds);
+        let path_col = if with_path { "path" } else { "x''" };
+        let mut trips: Vec<TripRow> = {
+            let sql = format!(
+                "SELECT seg_start, seg_end, start_ms, end_ms, distance_m, start_lat, start_lon, end_lat, end_lon,
+                        {path_col}, stays
+                 FROM trip WHERE seg_start >= ?1 AND seg_start < ?2 ORDER BY seg_start"
+            );
+            let mut st = conn.prepare_cached(&sql)?;
+            let rows = st.query_map([from, de], |r| {
+                Ok(TripRow {
+                    seg_start: r.get(0)?,
+                    seg_end: r.get(1)?,
+                    start_ms: r.get(2)?,
+                    end_ms: r.get(3)?,
+                    distance_m: r.get(4)?,
+                    start: Point { lat: r.get(5)?, lon: r.get(6)? },
+                    end: Point { lat: r.get(7)?, lon: r.get(8)? },
+                    path: decode_points(&r.get::<_, Vec<u8>>(9)?),
+                    stays: decode_stays(&r.get::<_, Vec<u8>>(10)?),
+                })
+            })?;
+            rows.collect::<Result<_, _>>()?
+        };
+        let next: Option<(Point, i64)> = conn
+            .query_row(
+                "SELECT start_lat, start_lon, start_ms FROM trip WHERE seg_start >= ?1 ORDER BY seg_start LIMIT 1",
+                [de],
+                |r| Ok((Point { lat: r.get(0)?, lon: r.get(1)? }, r.get(2)?)),
+            )
+            .optional()?;
+        // 전체 마지막 주행 뒤에 끝 신호가 있으면 "지금 머무는 중"
+        let ended = match (next, trips.last()) {
+            (None, Some(last)) => conn
+                .query_row(
+                    "SELECT 1 FROM drive_event WHERE kind = ?1 AND t_ms >= ?2 LIMIT 1",
+                    params![KIND_END, last.seg_end],
+                    |_| Ok(()),
+                )
+                .optional()?
+                .is_some(),
+            _ => false,
+        };
+
+        let next_starts: Vec<Option<(Point, i64)>> =
+            (0..trips.len()).map(|k| trips.get(k + 1).map(|n| (n.start, n.start_ms)).or(next)).collect();
+        let mut days: BTreeMap<i64, DayAcc> = BTreeMap::new();
+        let in_range = |t: i64| Some(self.local_day(t)).filter(|d| (d0..=d1).contains(d));
+        for (t, next_start) in trips.iter_mut().zip(next_starts) {
+            if let Some(d) = in_range(t.start_ms) {
+                days.entry(d).or_default().trips.push(TripSummary {
+                    start_ms: t.start_ms,
+                    end_ms: t.end_ms,
+                    distance_m: t.distance_m,
+                    start: gp(t.start),
+                    end: gp(t.end),
+                    path: std::mem::take(&mut t.path).into_iter().map(gp).collect(),
+                });
+            }
+            let after = match next_start {
+                Some((p, leave)) => trip::between_stay(t.end, t.end_ms, p, leave, &self.cfg),
+                None if ended => Some(Stay { center: t.end, arrive_ms: t.end_ms, leave_ms: t.end_ms }),
+                None => None,
+            };
+            for s in t.stays.iter().chain(after.as_ref()) {
+                if let Some(d) = in_range(s.arrive_ms) {
+                    days.entry(d).or_default().stays.push(stay_summary(s));
+                }
+            }
+        }
+        Ok(days)
+    }
+}
+
+/// 현지 날짜 번호 → "YYYY-MM-DD" (그레고리력, Howard Hinnant의 civil_from_days).
+fn format_day(day: i64) -> String {
+    let z = day + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!("{y:04}-{m:02}-{d:02}")
+}
+
+/// 연·월·일 → 날짜 번호 (days_from_civil).
+fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let mp = (m + 9) % 12;
+    let doy = (153 * mp + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
+/// "YYYY-MM-DD" → 날짜 번호. 형식이 틀리거나 없는 날짜(2월 30일 등)면 None.
+fn parse_day(s: &str) -> Option<i64> {
+    let b = s.as_bytes();
+    if b.len() != 10 || b[4] != b'-' || b[7] != b'-' {
+        return None;
+    }
+    let num = |r: std::ops::Range<usize>| s.get(r)?.parse::<i64>().ok();
+    let (y, m, d) = (num(0..4)?, num(5..7)?, num(8..10)?);
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
+        return None;
+    }
+    let day = days_from_civil(y, m, d);
+    (format_day(day) == s).then_some(day)
+}
+
+#[cfg(test)]
+mod tests;

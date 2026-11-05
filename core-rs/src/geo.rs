@@ -85,6 +85,44 @@ pub fn simplify(points: &[Point], tolerance_m: f64) -> Vec<usize> {
     (0..n).filter(|&i| keep[i]).collect()
 }
 
+/// 혼자 튀는 점(GPS 점프)을 뺀 점 목록을 돌려준다. fixes는 시간순(같은 시각 없음)이어야 한다.
+///
+/// - 가운데 점: 앞(남긴 점)→이 점, 이 점→다음 점이 둘 다 `max_speed_mps`보다 빠른데,
+///   앞→다음은 그보다 느리면 이 점만 튄 것이다.
+/// - 첫 점: 첫 점→둘째가 너무 빠르고 둘째→셋째는 정상이면 첫 점이 튄 것이다 (GPS 막 켜졌을 때 흔함).
+/// - 마지막 점: 그 앞 두 점은 정상인데 마지막 한 칸만 너무 빠르면 뺀다.
+///
+/// 점이 2개 이하이면 판단할 근거가 없어 그대로 둔다. 두 점 이상이 함께 튀면 걸러내지 않는다.
+pub fn drop_spikes(fixes: &[Fix], max_speed_mps: f64) -> Vec<Fix> {
+    let n = fixes.len();
+    if n < 3 {
+        return fixes.to_vec();
+    }
+    let fast = |a: &Fix, b: &Fix| {
+        let dt_s = (b.t_ms - a.t_ms) as f64 / 1000.0;
+        haversine_m(a.point(), b.point()) > max_speed_mps * dt_s
+    };
+    let mut out: Vec<Fix> = Vec::with_capacity(n);
+    for (i, f) in fixes.iter().enumerate() {
+        let next = fixes.get(i + 1);
+        let spike = match (out.last(), next) {
+            (Some(p), Some(nx)) => fast(p, f) && fast(f, nx) && !fast(p, nx),
+            (None, Some(nx)) => fast(f, nx) && fixes.get(i + 2).is_some_and(|n2| !fast(nx, n2)),
+            (Some(p), None) => out.len() >= 2 && fast(p, f) && !fast(&out[out.len() - 2], p),
+            (None, None) => false,
+        };
+        if !spike {
+            out.push(*f);
+        }
+    }
+    out
+}
+
+/// 시간순 점들의 이동 거리 합(미터).
+pub fn path_length_m(fixes: &[Fix]) -> f64 {
+    fixes.windows(2).map(|w| haversine_m(w[0].point(), w[1].point())).sum()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -116,6 +154,46 @@ mod tests {
         pts.extend((1..=100).map(|i| p(37.001, 127.0 + i as f64 * 1e-5)));
         let kept = simplify(&pts, 5.0);
         assert_eq!(kept, vec![0, 100, 200]);
+    }
+
+    /// 1초 간격, 북쪽으로 초속 약 11m(시속 40km)로 달리는 점 n개.
+    fn drive(n: usize) -> Vec<Fix> {
+        (0..n).map(|i| Fix { lat: 37.0 + i as f64 * 1e-4, lon: 127.0, t_ms: i as i64 * 1000 }).collect()
+    }
+
+    #[test]
+    fn drop_spikes_removes_a_single_jump_in_the_middle() {
+        let mut fixes = drive(10);
+        fixes[5].lon += 0.5; // 약 44km 옆으로 튐
+        let kept = drop_spikes(&fixes, 70.0);
+        assert_eq!(kept.len(), 9);
+        assert!(kept.iter().all(|f| f.lon == 127.0));
+    }
+
+    #[test]
+    fn drop_spikes_removes_a_bad_first_and_last_point() {
+        let mut fixes = drive(10);
+        fixes[0].lat -= 0.3;
+        fixes[9].lat += 0.3;
+        let kept = drop_spikes(&fixes, 70.0);
+        assert_eq!(kept.iter().map(|f| f.t_ms).collect::<Vec<_>>(), (1..9).map(|i| i * 1000).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn drop_spikes_keeps_normal_and_fast_driving() {
+        let fixes = drive(50);
+        assert_eq!(drop_spikes(&fixes, 70.0), fixes);
+        // 시속 200km(초속 약 55m)도 정상 주행으로 남긴다
+        let fast: Vec<Fix> = (0..20).map(|i| Fix { lat: 37.0 + i as f64 * 5e-4, lon: 127.0, t_ms: i * 1000 }).collect();
+        assert_eq!(drop_spikes(&fast, 70.0).len(), 20);
+        assert_eq!(drop_spikes(&fixes[..2], 70.0).len(), 2);
+    }
+
+    #[test]
+    fn path_length_sums_segments() {
+        let d = path_length_m(&drive(11));
+        assert!((d - haversine_m(p(37.0, 127.0), p(37.001, 127.0))).abs() < 0.01, "{d}");
+        assert_eq!(path_length_m(&[]), 0.0);
     }
 
     #[test]
