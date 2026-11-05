@@ -262,6 +262,8 @@ data class CoursePost(
     val id: String, val title: String, val body: String, val author: String, val mine: Boolean, val region: String,
     val tags: List<String>, val stops: List<StopFact>, val distanceM: Double, val durationMs: Long, val createdMs: Long,
     val hearts: Int, val heartedByMe: Boolean,
+    /** 다녀온 날(YYYY-MM-DD) · 계절("가을 · 단풍철") · 그날 날씨("맑음 · 14°C") */
+    val visitedDay: String = "", val season: String = "", val weather: String? = null,
 )
 
 data class PlaceReview(
@@ -278,6 +280,7 @@ private fun CommunitySort.toRust() = when (this) {
 
 internal fun RCoursePost.toModel() = CoursePost(
     id, title, body, author, mine, region, tags, stops.map { it.toModel() }, distanceM, durationMs, createdMs, hearts.toInt(), heartedByMe,
+    visitedDay, season, weather,
 )
 
 private fun RPlaceReview.toModel() =

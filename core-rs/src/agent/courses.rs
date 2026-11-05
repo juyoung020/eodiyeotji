@@ -418,9 +418,15 @@ fn one_answer(i: usize, r: &CourseRecommendation, go: bool, driving: bool) -> St
 }
 
 /// 언제 다녀온 코스인지 한마디 (예: "작년 가을 단풍철에 다녀온 코스예요."). 값이 없으면 None.
-/// 통합 지점: CoursePost에 visited_day·season·weather가 생기면 여기 한 곳에서 채운다 (지금 계약에는 아직 없다).
-fn when_phrase(_p: &crate::community::CoursePost) -> Option<String> {
-    None
+fn when_phrase(p: &crate::community::CoursePost) -> Option<String> {
+    if p.season.trim().is_empty() {
+        return None;
+    }
+    let season = p.season.replace(" · ", " ");
+    Some(match p.weather.as_deref().filter(|w| !w.trim().is_empty()) {
+        Some(w) => format!("{season}, {}에 다녀온 코스예요.", w.split(" · ").next().unwrap_or(w)),
+        None => format!("{season}에 다녀온 코스예요."),
+    })
 }
 
 impl MemoryAgent {

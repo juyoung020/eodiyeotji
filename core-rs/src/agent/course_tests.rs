@@ -23,6 +23,7 @@ fn post(id: &str, title: &str, author: &str, region: &str, tags: &[&str], hearts
         tags: tags.iter().map(|s| s.to_string()).collect(),
         stops: stops.iter().map(|(n, c, la, lo)| stop(n, c, region, *la, *lo)).collect(),
         distance_m: km * 1000.0, duration_ms: (hours * 3_600_000.0) as i64, created_ms: 0, hearts, hearted_by_me: false,
+        visited_day: "2025-10-25".into(), season: "가을 · 단풍철".into(), weather: Some("맑음 · 14°C".into()),
     }
 }
 

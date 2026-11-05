@@ -45,7 +45,10 @@ private const val MAX_STOP_CHIPS = 4
  * 통합 지점: CoursePost에 visitedDay·season·weather가 생기면 여기 한 곳에서 채운다 (지금 계약에는 아직 없다).
  */
 @Suppress("UNUSED_PARAMETER")
-internal fun courseWhenLine(post: CoursePost): String? = null
+@androidx.compose.runtime.Composable
+internal fun courseWhenLine(post: CoursePost): String? =
+    if (post.visitedDay.isBlank() && post.season.isBlank()) null
+    else app.eodiyeotji.ui.community.visitText(app.eodiyeotji.core.Visit(post.visitedDay, post.season, post.weather))
 
 /** 정차 중: 순위 카드 목록. 카드를 누르면 "N번으로 안내해줘"로 이어서 묻는다 (안내는 제안 → 확인 뒤에만). */
 @Composable
