@@ -18,6 +18,29 @@ class RateGate(private val minIntervalMs: Long) {
         if (at > now) delay(at - now)
         nextAtMs = at + minIntervalMs
     }
-
-    private fun nowMs() = System.nanoTime() / 1_000_000
 }
+
+/**
+ * 토큰 통: 쉬고 있으면 [capacity]개까지 한꺼번에 보내고(지점 하나의 요청을 동시에), 그 뒤로는 1초에 [perSecond]개씩.
+ * 카카오는 짧은 시간에 요청이 몰리면 "API limit has been exceeded"(400, code -10)로 막는다 → 밀린 지점이 많을 때만 늦춘다.
+ */
+class TokenBucket(private val capacity: Int, private val perSecond: Double) {
+    private val mutex = Mutex()
+    private var tokens = capacity.toDouble()
+    private var lastMs = nowMs()
+
+    suspend fun acquire() = mutex.withLock {
+        while (true) {
+            val now = nowMs()
+            tokens = minOf(capacity.toDouble(), tokens + (now - lastMs) * perSecond / 1000.0)
+            lastMs = now
+            if (tokens >= 1.0) {
+                tokens -= 1.0
+                return@withLock
+            }
+            delay(((1.0 - tokens) * 1000.0 / perSecond).toLong().coerceAtLeast(1))
+        }
+    }
+}
+
+private fun nowMs() = System.nanoTime() / 1_000_000
