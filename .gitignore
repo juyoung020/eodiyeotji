@@ -29,3 +29,6 @@ scripts/map/style/node_modules/
 
 # Word·Excel이 파일을 열 때 만드는 임시 잠금 파일
 ~$*
+
+# 제출용 개인정보(이름·연락처)가 들어간 양식은 올리지 않는다
+submission/*_개인정보*
