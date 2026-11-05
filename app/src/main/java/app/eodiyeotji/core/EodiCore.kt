@@ -78,6 +78,15 @@ class EodiCore @Inject constructor(
         store.dayDetail(day).toModel()
     }
 
+    /**
+     * 하루치 지도 데이터. [DayMapData.geojson]은 MapLibre GeoJsonSource에 그대로 넣는다
+     * (주행 LineString·머문 곳 Point, properties.kind = "trip"|"stay", properties.key = 타임라인 항목 키).
+     */
+    suspend fun dayMap(day: String): DayMapData = withContext(Dispatchers.IO) {
+        val m = store.dayMap(day)
+        DayMapData(m.day, m.geojson, m.bounds?.let { MapBoundsLatLon(it.minLat, it.minLon, it.maxLat, it.maxLon) })
+    }
+
     suspend fun fixCount(): Long = withContext(Dispatchers.IO) { store.fixCount().toLong() }
 }
 
@@ -132,6 +141,12 @@ data class DayDetail(
     val trips: List<TripSummary>,
     val stays: List<StaySummary>,
 )
+
+/** 지도 화면 맞춤 범위. */
+data class MapBoundsLatLon(val minLat: Double, val minLon: Double, val maxLat: Double, val maxLon: Double)
+
+/** 하루치 지도 데이터 (Rust가 만든 GeoJSON 문자열 + 범위, 그릴 것이 없으면 bounds = null). */
+data class DayMapData(val day: String, val geojson: String, val bounds: MapBoundsLatLon?)
 
 private fun RGeoPoint.toModel() = LatLon(lat, lon)
 

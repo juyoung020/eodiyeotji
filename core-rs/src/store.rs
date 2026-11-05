@@ -252,6 +252,12 @@ impl EodiStore {
 
     /// 하루 상세 (`day` = "YYYY-MM-DD"). 기록이 없는 날이면 빈 trips/stays. 날짜 형식이 틀리면 `InvalidInput`.
     /// 점 1만 개인 날도 50ms 이내 (경로는 저장할 때 이미 단순화돼 있다).
+    /// 하루치 지도 데이터: 주행 경로(LineString)·머문 곳(Point) GeoJSON과 화면 맞춤 범위 (`mapdata` 모듈 설명).
+    /// 하루 1만 점 경로도 수 ms 안에 만든다.
+    pub fn day_map(&self, day: String) -> Result<crate::mapdata::DayMap, CoreError> {
+        Ok(crate::mapdata::day_map(&self.day_detail(day)?))
+    }
+
     pub fn day_detail(&self, day: String) -> Result<DayDetail, CoreError> {
         let d = parse_day(&day).ok_or_else(|| CoreError::InvalidInput(format!("day {day:?}")))?;
         let mut conn = self.lock()?;

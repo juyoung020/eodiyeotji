@@ -8,6 +8,7 @@ uniffi::setup_scaffolding!();
 pub mod course;
 pub mod ffi;
 pub mod geo;
+pub mod mapdata;
 pub mod store;
 pub mod trip;
 
