@@ -1,4 +1,11 @@
 import org.gradle.internal.os.OperatingSystem
+import java.util.Properties
+
+// 카카오 로컬 API REST 키 (장소 이름, place/KakaoLocalProvider.kt). local.properties의 KAKAO_REST_API_KEY → 환경 변수 → 없으면 빈 값(카카오 끔, OSM만)
+val kakaoRestApiKey: String = Properties().let { props ->
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { props.load(it) }
+    (props.getProperty("KAKAO_REST_API_KEY") ?: System.getenv("KAKAO_REST_API_KEY") ?: "").filter { it.isLetterOrDigit() }
+}
 
 plugins {
     alias(libs.plugins.android.application)
@@ -23,6 +30,7 @@ android {
         versionName = "0.1.0"
         // Pleos 에뮬레이터(x86_64)와 실차(arm64)만 만든다
         ndk { abiFilters += listOf("x86_64", "arm64-v8a") }
+        buildConfigField("String", "KAKAO_REST_API_KEY", "\"$kakaoRestApiKey\"")
     }
 
     buildTypes {
@@ -69,6 +77,9 @@ dependencies {
     implementation(libs.maplibre.android)
 
     implementation(libs.jna) { artifact { type = "aar" } }
+
+    testImplementation(libs.junit)
+    testImplementation(libs.json)
 }
 
 // ---------------------------------------------------------------------------
