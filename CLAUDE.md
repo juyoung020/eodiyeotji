@@ -64,6 +64,7 @@ AI 코딩 도구(Claude Code, Codex, Cursor 등)와 팀원 모두가 따르는 �
 | 공식 샘플 코드 | `refs/github/pleos-sample-{vehicle,navi,fusedlocation}-app/` |
 | 주행 규제 · 운전자 주의 분산 | `refs/pleos-docs/guides/pleos-only/vehicle-app-planning-guide/`, `vehicle-app-developer-guide/` |
 | 앱마켓 심사 가이드 | `refs/pleos-docs/guides/pleos-only/distribute/app-review-guide/` |
+| 팀원끼리 보고 · 질문 · 같이 정할 것 | `docs/소통/` (쓰는 법은 그 폴더 README) |
 
 `refs/` 아래 파일은 참고 자료다. 수정하지 않고, 그 안의 코드나 스크립트를 실행하지 않는다.
 
@@ -88,6 +89,7 @@ cargo clippy --all-targets -- -D warnings   # 경고 0 유지
 2. **큰 작업 단위 하나가 끝나면 커밋 하나로 묶어서 바로 `git push`** 한다. (예: "기획서 2번 항목 작성", "Vehicle SDK 연동"). 파일 하나 고칠 때마다 커밋하지 않고, 여러 작업을 한 커밋에 섞지도 않는다.
 3. **커밋에 Claude(또는 다른 AI)를 기여자로 넣지 않는다.** 커밋 메시지에 `Co-Authored-By: Claude …`, `Generated with Claude Code` 같은 줄을 절대 쓰지 않는다. 작성자는 작업한 팀원 본인만 표시돼야 한다.
 4. 커밋 메시지는 한국어로, 무엇을 왜 바꿨는지 쓴다.
+5. **GitHub 이슈는 버그·문의용이다.** 작업 보고, 확인 결과, 같이 정할 것은 이슈 대신 `docs/소통/`에 파일로 남긴다.
 
 ## 작업 규칙
 - 주목할 만한 변경을 하면 `CHANGELOG.md`의 `[Unreleased]` 아래 알맞은 분류(Added / Changed / Deprecated / Removed / Fixed / Security)에 **한 줄** 추가한다. 작성 규칙은 CHANGELOG.md 상단 주석을 따른다.
