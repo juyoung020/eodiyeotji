@@ -48,14 +48,11 @@
 | # | 할 일 | 담당 | 상태 |
 |---|---|---|---|
 | D2 | Vehicle SDK 연동 → 첫 API 호출 (예: Odometer 트립 거리, 권한 `CAR_DRIVE` 선언만으로 됨) | | [ ] |
-| D3 | FusedLocation 샘플 앱 돌려보기 (`refs/github/pleos-sample-fusedlocation-app/`) | | [ ] |
 | D4 | Virtual Console로 기어·주행 값 바꿔보기 (시연 영상 준비) | | [ ] |
-| D5 | MVP ① 자동 기록 — 시동·위치·정차·트립을 기록 DB에 저장 | | [ ] |
 | D6 | MVP ② AI 하루 요약 (서버에서 외부 LLM) + 음성 검색 (STT → 검색 → TTS) | | [ ] |
 | D7 | MVP ③ 지오펜스 회상 안내 (`addProximityAlert` + TTS) | | [ ] |
 | D8 | MVP ④ 코스 공유 목록 + 따라가기 (`NaviHelper.requestRouteWithWaypoints`) | | [ ] |
 | D9 | release APK 빌드 → `apk/팀명_어디였지_release.apk` | | [ ] |
-| D11 | 기록 DB: Rust에 SQLite(rusqlite) 저장 + 주행·머문 곳 계산 결과 저장 | | [ ] |
 | D12 | 장소 이름: NaviHelper 목적지 `poiName` 우선, 없으면 역지오코딩 API | | [ ] |
 | D13 | 시연용 가짜 기록 1년치 생성기 (출퇴근 + 여행 + 드라이브) | | [ ] |
 | D14 | 성능 측정: 시작 시간 · 60fps · 검색 100ms · StrictMode (`CLAUDE.md` 목표) | | [ ] |
@@ -305,6 +302,7 @@
 
 ## 완료
 
+- [x] D3·D5·D11 개발 순서 2·3단계: 자동 기록(기어·시동 → FusedLocation 묶음 → Rust SQLite) + 날짜별 타임라인 화면, 시연 경로 재생 `scripts/replay.ps1` (주영, 11/05)
 - [x] D1 Android Studio + Pleos Connect 에뮬레이터 설치 — 데스크톱, 2차 PT 시연 PC 후보 (주영, 11/05)
 - [x] D10 뼈대: Android 프로젝트 + Rust 코어 UniFFI 연결 + cargo-ndk를 Gradle 빌드에 연결 (주영, 11/05) — 개발 순서 1단계
 - [x] 앱 이름 확정: **어디였지** (11/05)

@@ -697,3 +697,33 @@ fn perf_year_of_driving() {
     assert!(summaries_ms < 100.0, "day_summaries {summaries_ms}ms");
     assert!(detail_ms < 50.0, "day_detail {detail_ms}ms");
 }
+
+/// 기록기는 기어 P를 몇 초 확인하는 동안 위치를 더 받는다. 끝 신호 뒤에 들어온 그 점들은 주행이 아니다.
+#[test]
+fn fixes_after_end_signal_are_parked_not_a_trip() {
+    let db = TempDb::new("parked-tail");
+    let store = db.open(KST);
+    let t0 = kst(2026, 11, 5, 9, 0);
+    store.mark_drive_event(DriveEvent::Start, t0).unwrap();
+    let moving = drive(t0, 300, 37.5, 127.0);
+    let (lat, lon) = last_point(&moving);
+    let t_end = t0 + 299 * SEC;
+    // 주차 확인 대기 5초 동안 같은 자리 점 5개 → 끝 신호보다 늦게 저장된다 (실제 기록기 순서)
+    let parked: Vec<GeoFix> = (1..=5).map(|i| gf(lat, lon, t_end + i * SEC)).collect();
+    store.ingest(moving).unwrap();
+    store.ingest(parked).unwrap();
+    store.mark_drive_event(DriveEvent::End, t_end).unwrap();
+
+    let d = store.day_detail("2026-11-05".into()).unwrap();
+    assert_eq!(d.trips.len(), 1, "{:?}", d.trips);
+    assert_eq!(d.trips[0].end_ms, t_end);
+    assert_eq!(d.summary.trip_count, 1);
+
+    // 다음 주행은 다시 시작 신호부터 정상으로 잡힌다
+    let t1 = t_end + 30 * MIN;
+    store.mark_drive_event(DriveEvent::Start, t1).unwrap();
+    store.ingest(drive(t1, 120, lat, lon)).unwrap();
+    let d = store.day_detail("2026-11-05".into()).unwrap();
+    assert_eq!(d.trips.len(), 2);
+    assert_eq!(d.stays.len(), 1, "주차 30분 = 머문 곳 하나");
+}

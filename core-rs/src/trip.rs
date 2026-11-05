@@ -65,6 +65,20 @@ pub fn is_cut(a_ms: i64, b_ms: i64, marks: &[DriveMark], cfg: &TripConfig) -> bo
     })
 }
 
+/// `first_ms`에서 시작하는 구간이 "주행 끝 신호 직후의 주차 중 점"인지.
+///
+/// 기록기는 기어가 P로 돌아간 뒤 잠깐(흔들림 방지 대기) 위치를 더 받을 수 있다. 그 점들은 주행이 아니다.
+/// 조건: 구간 시작 직전 신호가 끝 신호이고(그 뒤 시작 신호 없음), 끝 신호와의 간격이 `max_gap_ms` 미만.
+/// 끝 신호 뒤 한참 지나 다시 움직이면(시작 신호를 못 받은 경우 등) 새 주행으로 본다.
+/// `marks`는 시각 오름차순이어야 한다.
+pub fn starts_parked(first_ms: i64, marks: &[DriveMark], cfg: &TripConfig) -> bool {
+    let i = marks.partition_point(|m| m.t_ms <= first_ms);
+    i > 0 && {
+        let m = marks[i - 1];
+        m.kind == MarkKind::End && m.t_ms < first_ms && first_ms - m.t_ms < cfg.max_gap_ms
+    }
+}
+
 /// 점을 시간순으로 하나씩 받아 주행 구간으로 끊어 내는 흐름식 분할기.
 ///
 /// 점을 한꺼번에 메모리에 올리지 않고 DB에서 읽으면서 바로 나눌 때 쓴다.
@@ -200,6 +214,24 @@ mod tests {
     /// 1분 간격으로 북쪽으로 약 1.1km씩 이동하는 주행.
     fn driving(from_min: i64, count: i64, lat0: f64) -> Vec<Fix> {
         (0..count).map(|k| fix(lat0 + k as f64 * 0.01, 127.0, from_min + k)).collect()
+    }
+
+    #[test]
+    fn starts_parked_only_between_end_and_next_start() {
+        let marks = [
+            DriveMark { t_ms: 10, kind: MarkKind::Start },
+            DriveMark { t_ms: 20, kind: MarkKind::End },
+            DriveMark { t_ms: 30, kind: MarkKind::Start },
+        ];
+        let c = TripConfig::default();
+        assert!(!starts_parked(5, &marks, &c), "신호 전");
+        assert!(!starts_parked(15, &marks, &c), "주행 중");
+        assert!(!starts_parked(20, &marks, &c), "끝 신호 시각의 점은 앞 주행");
+        assert!(starts_parked(25, &marks, &c), "끝 직후 · 다음 시작 전");
+        assert!(!starts_parked(30, &marks, &c), "시작 신호 시각부터 새 주행");
+        assert!(!starts_parked(25, &[], &c), "신호가 없으면 주차로 보지 않는다");
+        let end_only = [DriveMark { t_ms: 0, kind: MarkKind::End }];
+        assert!(!starts_parked(c.max_gap_ms, &end_only, &c), "끝 신호 뒤 한참 지나 움직이면 새 주행");
     }
 
     #[test]

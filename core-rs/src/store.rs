@@ -15,6 +15,8 @@
 //!   (`trip::is_cut`: 시작 신호 시각의 점은 새 주행, 끝 신호 시각의 점은 앞 주행에 들어간다).
 //! - 끊긴 구간마다 혼자 튀는 점(GPS 점프, 시속 252km 초과처럼 보이는 점)을 빼고(`geo::drop_spikes`),
 //!   남은 점이 2개 미만이면 주행으로 치지 않는다 (점은 지우지 않고 남겨 둔다).
+//! - 끝 신호 직후(5분 안, 다음 시작 신호 전)에 시작하는 구간은 주차 중 점이라 주행으로 치지 않는다 (`trip::starts_parked`).
+//!   기록기가 기어 P 확인을 기다리는 몇 초 동안 받은 점이 여기에 해당한다.
 //! - `start_ms`/`end_ms` = 남은 첫·마지막 점 시각, `distance_m` = 점 사이 대원 거리 합,
 //!   `path` = `geo::simplify`(허용 오차 5m)로 줄인 점.
 //! - 주행은 **시작 시각의 현지 날짜**에 속한다 (자정을 넘겨도 출발한 날).
@@ -567,13 +569,25 @@ impl EodiStore {
         }
         tx.execute("DELETE FROM trip WHERE seg_start BETWEEN ?1 AND ?2", [lo, hi])?;
 
+        // 창 안의 신호 + 창 바로 앞 신호 하나 (창 첫 구간이 주차 중인지 판단하는 데 필요).
         let marks: Vec<DriveMark> = {
-            let mut st = tx.prepare("SELECT t_ms, kind FROM drive_event WHERE t_ms BETWEEN ?1 AND ?2 ORDER BY t_ms")?;
+            let mut st = tx.prepare(
+                "SELECT t_ms, kind FROM (SELECT t_ms, kind FROM drive_event WHERE t_ms < ?1 ORDER BY t_ms DESC LIMIT 1)
+                 UNION ALL
+                 SELECT t_ms, kind FROM drive_event WHERE t_ms BETWEEN ?1 AND ?2
+                 ORDER BY t_ms",
+            )?;
             let rows = st.query_map([lo, hi], |r| {
                 let kind = if r.get::<_, i64>(1)? == KIND_START { MarkKind::Start } else { MarkKind::End };
                 Ok(DriveMark { t_ms: r.get(0)?, kind })
             })?;
             rows.collect::<Result<_, _>>()?
+        };
+        // 주행 끝 신호 뒤(다음 시작 전)에 들어온 점들은 주차 중 점이라 주행으로 만들지 않는다.
+        let build = |done: Vec<Fix>, built: &mut Vec<TripRow>| {
+            if !trip::starts_parked(done[0].t_ms, &marks, &self.cfg) {
+                built.extend(build_trip(&done, &self.cfg));
+            }
         };
 
         // 점은 시간순으로 흘려 읽으며 구간이 끊길 때마다 주행을 만든다 (한 번에 주행 하나만 메모리에).
@@ -585,11 +599,11 @@ impl EodiStore {
             while let Some(r) = q.next()? {
                 let f = Fix { t_ms: r.get(0)?, lat: r.get(1)?, lon: r.get(2)? };
                 if let Some(done) = seg.push(f) {
-                    built.extend(build_trip(&done, &self.cfg));
+                    build(done, &mut built);
                 }
             }
             if let Some(done) = seg.finish() {
-                built.extend(build_trip(&done, &self.cfg));
+                build(done, &mut built);
             }
         }
         {

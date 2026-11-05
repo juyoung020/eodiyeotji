@@ -18,6 +18,10 @@
 ## [Unreleased]
 
 ### Added
+- 자동 기록: 기어가 P를 벗어나면(또는 시동 ON) 주행을 시작해 Pleos 위치를 10초마다 묶어 저장하고, P로 돌아오면 마감. 앱을 안 열어도 부팅 때부터 동작 (`app/.../record/`, `pleos/`)
+- 기록 저장소: Rust SQLite에 위치를 저장하고 주행·머문 곳·날짜별 요약을 증분 계산 (1년치 날짜 목록 0.1ms) (`core-rs/src/store.rs`)
+- 타임라인 화면: 날짜별 목록(최신순) + 하루 상세(주행·머문 곳 시간순), 넓은 창은 나란히·좁은 창은 한 장씩, 기록이 바뀌면 자동 갱신 (`app/.../ui/timeline/`)
+- 시연 주행 재생: 실제 도로 경로(강릉 하루 코스, 서울→강릉 여행, 서울 짧은 코스)를 에뮬레이터에 재생 (`scripts/replay.ps1`, `scripts/demo-routes/`)
 - Android 앱 뼈대: Compose · Hilt · Pleos Maven, minSdk 28. 첫 화면에서 Rust 코어 연결과 하루 경로(점 1만 개) 단순화 시간을 보여 줌 (`app/`)
 - Rust 코어를 UniFFI로 Kotlin에 연결: Gradle 빌드가 에뮬레이터·실차용 `.so`와 Kotlin 바인딩을 자동으로 만듦 (`core-rs/src/ffi.rs`)
 - 개발 환경 세팅 문서: 설치 구성·버전, 환경 변수, Pleos Maven 설정, 빌드 방법, 검증 결과, 수동 단계 (`docs/50_개발환경_세팅.md`)
