@@ -10,6 +10,7 @@ pub mod community;
 pub mod course;
 pub mod ffi;
 pub mod geo;
+pub mod lastfix;
 pub mod mapdata;
 pub mod memory;
 pub mod photos;

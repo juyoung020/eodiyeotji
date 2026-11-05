@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.agent
 
+import app.eodiyeotji.agent.RecommendedCourse
 import app.eodiyeotji.core.CourseRoute
 import app.eodiyeotji.core.LatLon
 import app.eodiyeotji.core.MemoryHit
@@ -33,6 +34,12 @@ sealed interface AgentEvent {
 
     /** 찾은 기억 한 건 + (있으면) 다시 달릴 코스. 첫 번째가 가장 그럴듯한 답이다. */
     data class Recommendation(val hit: MemoryHit, val course: CourseRoute?) : AgentEvent
+
+    /**
+     * 근처 인기 드라이브 코스 목록 (순서 = 순위, [RecommendedCourse.rank]는 1부터).
+     * [focus]: 지금 안내를 제안한 코스의 자리. 후속 말마다 다시 오고 마지막이 최신이다.
+     */
+    data class CourseRecommendations(val courses: List<RecommendedCourse>, val focus: Int) : AgentEvent
 
     /**
      * 운전자 확인이 필요한 행동. [title]은 버튼에 그대로 쓰는 짧은 말("이 코스로 안내"),

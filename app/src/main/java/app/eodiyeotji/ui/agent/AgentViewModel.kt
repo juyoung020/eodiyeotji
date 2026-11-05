@@ -8,6 +8,8 @@ import app.eodiyeotji.core.DayMapData
 import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.MemoryHit
 import app.eodiyeotji.core.StopFact
+import app.eodiyeotji.agent.RecommendedCourse
+import app.eodiyeotji.core.lastKnownLocation
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
@@ -42,6 +44,12 @@ data class AgentTurn(
     val selectedStop: Int = 0,
     val action: ActionState = ActionState.Idle,
     val error: String? = null,
+    /** 근처 추천 코스 목록 (순위순). 비어 있지 않으면 기억 카드 대신 코스 카드를 보인다. */
+    val courses: List<RecommendedCourse> = emptyList(),
+    /** 지금 안내를 제안한 코스의 자리 ([courses] 안). */
+    val courseFocus: Int = 0,
+    /** 이번 질문에서 코스 목록을 받았나. 앞 질문에서 넘겨받은 목록은 답이 끝날 때까지 안 오면 지운다. */
+    val coursesFresh: Boolean = false,
 )
 
 enum class AnswerPhase {
@@ -99,10 +107,20 @@ class AgentViewModel @Inject constructor(
         askJob?.cancel()
         actionJob?.cancel()
         val id = ++lastId
-        turn.value = AgentTurn(id = id, question = question)
-        // TODO(통합): 현재 위치(FusedLocation 마지막 위치)를 넣으면 "가장 빠른 순서"가 지금 위치 기준이 된다
-        val context = AgentContext(nowMs = System.currentTimeMillis(), currentLocation = null, isDriving = driving.isDriving.value)
+        // 추천 코스 이야기 중이면 후속 질문("2번으로 가자") 동안 목록을 그대로 둔다 (새 목록이 오면 바뀐다)
+        val prev = turn.value
+        turn.value = AgentTurn(id = id, question = question, courses = prev?.courses.orEmpty(), courseFocus = prev?.courseFocus ?: 0)
+        val isDriving = driving.isDriving.value
         askJob = viewModelScope.launch(Dispatchers.Default) {
+            // 지금 위치 = 마지막으로 저장된 위치 (근처 추천 코스·지금 위치에서 가장 짧은 순서). DB 한 줄이라 1ms 안쪽.
+            val here = try {
+                core.lastKnownLocation()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+            val context = AgentContext(nowMs = System.currentTimeMillis(), currentLocation = here, isDriving = isDriving)
             agent.ask(question, context)
                 .catch { e ->
                     if (e is CancellationException) throw e
@@ -151,8 +169,12 @@ class AgentViewModel @Inject constructor(
             is AgentEvent.AnswerDelta -> updateTurn(id) {
                 it.copy(answer = it.answer + event.text, phase = AnswerPhase.Streaming)
             }
+            is AgentEvent.CourseRecommendations -> updateTurn(id) {
+                it.copy(courses = event.courses, courseFocus = event.focus.coerceIn(0, (event.courses.size - 1).coerceAtLeast(0)), coursesFresh = true)
+            }
             is AgentEvent.Recommendation -> {
                 val first = turn.value?.takeIf { it.id == id }?.recommendations?.isEmpty() == true
+                updateTurn(id) { it.copy(courses = emptyList(), courseFocus = 0) }
                 updateTurn(id) { t ->
                     val rec = RecommendationUi(event.hit, event.course)
                     val selected = if (first) rec.stops.indexOfFirst { it.name == event.hit.bestStop?.name }.coerceAtLeast(0) else t.selectedStop
@@ -170,7 +192,10 @@ class AgentViewModel @Inject constructor(
                 if (first) loadMap(id, event.hit.episode.facts.day)
             }
             is AgentEvent.ActionProposal -> updateTurn(id) { it.copy(proposals = it.proposals + event) }
-            AgentEvent.Done -> updateTurn(id) { if (it.phase == AnswerPhase.Failed) it else it.copy(phase = AnswerPhase.Done) }
+            AgentEvent.Done -> updateTurn(id) {
+                val t = if (it.coursesFresh) it else it.copy(courses = emptyList(), courseFocus = 0)
+                if (t.phase == AnswerPhase.Failed) t else t.copy(phase = AnswerPhase.Done)
+            }
             is AgentEvent.Error -> updateTurn(id) { it.copy(phase = AnswerPhase.Failed, error = event.message) }
         }
     }

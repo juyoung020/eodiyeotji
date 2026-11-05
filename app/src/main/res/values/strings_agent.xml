@@ -14,6 +14,7 @@
     <string name="agent_example_1">1년 전에 간 바다 어디였지?</string>
     <string name="agent_example_2">엄마랑 갔던 식당</string>
     <string name="agent_example_3">지난주 퇴근길에 들른 카페</string>
+    <string name="agent_example_4">여기 근처 드라이브 추천코스</string>
 
     <string name="agent_my_question">내 질문</string>
     <string name="agent_thinking">기억을 찾는 중…</string>
@@ -57,4 +58,13 @@
     <string name="agent_followup_only_here">%1$s만 안내해줘</string>
     <string name="agent_followup_other_days">다른 날도 보여줘</string>
     <string name="agent_followup_pick_day">%1$s %2$s 보여줘</string>
+    <string name="agent_followup_pick_course">%1$d번으로 안내해줘</string>
+
+    <!-- 근처 추천 코스 카드 -->
+    <string name="agent_courses_title">근처 인기 드라이브 코스</string>
+    <string name="agent_course_by">%1$s 님의 코스</string>
+    <string name="agent_course_hearts">♥ %1$d</string>
+    <string name="agent_course_from_here">여기서 %1$s</string>
+    <string name="agent_course_focus">안내 제안 중</string>
+    <string name="agent_course_more_stops">+%1$d곳</string>
 </resources>

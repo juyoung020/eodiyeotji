@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import app.eodiyeotji.core.rust.AgentDone as RAgentDone
+import app.eodiyeotji.core.rust.CourseRecommendation as RCourseRecommendation
 import app.eodiyeotji.core.rust.CourseRoute as RCourseRoute
 import app.eodiyeotji.core.rust.MemoryHit as RMemoryHit
 import app.eodiyeotji.core.rust.NavAction as RNavAction
@@ -71,6 +72,10 @@ class AgentBridge @Inject constructor(
 
             override fun onRecommendation(hit: RMemoryHit, course: RCourseRoute?) {
                 trySendBlocking(AgentEvent.Recommendation(hit.toModel(), course?.toModel()))
+            }
+
+            override fun onCourseRecommendations(courses: List<RCourseRecommendation>, focus: UInt) {
+                trySendBlocking(AgentEvent.CourseRecommendations(courses.toModel(), focus.toInt()))
             }
 
             override fun onActionProposal(proposal: RNavProposal) {
@@ -136,14 +141,18 @@ class AgentBridge @Inject constructor(
     }
 
     private suspend fun execute(a: AgentNavAction): Boolean = when (a) {
-        is AgentNavAction.Course -> {
-            val first = a.legs.firstOrNull()
-            val ok = first != null && requestLeg(first)
-            _pendingLegs.value = if (ok) a.legs.drop(1) else emptyList()
-            ok
-        }
+        is AgentNavAction.Course -> startLegs(a.legs)
+        is AgentNavAction.SharedCourse -> startLegs(a.legs)
         is AgentNavAction.Place -> navi.requestRoute(a.stop.name, a.stop.lat, a.stop.lon, a.stop.address)
         is AgentNavAction.Search -> navi.openPlaceSearch(a.keyword)
+    }
+
+    /** 코스: 첫 구간을 요청하고 나머지는 도착할 때마다 [continueCourse]. */
+    private suspend fun startLegs(legs: List<CourseLeg>): Boolean {
+        val first = legs.firstOrNull()
+        val ok = first != null && requestLeg(first)
+        _pendingLegs.value = if (ok) legs.drop(1) else emptyList()
+        return ok
     }
 
     private suspend fun requestLeg(leg: CourseLeg): Boolean =

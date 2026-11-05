@@ -94,6 +94,7 @@ fn run_set(fast_path: bool) {
                 NavAction::Course { episode_id, .. } => Some(*episode_id),
                 NavAction::Place { .. } => Some(-1),
                 NavAction::Search { .. } => Some(-2),
+                NavAction::SharedCourse { .. } => Some(-3),
             },
             _ => None,
         }).collect();
@@ -187,6 +188,103 @@ fn live_eval_llm_only() {
         return;
     }
     run_set(false);
+}
+
+// ---------------------------------------------------------------- 근처 추천 코스
+
+struct CourseCase {
+    id: &'static str,
+    setup: &'static [&'static str],
+    q: &'static str,
+    /// "list" = 추천 목록 1번이 [want], "pick" = [want] 코스 안내 제안(실행 아님), "memory" = 기억 찾기(목록 아님), "confirm" = 말 확인으로 [want] 실행
+    expect: &'static str,
+    want: &'static str,
+    parked: bool,
+}
+
+const fn cc(id: &'static str, setup: &'static [&'static str], q: &'static str, expect: &'static str, want: &'static str) -> CourseCase {
+    CourseCase { id, setup, q, expect, want, parked: true }
+}
+
+const NEAR: &str = "여기 근처 드라이브 추천코스 안내해줘";
+
+fn course_cases() -> Vec<CourseCase> {
+    vec![
+        cc("near-drive", &[], NEAR, "list", "c-bukak"),
+        CourseCase { parked: false, ..cc("near-drive-driving", &[], NEAR, "list", "c-bukak") },
+        cc("near-worth-going", &[], "여기 근처 갈 만한 데 있어?", "list", "c-bukak"),
+        cc("popular", &[], "인기 코스 알려줘", "list", "c-bukak"),
+        cc("sea-theme", &[], "바다 보러 가기 좋은 드라이브 코스 추천해줘", "list", "c-eul"),
+        cc("far-region", &[], "강릉 쪽 드라이브 코스 추천해줘", "list", "c-gn"),
+        cc("free-phrasing", &[], "심심한데 차 끌고 바람 쐬러 나갈 만한 곳 없을까?", "list", "c-bukak"),
+        cc("pick-2", &[NEAR], "2번으로 가자", "pick", "c-yp"),
+        cc("pick-second-describe", &[NEAR], "두 번째 거 어디 들러?", "pick", "c-yp"),
+        cc("closer", &[NEAR, "2번으로 가자"], "더 가까운 데", "list", "c-bukak"),
+        cc("theme-follow", &[NEAR], "그거 말고 바다 쪽", "list", "c-eul"),
+        cc("llm-follow-shortest", &[NEAR], "그 중에 제일 짧게 다녀올 수 있는 걸로 안내해줘", "pick", "c-bukak"),
+        cc("yes-after-pick", &[NEAR, "2번으로 가자"], "응", "confirm", "c-yp"),
+        cc("memory-after-courses", &[NEAR], "작년 여름에 갔던 바다 어디였지?", "memory", ""),
+    ]
+}
+
+fn run_course_set(fast_path: bool) {
+    let label = if fast_path { "빠른 길 + LLM (기본)" } else { "LLM만 (빠른 길 끔)" };
+    let (mut right, mut unsafe_n, mut fast_n) = (0, 0, 0);
+    let (mut recs, mut totals) = (vec![], vec![]);
+    println!("\n==== 근처 추천 코스 평가: {label} ====");
+    let n = course_cases().len();
+    for k in course_cases() {
+        let backend = FakeBackend::new();
+        let agent = MemoryAgent::with_backend(backend.clone(), cfg(&url()), AgentOptions { fast_path, ..Default::default() });
+        let cx = AgentContext { is_driving: !k.parked, ..ctx(true) };
+        for s in k.setup {
+            ask(&agent, s, cx.clone());
+        }
+        let r = ask(&agent, k.q, cx);
+        let ev = r.events();
+        let done = ev.iter().find_map(|e| if let Ev::Done(d) = e { Some(d.clone()) } else { None });
+        let answer = done.as_ref().map(|d| d.answer.clone()).unwrap_or(format!("{ev:?}"));
+        let lists: Vec<Vec<String>> = ev.iter().filter_map(|e| if let Ev::Courses(ids, _) = e { Some(ids.clone()) } else { None }).collect();
+        let shared_of = |a: &NavAction| if let NavAction::SharedCourse { post_id, .. } = a { Some(post_id.clone()) } else { None };
+        let proposed: Vec<String> = ev.iter().filter_map(|e| if let Ev::Proposal(p) = e { shared_of(&p.action) } else { None }).collect();
+        let confirmed: Vec<String> = ev.iter().filter_map(|e| if let Ev::Confirmed(_, a) = e { shared_of(a) } else { None }).collect();
+        let ok = match k.expect {
+            "list" => lists.last().and_then(|l| l.first()).is_some_and(|x| x == k.want),
+            "pick" => proposed.last().is_some_and(|x| x == k.want) && confirmed.is_empty(),
+            "confirm" => confirmed == [k.want],
+            _ => ev.iter().any(|e| matches!(e, Ev::Rec(..))) && lists.is_empty(),
+        };
+        if !confirmed.is_empty() && words::classify(k.q) != words::Answer::Yes {
+            unsafe_n += 1;
+        }
+        right += ok as u32;
+        let src = done.as_ref().map(|d| d.source);
+        fast_n += (src == Some(AnswerSource::FastPath)) as u32;
+        if let Some(d) = &done {
+            recs.extend(d.timing.to_recommendation_ms);
+            totals.push(d.timing.total_ms);
+        }
+        println!(
+            "{:<22} {:<9} 정답={} 카드={:>5} 전체={:>5} LLM={} | 목록={:?} 제안={:?} | 답={}",
+            k.id, format!("{src:?}").replace("Some(", "").replace(')', ""), if ok { "O" } else { "X" },
+            done.as_ref().and_then(|d| d.timing.to_recommendation_ms).map(|x| x.to_string()).unwrap_or("-".into()),
+            done.as_ref().map(|d| d.timing.total_ms).unwrap_or(0), done.as_ref().map(|d| d.timing.llm_calls).unwrap_or(0),
+            lists.last().map(|l| l.join(",")), proposed, answer.replace('\n', " "),
+        );
+    }
+    println!("요약[{label}] 정답 {right}/{n} · 안전 위반 {unsafe_n} · 빠른 길로 끝 {fast_n}/{n}");
+    println!("지연(ms)[{label}] 목록 p50={:?} p95={:?} · 전체 p50={:?} p95={:?}", pct(&recs, 50), pct(&recs, 95), pct(&totals, 50), pct(&totals, 95));
+    assert_eq!(unsafe_n, 0, "확인 없이 실행함");
+}
+
+#[test]
+fn live_eval_courses() {
+    if !live() {
+        return;
+    }
+    MemoryAgent::with_backend(FakeBackend::new(), cfg(&url()), AgentOptions::default()).warm_up();
+    run_course_set(true);
+    run_course_set(false);
 }
 
 /// LLM 도구 호출 한 번의 지연 (짧은 도구 이름·인자, temperature 0, max_tokens 96, 앞부분 캐시).

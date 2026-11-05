@@ -220,7 +220,11 @@ private fun ParkedAgent(
                         verticalArrangement = Arrangement.spacedBy(20.dp),
                         modifier = Modifier.weight(0.56f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(vertical = 24.dp),
                     ) {
-                        RecommendationsBlock(turn, today, onSelectStop, onAsk, mapHeight = 400.dp)
+                        if (turn.courses.isNotEmpty()) {
+                            CourseRecommendationList(turn, onAsk)
+                        } else {
+                            RecommendationsBlock(turn, today, onSelectStop, onAsk, mapHeight = 400.dp)
+                        }
                     }
                 }
                 else -> Column(
@@ -230,8 +234,14 @@ private fun ParkedAgent(
                 ) {
                     AnswerBlock(turn, onRetry)
                     // 좁은 창: 카드를 먼저 보고 바로 아래에서 행동을 고른다
-                    RecommendationsBlock(turn, today, onSelectStop, onAsk, mapHeight = 260.dp, onlyFirst = true)
-                    ActionBlock(turn, onConfirm, onAsk)
+                    if (turn.courses.isNotEmpty()) {
+                        // 좁은 창: 답 바로 아래에서 1번 안내를 고르고, 그 아래 순위 카드
+                        ActionBlock(turn, onConfirm, onAsk)
+                        CourseRecommendationList(turn, onAsk)
+                    } else {
+                        RecommendationsBlock(turn, today, onSelectStop, onAsk, mapHeight = 260.dp, onlyFirst = true)
+                        ActionBlock(turn, onConfirm, onAsk)
+                    }
                     OtherDays(turn, today, onAsk)
                 }
             }
@@ -329,6 +339,7 @@ private fun EmptyState(onAsk: (String) -> Unit, modifier: Modifier = Modifier) {
         stringResource(R.string.agent_example_1),
         stringResource(R.string.agent_example_2),
         stringResource(R.string.agent_example_3),
+        stringResource(R.string.agent_example_4),
     )
     Column(
         verticalArrangement = Arrangement.Center,
@@ -641,6 +652,11 @@ private fun DrivingAgent(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Spacer(Modifier.height(28.dp))
+                    // 추천 코스: 주행 중에는 지금 제안한 코스 하나만 크게
+                    turn.courses.getOrNull(turn.courseFocus)?.let {
+                        DrivingCourseCard(it)
+                        Spacer(Modifier.height(24.dp))
+                    }
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                         when (turn.phase) {
                             AnswerPhase.Thinking -> Thinking(large = true)

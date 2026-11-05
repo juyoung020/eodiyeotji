@@ -11,6 +11,7 @@ use super::llm::{SseAccumulator, VisibleText};
 use super::runner::{GIVE_UP, MAX_TOOL_ROUNDS, NOT_CONFIGURED, SERVER_DOWN};
 use super::words::{self, Answer};
 use super::*;
+use crate::community::{CoursePost, CourseRecommendation};
 use crate::memory::EpisodeKind;
 
 // ---------------------------------------------------------------- 고정 자료
@@ -89,11 +90,14 @@ pub(super) struct FakeBackend {
     pub pending: Mutex<Vec<DayFacts>>,
     pub saved: Mutex<Vec<DayEnrichment>>,
     pub failed: Mutex<Vec<(String, i64)>>,
+    /// 커뮤니티에 공유된 코스 (추천 코스 가짜 자료)
+    pub posts: Vec<CoursePost>,
+    pub reco_calls: Mutex<Vec<(Option<GeoPoint>, f64, u32)>>,
 }
 
 impl FakeBackend {
     pub fn new() -> Arc<Self> {
-        Arc::new(Self { eps: episodes(), ..Default::default() })
+        Arc::new(Self { eps: episodes(), posts: super::course_tests::posts(), ..Default::default() })
     }
 }
 
@@ -149,6 +153,21 @@ impl MemoryBackend for FakeBackend {
         self.failed.lock().unwrap().push((day, retry_after_ms));
         Ok(())
     }
+    /// 실제(community.rs)와 같은 약속: 근처면 반경 안에서 인기·거리 점수순, 위치가 없으면 전국 하트순(거리 -1).
+    fn recommend_drive_courses(&self, from: Option<GeoPoint>, radius_km: f64, k: u32) -> Result<Vec<CourseRecommendation>, CoreError> {
+        self.reco_calls.lock().unwrap().push((from, radius_km, k));
+        let mut v: Vec<CourseRecommendation> = match from {
+            Some(p) => self.posts.iter().filter_map(|post| {
+                let s = post.stops.first()?;
+                let d = crate::geo::haversine_m(crate::geo::Point::from(p), crate::geo::Point { lat: s.lat, lon: s.lon }) / 1000.0;
+                (d <= radius_km).then(|| CourseRecommendation { post: post.clone(), distance_km: d, score: post.hearts as f64 / (1.0 + d / 15.0) })
+            }).collect(),
+            None => self.posts.iter().map(|post| CourseRecommendation { post: post.clone(), distance_km: -1.0, score: post.hearts as f64 }).collect(),
+        };
+        v.sort_by(|a, b| b.score.total_cmp(&a.score));
+        v.truncate(k as usize);
+        Ok(v)
+    }
 }
 
 /// 받은 사건을 적어 둔다.
@@ -156,6 +175,8 @@ impl MemoryBackend for FakeBackend {
 pub(super) enum Ev {
     Delta(String),
     Rec(i64, bool),
+    /// 추천 코스 목록 (코스 id들, 고른 자리)
+    Courses(Vec<String>, u32),
     Proposal(NavProposal),
     Confirmed(String, NavAction),
     Done(AgentDone),
@@ -171,6 +192,9 @@ impl AgentListener for Recorder {
     }
     fn on_recommendation(&self, hit: MemoryHit, course: Option<CourseRoute>) {
         self.0.lock().unwrap().push(Ev::Rec(hit.episode.facts.id, course.is_some()));
+    }
+    fn on_course_recommendations(&self, courses: Vec<CourseRecommendation>, focus: u32) {
+        self.0.lock().unwrap().push(Ev::Courses(courses.into_iter().map(|c| c.post.id).collect(), focus));
     }
     fn on_action_proposal(&self, proposal: NavProposal) {
         self.0.lock().unwrap().push(Ev::Proposal(proposal));
@@ -210,12 +234,12 @@ pub(super) fn ask(agent: &MemoryAgent, text: &str, c: AgentContext) -> Arc<Recor
 // ---------------------------------------------------------------- 가짜 LLM 서버
 
 /// 요청마다 [responses]의 다음 응답 본문을 돌려준다 (다 쓰면 마지막 것을 반복). 받은 요청 본문을 적어 둔다.
-struct FakeServer {
+pub(super) struct FakeServer {
     url: String,
     bodies: Arc<Mutex<Vec<Value>>>,
 }
 
-fn fake_server(responses: Vec<String>, status: u16) -> FakeServer {
+pub(super) fn fake_server(responses: Vec<String>, status: u16) -> FakeServer {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let url = format!("http://{}/v1", listener.local_addr().unwrap());
     let bodies = Arc::new(Mutex::new(vec![]));
@@ -251,10 +275,10 @@ fn fake_server(responses: Vec<String>, status: u16) -> FakeServer {
 }
 
 impl FakeServer {
-    fn bodies(&self) -> Vec<Value> {
+    pub(super) fn bodies(&self) -> Vec<Value> {
         self.bodies.lock().unwrap().clone()
     }
-    fn agent(&self, backend: Arc<FakeBackend>, opts: AgentOptions) -> Arc<MemoryAgent> {
+    pub(super) fn agent(&self, backend: Arc<FakeBackend>, opts: AgentOptions) -> Arc<MemoryAgent> {
         MemoryAgent::with_backend(backend, cfg(&self.url), opts)
     }
 }
@@ -263,7 +287,7 @@ pub(super) fn cfg(url: &str) -> LlmConfig {
     LlmConfig { base_url: url.into(), model: "qwen3.5-9b".into(), api_key: String::new(), connect_timeout_ms: 2_000, read_timeout_ms: 30_000 }
 }
 
-fn llm_only() -> AgentOptions {
+pub(super) fn llm_only() -> AgentOptions {
     AgentOptions { fast_path: false, ..Default::default() }
 }
 
@@ -271,7 +295,7 @@ fn chunk(delta: Value, finish: Option<&str>) -> String {
     format!("data: {}\n\n", json!({"object": "chat.completion.chunk", "choices": [{"index": 0, "delta": delta, "finish_reason": finish}]}))
 }
 
-fn sse_text(pieces: &[&str]) -> String {
+pub(super) fn sse_text(pieces: &[&str]) -> String {
     let mut s: String = pieces.iter().map(|p| chunk(json!({"content": p}), None)).collect();
     s += &chunk(json!({}), Some("stop"));
     s += "data: [DONE]\n\n";
@@ -290,11 +314,11 @@ fn sse_end() -> String {
     chunk(json!({}), Some("tool_calls")) + "data: [DONE]\n\n"
 }
 
-fn tool(id: &str, name: &str, args: &str) -> String {
+pub(super) fn tool(id: &str, name: &str, args: &str) -> String {
     sse_tool(id, name, &[args], 0) + &sse_end()
 }
 
-fn last_msg(body: &Value) -> Value {
+pub(super) fn last_msg(body: &Value) -> Value {
     body["messages"].as_array().unwrap().last().unwrap().clone()
 }
 
@@ -456,7 +480,7 @@ fn people_words_go_to_llm_with_fast_results_as_data() {
     assert_eq!(bodies[0]["chat_template_kwargs"]["enable_thinking"], json!(false));
     assert_eq!(bodies[0]["cache_prompt"], json!(true));
     assert_eq!(bodies[0]["temperature"], json!(0.0));
-    assert_eq!(bodies[0]["tools"].as_array().unwrap().len(), 4);
+    assert_eq!(bodies[0]["tools"].as_array().unwrap().len(), 5);
     assert_eq!(r.done().source, AnswerSource::Llm);
 }
 
