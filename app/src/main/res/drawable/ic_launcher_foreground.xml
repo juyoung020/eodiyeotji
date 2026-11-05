@@ -1,11 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 임시 아이콘: 위치 핀. 디자인 시안(U1)이 나오면 교체 -->
+<!-- 앱 아이콘: 지나온 길(점선)이 이어져 닿는 위치 핀. 안전 영역(가운데 지름 66) 안에 그린다 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- 지나온 길: 왼쪽 아래에서 핀 끝으로 이어지는 점 -->
+    <path
+        android:fillColor="#99FFFFFF"
+        android:pathData="M30,80m-3.2,0a3.2,3.2 0,1 1,6.4 0a3.2,3.2 0,1 1,-6.4 0" />
+    <path
+        android:fillColor="#B3FFFFFF"
+        android:pathData="M38.5,76.5m-3.2,0a3.2,3.2 0,1 1,6.4 0a3.2,3.2 0,1 1,-6.4 0" />
+    <path
+        android:fillColor="#CCFFFFFF"
+        android:pathData="M46.5,76.5m-3.2,0a3.2,3.2 0,1 1,6.4 0a3.2,3.2 0,1 1,-6.4 0" />
+    <!-- 핀 -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M54,28c-10.5,0 -19,8.5 -19,19c0,14.2 19,33 19,33s19,-18.8 19,-33C73,36.5 64.5,28 54,28zM54,54a7,7 0,1 1,0 -14a7,7 0,1 1,0 14z" />
+        android:fillType="evenOdd"
+        android:pathData="M57,26c-9.4,0 -17,7.5 -17,16.8c0,12.4 17,29.2 17,29.2s17,-16.8 17,-29.2C74,33.5 66.4,26 57,26zM57,49.6a6.8,6.8 0,1 1,0 -13.6a6.8,6.8 0,1 1,0 13.6z" />
 </vector>

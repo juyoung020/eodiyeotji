@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 앱 아이콘 바탕: Pleos 파랑(#0064FF)에서 위쪽이 밝아지는 비스듬한 그라데이션 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="20"
+                android:startY="0"
+                android:endX="88"
+                android:endY="108">
+                <item android:offset="0" android:color="#FF2F86FF" />
+                <item android:offset="1" android:color="#FF0050E0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>
