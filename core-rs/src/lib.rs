@@ -6,6 +6,7 @@
 uniffi::setup_scaffolding!();
 
 pub mod agent;
+pub mod community;
 pub mod course;
 pub mod ffi;
 pub mod geo;

@@ -32,6 +32,11 @@ import app.eodiyeotji.core.rust.EpisodeLabel as REpisodeLabel
 import app.eodiyeotji.core.rust.MapBounds as RMapBounds
 import app.eodiyeotji.core.rust.MemoryQuery as RMemoryQuery
 import app.eodiyeotji.core.rust.StopFact as RStopFact
+import app.eodiyeotji.core.rust.CommunitySort as RCommunitySort
+import app.eodiyeotji.core.rust.CoursePost as RCoursePost
+import app.eodiyeotji.core.rust.NearFilter as RNearFilter
+import app.eodiyeotji.core.rust.PlaceReview as RPlaceReview
+import app.eodiyeotji.core.rust.PopularPlace as RPopularPlace
 import app.eodiyeotji.core.rust.NaviHintKind as RNaviHintKind
 import app.eodiyeotji.core.rust.NaviPlaceHint as RNaviPlaceHint
 import app.eodiyeotji.core.rust.PlaceLabel as RPlaceLabel
@@ -50,6 +55,14 @@ import app.eodiyeotji.core.rust.TripSummary as RTripSummary
 class EodiCore @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
+    /** Rust 저장소 (같은 파일의 확장 함수·기억 에이전트가 같은 연결을 쓰게). 앱 코드는 EodiCore 함수를 거친다. */
+    internal val rust: EodiStore get() = store
+
+    /** 다른 곳(에이전트 라벨 저장 등)에서 기록이 바뀌었을 때 화면을 다시 읽게 알린다. */
+    fun notifyChanged() {
+        _changes.tryEmit(Unit)
+    }
+
     private val store: EodiStore by lazy {
         val db = File(context.filesDir, "eodi.db").absolutePath
         val tzMinutes = TimeZone.getDefault().rawOffset / 60_000
@@ -205,6 +218,70 @@ class EodiCore @Inject constructor(
         }
     }
 }
+
+// ---- 커뮤니티 · 여행 리뷰 (core-rs/src/community.rs). 순위·하트 집계는 Rust, 여기는 옮겨 담기만 ----
+
+/** 커뮤니티 코스 피드. [near]가 있으면 그 근처 [radiusKm] 안만. */
+suspend fun EodiCore.communityCourses(sort: CommunitySort, near: LatLon? = null, radiusKm: Double = 30.0, limit: Int = 50): List<CoursePost> =
+    withContext(Dispatchers.IO) { rust.communityCourses(sort.toRust(), near?.let { RNearFilter(RGeoPoint(it.lat, it.lon), radiusKm) }, limit.toUInt()).map { it.toModel() } }
+
+/** 여행 리뷰 피드. */
+suspend fun EodiCore.placeReviews(sort: CommunitySort, near: LatLon? = null, radiusKm: Double = 30.0, limit: Int = 50): List<PlaceReview> =
+    withContext(Dispatchers.IO) { rust.placeReviews(sort.toRust(), near?.let { RNearFilter(RGeoPoint(it.lat, it.lon), radiusKm) }, limit.toUInt()).map { it.toModel() } }
+
+/** 인기 장소 순위. */
+suspend fun EodiCore.popularPlaces(near: LatLon? = null, radiusKm: Double = 30.0, limit: Int = 30): List<PopularPlace> =
+    withContext(Dispatchers.IO) {
+        rust.popularPlaces(near?.let { RNearFilter(RGeoPoint(it.lat, it.lon), radiusKm) }, limit.toUInt())
+            .map { PopularPlace(it.place.toModel(), it.hearts.toInt(), it.reviewCount.toInt(), it.avgRating) }
+    }
+
+/** 하트 누르기/취소 → 바뀐 하트 수. */
+suspend fun EodiCore.toggleCourseHeart(id: String): Int = withContext(Dispatchers.IO) { rust.toggleCourseHeart(id).toInt() }
+suspend fun EodiCore.toggleReviewHeart(id: String): Int = withContext(Dispatchers.IO) { rust.toggleReviewHeart(id).toInt() }
+
+/** 내 나들이·여행 에피소드를 커뮤니티에 코스로 공유. */
+suspend fun EodiCore.shareCourse(episodeId: Long, title: String, body: String): CoursePost =
+    withContext(Dispatchers.IO) { rust.shareCourse(episodeId, title, body, System.currentTimeMillis()).toModel() }
+
+/** 들른 곳 리뷰 쓰기. */
+suspend fun EodiCore.addPlaceReview(place: StopFact, rating: Int, text: String): PlaceReview =
+    withContext(Dispatchers.IO) {
+        rust.addPlaceReview(
+            RStopFact(place.name, place.category, place.address, place.arriveMs, place.leaveMs, place.lat, place.lon, place.firstVisit),
+            rating.coerceIn(1, 5).toUByte(), text, System.currentTimeMillis(),
+        ).toModel()
+    }
+
+/** 시연용 커뮤니티 데이터 (디버그 빌드에서만). */
+suspend fun EodiCore.seedCommunityDemo(): Int = withContext(Dispatchers.IO) { rust.seedCommunityDemo(System.currentTimeMillis()).toInt() }
+
+enum class CommunitySort { POPULAR, RECENT }
+
+data class CoursePost(
+    val id: String, val title: String, val body: String, val author: String, val mine: Boolean, val region: String,
+    val tags: List<String>, val stops: List<StopFact>, val distanceM: Double, val durationMs: Long, val createdMs: Long,
+    val hearts: Int, val heartedByMe: Boolean,
+)
+
+data class PlaceReview(
+    val id: String, val place: StopFact, val author: String, val mine: Boolean, val rating: Int, val text: String,
+    val createdMs: Long, val hearts: Int, val heartedByMe: Boolean,
+)
+
+data class PopularPlace(val place: StopFact, val hearts: Int, val reviewCount: Int, val avgRating: Float)
+
+private fun CommunitySort.toRust() = when (this) {
+    CommunitySort.POPULAR -> RCommunitySort.POPULAR
+    CommunitySort.RECENT -> RCommunitySort.RECENT
+}
+
+internal fun RCoursePost.toModel() = CoursePost(
+    id, title, body, author, mine, region, tags, stops.map { it.toModel() }, distanceM, durationMs, createdMs, hearts.toInt(), heartedByMe,
+)
+
+private fun RPlaceReview.toModel() =
+    PlaceReview(id, place.toModel(), author, mine, rating.toInt(), text, createdMs, hearts.toInt(), heartedByMe)
 
 private fun RPlacePhotos.toModel() =
     PlacePhotos(found, photos.map { PlacePhoto(it.name, it.widthPx.toInt(), it.heightPx.toInt(), it.author) })
@@ -369,7 +446,7 @@ private fun RDaySummary.toModel() = DaySummary(
     tags = tags,
 )
 
-private fun RStopFact.toModel() = StopFact(name, category, address, arriveMs, leaveMs, lat, lon, firstVisit)
+internal fun RStopFact.toModel() = StopFact(name, category, address, arriveMs, leaveMs, lat, lon, firstVisit)
 
 private fun REpisodeKind.toModel() = when (this) {
     REpisodeKind.COMMUTE_TO_WORK -> EpisodeKind.COMMUTE_TO_WORK
