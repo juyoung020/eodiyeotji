@@ -17,6 +17,9 @@
 
 ## [Unreleased]
 
+### Added
+- 접수양식 02장 ①~⑥ 기획서 초안 v0 (`docs/00_plan.md`)
+
 ### Changed
 - 공모전 자료를 `docs/contest/`로 모으고, 백로그를 `docs/00_plan.md`로 이름 바꿔 docs 맨 위에 둠
 - CLAUDE.md에 Git 규칙 명시: 작업 전 pull, 큰 작업 단위로 커밋·푸시, AI 기여자 표시 금지
