@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 기억 에이전트 화면 (ui/agent): "어디였지? 물어보세요" -->
+    <string name="agent_entry">어디였지? 물어보세요</string>
+    <string name="agent_entry_driving">어디였지? 말로 물어보세요</string>
+    <string name="agent_field_hint">언제, 누구와, 어디였는지 물어보세요</string>
+    <string name="agent_mic">말로 묻기</string>
+    <string name="agent_send">묻기</string>
+    <string name="agent_close">닫기</string>
+
+    <string name="agent_empty_title">그때 거기, 어디였지?</string>
+    <string name="agent_empty_body">지난 기록에서 찾아 드려요. 그날 코스로 바로 안내도 할 수 있어요.</string>
+    <string name="agent_examples">이렇게 물어보세요</string>
+    <string name="agent_example_1">작년 여름 바다 어디였지?</string>
+    <string name="agent_example_2">엄마랑 갔던 식당</string>
+    <string name="agent_example_3">지난주 퇴근길에 들른 카페</string>
+
+    <string name="agent_my_question">내 질문</string>
+    <string name="agent_thinking">기억을 찾는 중…</string>
+    <string name="agent_failed">답을 받지 못했어요. 잠시 뒤 다시 물어봐 주세요.</string>
+    <string name="agent_retry">다시 묻기</string>
+
+    <!-- 추천 카드 -->
+    <!-- 예: 1년 전 · 2025년 8월 14일 (목) -->
+    <string name="agent_date_line">%1$s · %2$s</string>
+    <string name="agent_date_pattern" translatable="false">yyyy년 M월 d일 (E)</string>
+    <string name="agent_today">오늘</string>
+    <string name="agent_yesterday">어제</string>
+    <string name="agent_days_ago">%1$d일 전</string>
+    <string name="agent_weeks_ago">%1$d주 전</string>
+    <string name="agent_months_ago">%1$d개월 전</string>
+    <string name="agent_years_ago">%1$d년 전</string>
+    <string name="agent_stops_count">들른 곳 %1$d곳</string>
+    <string name="agent_km">%1$skm</string>
+    <string name="agent_hours_minutes">%1$d시간 %2$d분</string>
+    <string name="agent_hours">%1$d시간</string>
+    <string name="agent_minutes">%1$d분</string>
+    <string name="agent_map_none">지도 기록이 없는 날이에요</string>
+    <string name="agent_more_days">다른 날</string>
+
+    <string name="agent_kind_commute_to_work">출근길</string>
+    <string name="agent_kind_commute_home">퇴근길</string>
+    <string name="agent_kind_errand">볼일</string>
+    <string name="agent_kind_outing">나들이</string>
+    <string name="agent_kind_trip">여행</string>
+
+    <!-- 행동 -->
+    <string name="agent_only_here">여기만 가기</string>
+    <string name="agent_other_days">다른 날도 보기</string>
+    <string name="agent_navigate">안내</string>
+    <string name="agent_cancel">취소</string>
+    <string name="agent_action_running">내비에 경로를 보내는 중…</string>
+    <string name="agent_action_done">내비 안내를 시작했어요</string>
+    <string name="agent_action_failed">안내를 시작하지 못했어요: %1$s</string>
+
+    <!-- 버튼을 누르면 에이전트에 이어서 묻는 말 -->
+    <string name="agent_followup_only_here">%1$s만 안내해줘</string>
+    <string name="agent_followup_other_days">다른 날도 보여줘</string>
+    <string name="agent_followup_pick_day">%1$s %2$s 보여줘</string>
+</resources>
