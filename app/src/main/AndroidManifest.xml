@@ -22,7 +22,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- 차량을 켜면(부팅) 앱을 열지 않아도 기록 대기를 시작하기 위해. normal -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- 머문 곳·출발/도착 지점을 실제 장소 이름으로 보여 주려고 지도 API(카카오 로컬·OSM)에 좌표를 묻는다. normal -->
+    <!-- 머문 곳·출발/도착 지점을 실제 장소 이름으로 보여 주려고 지도 API(카카오 로컬·OSM)에 좌표를 묻고,
+         기억 검색 에이전트·하루 라벨링을 위해 LLM 서버(개발: 개발 PC의 llama-server, res/xml/network_security_config.xml)를 부른다. normal -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- 오프라인이면 장소 이름 요청을 멈추고, 다시 연결되면 이어서 묻기 위해 연결 상태를 본다. normal -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -30,6 +31,7 @@
     <application
         android:name=".EodiApp"
         android:allowBackup="false"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"

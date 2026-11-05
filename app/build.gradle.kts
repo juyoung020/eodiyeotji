@@ -7,6 +7,17 @@ val kakaoRestApiKey: String = Properties().let { props ->
     (props.getProperty("KAKAO_REST_API_KEY") ?: System.getenv("KAKAO_REST_API_KEY") ?: "").filter { it.isLetterOrDigit() }
 }
 
+// 기억 에이전트·하루 라벨링 LLM (agent/). OpenAI 호환 Chat Completions 서버 (개발: 개발 PC의 llama.cpp llama-server + Qwen3.5-9B).
+// local.properties → 환경 변수 → 기본값. 에뮬레이터에서 개발 PC는 10.0.2.2 로 보인다.
+val llmProps: Properties = Properties().also { props ->
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { props.load(it) }
+}
+fun llmSetting(name: String, default: String): String =
+    (llmProps.getProperty(name) ?: System.getenv(name) ?: default).trim().filter { it != '"' && it != '\\' }
+val llmBaseUrl = llmSetting("LLM_BASE_URL", "http://10.0.2.2:8181/v1")
+val llmModel = llmSetting("LLM_MODEL", "qwen3.5-9b")
+val llmApiKey = llmSetting("LLM_API_KEY", "")
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -31,6 +42,9 @@ android {
         // Pleos 에뮬레이터(x86_64)와 실차(arm64)만 만든다
         ndk { abiFilters += listOf("x86_64", "arm64-v8a") }
         buildConfigField("String", "KAKAO_REST_API_KEY", "\"$kakaoRestApiKey\"")
+        buildConfigField("String", "LLM_BASE_URL", "\"$llmBaseUrl\"")
+        buildConfigField("String", "LLM_MODEL", "\"$llmModel\"")
+        buildConfigField("String", "LLM_API_KEY", "\"$llmApiKey\"")
     }
 
     buildTypes {
