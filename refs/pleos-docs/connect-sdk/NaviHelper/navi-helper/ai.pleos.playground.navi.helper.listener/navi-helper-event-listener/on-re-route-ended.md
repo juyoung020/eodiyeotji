@@ -1,0 +1,7 @@
+> 출처: https://document.pleos.ai/docs/pleos-only/connect-sdk-pleos/NaviHelper/navi-helper/ai.pleos.playground.navi.helper.listener/navi-helper-event-listener/on-re-route-ended
+
+# onReRouteEnded
+
+open fun [onReRouteEnded](https://document.pleos.ai/docs/pleos-only/connect-sdk-pleos/NaviHelper/navi-helper/ai.pleos.playground.navi.helper.listener/navi-helper-event-listener/on-re-route-ended)()
+
+Called when navigation re-route is completed.
