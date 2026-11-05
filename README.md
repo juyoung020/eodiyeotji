@@ -17,6 +17,12 @@
 ![PT](https://img.shields.io/badge/2차_PT-2026.12.03~04-F5A623?style=flat-square)
 ![SDK](https://img.shields.io/badge/Pleos_SDK-5종_전부_활용-2EA44F?style=flat-square)
 
+<br>
+
+<img src="docs/images/demo.gif" width="760" alt="Pleos 에뮬레이터 시연: '1년 전에 간 바다 어디였지?' → 그날 코스 카드 → 들른 곳 사진 → 차량 내비 경유지 안내">
+
+<sub>Pleos Connect 에뮬레이터 실제 화면 · "1년 전에 간 바다 어디였지?" → 그날 코스 카드 → 들른 곳 사진 → 차량 내비 경유지 안내</sub>
+
 </div>
 
 ---
