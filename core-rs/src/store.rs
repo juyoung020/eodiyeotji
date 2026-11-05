@@ -49,7 +49,7 @@ use crate::places::{self, PlaceLabel, REF_END, REF_START, REF_STAY};
 use crate::trip::{self, DriveMark, MarkKind, Segmenter, Stay, TripConfig};
 
 /// DB 구조 버전 (`PRAGMA user_version`). 구조를 바꾸면 올리고 `migrate`에 단계를 추가한다.
-pub(crate) const SCHEMA_VERSION: i32 = 4;
+pub(crate) const SCHEMA_VERSION: i32 = 5;
 /// 이보다 정확도가 나쁜(m) 점은 버린다.
 pub const MAX_ACCURACY_M: f32 = 100.0;
 /// 지도에 넘길 경로의 단순화 허용 오차(m).
@@ -368,7 +368,11 @@ fn migrate(conn: &mut Connection) -> Result<(), CoreError> {
         // 들른 곳 대표 사진 저장 (구글 Places)
         tx.execute_batch(crate::photos::SCHEMA_V4)?;
     }
-    // 다음 버전은 여기에: if version < 5 { ... }
+    if version < 5 {
+        // 커뮤니티 코스·여행 리뷰·하트 (기기 안, 2차 단계에서 서버와 맞춘다)
+        tx.execute_batch(crate::community::SCHEMA_V5)?;
+    }
+    // 다음 버전은 여기에: if version < 6 { ... }
     tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     tx.commit()?;
     Ok(())
