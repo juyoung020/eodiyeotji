@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.eodiyeotji.R
 import app.eodiyeotji.core.Visit
+import app.eodiyeotji.ui.place.PhotoLoadingPlaceholder
 import app.eodiyeotji.ui.place.PlaceThumbnail
 import app.eodiyeotji.ui.theme.EodiTheme
 import java.time.Instant
@@ -328,24 +329,25 @@ fun RatingStars(rating: Int, modifier: Modifier = Modifier, size: Dp = 24.dp) {
     }
 }
 
-/** 들른 곳 사진 (없으면 순서 번호 동그라미). */
+/**
+ * 들른 곳 사진. 받는 동안은 옅은 자리가 은은하게 깜빡이고(불러오는 중), 사진이 없으면 핀 아이콘.
+ * 순서 번호는 부르는 쪽이 [OrderDot]으로 사진 위에 얹는다 (자리 안에 번호를 또 그리지 않는다).
+ */
 @Composable
 fun StopPhoto(name: String, address: String, lat: Double, lon: Double, order: Int?, size: Dp, modifier: Modifier = Modifier, radius: Dp = 16.dp) {
     val c = EodiTheme.colors
     val shape = RoundedCornerShape(radius)
+    val description = if (order != null) "$order $name" else name
     PlaceThumbnail(
         name = name,
         address = address,
         lat = lat,
         lon = lon,
-        modifier = modifier.size(size).clip(shape).background(c.staySoft, shape),
+        modifier = modifier.size(size).clip(shape).background(c.surfaceHigh, shape).semantics { contentDescription = description },
+        loading = { PhotoLoadingPlaceholder(c.staySoft) },
         fallback = {
             Box(Modifier.fillMaxSize().background(c.staySoft), contentAlignment = Alignment.Center) {
-                if (order != null) {
-                    Text(order.toString(), style = EodiTheme.type.titleSmall, color = c.stay)
-                } else {
-                    Icon(app.eodiyeotji.ui.theme.EodiIcons.Pin, null, tint = c.stay, modifier = Modifier.size(size / 3))
-                }
+                Icon(app.eodiyeotji.ui.theme.EodiIcons.Pin, null, tint = c.stay.copy(alpha = 0.7f), modifier = Modifier.size(size / 3))
             }
         },
     )

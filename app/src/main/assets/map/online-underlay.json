@@ -1,0 +1,104 @@
+{
+  "comment": "오프라인 지도 파일 밖(강원 북부·남해·제주 등)을 채우는 온라인 밑그림. OpenFreeMap(키 없음, OpenMapTiles 스키마) 벡터 타일을 오프라인 스타일의 배경 바로 위·오프라인 레이어 아래에 깐다. 색은 오프라인 스타일(Protomaps light)과 맞췄다. 지명은 한국어(name:ko) 먼저. MapStyleSource가 읽어 style.json에 끼운다.",
+  "source": {
+    "type": "vector",
+    "url": "https://tiles.openfreemap.org/planet",
+    "attribution": "<a href=\"https://openfreemap.org\">OpenFreeMap</a> © <a href=\"https://www.openmaptiles.org/\">OpenMapTiles</a> Data from <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a>"
+  },
+  "layers": [
+    {
+      "id": "ofm-landcover",
+      "type": "fill",
+      "source-layer": "landcover",
+      "filter": ["in", ["get", "class"], ["literal", ["wood", "grass", "farmland"]]],
+      "paint": { "fill-color": "rgba(210, 239, 207, 1)", "fill-opacity": 0.7 }
+    },
+    {
+      "id": "ofm-park",
+      "type": "fill",
+      "source-layer": "park",
+      "paint": { "fill-color": "#9cd3b4", "fill-opacity": 0.6 }
+    },
+    {
+      "id": "ofm-water",
+      "type": "fill",
+      "source-layer": "water",
+      "paint": { "fill-color": "#80deea" }
+    },
+    {
+      "id": "ofm-waterway",
+      "type": "line",
+      "source-layer": "waterway",
+      "minzoom": 9,
+      "paint": { "line-color": "#80deea", "line-width": ["interpolate", ["linear"], ["zoom"], 9, 0.5, 15, 3] }
+    },
+    {
+      "id": "ofm-road-minor",
+      "type": "line",
+      "source-layer": "transportation",
+      "minzoom": 11,
+      "filter": ["in", ["get", "class"], ["literal", ["minor", "service", "tertiary"]]],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": {
+        "line-color": "#ffffff",
+        "line-width": ["interpolate", ["exponential", 1.6], ["zoom"], 11, 0.5, 16, 6]
+      }
+    },
+    {
+      "id": "ofm-road-major-casing",
+      "type": "line",
+      "source-layer": "transportation",
+      "minzoom": 7,
+      "filter": ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary", "secondary"]]],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": {
+        "line-color": "#e0e0e0",
+        "line-width": ["interpolate", ["exponential", 1.6], ["zoom"], 7, 1.5, 16, 14]
+      }
+    },
+    {
+      "id": "ofm-road-major",
+      "type": "line",
+      "source-layer": "transportation",
+      "minzoom": 7,
+      "filter": ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary", "secondary"]]],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": {
+        "line-color": "#ffffff",
+        "line-width": ["interpolate", ["exponential", 1.6], ["zoom"], 7, 0.8, 16, 11]
+      }
+    },
+    {
+      "id": "ofm-boundary",
+      "type": "line",
+      "source-layer": "boundary",
+      "filter": ["all", ["<=", ["get", "admin_level"], 4], ["!=", ["get", "maritime"], 1]],
+      "paint": { "line-color": "#adadad", "line-width": 1, "line-dasharray": [3, 2] }
+    },
+    {
+      "id": "ofm-water-name",
+      "type": "symbol",
+      "source-layer": "water_name",
+      "layout": {
+        "text-field": ["coalesce", ["get", "name:ko"], ["get", "name"]],
+        "text-font": ["NotoSans-Italic"],
+        "text-size": 13
+      },
+      "paint": { "text-color": "#728dd4", "text-halo-color": "#80deea", "text-halo-width": 1 }
+    },
+    {
+      "id": "ofm-place",
+      "type": "symbol",
+      "source-layer": "place",
+      "filter": ["in", ["get", "class"], ["literal", ["city", "town", "village", "suburb"]]],
+      "layout": {
+        "text-field": ["coalesce", ["get", "name:ko"], ["get", "name"]],
+        "text-font": ["NotoSans-Regular"],
+        "text-size": ["match", ["get", "class"], "city", 17, "town", 15, 13],
+        "symbol-sort-key": ["coalesce", ["get", "rank"], 99],
+        "text-padding": 6
+      },
+      "paint": { "text-color": "#5c5c5c", "text-halo-color": "#e0e0e0", "text-halo-width": 1.5 }
+    }
+  ]
+}

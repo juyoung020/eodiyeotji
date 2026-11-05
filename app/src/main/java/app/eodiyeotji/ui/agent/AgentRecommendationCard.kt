@@ -73,6 +73,8 @@ internal fun RecommendationCard(
     val facts = rec.hit.episode.facts
     val stops = rec.stops
     var showPhotos by rememberSaveable(facts.id) { mutableStateOf(false) }
+    // 지도 강조는 사용자가 직접 고른 뒤부터 (처음부터 한 곳만 진하고 경로가 흐리면 하루 전체가 안 읽힌다)
+    var picked by rememberSaveable(facts.id) { mutableStateOf(false) }
     Surface(
         shape = CardShape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -88,10 +90,17 @@ internal fun RecommendationCard(
                 when {
                     photoStop != null -> PlacePhotoGallery(photoStop, Modifier.fillMaxSize())
                     !rec.mapLoaded -> Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerHigh))
+                    // 지도에서도 고른 곳을 강조하고, 지도의 핀을 누르면 그곳을 고른다 (칩과 같은 동작)
                     map?.bounds != null -> DayMap(
                         data = map,
-                        selectedKey = null,
-                        onSelectKey = {},
+                        selectedKey = stops.getOrNull(selectedStop)?.takeIf { picked }?.let { "s${it.arriveMs}" },
+                        onSelectKey = { key ->
+                            val i = stops.indexOfFirst { "s${it.arriveMs}" == key }
+                            if (i >= 0) {
+                                picked = true
+                                onSelectStop(i)
+                            }
+                        },
                         modifier = Modifier.fillMaxSize(),
                         photoPins = remember(stops) { stops.map { MapPhotoPin("s${it.arriveMs}", it.name, it.address, it.lat, it.lon) } },
                     )
@@ -157,7 +166,7 @@ internal fun RecommendationCard(
                     Spacer(Modifier.height(20.dp))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         stops.forEachIndexed { i, stop ->
-                            StopChip(i + 1, stop, selected = i == selectedStop, onClick = { onSelectStop(i); showPhotos = true })
+                            StopChip(i + 1, stop, selected = i == selectedStop, onClick = { picked = true; onSelectStop(i); showPhotos = true })
                         }
                     }
                 }
@@ -166,24 +175,24 @@ internal fun RecommendationCard(
     }
 }
 
-/** 지도 | 사진 전환 (카드 위쪽 오른편). */
+/** 지도 | 사진 전환 (카드 위쪽 오른편). 차 화면에서 한눈에 보이고 누르기 쉽게 크게 (76dp). */
 @Composable
 private fun MediaToggle(photos: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     Row(
-        modifier.background(Color(0xE6FFFFFF), CircleShape).padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier.background(Color(0xF2FFFFFF), CircleShape).padding(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        listOf(false to "지도", true to "사진").forEach { (value, label) ->
+        listOf(false to stringResource(R.string.agent_media_map), true to stringResource(R.string.agent_media_photo)).forEach { (value, label) ->
             val on = value == photos
             Surface(
                 onClick = { onChange(value) },
                 shape = CircleShape,
                 color = if (on) MaterialTheme.colorScheme.primary else Color.Transparent,
                 contentColor = if (on) MaterialTheme.colorScheme.onPrimary else Color(0xFF333333),
-                modifier = Modifier.heightIn(min = 48.dp),
+                modifier = Modifier.heightIn(min = AgentTouchMin - 12.dp),
             ) {
-                Box(Modifier.padding(horizontal = 20.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
-                    Text(label, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Box(Modifier.padding(horizontal = 28.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
+                    Text(label, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

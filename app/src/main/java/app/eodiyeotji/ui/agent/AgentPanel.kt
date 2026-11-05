@@ -86,37 +86,47 @@ private val WideBreakpoint = 1100.dp
 
 private val PagePadding = 32.dp
 
+/** 입구 버튼이 "어디였지? 물어보세요"를 다 보여 줄 수 있는 폭. 이보다 좁으면 "물어보기". */
+private val EntryFullWidth = 480.dp
+
 // =====================================================================================
 // 진입점
 // =====================================================================================
 
 /**
- * "어디였지? 물어보세요" 입구. 큰 알약 버튼 (높이 88dp, 받은 폭을 채우고 마이크는 오른쪽 끝). 누르면 [AgentPanel]을 띄운다.
+ * "어디였지? 물어보세요" 입구. 큰 알약 버튼 (높이 88dp, 글자 길이만큼만 넓어지고 마이크는 오른쪽 끝). 누르면 [AgentPanel]을 띄운다.
+ * 글자는 줄이지 않고 다 보이게 한다 (좁은 창에서는 머리 쪽이 다른 것을 줄인다).
  * [driving]이면 문구가 "말로 물어보세요"로 바뀐다 (운전 중에는 음성으로만 묻는다).
  */
 @Composable
-fun AgentEntryButton(onClick: () -> Unit, modifier: Modifier = Modifier, driving: Boolean = false) {
+fun AgentEntryButton(onClick: () -> Unit, modifier: Modifier = Modifier, driving: Boolean = false) = BoxWithConstraints(modifier) {
+    // 받은 폭이 좁으면(좁은 창의 머리) 짧은 이름 "물어보기"로 → 글자가 잘리지 않는다
+    val label = when {
+        driving -> R.string.agent_entry_driving
+        maxWidth < EntryFullWidth -> R.string.agent_entry_short
+        else -> R.string.agent_entry
+    }
     Surface(
         onClick = onClick,
         shape = CircleShape,
         color = MaterialTheme.colorScheme.primaryContainer,
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
         shadowElevation = 2.dp,
-        modifier = modifier.heightIn(min = 88.dp),
+        modifier = Modifier.heightIn(min = 88.dp),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(start = 28.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+            modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
         ) {
             Icon(AgentIcons.Sparkle, contentDescription = null, modifier = Modifier.size(32.dp))
-            Spacer(Modifier.width(16.dp))
+            Spacer(Modifier.width(14.dp))
             Text(
-                stringResource(if (driving) R.string.agent_entry_driving else R.string.agent_entry),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold,
+                stringResource(label),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
+                softWrap = false,
+                modifier = Modifier.weight(1f, fill = false),
             )
             Spacer(Modifier.width(24.dp))
             Box(
@@ -555,7 +565,7 @@ private fun ProposalButton(p: AgentEvent.ActionProposal, primary: Boolean, runni
         Column(Modifier.weight(1f)) {
             Text(p.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (p.description.isNotBlank()) {
-                Text(p.description, style = AgentSubStyle, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.alpha(0.8f))
+                Text(p.description, style = AgentSubStyle, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.alpha(0.8f))
             }
         }
     }

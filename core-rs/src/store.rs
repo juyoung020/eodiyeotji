@@ -55,6 +55,8 @@ pub const MAX_ACCURACY_M: f32 = 100.0;
 /// 지도에 넘길 경로의 단순화 허용 오차(m).
 pub const PATH_TOLERANCE_M: f64 = 5.0;
 pub(crate) const DAY_MS: i64 = 86_400_000;
+/// 하루 요약을 만드는 규칙의 버전. 규칙이 바뀌면(예: 잡음 주행 빼기) 올린다 → 다음에 열 때 날짜별 요약을 다시 만든다.
+const DAY_RULES: i64 = 2;
 
 /// 위치 한 점 (FusedLocation `LocationData`에서 필요한 값만).
 #[derive(Debug, Clone, Copy, PartialEq, uniffi::Record)]
@@ -625,18 +627,21 @@ impl EodiStore {
         day * DAY_MS - self.tz_ms()
     }
 
-    /// 지난번에 연 시간대와 다르면 날짜별 요약을 전부 다시 만든다 (주행 자체는 시간대와 무관).
+    /// 지난번에 연 시간대나 하루 요약 규칙([`DAY_RULES`])과 다르면 날짜별 요약을 전부 다시 만든다 (주행 자체는 그대로).
     fn apply_timezone(&self) -> Result<(), CoreError> {
         let mut conn = self.lock()?;
         let tx = conn.transaction()?;
         let stored: Option<i64> = tx
             .query_row("SELECT value FROM meta WHERE key = 'tz_offset_minutes'", [], |r| r.get(0))
             .optional()?;
-        if stored != Some(self.tz_offset_minutes as i64) {
+        let rules: Option<i64> =
+            tx.query_row("SELECT value FROM meta WHERE key = 'day_rules'", [], |r| r.get(0)).optional()?;
+        if stored != Some(self.tz_offset_minutes as i64) || rules != Some(DAY_RULES) {
             tx.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('tz_offset_minutes', ?1)",
                 [self.tz_offset_minutes],
             )?;
+            tx.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('day_rules', ?1)", [DAY_RULES])?;
             tx.execute("DELETE FROM day_summary", [])?;
             // 날짜 번호가 바뀌므로 지금 에피소드가 있는 날도 다시 만든다 (새 날짜는 refresh_days가 표시한다).
             tx.execute(
@@ -997,11 +1002,16 @@ impl EodiStore {
         let labels = places::labels_between(conn, from, de)?;
         let label = |seg: i64, kind: i64, t: i64| labels.get(&(seg, kind, t)).cloned();
 
-        let next_starts: Vec<Option<(Point, i64)>> =
-            (0..trips.len()).map(|k| trips.get(k + 1).map(|n| (n.start, n.start_ms)).or(next)).collect();
+        // 주차 중 GPS 흔들림으로 생긴 잡음 주행은 빼고 본다 (trip::real_trips). 그 앞뒤 사이 주차는 아래에서 머문 곳 하나로 잡힌다.
+        let real = trip::real_trips(&trips.iter().map(|t| t.distance_m).collect::<Vec<_>>(), &self.cfg);
+        // 마지막 진짜 주행 뒤에 잡음 주행만 남았으면 차는 그 자리에 서 있는 중이다.
+        let trailing_jitter = real.last().is_some_and(|&i| i + 1 < trips.len());
+
         let mut days: BTreeMap<i64, DayAcc> = BTreeMap::new();
         let in_range = |t: i64| Some(self.local_day(t)).filter(|d| (d0..=d1).contains(d));
-        for (t, next_start) in trips.iter_mut().zip(next_starts) {
+        for (k, &i) in real.iter().enumerate() {
+            let next_start = real.get(k + 1).map(|&n| (trips[n].start, trips[n].start_ms)).or(next);
+            let t = &mut trips[i];
             let end_place = label(t.seg_start, REF_END, t.end_ms);
             if let Some(d) = in_range(t.start_ms) {
                 days.entry(d).or_default().trips.push(TripSummary {
@@ -1023,7 +1033,7 @@ impl EodiStore {
             // 주행 사이 머문 곳·지금 머무는 중인 곳은 중심이 이 주행의 도착점이라 도착점의 장소 이름을 쓴다.
             let after = match next_start {
                 Some((p, leave)) => trip::between_stay(t.end, t.end_ms, p, leave, &self.cfg),
-                None if ended => Some(Stay { center: t.end, arrive_ms: t.end_ms, leave_ms: t.end_ms }),
+                None if ended || trailing_jitter => Some(Stay { center: t.end, arrive_ms: t.end_ms, leave_ms: t.end_ms }),
                 None => None,
             };
             if let Some(s) = after {

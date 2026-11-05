@@ -48,6 +48,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import app.eodiyeotji.ui.community.CommunityIcons
+import app.eodiyeotji.ui.community.Notice
+import app.eodiyeotji.ui.community.SecondaryPill
+import app.eodiyeotji.ui.community.ShareCourseSheet
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -106,8 +114,11 @@ fun TimelineRoute(
     viewModel: TimelineViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var shareEpisode by rememberSaveable { mutableStateOf<Long?>(null) }
+    var shared by remember { mutableStateOf(false) }
     TimelineScreen(
         state = state,
+        onShare = { shareEpisode = it },
         onSelectDay = viewModel::select,
         onBack = viewModel::clearSelection,
         onRetry = viewModel::reload,
@@ -117,6 +128,23 @@ fun TimelineRoute(
         status = if (BuildConfig.DEBUG) DebugStatus else null,
         headerAction = headerAction,
     )
+    // 하루 상세에서 바로 커뮤니티에 코스로 올리기 (커뮤니티 탭까지 가지 않는다)
+    shareEpisode?.let { id ->
+        BackHandler { shareEpisode = null }
+        ShareCourseSheet(episodeId = id, onDone = { post ->
+            shareEpisode = null
+            if (post != null) shared = true
+        })
+    }
+    if (shared) {
+        LaunchedEffect(Unit) {
+            delay(2_500)
+            shared = false
+        }
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+            Notice(stringResource(R.string.timeline_shared))
+        }
+    }
 }
 
 private val DebugStatus: @Composable () -> Unit = { CoreStatusLine() }
@@ -138,6 +166,7 @@ fun TimelineScreen(
     onMapSelect: (String?) -> Unit,
     status: (@Composable () -> Unit)?,
     headerAction: (@Composable () -> Unit)? = null,
+    onShare: (Long) -> Unit = {},
 ) {
     val c = EodiTheme.colors
     val space = EodiTheme.space
@@ -152,7 +181,7 @@ fun TimelineScreen(
             val bodyPadding = Modifier.padding(start = space.page, end = space.page, bottom = space.page)
 
             Column(Modifier.fillMaxSize()) {
-                TimelineHeader(wide, status, headerAction)
+                TimelineHeader(wide, headerAction)
                 when (val days = state.days) {
                     DaysState.Loading -> LoadingPane(Modifier.fillMaxSize())
                     is DaysState.Failed -> FailedPane(days.message, onRetry, Modifier.fillMaxSize())
@@ -166,6 +195,7 @@ fun TimelineScreen(
                                 showChevron = false,
                                 onSelect = onSelectDay,
                                 listState = listState,
+                                footer = status,
                                 modifier = Modifier.weight(ListWeight).fillMaxHeight(),
                             )
                             Spacer(Modifier.width(space.l))
@@ -175,6 +205,7 @@ fun TimelineScreen(
                                 selectedEntry = state.selectedEntry,
                                 onEntryClick = onEntryClick,
                                 onMapSelect = onMapSelect,
+                                onShare = onShare,
                                 onBack = null,
                                 modifier = Modifier.weight(1f - ListWeight).fillMaxHeight(),
                             )
@@ -198,6 +229,7 @@ fun TimelineScreen(
                                     selectedEntry = state.selectedEntry,
                                     onEntryClick = onEntryClick,
                                     onMapSelect = onMapSelect,
+                                    onShare = onShare,
                                     onBack = onBack,
                                     modifier = Modifier.fillMaxSize().then(bodyPadding),
                                 )
@@ -209,6 +241,7 @@ fun TimelineScreen(
                                     showChevron = true,
                                     onSelect = onSelectDay,
                                     listState = listState,
+                                    footer = status,
                                     modifier = Modifier.fillMaxSize().padding(horizontal = space.page),
                                 )
                             }
@@ -222,11 +255,11 @@ fun TimelineScreen(
 
 /**
  * 앱 표시(파란 핀 타일 + 이름). 넓은 창에서는 한 줄 소개를 옆에 붙인다.
- * 오른쪽 끝 [action] 자리는 화면의 대표 동작 하나(예: ui/agent의 "어디였지? 물어보세요" 버튼)가 들어간다.
- * 높이 76dp 버튼이 들어가도 머리 높이(104dp) 안에 맞는다. [status](디버그 전용)는 그 왼쪽에서 남는 폭만 쓴다.
+ * 오른쪽 끝 [action] 자리는 화면의 대표 동작 하나(ui/agent의 "어디였지? 물어보세요" 버튼)가 들어가고, 글자가 잘리지 않게
+ * 먼저 자리를 받는다. 소개 글은 남는 폭에서만 보인다. 개발용 코어 상태 줄은 머리가 아니라 날짜 목록 맨 아래에 둔다.
  */
 @Composable
-private fun TimelineHeader(wide: Boolean, status: (@Composable () -> Unit)?, action: (@Composable () -> Unit)?) {
+private fun TimelineHeader(wide: Boolean, action: (@Composable () -> Unit)?) {
     val c = EodiTheme.colors
     val space = EodiTheme.space
     Row(
@@ -245,20 +278,25 @@ private fun TimelineHeader(wide: Boolean, status: (@Composable () -> Unit)?, act
             style = EodiTheme.type.titleSmall,
             fontWeight = FontWeight.ExtraBold,
             color = c.textPrimary,
+            maxLines = 1,
             modifier = Modifier.semantics { heading() },
         )
-        if (wide) {
-            Spacer(Modifier.width(20.dp))
-            Box(Modifier.size(width = 2.dp, height = 28.dp).background(c.outline))
-            Spacer(Modifier.width(20.dp))
-            Text(stringResource(R.string.tagline), style = EodiTheme.type.body, color = c.textTertiary, maxLines = 1)
-        }
-        // 남는 폭은 디버그 상태 줄이 오른쪽 정렬로 쓴다 (좁으면 줄임표로 줄어든다)
-        Box(Modifier.weight(1f).padding(start = space.l), contentAlignment = Alignment.CenterEnd) {
-            if (status != null) status()
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            if (wide) {
+                Spacer(Modifier.width(20.dp))
+                Box(Modifier.size(width = 2.dp, height = 28.dp).background(c.outline))
+                Spacer(Modifier.width(20.dp))
+                Text(
+                    stringResource(R.string.tagline),
+                    style = EodiTheme.type.body,
+                    color = c.textTertiary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         if (action != null) {
-            Spacer(Modifier.width(space.l))
+            Spacer(Modifier.width(space.m))
             action()
         }
     }
@@ -275,6 +313,7 @@ private fun DayList(
     onSelect: (String) -> Unit,
     listState: LazyListState,
     modifier: Modifier = Modifier,
+    footer: (@Composable () -> Unit)? = null,
 ) {
     LazyColumn(
         modifier = modifier,
@@ -292,6 +331,11 @@ private fun DayList(
         }
         items(days, key = { it.day }, contentType = { "day" }) { s ->
             DayRow(s, today, selected = s.day == highlightedDay, showChevron = showChevron, onSelect = onSelect, modifier = Modifier.animateItem())
+        }
+        if (footer != null) {
+            item(key = "footer", contentType = "footer") {
+                Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) { footer() }
+            }
         }
     }
 }
@@ -419,12 +463,14 @@ private fun DayDetailCard(
     selectedEntry: String?,
     onEntryClick: (String) -> Unit,
     onMapSelect: (String?) -> Unit,
+    onShare: (Long) -> Unit,
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val c = EodiTheme.colors
     val space = EodiTheme.space
     val summary = detail.shownSummary
+    val shareEpisode = (detail as? DetailState.Loaded)?.shareEpisode
     Surface(
         color = c.surface,
         contentColor = c.textPrimary,
@@ -432,7 +478,7 @@ private fun DayDetailCard(
         modifier = modifier,
     ) {
         Column(Modifier.fillMaxSize()) {
-            DetailHeader(summary, today, onBack)
+            DetailHeader(summary, today, onBack, onShare = shareEpisode?.let { id -> { onShare(id) } })
             val loaded = detail as? DetailState.Loaded
             // 정차한 곳 사진 상자 (이름을 찾은 머문 곳만)
             val photoPins = remember(loaded?.entries) {
@@ -467,7 +513,7 @@ private fun DayDetailCard(
 }
 
 @Composable
-private fun DetailHeader(summary: DaySummary?, today: LocalDate, onBack: (() -> Unit)?) {
+private fun DetailHeader(summary: DaySummary?, today: LocalDate, onBack: (() -> Unit)?, onShare: (() -> Unit)? = null) {
     val c = EodiTheme.colors
     val space = EodiTheme.space
     Column(Modifier.fillMaxWidth().padding(start = space.xl, end = space.xl, top = 28.dp, bottom = space.l)) {
@@ -501,12 +547,21 @@ private fun DetailHeader(summary: DaySummary?, today: LocalDate, onBack: (() -> 
                         modifier = Modifier.semantics { heading() },
                     )
                 }
+                // 넓은 창: 제목 옆. 좁은 창(뒤로 버튼이 있을 때)은 제목이 눌리지 않게 아래 줄에 둔다.
+                if (onShare != null && onBack == null) {
+                    Spacer(Modifier.width(16.dp))
+                    SecondaryPill(stringResource(R.string.timeline_share), CommunityIcons.Upload, onShare)
+                }
             }
         }
         if (summary != null) {
             if (summary.tags.isNotEmpty()) {
                 Spacer(Modifier.height(14.dp))
                 TagRow(summary.tags)
+            }
+            if (onShare != null && onBack != null) {
+                Spacer(Modifier.height(14.dp))
+                SecondaryPill(stringResource(R.string.timeline_share), CommunityIcons.Upload, onShare)
             }
             Spacer(Modifier.height(20.dp))
             StatRow(summary)

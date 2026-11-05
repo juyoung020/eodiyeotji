@@ -10,14 +10,13 @@ import app.eodiyeotji.core.DayMapData
 import app.eodiyeotji.core.DriveCourse
 import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.LatLon
-import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.core.courseLegs
 import app.eodiyeotji.core.courseMap
 import app.eodiyeotji.core.driveCourses
 import app.eodiyeotji.core.lastKnownPosition
 import app.eodiyeotji.core.toggleCourseHeart
-import app.eodiyeotji.pleos.PleosNavi
-import app.eodiyeotji.pleos.RouteStop
+import app.eodiyeotji.pleos.CourseGuide
+import app.eodiyeotji.pleos.CourseProgress
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException
@@ -36,21 +35,13 @@ sealed interface Load<out T> {
     data class Loaded<T>(val items: List<T>) : Load<T>
 }
 
-/** 내비로 보낸 결과 (화면 아래 알림 한 줄). */
-@Immutable
-sealed interface NaviNotice {
-    data class Sent(val leg: Int, val total: Int) : NaviNotice
-    data object Failed : NaviNotice
-}
-
-/** 고른 코스의 상세 (지도·내비 구간은 뒤따라 채운다). [sentLegs] = 내비에 보낸 구간 수. */
+/** 고른 코스의 상세 (지도·내비 구간은 뒤따라 채운다). [naviFailed] = 내비에 보내지 못했음 (안내 한 줄). */
 @Immutable
 data class CourseDetail(
     val course: DriveCourse,
     val map: DayMapData? = null,
     val legs: List<CourseLeg> = emptyList(),
-    val sentLegs: Int = 0,
-    val notice: NaviNotice? = null,
+    val naviFailed: Boolean = false,
 )
 
 @Immutable
@@ -72,10 +63,13 @@ data class CourseUiState(
 @HiltViewModel
 class CourseViewModel @Inject constructor(
     private val core: EodiCore,
-    private val navi: PleosNavi,
+    private val guide: CourseGuide,
 ) : ViewModel() {
     private val _state = MutableStateFlow(CourseUiState())
     val state: StateFlow<CourseUiState> = _state.asStateFlow()
+
+    /** 진행 중인 코스 안내 (이 코스면 상세의 버튼이 "다음 구간 바로 안내"로 바뀐다). */
+    val progress: StateFlow<CourseProgress?> = guide.progress
     private var loadJob: Job? = null
 
     init {
@@ -125,20 +119,22 @@ class CourseViewModel @Inject constructor(
         _state.update { it.copy(detail = null) }
     }
 
-    /** 다음 구간(처음이면 첫 구간)을 내비에 보낸다. 경유지 2개 + 목적지 (Rust `course_legs`). */
+    /**
+     * 이 코스로 안내: 첫 구간(경유지 2개 + 목적지, Rust `course_legs`)을 내비에 보내고, 도착할 때마다 다음 구간은
+     * [CourseGuide]가 알아서 이어 보낸다. 이미 이 코스를 안내 중이면 도착을 기다리지 않고 다음 구간으로 넘긴다.
+     */
     fun navigate() {
         val d = _state.value.detail ?: return
-        val leg = d.legs.getOrNull(d.sentLegs) ?: d.legs.firstOrNull() ?: return
-        val index = if (d.sentLegs < d.legs.size) d.sentLegs else 0
+        if (d.legs.isEmpty()) return
+        val id = d.course.post.id
+        val active = guide.progress.value
+        if (active != null && active.courseId == id && !active.finished) {
+            guide.skipToNextLeg()
+            return
+        }
         viewModelScope.launch {
-            val ok = runCatching {
-                navi.requestRouteWithWaypoints(leg.destination.toRouteStop(), leg.waypoints.take(2).map { it.toRouteStop() })
-            }.getOrDefault(false)
-            _state.update { s ->
-                val cur = s.detail ?: return@update s
-                if (cur.course.post.id != d.course.post.id) return@update s
-                s.copy(detail = if (ok) cur.copy(sentLegs = index + 1, notice = NaviNotice.Sent(index + 1, cur.legs.size)) else cur.copy(notice = NaviNotice.Failed))
-            }
+            val ok = guide.startShared(id, d.course.post.title, d.legs)
+            _state.update { s -> if (s.detail?.course?.post?.id == id) s.copy(detail = s.detail.copy(naviFailed = !ok)) else s }
         }
     }
 
@@ -186,5 +182,3 @@ private fun CourseUiState.flipHeart(id: String, count: Int?, apply: Boolean = tr
         detail = detail?.let { it.copy(course = it.course.fix()) },
     )
 }
-
-private fun StopFact.toRouteStop() = RouteStop(name, lat, lon, address)

@@ -39,7 +39,7 @@ use crate::ffi::GeoPoint;
 use crate::geo::{haversine_m, Point};
 use crate::mapdata::{map_safe_name, DayMap, EntryBounds, MapBounds};
 use crate::memory::{CourseLeg, Episode, EpisodeKind, MemoryQuery, StopFact};
-use crate::store::{format_day, join_names, split_names, CoreError, EodiStore};
+use crate::store::{format_day, join_names, parse_day, split_names, CoreError, EodiStore};
 
 mod demo;
 pub mod weather;
@@ -393,6 +393,29 @@ impl EodiStore {
         let conn = self.lock()?;
         let ctx = ShareCtx::load(self, &conn)?;
         Ok(hits.into_iter().map(|h| ctx.preview(h.episode, h.day_title)).filter(|p| !p.stops.is_empty()).collect())
+    }
+
+    /// 그날(`day` = "YYYY-MM-DD")에 코스로 올릴 수 있는 나들이·여행 미리보기 (먼저 시작한 순, 올릴 곳이 남는 것만).
+    /// 타임라인 하루 상세에서 바로 "커뮤니티에 올리기"를 띄울 때 쓴다. 날짜 형식이 틀리면 `InvalidInput`.
+    pub fn share_candidates_on(&self, day: String) -> Result<Vec<SharePreview>, CoreError> {
+        let d = parse_day(&day).ok_or_else(|| CoreError::InvalidInput(format!("day {day:?}")))?;
+        let hits = self.search_memories(MemoryQuery {
+            terms: vec![],
+            from_ms: Some(self.day_start_ms(d)),
+            to_ms: Some(self.day_start_ms(d + 1)),
+            kinds: vec![EpisodeKind::Outing, EpisodeKind::Trip],
+            limit: 20,
+        })?;
+        let conn = self.lock()?;
+        let ctx = ShareCtx::load(self, &conn)?;
+        let mut out: Vec<SharePreview> = hits
+            .into_iter()
+            .filter(|h| h.episode.facts.day == day)
+            .map(|h| ctx.preview(h.episode, h.day_title))
+            .filter(|p| !p.stops.is_empty())
+            .collect();
+        out.sort_by_key(|p| p.stops.first().map_or(i64::MAX, |s| s.arrive_ms));
+        Ok(out)
     }
 
     /// 에피소드 하나의 공유 미리보기 (제목 기본값, 올라갈 곳, 자동으로 가린 곳 수, 날씨 주소). 나들이·여행이 아니어도
