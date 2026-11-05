@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 앱 아이콘: 지나온 길(점선)이 이어져 닿는 위치 핀. 안전 영역(가운데 지름 66) 안에 그린다 -->
+<!-- 알림 작은 아이콘: 앱 아이콘과 같은 모양(점선 길 → 위치 핀)의 흰 실루엣 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
+    android:width="24dp"
+    android:height="24dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <!-- 지나온 길: 왼쪽 아래에서 핀 끝으로 이어지는 점 -->
     <path
-        android:fillColor="#99FFFFFF"
+        android:fillColor="#FFFFFFFF"
         android:pathData="M30,80m-3.2,0a3.2,3.2 0,1 1,6.4 0a3.2,3.2 0,1 1,-6.4 0" />
     <path
-        android:fillColor="#B3FFFFFF"
+        android:fillColor="#FFFFFFFF"
         android:pathData="M38.5,76.5m-3.2,0a3.2,3.2 0,1 1,6.4 0a3.2,3.2 0,1 1,-6.4 0" />
     <path
-        android:fillColor="#CCFFFFFF"
+        android:fillColor="#FFFFFFFF"
         android:pathData="M46.5,76.5m-3.2,0a3.2,3.2 0,1 1,6.4 0a3.2,3.2 0,1 1,-6.4 0" />
     <!-- 핀 -->
     <path

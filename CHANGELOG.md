@@ -18,6 +18,7 @@
 ## [Unreleased]
 
 ### Added
+- 기억 코어: 주행·머문 곳을 출근길·퇴근길·볼일·나들이·여행 에피소드로 묶고, 집·회사 추정, AI 하루 라벨링 대기열, 한국어 부분 일치 검색(0.2ms), 코스 최적 순서, 1년치 시연 데이터 (`core-rs/src/memory/`, `core-rs/src/course.rs`)
 - 화면 디자인: Pleos 색·글자 크기 토큰, 세로 타임라인 상세, 날짜 목록에 하루 제목·들른 곳, 빈 화면·오류 화면, 새 앱 아이콘 (`app/.../ui/theme/` 외)
 - 기억 에이전트용 LLM 서버: Qwen3.5-9B를 llama.cpp로 띄우는 스크립트, 도구 호출 0.5~0.9초 (`scripts/llm/start-llm.ps1`, `docs/70_기억_검색_설계.md`)
 - 장소 이름: 머문 곳·출발/도착을 좌표 대신 실제 장소 이름으로 표시. 출처 우선순위 차량 내비 > 카카오 로컬 > OSM, 가까운 지점은 한 장소로 묶어 한 번만 조회 (`core-rs/src/places.rs`, `app/.../place/`)
@@ -42,6 +43,7 @@
 - 개발 순서(MVP): 단계별 시연 목표, 자르는 순서, 위험 요소, 데일리 칸 (`docs/00_plan.md`)
 
 ### Changed
+- 앱 아이콘: Gemini로 그린 "지나온 점선 길 → 위치 핀 + 반짝임" 그림으로 교체(Pleos 둥근 사각형 틀에 맞춤), 알림 아이콘은 따로 분리 (`res/mipmap-*/ic_launcher_foreground.png`, `res/drawable/ic_notification.xml`)
 - 장소 이름 찾기를 빠르게: 주행이 끝나면 바로, 요청을 동시에 보내 한 지점 약 50ms. 출발·도착도 가게·명소 이름으로 (예: 광장시장, 경복궁)
 - 앱 화면이 두 개 뜨지 않게 MainActivity를 한 개로 유지 (`launchMode=singleTask`)
 - 공모전 자료를 `docs/contest/`로 모으고, 백로그를 `docs/00_plan.md`로 이름 바꿔 docs 맨 위에 둠
