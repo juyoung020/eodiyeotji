@@ -6,6 +6,19 @@ description = "어디였지 앱의 네이티브 코어: 경로 처리, 머문 �
 
 [lib]
 crate-type = ["lib", "cdylib"]
+name = "eodi_core"
+
+[dependencies]
+uniffi = "0.32"
+
+[features]
+# Kotlin 바인딩 생성기(호스트에서만 실행). 앱에 들어가는 .so에는 포함되지 않는다.
+bindgen = ["uniffi/cli"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+required-features = ["bindgen"]
 
 [profile.release]
 opt-level = 3

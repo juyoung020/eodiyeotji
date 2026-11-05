@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">어디였지</string>
+    <string name="tagline">차가 기억하는 나의 모든 길</string>
+    <string name="core_checking">Rust 코어 확인 중…</string>
+    <string name="core_connected">Rust 코어 연결됨 · v%1$s</string>
+    <string name="core_failed">Rust 코어 연결 실패: %1$s</string>
+    <string name="core_simplify">하루 경로 %1$s점 → %2$s점</string>
+    <string name="core_elapsed">단순화 %1$s ms (목표 16 ms 이내)</string>
+    <string name="core_recheck">다시 측정</string>
+</resources>

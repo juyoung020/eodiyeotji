@@ -5,7 +5,7 @@
 | 위치 | 내용 |
 |---|---|
 | `core-rs/` | Rust 네이티브 코어 (eodi-core) |
-| `app/` | Android 앱 (Kotlin + Compose) — 뼈대 단계에서 생성 예정 |
+| `app/` | Android 앱 (Kotlin + Compose + Hilt) |
 | `server/` | LLM 요약 · 코스 공유 서버 — 2차 단계 |
 
 이 폴더는 위에 속하지 않는 보조 스크립트(시연 데이터 생성 등)를 둘 때 쓴다.

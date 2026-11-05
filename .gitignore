@@ -8,3 +8,13 @@ refs/github/ulw-research/
 
 # Rust 빌드 결과
 core-rs/target/
+
+# Android / Gradle 빌드 결과 (Rust .so와 UniFFI 바인딩도 app/build/ 아래에 생성됨)
+.gradle/
+build/
+app/build/
+local.properties
+.idea/
+*.iml
+.kotlin/
+captures/

@@ -47,7 +47,6 @@
 
 | # | 할 일 | 담당 | 상태 |
 |---|---|---|---|
-| D1 | Android Studio + Pleos Connect 에뮬레이터 설치 (`refs/pleos-docs/guides/connect/getting-started/`) | | [ ] |
 | D2 | Vehicle SDK 연동 → 첫 API 호출 (예: Odometer 트립 거리, 권한 `CAR_DRIVE` 선언만으로 됨) | | [ ] |
 | D3 | FusedLocation 샘플 앱 돌려보기 (`refs/github/pleos-sample-fusedlocation-app/`) | | [ ] |
 | D4 | Virtual Console로 기어·주행 값 바꿔보기 (시연 영상 준비) | | [ ] |
@@ -56,7 +55,6 @@
 | D7 | MVP ③ 지오펜스 회상 안내 (`addProximityAlert` + TTS) | | [ ] |
 | D8 | MVP ④ 코스 공유 목록 + 따라가기 (`NaviHelper.requestRouteWithWaypoints`) | | [ ] |
 | D9 | release APK 빌드 → `apk/팀명_어디였지_release.apk` | | [ ] |
-| D10 | 뼈대: Android 프로젝트 + Rust 코어 UniFFI 연결 + cargo-ndk를 Gradle 빌드에 연결 | | [ ] |
 | D11 | 기록 DB: Rust에 SQLite(rusqlite) 저장 + 주행·머문 곳 계산 결과 저장 | | [ ] |
 | D12 | 장소 이름: NaviHelper 목적지 `poiName` 우선, 없으면 역지오코딩 API | | [ ] |
 | D13 | 시연용 가짜 기록 1년치 생성기 (출퇴근 + 여행 + 드라이브) | | [ ] |
@@ -98,7 +96,7 @@
 | 순서 | 만들 것 | 끝나면 보여줄 수 있는 것 | 백로그 |
 |---|---|---|---|
 | **1** | 뼈대: Android 프로젝트(Compose · Hilt · Pleos Maven) + Rust 코어 UniFFI 연결 | 에뮬레이터에서 앱이 뜨고 Rust 함수 결과가 화면에 나옴 | D1, D10 |
-| **2** | 자동 기록: FusedLocation 위치를 묶음으로 Rust에 넘겨 SQLite에 저장, `IGNITION_STATE`로 시작 · 끝 | 에뮬레이터에 경로(GPX)를 재생하면 기록이 DB에 쌓임 | D3, D5, D11 |
+| **2** | 자동 기록: FusedLocation 위치를 묶음으로 Rust에 넘겨 SQLite에 저장, `IGNITION_STATE`로 시작 · 끝 (에뮬레이터에는 시동 조작이 없어 기어 P↔D로 시연, `scripts/vc.ps1`) | 에뮬레이터에 경로(GPX)를 재생하면 기록이 DB에 쌓임 | D3, D5, D11 |
 | **3** | 타임라인: Rust가 주행 · 머문 곳을 계산 → 날짜별 목록 화면 | "11/7 · 주행 2회 · 머문 곳 1곳 · 42km" 목록 | D5 |
 | **4** | 지도: MapLibre + 기기 내 지도 파일, 단순화한 경로와 머문 곳 핀 | 하루를 누르면 그날의 경로가 지도에 바로 그려짐 | – |
 | **5** | 차량 데이터: Vehicle SDK 탑승 인원 · 와이퍼 · 트립 거리 + 장소 이름 | "가족 4명 · 비 · 경포해변" 같은 정보가 기록에 붙음 | D2, D4, D12 |
@@ -307,6 +305,8 @@
 
 ## 완료
 
+- [x] D1 Android Studio + Pleos Connect 에뮬레이터 설치 — 데스크톱, 2차 PT 시연 PC 후보 (주영, 11/05)
+- [x] D10 뼈대: Android 프로젝트 + Rust 코어 UniFFI 연결 + cargo-ndk를 Gradle 빌드에 연결 (주영, 11/05) — 개발 순서 1단계
 - [x] 앱 이름 확정: **어디였지** (11/05)
 - [x] 공모전 자료·SDK 문서 수집 (11/05)
 - [x] 온라인 설명회 다시보기 정리 → `docs/contest/16_설명회_다시보기_정리.md` (11/05)

@@ -50,6 +50,8 @@ AI 코딩 도구(Claude Code, Codex, Cursor 등)와 팀원 모두가 따르는 �
 - NaviHelper 경유지는 **최대 2개** → 코스는 `course::split_legs`로 구간을 나누고, 도착(`onDestinationArrived`)하면 다음 구간을 요청한다.
 - Vehicle · FusedLocation은 차종마다 지원이 다르다 → `checkXxxCapabilities()` / `isSupported()`로 확인한 뒤 기능을 켠다.
 - 좌석 센서는 "몇 명 · 어느 자리"까지만 안다. 누구인지는 사용자가 직접 태그해야 한다.
+- 주행 중에 쓸 화면(Activity)은 `distractionOptimized`(DO)를 선언해야 한다. 선언하지 않으면 주행 중 "주행 중에는 사용할 수 없습니다." 화면으로 가려진다.
+- 에뮬레이터 Virtual Console에는 시동 항목이 없다 → 시동 기준 동작은 기어 P↔D로 시연한다.
 - 버전: Vehicle 2.3.2 · NaviHelper 3.0.5 · FusedLocation 1.1.3 · TTS/STT 3.3.1. Android API 28+, Gradle 8.0+.
 
 ## 문서 위치
@@ -69,11 +71,16 @@ AI 코딩 도구(Claude Code, Codex, Cursor 등)와 팀원 모두가 따르는 �
 ```bash
 # Rust 코어
 cd core-rs
-cargo test                       # 기기 없이 로직 테스트
-cargo clippy -- -D warnings      # 경고 0 유지
-cargo ndk -t x86_64 -t arm64-v8a -o ../app/src/main/jniLibs build --release   # 앱에 넣을 .so
+cargo test                                  # 기기 없이 로직 테스트
+cargo clippy --all-targets -- -D warnings   # 경고 0 유지
+
+# 앱 (저장소 루트에서). Rust .so 빌드와 UniFFI Kotlin 바인딩 생성은 Gradle이 자동으로 한다.
+./gradlew assembleDebug            # → app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleRelease          # R8 + Rust --release(LTO)
 ```
-안드로이드 빌드 · 에뮬레이터 실행 방법은 `docs/50_개발환경_세팅.md`를 따른다.
+- Kotlin에 공개할 Rust 함수는 `core-rs/src/ffi.rs`에만 `#[uniffi::export]`로 둔다. Kotlin에서는 `app.eodiyeotji.core.EodiCore`를 거쳐 부른다.
+- Rust 결과물(`.so`)과 바인딩은 `app/build/` 아래에 생기고 git에 올리지 않는다.
+- 에뮬레이터 실행 · 차량 상태 조작은 `scripts/emu.ps1`, `scripts/vc.ps1` (`docs/50_개발환경_세팅.md` 7-3).
 
 ## Git 규칙 (반드시 지킨다)
 1. **작업 시작 전에 항상 `git pull`** 한다. 다른 사람이 올린 변경은 덮어쓰지 않는다.

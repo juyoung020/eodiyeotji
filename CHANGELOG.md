@@ -18,6 +18,8 @@
 ## [Unreleased]
 
 ### Added
+- Android 앱 뼈대: Compose · Hilt · Pleos Maven, minSdk 28. 첫 화면에서 Rust 코어 연결과 하루 경로(점 1만 개) 단순화 시간을 보여 줌 (`app/`)
+- Rust 코어를 UniFFI로 Kotlin에 연결: Gradle 빌드가 에뮬레이터·실차용 `.so`와 Kotlin 바인딩을 자동으로 만듦 (`core-rs/src/ffi.rs`)
 - 개발 환경 세팅 문서: 설치 구성·버전, 환경 변수, Pleos Maven 설정, 빌드 방법, 검증 결과, 수동 단계 (`docs/50_개발환경_세팅.md`)
 - 팀원용 한 번에 설치 스크립트: JDK·Android SDK·NDK·Rust·cargo-ndk 설치·검증, 이미 있으면 건너뜀 (`scripts/setup-dev.ps1`)
 - 에뮬레이터 실행 스크립트: cold boot + RAM 파일 안 만들기 + Virtual Console 포트 연결 (`scripts/emu.ps1`)
