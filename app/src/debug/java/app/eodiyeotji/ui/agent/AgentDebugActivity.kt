@@ -23,7 +23,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
 /**
- * 기억 에이전트 화면만 띄워 보는 디버그 화면 (디버그 빌드에만 있다). 가짜 에이전트(FakeAgentPort)가 답한다.
+ * 기억 에이전트 화면만 띄워 보는 디버그 화면 (디버그 빌드에만 있다). 실제 기억 에이전트(MemoryAgentPort)가 답한다.
  *
  * ```
  * adb shell am start -n app.eodiyeotji/.ui.agent.AgentDebugActivity                 # 처음 화면

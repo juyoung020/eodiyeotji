@@ -55,7 +55,7 @@ class DayLabeler @Inject constructor(
                 if (!online()) continue
                 try {
                     val r = bridge.labelPendingDays(BATCH)
-                    if (r.labeled > 0u || r.serverDown) Log.i(TAG, "하루 라벨링: ${r.labeled}일, 형식 오류 ${r.badOutput}일, 서버 꺼짐=${r.serverDown}")
+                    if (r.labeled > 0u || r.badOutput > 0u || r.serverDown) Log.i(TAG, "하루 라벨링: ${r.labeled}일, 형식 오류 ${r.badOutput}일, 서버 꺼짐=${r.serverDown}")
                     if (r.labeled.toInt() == BATCH) wake.trySend(Unit) // 남은 날은 바로 다음 차례에
                 } catch (e: CancellationException) {
                     throw e

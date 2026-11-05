@@ -97,7 +97,10 @@ private const val PageMs = 220
 
 /** 타임라인 진입점 (정차 중 화면). Rust 코어 상태 줄은 디버그 빌드에서만 머리 구석에 둔다. */
 @Composable
-fun TimelineRoute(viewModel: TimelineViewModel = hiltViewModel()) {
+fun TimelineRoute(
+    headerAction: (@Composable () -> Unit)? = null,
+    viewModel: TimelineViewModel = hiltViewModel(),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     TimelineScreen(
         state = state,
@@ -108,6 +111,7 @@ fun TimelineRoute(viewModel: TimelineViewModel = hiltViewModel()) {
         onEntryClick = viewModel::toggleEntry,
         onMapSelect = viewModel::selectEntry,
         status = if (BuildConfig.DEBUG) DebugStatus else null,
+        headerAction = headerAction,
     )
 }
 

@@ -42,7 +42,12 @@
             android:name=".MainActivity"
             android:launchMode="singleTask"
             android:exported="true"
-            android:resizeableActivity="true">
+            android:resizeableActivity="true"
+            android:windowSoftInputMode="adjustResize">
+            <!-- 주행 중에도 쓰는 화면: 주행 중에는 기억 에이전트 주행 화면(음성 + 큰 카드 1장)만 보인다 (ui/home/HomeScreen.kt) -->
+            <meta-data
+                android:name="distractionOptimized"
+                android:value="true" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

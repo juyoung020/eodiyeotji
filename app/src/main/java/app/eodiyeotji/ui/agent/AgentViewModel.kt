@@ -156,7 +156,16 @@ class AgentViewModel @Inject constructor(
                 updateTurn(id) { t ->
                     val rec = RecommendationUi(event.hit, event.course)
                     val selected = if (first) rec.stops.indexOfFirst { it.name == event.hit.bestStop?.name }.coerceAtLeast(0) else t.selectedStop
-                    t.copy(recommendations = t.recommendations + rec, selectedStop = selected)
+                    // 같은 기억이 다시 오면(빠른 길 → LLM 확인) 새 것으로 바꿔 끼운다 — "다른 날"에 같은 날이 겹치지 않게
+                    val epId = event.hit.episode.facts.id
+                    val at = t.recommendations.indexOfFirst { it.hit.episode.facts.id == epId }
+                    val recs = if (at < 0) {
+                        t.recommendations + rec
+                    } else {
+                        val old = t.recommendations[at]
+                        t.recommendations.toMutableList().also { it[at] = rec.copy(map = old.map, mapLoaded = old.mapLoaded) }
+                    }
+                    t.copy(recommendations = recs, selectedStop = selected)
                 }
                 if (first) loadMap(id, event.hit.episode.facts.day)
             }
