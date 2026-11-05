@@ -75,9 +75,13 @@ cargo ndk -t x86_64 -t arm64-v8a -o ../app/src/main/jniLibs build --release   # 
 ```
 안드로이드 빌드 · 에뮬레이터 실행 방법은 `docs/50_개발환경_세팅.md`를 따른다.
 
+## Git 규칙 (반드시 지킨다)
+1. **작업 시작 전에 항상 `git pull`** 한다. 다른 사람이 올린 변경은 덮어쓰지 않는다.
+2. **큰 작업 단위 하나가 끝나면 커밋 하나로 묶어서 바로 `git push`** 한다. (예: "기획서 2번 항목 작성", "Vehicle SDK 연동"). 파일 하나 고칠 때마다 커밋하지 않고, 여러 작업을 한 커밋에 섞지도 않는다.
+3. **커밋에 Claude(또는 다른 AI)를 기여자로 넣지 않는다.** 커밋 메시지에 `Co-Authored-By: Claude …`, `Generated with Claude Code` 같은 줄을 절대 쓰지 않는다. 작성자는 작업한 팀원 본인만 표시돼야 한다.
+4. 커밋 메시지는 한국어로, 무엇을 왜 바꿨는지 쓴다.
+
 ## 작업 규칙
-- 작업 전 `git pull`, 끝나면 커밋 → `git push`. 다른 사람이 올린 변경은 덮어쓰지 않는다.
-- 커밋 메시지는 한국어로, 무엇을 왜 바꿨는지 쓴다. **`Co-Authored-By` 같은 AI 공동 작성자 줄은 넣지 않는다.**
 - 주목할 만한 변경을 하면 `CHANGELOG.md`의 `[Unreleased]` 아래 알맞은 분류(Added / Changed / Deprecated / Removed / Fixed / Security)에 **한 줄** 추가한다. 작성 규칙은 CHANGELOG.md 상단 주석을 따른다.
 - Rust 로직을 바꾸면 테스트를 같이 추가하고 `cargo test`를 통과시킨다.
 - 요청받은 범위만 고친다. 관련 없는 코드나 문서는 손대지 않는다.
