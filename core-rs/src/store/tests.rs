@@ -265,7 +265,7 @@ fn stay_after_a_trip_that_crosses_midnight_counts_on_the_arrival_day() {
     assert_eq!(days[0].day, "2026-11-05");
     assert_eq!((days[0].trip_count, days[0].stay_count, days[0].first_ms, days[0].last_ms), (0, 1, arrive, arrive));
     let d5 = store.day_detail("2026-11-05".into()).unwrap();
-    assert_eq!(d5.stays, vec![StaySummary { center: GeoPoint { lat, lon }, arrive_ms: arrive, leave_ms: arrive }]);
+    assert_eq!(d5.stays, vec![StaySummary { center: GeoPoint { lat, lon }, arrive_ms: arrive, leave_ms: arrive, place: None }]);
 
     // 아침에 같은 자리에서 출발 → 머문 곳이 00:10~08:30으로 닫힌다
     let leave = kst(2026, 11, 5, 8, 30);
@@ -295,7 +295,7 @@ fn parking_between_trips_is_a_stay() {
     store.ingest(b).unwrap();
     let d = store.day_detail("2026-11-05".into()).unwrap();
     assert_eq!(d.trips.len(), 3);
-    assert_eq!(d.stays, vec![StaySummary { center: GeoPoint { lat, lon }, arrive_ms: a_end, leave_ms: b_start }]);
+    assert_eq!(d.stays, vec![StaySummary { center: GeoPoint { lat, lon }, arrive_ms: a_end, leave_ms: b_start, place: None }]);
     assert_eq!((d.summary.trip_count, d.summary.stay_count), (3, 1));
 }
 
@@ -333,7 +333,7 @@ fn last_arrival_is_an_open_stay_only_after_an_end_signal() {
 
     store.mark_drive_event(DriveEvent::End, end + 2 * SEC).unwrap();
     let d = store.day_detail("2026-11-05".into()).unwrap();
-    assert_eq!(d.stays, vec![StaySummary { center: GeoPoint { lat, lon }, arrive_ms: end, leave_ms: end }]);
+    assert_eq!(d.stays, vec![StaySummary { center: GeoPoint { lat, lon }, arrive_ms: end, leave_ms: end, place: None }]);
 
     // 다음 날 아침 같은 자리에서 출발: 밤새 주차는 도착한 날(11/5)의 머문 곳, 11/6에는 주행만
     let leave = kst(2026, 11, 6, 8, 0);

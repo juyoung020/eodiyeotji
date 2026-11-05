@@ -101,6 +101,9 @@ pub struct TripSummary {
     pub end: GeoPoint,
     /// 지도에 그릴 경로: geo::simplify(허용 오차 5m)로 줄인 점
     pub path: Vec<GeoPoint>,
+    /// 출발·도착 장소 이름 (아직 모르면 None, `places` 모듈)
+    pub start_place: Option<crate::places::PlaceLabel>,
+    pub end_place: Option<crate::places::PlaceLabel>,
 }
 
 /// 머문 곳 하나. `leave_ms == arrive_ms`면 아직 머무는 중(다음 주행이 아직 없음).
@@ -109,6 +112,8 @@ pub struct StaySummary {
     pub center: GeoPoint,
     pub arrive_ms: i64,
     pub leave_ms: i64,
+    /// 장소 이름 (아직 모르면 None, `places` 모듈)
+    pub place: Option<crate::places::PlaceLabel>,
 }
 
 /// 하루 타임라인의 한 칸: 주행 또는 머문 곳.
@@ -452,7 +457,7 @@ fn gp(p: Point) -> GeoPoint {
 }
 
 fn stay_summary(s: &Stay) -> StaySummary {
-    StaySummary { center: gp(s.center), arrive_ms: s.arrive_ms, leave_ms: s.leave_ms }
+    StaySummary { center: gp(s.center), arrive_ms: s.arrive_ms, leave_ms: s.leave_ms, place: None }
 }
 
 /// 하루치 모음 (계산 중간값).
@@ -728,6 +733,8 @@ impl EodiStore {
                     start: gp(t.start),
                     end: gp(t.end),
                     path: std::mem::take(&mut t.path).into_iter().map(gp).collect(),
+                    start_place: None,
+                    end_place: None,
                 });
             }
             let after = match next_start {

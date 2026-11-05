@@ -20,6 +20,11 @@ import app.eodiyeotji.core.rust.DayEntry as RDayEntry
 import app.eodiyeotji.core.rust.DaySummary as RDaySummary
 import app.eodiyeotji.core.rust.GeoPoint as RGeoPoint
 import app.eodiyeotji.core.rust.MapBounds as RMapBounds
+import app.eodiyeotji.core.rust.NaviHintKind as RNaviHintKind
+import app.eodiyeotji.core.rust.NaviPlaceHint as RNaviPlaceHint
+import app.eodiyeotji.core.rust.PlaceLabel as RPlaceLabel
+import app.eodiyeotji.core.rust.PlaceName as RPlaceName
+import app.eodiyeotji.core.rust.PlaceSource as RPlaceSource
 import app.eodiyeotji.core.rust.StaySummary as RStaySummary
 import app.eodiyeotji.core.rust.TripSummary as RTripSummary
 
@@ -93,6 +98,32 @@ class EodiCore @Inject constructor(
         )
     }
 
+    // ---- 장소 이름 (core-rs/src/places.rs) ----
+
+    /** 이름이 필요한 지점 (최신순, 가까운 지점은 Rust가 하나로 묶어 준다). */
+    suspend fun pendingPlaces(limit: Int = 20): List<PlaceQuery> = withContext(Dispatchers.IO) {
+        store.pendingPlaces(limit.toUInt()).map { PlaceQuery(it.id, it.lat, it.lon, it.isStay) }
+    }
+
+    /** 찾은 이름 저장. 더 높은 출처(Navi > Kakao > Osm) 이름이 이미 있으면 Rust가 무시한다. */
+    suspend fun setPlaceName(id: Long, label: PlaceLabel) = withContext(Dispatchers.IO) {
+        store.setPlaceName(RPlaceName(id, label.toRust()))
+        _changes.tryEmit(Unit)
+    }
+
+    /** 이름을 못 찾음 (네트워크 없음·결과 없음). [retryAfterMs] 뒤에 다시 pendingPlaces에 나온다. */
+    suspend fun markPlaceUnresolved(id: Long, retryAfterMs: Long) = withContext(Dispatchers.IO) {
+        store.markPlaceUnresolved(id, retryAfterMs)
+    }
+
+    /** 차량 내비 목적지·경유지 힌트. Rust가 가까운 머문 곳·도착 지점의 이름으로 쓴다 (출처 Navi). */
+    suspend fun addNaviHint(hint: NaviHint) = withContext(Dispatchers.IO) {
+        store.addNaviHint(
+            RNaviPlaceHint(hint.name, hint.lat, hint.lon, hint.tMs, if (hint.isWaypoint) RNaviHintKind.WAYPOINT else RNaviHintKind.DESTINATION, hint.address)
+        )
+        _changes.tryEmit(Unit)
+    }
+
     suspend fun fixCount(): Long = withContext(Dispatchers.IO) { store.fixCount().toLong() }
 }
 
@@ -126,10 +157,32 @@ data class TripSummary(
     val start: LatLon,
     val end: LatLon,
     val path: List<LatLon>,
+    /** 출발·도착 장소 이름 (아직 모르면 null) */
+    val startPlace: PlaceLabel? = null,
+    val endPlace: PlaceLabel? = null,
 )
 
-/** 머문 곳. 하루 마지막 도착지처럼 아직 떠나지 않았으면 leaveMs == arriveMs ([isOpen]). */
-data class StaySummary(val center: LatLon, val arriveMs: Long, val leaveMs: Long) {
+/** 장소 이름 출처. 우선순위 NAVI > KAKAO > OSM. */
+enum class PlaceSource { NAVI, KAKAO, OSM }
+
+/** 화면·지도에 붙는 장소 이름. category·address는 모르면 빈 문자열. */
+data class PlaceLabel(val name: String, val category: String, val address: String, val source: PlaceSource)
+
+/** 이름이 필요한 지점. [id]는 답할 때 그대로 돌려준다. [isStay]면 가게·건물 이름을 우선 찾는다. */
+data class PlaceQuery(val id: Long, val lat: Double, val lon: Double, val isStay: Boolean)
+
+/** 차량 내비 목적지·경유지 힌트. */
+data class NaviHint(
+    val name: String,
+    val lat: Double,
+    val lon: Double,
+    val tMs: Long,
+    val isWaypoint: Boolean,
+    val address: String = "",
+)
+
+/** 머문 곳. 하루 마지막 도착지처럼 아직 떠나지 않았으면 leaveMs == arriveMs ([isOpen]). [place]는 아직 모르면 null. */
+data class StaySummary(val center: LatLon, val arriveMs: Long, val leaveMs: Long, val place: PlaceLabel? = null) {
     val isOpen: Boolean get() = leaveMs == arriveMs
 }
 
@@ -176,10 +229,30 @@ private fun RDaySummary.toModel() = DaySummary(
     lastMs = lastMs,
 )
 
-private fun RTripSummary.toModel() =
-    TripSummary(startMs, endMs, distanceM, start.toModel(), end.toModel(), path.map { it.toModel() })
+private fun RTripSummary.toModel() = TripSummary(
+    startMs, endMs, distanceM, start.toModel(), end.toModel(), path.map { it.toModel() },
+    startPlace?.toModel(), endPlace?.toModel(),
+)
 
-private fun RStaySummary.toModel() = StaySummary(center.toModel(), arriveMs, leaveMs)
+private fun RStaySummary.toModel() = StaySummary(center.toModel(), arriveMs, leaveMs, place?.toModel())
+
+private fun RPlaceLabel.toModel() = PlaceLabel(
+    name, category, address,
+    when (source) {
+        RPlaceSource.NAVI -> PlaceSource.NAVI
+        RPlaceSource.KAKAO -> PlaceSource.KAKAO
+        RPlaceSource.OSM -> PlaceSource.OSM
+    },
+)
+
+private fun PlaceLabel.toRust() = RPlaceLabel(
+    name, category, address,
+    when (source) {
+        PlaceSource.NAVI -> RPlaceSource.NAVI
+        PlaceSource.KAKAO -> RPlaceSource.KAKAO
+        PlaceSource.OSM -> RPlaceSource.OSM
+    },
+)
 
 private fun RDayDetail.toModel() = DayDetail(
     day = day,

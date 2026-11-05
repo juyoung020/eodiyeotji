@@ -6,6 +6,8 @@
 //! # GeoJSON 형식 (FeatureCollection)
 //! - 주행: `LineString`, properties `{"kind":"trip","key":"t<start_ms>","start_ms":..,"end_ms":..,"distance_m":..}`
 //! - 머문 곳: `Point`, properties `{"kind":"stay","key":"s<arrive_ms>","arrive_ms":..,"leave_ms":..,"open":true|false}`
+//! - 장소 이름(계약, 구현 예정): 머문 곳 properties에 `"name"`(문자열, 모르면 없음)·`"order"`(그날 머문 곳 순서 1부터),
+//!   주행 properties에 `"from"`·`"to"`(출발·도착 이름, 모르면 없음). 지도가 핀 옆에 이름·순서를 띄운다.
 //! - `key`는 앱의 타임라인 항목 키와 같다 → 항목을 누르면 지도에서 `key`로 골라 강조한다.
 //! - 좌표는 GeoJSON 규칙대로 `[경도, 위도]`, 소수 6자리(약 0.1m).
 
@@ -184,8 +186,10 @@ mod tests {
             start: p(37.5, 127.0),
             end: p(37.6, 127.1),
             path: vec![p(37.5, 127.0), p(37.55, 127.02), p(37.6, 127.1)],
+            start_place: None,
+            end_place: None,
         };
-        let stay = StaySummary { center: p(37.6, 127.1), arrive_ms: 5000, leave_ms: 5000 };
+        let stay = StaySummary { center: p(37.6, 127.1), arrive_ms: 5000, leave_ms: 5000, place: None };
         let m = day_map(&detail(vec![trip], vec![stay]));
         assert!(m.geojson.contains(r#""coordinates":[[127.000000,37.500000],[127.020000,37.550000],[127.100000,37.600000]]"#));
         assert!(m.geojson.contains(r#""kind":"trip","key":"t1000","start_ms":1000,"end_ms":5000,"distance_m":1234.6"#));
@@ -211,6 +215,8 @@ mod tests {
             start: p(37.0, 127.0),
             end: p(37.0, 127.0),
             path: vec![p(37.0, 127.0)],
+            start_place: None,
+            end_place: None,
         };
         let m = day_map(&detail(vec![trip], vec![]));
         assert!(m.geojson.contains(r#""coordinates":[[127.000000,37.000000],[127.000000,37.000000]]"#));
@@ -219,7 +225,16 @@ mod tests {
     #[test]
     fn a_day_of_ten_thousand_simplified_points_is_fast() {
         let path: Vec<GeoPoint> = (0..10_000).map(|i| p(37.0 + i as f64 * 1e-5, 127.0 + (i % 7) as f64 * 1e-5)).collect();
-        let trip = TripSummary { start_ms: 0, end_ms: 1, distance_m: 0.0, start: path[0], end: path[9_999], path };
+        let trip = TripSummary {
+            start_ms: 0,
+            end_ms: 1,
+            distance_m: 0.0,
+            start: path[0],
+            end: path[9_999],
+            path,
+            start_place: None,
+            end_place: None,
+        };
         let t = std::time::Instant::now();
         let m = day_map(&detail(vec![trip], vec![]));
         let ms = t.elapsed().as_secs_f64() * 1000.0;
