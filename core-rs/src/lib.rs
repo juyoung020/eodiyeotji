@@ -9,6 +9,7 @@ pub mod course;
 pub mod ffi;
 pub mod geo;
 pub mod mapdata;
+pub mod memory;
 pub mod places;
 pub mod store;
 pub mod trip;
