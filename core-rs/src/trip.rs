@@ -19,6 +19,8 @@ pub struct TripConfig {
     pub park_radius_m: f64,
     /// 이보다 빠르게 움직인 것처럼 보이는 점은 GPS 점프로 본다 (초속 70m = 시속 252km).
     pub max_speed_mps: f64,
+    /// 이보다 짧게 움직인 주행은 화면에 주행으로 보이지 않는다 (주차 중 GPS 흔들림, 주차장 안 자리 옮기기) → [`group_trips`].
+    pub min_trip_m: f64,
 }
 
 impl Default for TripConfig {
@@ -29,6 +31,7 @@ impl Default for TripConfig {
             stay_min_ms: 10 * 60_000,
             park_radius_m: 300.0,
             max_speed_mps: 70.0,
+            min_trip_m: 300.0,
         }
     }
 }
@@ -201,6 +204,13 @@ pub fn detect_stays(fixes: &[Fix], cfg: &TripConfig) -> Vec<Stay> {
     out
 }
 
+/// 화면에 주행으로 보일 주행 번호(시간순 그대로). 움직인 거리가 `min_trip_m` 미만인 잡음 주행은 뺀다
+/// (주차 중 GPS 흔들림으로 생긴 "A → A · 0m · 1분 미만", 주차장 안 자리 옮기기).
+/// 빠진 주행 앞뒤 주행은 그대로 이웃하므로, 그 사이 주차는 [`between_stay`]가 한 번에 머문 곳으로 잡는다.
+pub fn real_trips(distances_m: &[f64], cfg: &TripConfig) -> Vec<usize> {
+    distances_m.iter().enumerate().filter(|(_, d)| **d >= cfg.min_trip_m).map(|(i, _)| i).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -341,4 +351,13 @@ mod tests {
         fixes.extend(driving(8, 5, 37.06));
         assert!(detect_stays(&fixes, &TripConfig::default()).is_empty());
     }
+
+    #[test]
+    fn real_trips_drop_parked_jitter() {
+        let cfg = TripConfig::default();
+        // 11km 주행, 0m 흔들림, 55m 자리 옮기기, 300m 딱 기준, 11km 주행
+        assert_eq!(real_trips(&[11_000.0, 0.0, 55.0, 300.0, 11_000.0], &cfg), vec![0, 3, 4]);
+        assert!(real_trips(&[], &cfg).is_empty());
+    }
+
 }

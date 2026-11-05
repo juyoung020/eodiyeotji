@@ -87,6 +87,10 @@ suspend fun EodiCore.lastKnownPosition(): LatLon? = withContext(Dispatchers.IO) 
 suspend fun EodiCore.shareCandidates(limit: Int = 30): List<SharePreview> =
     withContext(Dispatchers.IO) { rust.shareCandidates(limit.toUInt()).map { it.toModel() } }
 
+/** 그날 코스로 올릴 수 있는 나들이·여행 (타임라인 하루 상세의 "커뮤니티에 올리기"). */
+suspend fun EodiCore.shareCandidatesOn(day: String): List<SharePreview> =
+    withContext(Dispatchers.IO) { rust.shareCandidatesOn(day).map { it.toModel() } }
+
 suspend fun EodiCore.sharePreview(episodeId: Long): SharePreview = withContext(Dispatchers.IO) { rust.sharePreview(episodeId).toModel() }
 
 /** 코스 올리기. [excludedArriveMs] = 미리보기에서 체크를 푼 곳의 도착 시각. 날씨는 [weatherFor]로 미리 받아 넘긴다. */

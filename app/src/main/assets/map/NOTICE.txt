@@ -2,7 +2,9 @@
 
 지도 데이터: © OpenStreetMap contributors, Open Database License (ODbL) 1.0 — https://www.openstreetmap.org/copyright
 지도 타일 · 스타일: Protomaps basemap (https://github.com/protomaps/basemaps) — 코드 BSD-3-Clause, 디자인 CC0 (LICENSE-protomaps-basemaps.md)
+온라인 밑그림 (지도 파일 밖 지역, online-underlay.json): OpenFreeMap (https://openfreemap.org) 벡터 타일 — 키·가입 없이 무료,
+  스키마 © OpenMapTiles (https://openmaptiles.org, CC-BY 4.0), 데이터 © OpenStreetMap contributors (ODbL 1.0)
 글꼴: Noto Sans © The Noto Project Authors — SIL Open Font License 1.1 (fonts/OFL.txt)
 아이콘: protomaps/basemaps-assets 스프라이트, Mapzen tangrams/icons 파생 — MIT (sprites/LICENSE-tangrams-icons.md)
 
-앱 화면에 표시할 문구: © OpenStreetMap contributors · Protomaps
+앱 화면에 표시할 문구: © OpenStreetMap contributors · Protomaps (온라인 밑그림을 쓸 때 · OpenMapTiles · OpenFreeMap 추가)

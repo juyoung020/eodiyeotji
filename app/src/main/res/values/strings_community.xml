@@ -38,11 +38,15 @@
     <string name="course_empty">아직 올라온 코스가 없어요</string>
     <string name="course_empty_near">근처 %1$dkm 안에는 아직 코스가 없어요</string>
     <string name="course_navigate">이 코스로 안내</string>
-    <string name="course_navigate_next">다음 구간 안내 (%1$d/%2$d)</string>
-    <string name="course_navi_sent">내비에 %1$d/%2$d 구간을 보냈어요</string>
+    <string name="course_navigate_next">다음 구간 바로 안내 (%1$d/%2$d)</string>
+    <string name="course_navigate_again">마지막 구간 다시 안내</string>
+    <string name="course_navi_auto">%1$d/%2$d 구간 안내 중 · 도착하면 다음 구간으로 자동으로 넘어가요</string>
+    <string name="course_navi_legs_hint">%1$d구간 코스 · 도착하면 다음 구간을 자동으로 이어서 안내해요</string>
+    <string name="course_back_to_list">코스 목록</string>
     <string name="course_navi_failed">내비에 보내지 못했어요</string>
     <string name="course_stops_title">들르는 곳</string>
     <string name="course_share_from_record">내 기록에서 올리기</string>
+    <string name="course_share_short">올리기</string>
     <string name="course_shared_done">코스를 올렸어요</string>
 
     <!-- 내 기록에서 올리기 (ShareCourseSheet) -->
@@ -88,4 +92,7 @@
     <string name="review_empty">리뷰가 없어요</string>
     <string name="review_place_title">%1$s 리뷰</string>
     <string name="review_posted">리뷰를 올렸어요</string>
+    <string name="review_navigate_here">여기로 안내</string>
+    <string name="review_write_here">이곳 리뷰 쓰기</string>
+    <string name="review_navi_sent">내비에 보냈어요</string>
 </resources>

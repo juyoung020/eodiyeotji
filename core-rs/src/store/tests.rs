@@ -749,3 +749,64 @@ fn fixes_after_end_signal_are_parked_not_a_trip() {
     assert_eq!(d.trips.len(), 2);
     assert_eq!(d.stays.len(), 1, "주차 30분 = 머문 곳 하나");
 }
+
+/// 주차 중 GPS 흔들림 (같은 자리에서 1초 간격 n개, ±1m 안).
+fn jitter(t0: i64, n: i64, lat: f64, lon: f64) -> Vec<GeoFix> {
+    (0..n).map(|i| gf(lat + (i % 3) as f64 * 1e-5, lon, t0 + i * SEC)).collect()
+}
+
+#[test]
+fn parked_jitter_is_not_a_trip_and_parking_stays_one_stay() {
+    let db = TempDb::new("jitter");
+    let store = db.open(KST);
+    let t0 = kst(2026, 11, 5, 9, 0);
+    let a = drive(t0, 600, 37.5, 127.0);
+    let (lat, lon) = last_point(&a);
+    let arrive = a.last().unwrap().t_ms;
+    let wiggle = jitter(arrive + 20 * MIN, 30, lat, lon); // 주차 20분 뒤 잠깐 켠 사이 흔들림 → "A → A · 0m"
+    let leave = arrive + 60 * MIN;
+    let b = drive(leave, 600, lat, lon);
+    store.ingest(a).unwrap();
+    store.ingest(wiggle).unwrap();
+    store.ingest(b).unwrap();
+
+    let d = store.day_detail("2026-11-05".into()).unwrap();
+    assert_eq!(d.trips.iter().map(|t| t.start_ms).collect::<Vec<_>>(), vec![t0, leave], "흔들림은 주행이 아니다");
+    assert_eq!(d.stays.iter().map(|s| (s.arrive_ms, s.leave_ms)).collect::<Vec<_>>(), vec![(arrive, leave)], "주차는 한 번");
+    assert_eq!(d.summary.trip_count, 2);
+    assert_eq!(store.day_summaries(10).unwrap()[0].trip_count, 2, "목록 요약도 같은 수");
+}
+
+#[test]
+fn trailing_jitter_means_still_parked_here() {
+    let db = TempDb::new("jitter-now");
+    let store = db.open(KST);
+    let t0 = kst(2026, 11, 5, 9, 0);
+    let a = drive(t0, 600, 37.5, 127.0);
+    let (lat, lon) = last_point(&a);
+    let arrive = a.last().unwrap().t_ms;
+    store.ingest(a).unwrap();
+    store.ingest(jitter(arrive + 20 * MIN, 30, lat, lon)).unwrap();
+
+    let d = store.day_detail("2026-11-05".into()).unwrap();
+    assert_eq!(d.trips.len(), 1);
+    assert_eq!(d.stays.iter().map(|s| (s.arrive_ms, s.leave_ms)).collect::<Vec<_>>(), vec![(arrive, arrive)], "지금 머무는 중");
+}
+
+#[test]
+fn old_day_summaries_are_rebuilt_when_day_rules_change() {
+    let db = TempDb::new("rules");
+    let store = db.open(KST);
+    let t0 = kst(2026, 11, 5, 9, 0);
+    store.ingest(drive(t0, 600, 37.5, 127.0)).unwrap();
+    assert_eq!(store.day_summaries(10).unwrap()[0].trip_count, 1);
+    {
+        // 이전 규칙으로 만든 요약인 척 (잡음 주행까지 센 수)
+        let c = store.lock().unwrap();
+        c.execute("UPDATE day_summary SET trip_count = 6", []).unwrap();
+        c.execute("UPDATE meta SET value = 1 WHERE key = 'day_rules'", []).unwrap();
+    }
+    drop(store);
+    let store = db.open(KST);
+    assert_eq!(store.day_summaries(10).unwrap()[0].trip_count, 1, "다시 열면 새 규칙으로 다시 만든다");
+}

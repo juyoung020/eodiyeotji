@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -60,22 +59,37 @@ enum class HomeTab { TIMELINE, COMMUNITY }
  * - 주행 중: 레일·타임라인·커뮤니티(긴 목록·피드)를 모두 감추고 기억 에이전트 주행 화면(음성 + 큰 카드 1장)만 보인다.
  */
 @Composable
-fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel()) {
+fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: CourseGuideViewModel = hiltViewModel()) {
+    // 코스 안내 이어 가기(CourseGuide)는 주행 중에도 살아 있어야 한다 → 화면 갈래와 상관없이 여기서 만든다
+    // (운전 중 "응, 안내해 줘"로 시작한 에이전트 코스도 도착하면 다음 구간으로 이어진다)
     val agentState by agentViewModel.state.collectAsStateWithLifecycle()
     var agentOpen by rememberSaveable { mutableStateOf(false) }
     var tab by rememberSaveable { mutableStateOf(HomeTab.TIMELINE) }
     Box(Modifier.fillMaxSize()) {
         if (agentState.isDriving) {
-            AgentPanel(onClose = null, viewModel = agentViewModel)
+            Column(Modifier.fillMaxSize()) {
+                Box(Modifier.weight(1f).fillMaxWidth()) { AgentPanel(onClose = null, viewModel = agentViewModel) }
+                // 주행 중에는 버튼 없이 진행 상황 한 줄만 (몇 번째 구간 · 다음 들를 곳)
+                CourseGuideBanner(
+                    Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 20.dp),
+                    viewModel = guideViewModel,
+                    interactive = false,
+                )
+            }
         } else {
-            val entry: @Composable () -> Unit = { AgentEntryButton(onClick = { agentOpen = true }, Modifier.widthIn(max = 420.dp)) }
+            val entry: @Composable () -> Unit = { AgentEntryButton(onClick = { agentOpen = true }) }
             Row(Modifier.fillMaxSize().background(EodiTheme.colors.background)) {
                 NavRail(tab, onSelect = { tab = it })
-                Box(Modifier.weight(1f).fillMaxHeight()) {
-                    when (tab) {
-                        HomeTab.TIMELINE -> TimelineRoute(headerAction = entry)
-                        HomeTab.COMMUNITY -> CommunityRoute(headerAction = entry)
+                Column(Modifier.weight(1f).fillMaxHeight()) {
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        when (tab) {
+                            HomeTab.TIMELINE -> TimelineRoute(headerAction = entry)
+                            HomeTab.COMMUNITY -> CommunityRoute(headerAction = entry)
+                        }
                     }
+                    // 코스 안내 중이면 어느 탭에서든 맨 아래에 진행 카드 (내비에서 돌아왔을 때 몇 번째 구간인지 바로 보이게).
+                    // 화면을 덮지 않고 그만큼 위 내용이 줄어든다.
+                    CourseGuideBanner(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 20.dp), viewModel = guideViewModel)
                 }
             }
             if (agentOpen) AgentPanel(onClose = { agentOpen = false; agentViewModel.clear() }, viewModel = agentViewModel) // 닫으면 대화를 비워 다음엔 새 질문부터

@@ -8,4 +8,16 @@
     <string name="core_simplify">하루 경로 %1$s점 → %2$s점</string>
     <string name="core_elapsed">단순화 %1$s ms (목표 16 ms 이내)</string>
     <string name="core_recheck">다시 측정</string>
+
+    <!-- 코스 안내 중 알림 카드 (CourseGuideBanner) -->
+    <string name="guide_title">코스 안내 중 · %1$d/%2$d 구간</string>
+    <string name="guide_next_stop">다음: %1$s</string>
+    <string name="guide_next_leg">그다음 구간: %1$s</string>
+    <string name="guide_last_leg">마지막 구간</string>
+    <string name="guide_failed">내비에 보내지 못했어요</string>
+    <string name="guide_finished">코스 안내를 마쳤어요</string>
+    <string name="guide_skip">다음 구간</string>
+    <string name="guide_retry">다시 보내기</string>
+    <string name="guide_stop">끝내기</string>
+    <string name="guide_close">닫기</string>
 </resources>

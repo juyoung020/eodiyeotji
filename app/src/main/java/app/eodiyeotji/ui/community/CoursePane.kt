@@ -1,5 +1,7 @@
 package app.eodiyeotji.ui.community
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -49,6 +51,7 @@ import app.eodiyeotji.R
 import app.eodiyeotji.core.CommunitySort
 import app.eodiyeotji.core.DriveCourse
 import app.eodiyeotji.core.StopFact
+import app.eodiyeotji.pleos.CourseProgress
 import app.eodiyeotji.ui.map.DayMap
 import app.eodiyeotji.ui.map.MapPhotoPin
 import app.eodiyeotji.ui.theme.EodiIcons
@@ -56,6 +59,9 @@ import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.timeline.distanceText
 import app.eodiyeotji.ui.timeline.durationText
 import kotlinx.coroutines.delay
+
+/** 도구 줄이 이보다 좁으면 버튼 이름을 짧게 쓴다. */
+internal val CompactToolbar = 900.dp
 
 /** 이 폭 이상이면 상세를 지도 | 정보 두 칸으로 나눈다. */
 private val WideDetail = 1100.dp
@@ -100,7 +106,14 @@ fun CoursePane(viewModel: CourseViewModel = hiltViewModel()) {
         }
         state.detail?.let { d ->
             BackHandler(onBack = viewModel::closeDetail)
-            CourseDetailScreen(d, onBack = viewModel::closeDetail, onHeart = { viewModel.toggleHeart(d.course.post.id) }, onNavigate = viewModel::navigate)
+            val progress by viewModel.progress.collectAsStateWithLifecycle()
+            CourseDetailScreen(
+                d,
+                progress = progress?.takeIf { it.courseId == d.course.post.id && !it.finished },
+                onBack = viewModel::closeDetail,
+                onHeart = { viewModel.toggleHeart(d.course.post.id) },
+                onNavigate = viewModel::navigate,
+            )
         }
         if (picking) {
             BackHandler { picking = false }
@@ -125,15 +138,25 @@ fun CoursePane(viewModel: CourseViewModel = hiltViewModel()) {
 
 @Composable
 private fun CourseToolbar(sort: CommunitySort, nearOn: Boolean, onSort: (CommunitySort) -> Unit, onNear: () -> Unit, onShare: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = 8.dp, bottom = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        SortChoice(sort, onSort)
-        TogglePill(stringResource(R.string.community_near_me, 30), nearOn, onNear)
-        Spacer(Modifier.weight(1f))
-        PrimaryPill(stringResource(R.string.course_share_from_record), CommunityIcons.Upload, onShare)
+    // 좁은 창: 버튼 이름을 줄이고, 정렬·근처는 옆으로 밀어 볼 수 있게 한다 (버튼 글자가 잘리지 않게 버튼이 먼저 자리를 받는다)
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = 8.dp, bottom = 16.dp)) {
+        val compact = maxWidth < CompactToolbar
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                SortChoice(sort, onSort)
+                TogglePill(stringResource(R.string.community_near_me, 30), nearOn, onNear)
+            }
+            Spacer(Modifier.width(16.dp))
+            PrimaryPill(
+                stringResource(if (compact) R.string.course_share_short else R.string.course_share_from_record),
+                CommunityIcons.Upload,
+                onShare,
+            )
+        }
     }
 }
 
@@ -262,7 +285,7 @@ fun OrderDot(order: Int, modifier: Modifier = Modifier) {
 /** 코스 상세: 지도(들르는 곳 핀·사진) + 제목·작성자·다녀온 날·소개·태그·들르는 곳 목록 + 하트·이 코스로 안내. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun CourseDetailScreen(d: CourseDetail, onBack: () -> Unit, onHeart: () -> Unit, onNavigate: () -> Unit) {
+private fun CourseDetailScreen(d: CourseDetail, progress: CourseProgress?, onBack: () -> Unit, onHeart: () -> Unit, onNavigate: () -> Unit) {
     val colors = EodiTheme.colors
     val p = d.course.post
     var selectedKey by remember(p.id) { mutableStateOf<String?>(null) }
@@ -311,23 +334,27 @@ private fun CourseDetailScreen(d: CourseDetail, onBack: () -> Unit, onHeart: () 
                             StopRow(i + 1, s, selected = selectedKey == "s${i + 1}", onClick = { selectedKey = if (selectedKey == "s${i + 1}") null else "s${i + 1}" })
                         }
                     }
+                    val total = d.legs.size
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         HeartButton(p.hearts, p.heartedByMe, onHeart)
-                        val total = d.legs.size
                         val label = when {
-                            d.sentLegs in 1 until total -> stringResource(R.string.course_navigate_next, d.sentLegs + 1, total)
-                            else -> stringResource(R.string.course_navigate)
+                            progress == null -> stringResource(R.string.course_navigate)
+                            progress.hasNextLeg -> stringResource(R.string.course_navigate_next, progress.leg + 1, progress.total)
+                            else -> stringResource(R.string.course_navigate_again)
                         }
                         PrimaryPill(label, EodiIcons.Navi, onNavigate, Modifier.weight(1f), enabled = total > 0)
                     }
-                    d.notice?.let { n ->
+                    val hint = when {
+                        d.naviFailed -> stringResource(R.string.course_navi_failed)
+                        progress != null -> stringResource(R.string.course_navi_auto, progress.leg, progress.total)
+                        total > 1 -> stringResource(R.string.course_navi_legs_hint, total)
+                        else -> null
+                    }
+                    if (hint != null) {
                         Text(
-                            when (n) {
-                                is NaviNotice.Sent -> stringResource(R.string.course_navi_sent, n.leg, n.total)
-                                NaviNotice.Failed -> stringResource(R.string.course_navi_failed)
-                            },
+                            hint,
                             style = EodiTheme.type.caption,
-                            color = if (n is NaviNotice.Failed) colors.error else colors.textSecondary,
+                            color = if (d.naviFailed) colors.error else colors.textSecondary,
                             modifier = Modifier.padding(top = 8.dp, start = 8.dp),
                         )
                     }
@@ -335,7 +362,7 @@ private fun CourseDetailScreen(d: CourseDetail, onBack: () -> Unit, onHeart: () 
             }
             Column(Modifier.fillMaxSize()) {
                 Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    RoundIconButton(EodiIcons.Back, stringResource(R.string.community_back), onBack)
+                    SecondaryPill(stringResource(R.string.course_back_to_list), EodiIcons.Back, onBack)
                 }
                 if (wide) {
                     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {

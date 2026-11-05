@@ -8,6 +8,7 @@ import app.eodiyeotji.core.DayMapData
 import app.eodiyeotji.core.DaySummary
 import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.DayEntry
+import app.eodiyeotji.core.shareCandidatesOn
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.LocalDate
 import javax.inject.Inject
@@ -49,8 +50,16 @@ internal val DayEntry.key: String
 sealed interface DetailState {
     data object None : DetailState
     data class Loading(val summary: DaySummary) : DetailState
-    /** [map]은 그날 지도 데이터. 지도만 못 읽었으면 null이고 목록은 그대로 보인다. */
-    data class Loaded(val summary: DaySummary, val entries: List<DayEntry>, val map: DayMapData? = null) : DetailState
+    /**
+     * [map]은 그날 지도 데이터. 지도만 못 읽었으면 null이고 목록은 그대로 보인다.
+     * [shareEpisode]: 그날 커뮤니티에 코스로 올릴 수 있는 기록(나들이·여행)이 있으면 그 id → 상세에 "커뮤니티에 올리기".
+     */
+    data class Loaded(
+        val summary: DaySummary,
+        val entries: List<DayEntry>,
+        val map: DayMapData? = null,
+        val shareEpisode: Long? = null,
+    ) : DetailState
     data class Failed(val summary: DaySummary, val message: String) : DetailState
 }
 
@@ -173,7 +182,7 @@ class TimelineViewModel @Inject constructor(
     private suspend fun loadDetail(s: DaySummary): DetailState = try {
         // 주행·머문 곳은 Rust가 시간순으로 섞어서 준다 (Kotlin에서 정렬하지 않는다).
         val d = core.dayDetail(s.day)
-        DetailState.Loaded(d.summary, d.entries, loadMap(s.day))
+        DetailState.Loaded(d.summary, d.entries, loadMap(s.day), loadShareEpisode(s.day))
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
@@ -187,6 +196,16 @@ class TimelineViewModel @Inject constructor(
         throw e
     } catch (e: Exception) {
         Log.w(TAG, "지도 데이터 불러오기 실패 ($day)", e)
+        null
+    }
+
+    /** 그날 올릴 수 있는 기록 (없거나 못 읽으면 null → 버튼을 숨긴다). */
+    private suspend fun loadShareEpisode(day: String): Long? = try {
+        core.shareCandidatesOn(day).firstOrNull()?.episodeId
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w(TAG, "올릴 기록 찾기 실패 ($day)", e)
         null
     }
 

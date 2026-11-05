@@ -144,8 +144,15 @@ private fun DayMapContent(
             mapView = mapView,
             density = density,
             onSelectKey = { currentOnSelect(it) },
-            // 오프라인 스타일이 깨져 있어도 앱은 멈추지 않는다 → 바탕색 스타일로 바꾸고 안내만 띄운다
-            onStyleFailed = { if (style is MapStyleSpec.Offline) style = MapStyleSpec.Fallback },
+            // 불러오기에 실패해도 앱은 멈추지 않는다: 온라인 밑그림(네트워크) 탓이면 오프라인만으로,
+            // 오프라인 스타일이 깨졌으면 바탕색 스타일로 바꾸고 안내만 띄운다
+            onStyleFailed = {
+                when (val s = style) {
+                    is MapStyleSpec.Offline -> style = s.offlineOnly?.let { MapStyleSpec.Offline(it) } ?: MapStyleSpec.Fallback
+                    is MapStyleSpec.Online -> style = MapStyleSpec.Fallback
+                    else -> Unit
+                }
+            },
         )
     }
 
@@ -157,6 +164,7 @@ private fun DayMapContent(
         when (val s = style) {
             null -> Unit
             is MapStyleSpec.Offline -> controller.setStyle(s.json)
+            is MapStyleSpec.Online -> controller.setStyle(s.json)
             MapStyleSpec.Fallback -> controller.setStyle(MapStyleSource.fallbackJson(backgroundArgb))
         }
     }
@@ -183,14 +191,16 @@ private fun DayMapContent(
 
     Box(modifier) {
         AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
-        when (style) {
+        when (val s = style) {
             MapStyleSpec.Fallback -> MapNotice(
                 stringResource(R.string.map_offline_missing),
                 Modifier.align(Alignment.TopStart).padding(16.dp),
             )
-            // 지도 데이터 출처 표시 (OSM 라이선스). 지도 파일을 쓸 때 항상 보인다.
-            is MapStyleSpec.Offline -> MapNotice(
-                stringResource(R.string.map_attribution),
+            // 지도 데이터 출처 표시 (OSM·OpenFreeMap 라이선스). 지도를 그릴 때 항상 보인다.
+            is MapStyleSpec.Offline, is MapStyleSpec.Online -> MapNotice(
+                stringResource(
+                    if (s is MapStyleSpec.Offline && s.offlineOnly == null) R.string.map_attribution else R.string.map_attribution_online,
+                ),
                 Modifier.align(Alignment.BottomEnd).padding(12.dp),
                 small = true,
             )

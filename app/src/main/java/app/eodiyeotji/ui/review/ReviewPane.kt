@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.review
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -87,18 +88,24 @@ fun ReviewPane(viewModel: ReviewViewModel = hiltViewModel()) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                ChoiceRow(
-                    options = listOf(
-                        ReviewMode.PLACES to stringResource(R.string.review_popular_places),
-                        ReviewMode.FEED to stringResource(R.string.review_feed),
-                    ),
-                    selected = state.mode,
-                    onSelect = viewModel::setMode,
-                )
-                if (state.mode == ReviewMode.FEED) SortChoice(state.sort, viewModel::setSort)
-                TogglePill(stringResource(R.string.community_near_me, 30), state.nearOn, viewModel::toggleNear)
-                Spacer(Modifier.weight(1f))
-                PrimaryPill(stringResource(R.string.review_write), CommunityIcons.Pen, viewModel::startDraft)
+                // 좁은 창: 왼쪽 선택들은 옆으로 밀어 볼 수 있고, "리뷰 쓰기"는 항상 다 보인다
+                Row(
+                    Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    ChoiceRow(
+                        options = listOf(
+                            ReviewMode.PLACES to stringResource(R.string.review_popular_places),
+                            ReviewMode.FEED to stringResource(R.string.review_feed),
+                        ),
+                        selected = state.mode,
+                        onSelect = viewModel::setMode,
+                    )
+                    if (state.mode == ReviewMode.FEED) SortChoice(state.sort, viewModel::setSort)
+                    TogglePill(stringResource(R.string.community_near_me, 30), state.nearOn, viewModel::toggleNear)
+                }
+                PrimaryPill(stringResource(R.string.review_write), CommunityIcons.Pen, { viewModel.startDraft() })
             }
             if (state.nearOn && !state.nearKnown) {
                 Text(
@@ -115,7 +122,13 @@ fun ReviewPane(viewModel: ReviewViewModel = hiltViewModel()) {
         }
         state.placeReviews?.let { pr ->
             BackHandler(onBack = viewModel::closePlace)
-            PlaceReviewsSheet(pr, onClose = viewModel::closePlace, onHeart = viewModel::toggleHeart)
+            PlaceReviewsSheet(
+                pr,
+                onClose = viewModel::closePlace,
+                onHeart = viewModel::toggleHeart,
+                onNavigate = viewModel::navigateToPlace,
+                onWrite = viewModel::writeForPlace,
+            )
         }
         state.draft?.let { d ->
             BackHandler(onBack = viewModel::closeDraft)
@@ -222,30 +235,44 @@ private fun ReviewGrid(reviews: List<TravelReview>, onHeart: (String) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        items(reviews, key = { it.review.id }, contentType = { "review" }) { r -> ReviewCard(r) { onHeart(r.review.id) } }
+        items(reviews, key = { it.review.id }, contentType = { "review" }) { r -> ReviewCard(r, onHeart = { onHeart(r.review.id) }) }
     }
 }
 
 @Composable
-private fun ReviewCard(t: TravelReview, onHeart: () -> Unit) {
+private fun ReviewCard(t: TravelReview, onHeart: () -> Unit, showPlace: Boolean = true) {
     val c = EodiTheme.colors
     val r = t.review
-    Surface(color = c.surface, shape = RoundedCornerShape(EodiTheme.space.radiusL), modifier = Modifier.fillMaxWidth()) {
+    Surface(
+        color = if (showPlace) c.surface else c.surfaceHigh,
+        shape = RoundedCornerShape(EodiTheme.space.radiusL),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         Row(Modifier.padding(18.dp)) {
-            StopPhoto(r.place.name, r.place.address, r.place.lat, r.place.lon, order = null, size = 148.dp)
-            Spacer(Modifier.width(20.dp))
+            // 한 장소의 리뷰 모음에서는 장소 사진·이름이 위에 한 번만 있으면 된다
+            if (showPlace) {
+                StopPhoto(r.place.name, r.place.address, r.place.lat, r.place.lon, order = null, size = 148.dp)
+                Spacer(Modifier.width(20.dp))
+            }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(r.place.name, style = EodiTheme.type.bodyStrong, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                    if (r.mine) MineBadge()
+                if (showPlace) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(r.place.name, style = EodiTheme.type.bodyStrong, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        if (r.mine) MineBadge()
+                    }
+                    Text(
+                        listOf(r.place.category, regionOf(r.place.address)).filter { it.isNotBlank() }.joinToString(" · "),
+                        style = EodiTheme.type.caption,
+                        color = c.textTertiary,
+                        maxLines = 1,
+                    )
+                    RatingStars(r.rating)
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RatingStars(r.rating)
+                        if (r.mine) MineBadge()
+                    }
                 }
-                Text(
-                    listOf(r.place.category, regionOf(r.place.address)).filter { it.isNotBlank() }.joinToString(" · "),
-                    style = EodiTheme.type.caption,
-                    color = c.textTertiary,
-                    maxLines = 1,
-                )
-                RatingStars(r.rating)
                 if (r.text.isNotBlank()) {
                     Text(r.text, style = EodiTheme.type.body, color = c.textSecondary, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
@@ -268,7 +295,7 @@ private fun ReviewCard(t: TravelReview, onHeart: () -> Unit) {
 // ---------------------------------------------------------------- 장소별 리뷰
 
 @Composable
-private fun PlaceReviewsSheet(pr: PlaceReviews, onClose: () -> Unit, onHeart: (String) -> Unit) {
+private fun PlaceReviewsSheet(pr: PlaceReviews, onClose: () -> Unit, onHeart: (String) -> Unit, onNavigate: () -> Unit, onWrite: () -> Unit) {
     val p = pr.place
     OverlayCard(onDismiss = onClose, maxWidth = 1200.dp) {
         Column(Modifier.padding(32.dp).heightIn(max = 1050.dp)) {
@@ -282,6 +309,19 @@ private fun PlaceReviewsSheet(pr: PlaceReviews, onClose: () -> Unit, onHeart: (S
                 RoundIconButton(CommunityIcons.Close, stringResource(R.string.community_close), onClose)
             }
             Spacer(Modifier.height(20.dp))
+            // 리뷰를 보고 바로 할 일: 그곳으로 안내 · 그곳 리뷰 쓰기
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                PrimaryPill(stringResource(R.string.review_navigate_here), EodiIcons.Navi, onNavigate)
+                SecondaryPill(stringResource(R.string.review_write_here), CommunityIcons.Pen, onWrite)
+                pr.navi?.let { ok ->
+                    Text(
+                        stringResource(if (ok) R.string.review_navi_sent else R.string.course_navi_failed),
+                        style = EodiTheme.type.caption,
+                        color = if (ok) EodiTheme.colors.textSecondary else EodiTheme.colors.error,
+                    )
+                }
+            }
+            Spacer(Modifier.height(20.dp))
             when (val l = pr.reviews) {
                 Load.Loading -> Box(Modifier.fillMaxWidth().height(240.dp)) { LoadingBox() }
                 is Load.Failed -> Text(stringResource(R.string.community_failed, l.message), color = EodiTheme.colors.error)
@@ -290,7 +330,7 @@ private fun PlaceReviewsSheet(pr: PlaceReviews, onClose: () -> Unit, onHeart: (S
                         Text(stringResource(R.string.review_empty), style = EodiTheme.type.body, color = EodiTheme.colors.textSecondary)
                     } else {
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            items(l.items, key = { it.review.id }) { r -> ReviewCard(r) { onHeart(r.review.id) } }
+                            items(l.items, key = { it.review.id }) { r -> ReviewCard(r, onHeart = { onHeart(r.review.id) }, showPlace = false) }
                         }
                     }
             }
