@@ -49,6 +49,7 @@ import app.eodiyeotji.R
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.ui.map.DayMap
 import app.eodiyeotji.ui.place.PlacePhotoGallery
+import app.eodiyeotji.ui.place.PlaceThumbnail
 import java.time.LocalDate
 
 private val CardShape = RoundedCornerShape(32.dp)
@@ -192,17 +193,29 @@ private fun StopChip(number: Int, stop: StopFact, selected: Boolean, onClick: ()
         contentColor = if (selected) colors.onPrimary else colors.onSurface,
         modifier = Modifier.heightIn(min = AgentTouchMin),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 12.dp, end = 24.dp)) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.size(44.dp).background(if (selected) colors.onPrimary else colors.primary, CircleShape),
-            ) {
-                Text(
-                    number.toString(),
-                    style = AgentSubStyle,
-                    fontWeight = FontWeight.Bold,
-                    color = if (selected) colors.primary else colors.onPrimary,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 8.dp, end = 24.dp, top = 6.dp, bottom = 6.dp),
+        ) {
+            val dotColor = if (selected) colors.onPrimary else colors.primary
+            val numColor = if (selected) colors.primary else colors.onPrimary
+            // 정차한 곳 대표 사진(동그라미) + 순서 번호 배지. 사진이 없으면 번호 동그라미만.
+            Box(Modifier.size(56.dp)) {
+                PlaceThumbnail(
+                    stop.name, stop.address, stop.lat, stop.lon,
+                    modifier = Modifier.size(56.dp).clip(CircleShape),
+                    fallback = {
+                        Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(44.dp).background(dotColor, CircleShape))
+                        }
+                    },
                 )
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.align(Alignment.BottomEnd).size(26.dp).background(dotColor, CircleShape),
+                ) {
+                    Text(number.toString(), fontSize = 15.sp, fontWeight = FontWeight.Bold, color = numColor)
+                }
             }
             Spacer(Modifier.width(12.dp))
             Column {

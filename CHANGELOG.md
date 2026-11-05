@@ -28,7 +28,7 @@
 - 기억: 주행·머문 곳을 출근길·퇴근길·볼일·나들이·여행으로 묶고 집·회사를 추정, 한국어 부분 일치 검색(0.2ms), 코스를 지금 위치에서 가장 짧은 순서로 (`core-rs/src/memory/`, `core-rs/src/course.rs`)
 - 기억 에이전트: "1년 전에 간 바다 어디였지?"처럼 물으면 날짜·검색어 규칙으로 기기 안에서 바로 답하고, 필요할 때만 로컬 LLM(Qwen3.5-9B)이 도구를 골라 씀. 안내는 운전자가 "응"이라고 한 뒤에만. 하루 제목은 LLM이 하루 한 번 붙임 (`core-rs/src/agent/`)
 - 기억 에이전트 화면: 타임라인 위 "어디였지? 물어보세요" → 답 + 추천 카드(그날 지도·들른 곳) → "이 코스로 안내"로 차량 내비 경유지 안내. 주행 중에는 타임라인을 감추고 큰 카드 한 장만 보임 (`app/.../ui/agent/`, `ui/home/`)
-- 들른 곳 대표 사진: 추천 카드에서 들른 곳을 누르면 구글 지도의 그곳 사진(최대 6장)을 넘겨 봄, 올린 사람 표시. 결과는 기기에 30일 저장 (`core-rs/src/photos.rs`, `app/.../place/PlacePhotoRepository.kt`)
+- 정차한 곳 대표 사진(구글 지도 사진): 타임라인 머문 곳과 추천 카드의 들른 곳마다 작은 사진, 누르면 그곳 사진(최대 6장)을 넘겨 봄, 올린 사람 표시. 결과는 기기에 30일 저장하고, 구글 키는 Places API에만·하루 한도 안(무료 범위)으로 묶음 (`core-rs/src/photos.rs`, `app/.../place/`, `ui/place/`)
 - 화면 디자인: Pleos 색·글자 크기·간격 토큰, 빈 화면·오류 화면, 앱 아이콘(지나온 점선 길 → 위치 핀 + 반짝임)과 알림 아이콘 (`app/.../ui/theme/`, `res/`)
 - Android 앱 뼈대: Compose · Hilt · Pleos Maven, minSdk 28. Rust 코어를 UniFFI로 연결하고 Gradle이 에뮬레이터·실차용 `.so`와 Kotlin 바인딩을 자동으로 만듦 (`app/`, `core-rs/src/ffi.rs`)
 - 개발 도구: 한 번에 설치(`scripts/setup-dev.ps1`), 에뮬레이터 실행(`emu.ps1`), 기어·속도·위치 조작(`vc.ps1`), 실제 도로 경로 재생(`replay.ps1`, `demo-routes/`), LLM 서버 실행(`scripts/llm/start-llm.ps1`), 디버그 빌드용 1년치 시연 기록 넣기

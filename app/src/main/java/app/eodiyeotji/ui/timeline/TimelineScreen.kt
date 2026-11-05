@@ -50,6 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -69,6 +70,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.BuildConfig
 import app.eodiyeotji.R
+import app.eodiyeotji.ui.place.PlaceThumbnail
 import app.eodiyeotji.core.DayEntry
 import app.eodiyeotji.core.DaySummary
 import app.eodiyeotji.core.PlaceSource
@@ -681,8 +683,19 @@ private fun StayRow(stay: StaySummary, rail: Rail, selected: Boolean, onClick: (
         here = stay.isOpen,
         selected = selected,
         onClick = onClick,
+        trailing = place?.let { p ->
+            {
+                // 정차한 곳 대표 사진 (구글 지도 사진). 없으면 칸 없이.
+                PlaceThumbnail(
+                    p.name, p.address, stay.center.lat, stay.center.lon,
+                    modifier = Modifier.size(StayThumb).clip(RoundedCornerShape(EodiTheme.space.radiusM)),
+                )
+            }
+        },
     )
 }
+
+private val StayThumb = 88.dp
 
 private enum class EntryKind { Trip, Stay, Here }
 
@@ -711,6 +724,7 @@ private fun EntryRow(
     here: Boolean,
     selected: Boolean,
     onClick: () -> Unit,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     val c = EodiTheme.colors
     val type = EodiTheme.type
@@ -771,6 +785,9 @@ private fun EntryRow(
                         NaviTag()
                     }
                 }
+            }
+            if (trailing != null) {
+                Box(Modifier.padding(top = 12.dp, bottom = 12.dp, end = 16.dp)) { trailing() }
             }
         }
     }

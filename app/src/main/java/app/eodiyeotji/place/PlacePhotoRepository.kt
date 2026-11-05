@@ -26,11 +26,14 @@ import org.json.JSONObject
 class PlacePhotoRepository @Inject constructor(private val core: EodiCore) {
     private val key = BuildConfig.GOOGLE_PLACES_API_KEY
 
-    suspend fun photos(stop: StopFact): List<PlacePhoto> {
-        if (key.isBlank() || stop.name.isBlank()) return emptyList()
+    suspend fun photos(stop: StopFact): List<PlacePhoto> = photos(stop.name, stop.address, stop.lat, stop.lon)
+
+    /** 이름·주소·좌표로 찾은 그곳 사진 (정차한 곳마다 부른다). 이름이 없으면(아직 장소를 못 찾음) 빈 목록. */
+    suspend fun photos(name: String, address: String, lat: Double, lon: Double): List<PlacePhoto> {
+        if (key.isBlank() || name.isBlank()) return emptyList()
         return runCatching {
-            core.placePhotos(stop.name, stop.address, stop.lat, stop.lon) { query -> search(query, stop.lat, stop.lon) }.photos
-        }.onFailure { Log.w(TAG, "사진 못 받음: ${stop.name}: ${it.message}") }.getOrDefault(emptyList())
+            core.placePhotos(name, address, lat, lon) { query -> search(query, lat, lon) }.photos
+        }.onFailure { Log.w(TAG, "사진 못 받음: $name: ${it.message}") }.getOrDefault(emptyList())
     }
 
     /** 화면에 그릴 이미지 주소 (구글이 실제 이미지 주소로 넘겨 준다). [maxPx]는 긴 변 기준. */
