@@ -78,6 +78,7 @@ cargo ndk -t x86_64 -t arm64-v8a -o ../app/src/main/jniLibs build --release   # 
 ## 작업 규칙
 - 작업 전 `git pull`, 끝나면 커밋 → `git push`. 다른 사람이 올린 변경은 덮어쓰지 않는다.
 - 커밋 메시지는 한국어로, 무엇을 왜 바꿨는지 쓴다. **`Co-Authored-By` 같은 AI 공동 작성자 줄은 넣지 않는다.**
+- 주목할 만한 변경을 하면 `CHANGELOG.md`의 `[Unreleased]` 아래 알맞은 분류(Added / Changed / Deprecated / Removed / Fixed / Security)에 **한 줄** 추가한다. 작성 규칙은 CHANGELOG.md 상단 주석을 따른다.
 - Rust 로직을 바꾸면 테스트를 같이 추가하고 `cargo test`를 통과시킨다.
 - 요청받은 범위만 고친다. 관련 없는 코드나 문서는 손대지 않는다.
 - 비밀값(LLM API 키 등)은 커밋하지 않는다. `local.properties` / 환경 변수로 넣는다.
