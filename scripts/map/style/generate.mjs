@@ -1,22 +1,28 @@
 // 어디였지 오프라인 지도 스타일 · 글꼴 · 아이콘 생성기
 //
 //   cd scripts/map/style && npm ci
-//   node generate.mjs           # style.json + 글꼴(.pbf) + 아이콘(sprite) + 라이선스를 app/src/main/assets/map/ 에 다시 만든다 (인터넷 필요)
-//   node generate.mjs --check   # 인터넷 없이 확인만: scripts/map/out/korea-demo.pmtiles 의 글자가 앱에 넣은 글꼴 범위로 다 그려지는가
+//   node generate.mjs                  # 시연용 가벼운 스타일(demo)로 app/src/main/assets/map/ 을 다시 만든다 (인터넷 필요)
+//   node generate.mjs --flavor full    # Protomaps light 레이어 전부(71개)로 다시 만든다
+//   node generate.mjs --check          # 인터넷 없이 확인만: 앱에 넣은 style.json 이 지도 파일 라벨을 그릴 글꼴 범위를 다 갖췄는가
+//   node generate.mjs --flavor full --style-only --out <파일>   # 스타일 JSON 만 다른 곳에 쓴다 (비교 · 측정용, assets 는 안 건드림)
 //
-// 스타일은 Protomaps 기본 지도(@protomaps/basemaps, light, 라벨 한국어)를 그대로 쓰고, 앱과의 약속에 맞춰 아래만 바꾼다.
+// 스타일은 Protomaps 기본 지도(@protomaps/basemaps, light, 라벨 한국어)에서 시작해 앱과의 약속에 맞춰 바꾼다.
 //   - 지도 소스 이름 "protomaps", url 은 자리표시자 "{{PMTILES_URL}}" (앱이 실행 중에 pmtiles://file://<절대 경로> 로 바꾼다)
 //   - glyphs / sprite 는 APK 안 assets (asset://map/...) — 네트워크를 쓰지 않는다
 //   - 글꼴 이름에서 공백을 뺀다 (URL 인코딩 문제를 아예 없앤다). 데바나가리 글꼴은 한국 지도에 필요 없어 기본 글꼴로 돌린다
-// 한글 · 한자는 앱이 MapLibre localIdeographFontFamily(기기 글꼴)로 그린다. 그래서 글꼴은 라틴 등 실제로 쓰이는 범위만 넣고,
-// 글자가 없는(수십 바이트짜리) 범위 파일은 전부 넣어 둔다 — 범위 파일이 없으면 MapLibre Native 는 그 타일의 라벨을 끝내 못 그리기 때문이다.
+//   - 한글 라벨은 글자 간격을 HANGUL_LETTER_SPACING 으로 둔다 (원본 0.1em 은 한글에 넓다)
+//   - demo: 차 화면에서 60fps 를 내도록 무거운 레이어를 빼고 합친다 (DEMO_* 설정 참고), 라벨은 한 줄
+// 한글 · 한자는 앱이 MapLibre localIdeographFontFamily(기기 글꼴)로 그린다. 글꼴 범위 파일이 하나라도 없으면 MapLibre Native 는
+// 그 범위 글자가 든 타일의 라벨을 끝내 그리지 못하므로(GlyphManager::processResponse), 지도 파일의 모든 지물에 스타일 식을
+// 직접 계산해 실제로 그려질 글자의 범위를 찾아 넣는다. 아랍 문자는 MapLibre 가 표현형(U+FB50–FEFF)으로 바꿔 그리므로 그 범위도 넣는다.
+// 글자가 없는(수십 바이트짜리) 범위 파일은 전부 넣어 둔다.
 
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { layers, namedFlavor } from "@protomaps/basemaps";
-import { validateStyleMin } from "@maplibre/maplibre-gl-style-spec";
+import { validateStyleMin, featureFilter, normalizePropertyExpression, latest } from "@maplibre/maplibre-gl-style-spec";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "../../..");
@@ -34,7 +40,7 @@ const SOURCE = "protomaps";
 const PMTILES_PLACEHOLDER = "{{PMTILES_URL}}";
 const GLYPHS = "asset://map/fonts/{fontstack}/{range}.pbf";
 const SPRITE = "asset://map/sprites/light";
-const FLAVOR = "light";
+const BASE_FLAVOR = "light";
 const LANG = "ko";
 const ATTRIBUTION =
   '<a href="https://github.com/protomaps/basemaps">Protomaps</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
@@ -47,21 +53,99 @@ const FONT_RENAME = {
   "Noto Sans Devanagari Regular v1": "NotoSans-Regular",
 };
 const ALWAYS_RANGES = [0, 256, 8192]; // 기본 라틴 · 라틴 확장 · 일반 문장부호(· – ’ 등)
+const ARABIC_PRESENTATION_RANGES = [64256, 64512, 64768, 65024]; // U+FB00–FEFF: MapLibre 가 아랍 문자를 바꿔 그리는 표현형
 const TINY_BYTES = 8192; // 이보다 작은 범위 파일(글자가 거의 없음)은 전부 넣는다
+// 길 따라 놓는 라벨이 세로로 서면 MapLibre 가 문장부호를 세로쓰기 글자로 바꿔 그린다 (maplibre-native src/mln/util/i18n.cpp verticalPunctuation)
+const VERTICAL_PUNCT = new Map(
+  [..."!︕#＃$＄%％&＆(︵)︶*＊+＋,︐-︲.・/／:︓;︔<︿=＝>﹀?︖@＠[﹇\\＼]﹈^＾_︳`｀{︷|―}︸~～¢￠£￡¥￥¦￤¬￢¯￣–︲—︱‘﹃’﹄“﹁”﹂…︙‧・₩￦、︑。︒〈︿〉﹀《︽》︾「﹁」﹂『﹃』﹄【︻】︼〔︹〕︺〖︗〗︘！︕（︵）︶，︐－︲．・：︓；︔＜︿＞﹀？︖［﹇］﹈＿︳｛︷｜―｝︸｟︵｠︶｡︒｢﹁｣﹂"]
+    .reduce((pairs, ch, i, all) => (i % 2 ? pairs : [...pairs, [ch, all[i + 1]]]), []),
+);
 
-const CHECK_ONLY = process.argv.includes("--check");
+// 한글 라벨의 글자 간격(em). MapLibre Native(Android)는 기기 글꼴로 그린 한글 한 자의 폭을 글꼴과 상관없이
+// 1em(24px 중 24)으로 고정한다(LocalGlyphRasterizer advance=24). Pleos 에뮬레이터 화면에서 재 보니 글자 잉크 폭이
+// 약 0.78em 이라 간격 0 이어도 글자 사이가 0.22em 로 넓다(원본 0.1em 을 더하면 0.32em). -0.08 로 0.14em 쯤에 맞춘다.
+const HANGUL_LETTER_SPACING = -0.08;
+const IS_KOREAN_LABEL = ["any", ["has", "name:ko"], ["==", ["get", "script"], "Hangul"]];
+
+// ---- demo(시연용 가벼운 스타일) 설정 ----------------------------------------------------------------
+// 빼는 레이어: 건물, 자잘한 땅 쓰임새, 보행로·서비스 도로, 터널·다리 테두리, 일방통행 화살표, 번지
+const DEMO_DROP = new Set([
+  "landuse_urban_green", "landuse_hospital", "landuse_industrial", "landuse_school", "landuse_zoo",
+  "landuse_pedestrian", "landuse_pier", "roads_taxiway", "water_stream", "buildings", "roads_pier",
+  "roads_other", "roads_minor_service", "roads_minor_service_casing", "roads_minor_casing", "roads_link_casing",
+  "roads_oneway", "address_label",
+]);
+// 터널 · 다리 레이어(19개)는 빼고, 일반 도로 레이어가 터널 · 다리 구간도 그리게 합친다 (영동고속도로 터널 구간이 끊기지 않게)
+const DEMO_MERGE_TUNNELS_BRIDGES = /^roads_(tunnels|bridges)_/;
+// 공원류 녹지: 공원 · 국립공원 · 보호구역 · 골프장 · 묘지만 남긴다 (산림 · 풀밭 다각형은 산마다 커서 무겁다. 넓은 녹지는 landcover 가 낮은 줌에서 보여 준다)
+const DEMO_PARK_KINDS = ["national_park", "park", "protected_area", "nature_reserve", "golf_course", "cemetery"];
+// 이 줌부터만 그린다
+const DEMO_MINZOOM = { roads_minor: 14, roads_labels_minor: 16, water_waterway_label: 14 };
+// 남길 장소 아이콘(pois) 종류: 역 · 공항 · 항구 · 해변 · 국립공원 · 산 · 경기장 · 대학
+const DEMO_POI_KINDS = ["station", "aerodrome", "ferry_terminal", "beach", "national_park", "peak", "stadium", "university"];
+// 한 줄 라벨: name:ko → (한글 이름이면) name → name:en → name
+const DEMO_LABEL = [
+  "coalesce",
+  ["get", "name:ko"],
+  ["case", ["==", ["get", "script"], "Hangul"], ["get", "name"], ["coalesce", ["get", "name:en"], ["get", "name"]]],
+];
+
+// ---------------------------------------------------------------- 인자
+const args = process.argv.slice(2);
+const argValue = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
+const CHECK_ONLY = args.includes("--check");
+const STYLE_ONLY = args.includes("--style-only");
+const OUT = argValue("--out");
+let FLAVOR = argValue("--flavor");
+if (CHECK_ONLY && !FLAVOR) FLAVOR = JSON.parse(fs.readFileSync(path.join(ASSETS, "style.json"), "utf8")).metadata?.["eodiyeotji:flavor"];
+FLAVOR ??= "demo";
+if (!["demo", "full"].includes(FLAVOR)) throw new Error(`--flavor 는 demo 또는 full: ${FLAVOR}`);
 
 // ---------------------------------------------------------------- 스타일
-function buildStyle() {
-  let json = JSON.stringify(layers(SOURCE, namedFlavor(FLAVOR), { lang: LANG }));
+const isEqual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+// 레거시 필터 ["all", ..., ["!has","is_tunnel"], ...] 에서 터널 · 다리 제외 조건을 지운다
+function allowTunnelsBridges(filter) {
+  if (!Array.isArray(filter) || filter[0] !== "all") return filter;
+  return filter.filter((f) => !isEqual(f, ["!has", "is_tunnel"]) && !isEqual(f, ["!has", "is_bridge"]));
+}
+
+function demoLayers(all) {
+  const out = [];
+  for (const src of all) {
+    const l = structuredClone(src);
+    if (DEMO_DROP.has(l.id) || DEMO_MERGE_TUNNELS_BRIDGES.test(l.id)) continue;
+    if (l.type === "line" && l["source-layer"] === "roads") l.filter = allowTunnelsBridges(l.filter);
+    if (l.id === "landuse_park") {
+      l.filter = ["in", "kind", ...DEMO_PARK_KINDS];
+      l.paint["fill-color"] = "#9cd3b4";
+    }
+    if (l.id === "pois") l.filter = ["all", ["in", ["get", "kind"], ["literal", DEMO_POI_KINDS]], l.filter[2]];
+    if (DEMO_MINZOOM[l.id] !== undefined) l.minzoom = Math.max(l.minzoom ?? 0, DEMO_MINZOOM[l.id]);
+    if (l.layout?.["text-field"] && JSON.stringify(l.layout["text-field"]).includes('"name')) l.layout["text-field"] = DEMO_LABEL;
+    out.push(l);
+  }
+  return out;
+}
+
+function buildStyle(flavor) {
+  let json = JSON.stringify(layers(SOURCE, namedFlavor(BASE_FLAVOR), { lang: LANG }));
   for (const [from, to] of Object.entries(FONT_RENAME)) json = json.split(JSON.stringify(from)).join(JSON.stringify(to));
-  const styleLayers = JSON.parse(json);
+  let styleLayers = JSON.parse(json);
+  if (flavor === "demo") styleLayers = demoLayers(styleLayers);
+  for (const l of styleLayers) {
+    if (l.type !== "symbol" || !JSON.stringify(l.layout?.["text-field"] ?? "").includes('"name')) continue; // 이름 라벨만 (도로 번호 방패는 그대로)
+    const orig = l.layout["text-letter-spacing"] ?? 0;
+    if (typeof orig !== "number") continue;
+    if (orig === HANGUL_LETTER_SPACING) continue;
+    l.layout["text-letter-spacing"] = orig === 0 && HANGUL_LETTER_SPACING === 0 ? 0 : ["case", IS_KOREAN_LABEL, HANGUL_LETTER_SPACING, orig];
+  }
   return {
     version: 8,
-    name: "어디였지 라이트 (Protomaps light, 한국어)",
+    name: `어디였지 라이트 (Protomaps light, 한국어, ${flavor})`,
     metadata: {
       "eodiyeotji:generator": "scripts/map/style/generate.mjs",
-      "eodiyeotji:basemaps": `@protomaps/basemaps 5.7.2 flavor=${FLAVOR} lang=${LANG}`,
+      "eodiyeotji:flavor": flavor,
+      "eodiyeotji:basemaps": `@protomaps/basemaps 5.7.2 flavor=${BASE_FLAVOR} lang=${LANG}`,
       "eodiyeotji:assets": `protomaps/basemaps-assets@${BASEMAPS_ASSETS_SHA}`,
     },
     sources: { [SOURCE]: { type: "vector", url: PMTILES_PLACEHOLDER, attribution: ATTRIBUTION } },
@@ -71,23 +155,6 @@ function buildStyle() {
   };
 }
 
-// 스타일 안에서 ["get", "키"] 로 읽는 속성 이름 (text-field 안) · 쓰는 글꼴 이름 (text-font 안)
-function collect(node, pred, out) {
-  if (Array.isArray(node)) {
-    if (pred(node)) out.add(node[1]);
-    for (const x of node) collect(x, pred, out);
-  } else if (node && typeof node === "object") {
-    for (const v of Object.values(node)) collect(v, pred, out);
-  }
-  return out;
-}
-function textKeys(style) {
-  const keys = new Set();
-  for (const l of style.layers) {
-    if (l.layout?.["text-field"]) collect(l.layout["text-field"], (a) => a[0] === "get" && typeof a[1] === "string", keys);
-  }
-  return keys;
-}
 function fontStacks(style) {
   const stacks = new Set();
   const add = (v) => {
@@ -110,13 +177,19 @@ function decompress(buf, kind) {
   if (kind === 2) return zlib.gunzipSync(buf); // gzip
   throw new Error(`지원하지 않는 압축 방식 ${kind}`);
 }
+function zoomOfTileId(id) {
+  let acc = 0;
+  for (let z = 0; z < 32; z++) { const n = 4 ** z; if (id < acc + n) return z; acc += n; }
+  throw new Error(`tile id 범위 밖: ${id}`);
+}
+// 타일 내용(중복 제거)과 그 내용이 쓰이는 줌들
 function* pmtilesTiles(file) {
   const b = fs.readFileSync(file);
   if (b.toString("latin1", 0, 7) !== "PMTiles" || b[7] !== 3) throw new Error(`PMTiles v3 파일이 아닙니다: ${file}`);
   const u64 = (o) => Number(b.readBigUInt64LE(o));
   const rootOff = u64(8), rootLen = u64(16), leafOff = u64(40), dataOff = u64(56);
-  const internal = b[97], tileComp = b[98];
-  const seen = new Set();
+  const internal = b[97], tileComp = b[98], maxZoom = b[101];
+  const blobs = new Map(); // offset → { len, zooms }
   const stack = [[rootOff, rootLen]];
   while (stack.length) {
     const [off, len] = stack.pop();
@@ -124,7 +197,8 @@ function* pmtilesTiles(file) {
     let p = 0, n;
     [n, p] = varint(d, p);
     const e = Array.from({ length: n }, () => ({}));
-    for (const x of e) [, p] = varint(d, p); // tile id 차이 (여기선 안 씀)
+    let id = 0;
+    for (const x of e) { let v; [v, p] = varint(d, p); id += v; x.id = id; }
     for (const x of e) [x.run, p] = varint(d, p);
     for (const x of e) [x.len, p] = varint(d, p);
     e.forEach((x, i) => {
@@ -133,9 +207,15 @@ function* pmtilesTiles(file) {
       x.off = v === 0 && i > 0 ? e[i - 1].off + e[i - 1].len : v - 1;
     });
     for (const x of e) {
-      if (x.run === 0) stack.push([leafOff + x.off, x.len]);
-      else if (!seen.has(x.off)) { seen.add(x.off); yield decompress(b.subarray(dataOff + x.off, dataOff + x.off + x.len), tileComp); }
+      if (x.run === 0) { stack.push([leafOff + x.off, x.len]); continue; }
+      if (!blobs.has(x.off)) blobs.set(x.off, { len: x.len, zooms: new Set() });
+      const zs = blobs.get(x.off).zooms;
+      zs.add(zoomOfTileId(x.id));
+      zs.add(zoomOfTileId(x.id + x.run - 1));
     }
+  }
+  for (const [off, { len, zooms }] of blobs) {
+    yield { maxZoom, zooms, data: decompress(b.subarray(dataOff + off, dataOff + off + len), tileComp) };
   }
 }
 function* pbfFields(b, start, end) {
@@ -146,68 +226,128 @@ function* pbfFields(b, start, end) {
     const field = Math.floor(k / 8), wire = k & 7;
     if (wire === 0) { let v; [v, p] = varint(b, p); yield [field, wire, v]; }
     else if (wire === 2) { let n; [n, p] = varint(b, p); yield [field, wire, p, p + n]; p += n; }
-    else if (wire === 5) p += 4;
-    else if (wire === 1) p += 8;
+    else if (wire === 5) { yield [field, wire, p]; p += 4; }
+    else if (wire === 1) { yield [field, wire, p]; p += 8; }
     else throw new Error(`알 수 없는 protobuf wire type ${wire}`);
   }
 }
-// 타일 안에서 style 이 글자로 그리는 속성 값의 UTF-16 코드 단위 → 범위 시작값(256 단위)
-// 결과: "타일레이어\0속성" → Map(범위 시작값 → 예시 글자)
-function scanRanges(file, keysWanted) {
-  const byKey = new Map();
-  let tiles = 0;
-  for (const t of pmtilesTiles(file)) {
-    tiles++;
-    for (const [f, w, s, e] of pbfFields(t, 0, t.length)) {
-      if (f !== 3 || w !== 2) continue; // layer
-      const keys = [], values = [], tagLists = [];
-      let layerName = "";
-      for (const [lf, lw, ls, le] of pbfFields(t, s, e)) {
-        if (lf === 1 && lw === 2) layerName = t.toString("utf8", ls, le);
-        else if (lf === 3 && lw === 2) keys.push(t.toString("utf8", ls, le));
-        else if (lf === 4 && lw === 2) {
-          let str = null;
-          for (const [vf, vw, vs, ve] of pbfFields(t, ls, le)) if (vf === 1 && vw === 2) str = t.toString("utf8", vs, ve);
-          values.push(str);
-        } else if (lf === 2 && lw === 2) {
-          for (const [ff, fw, fs_, fe] of pbfFields(t, ls, le)) if (ff === 2 && fw === 2) tagLists.push([fs_, fe]);
+function mvtValue(t, s, e) {
+  for (const [f, w, a, b] of pbfFields(t, s, e)) {
+    if (f === 1 && w === 2) return t.toString("utf8", a, b);
+    if (f === 2 && w === 5) return t.readFloatLE(a);
+    if (f === 3 && w === 1) return t.readDoubleLE(a);
+    if ((f === 4 || f === 5) && w === 0) return a;
+    if (f === 6 && w === 0) return a % 2 ? -(a + 1) / 2 : a / 2;
+    if (f === 7 && w === 0) return a !== 0;
+  }
+  return null;
+}
+// 타일의 레이어별 지물: { name, features: [{ type, properties }] }
+function* mvtLayers(t) {
+  for (const [f, w, s, e] of pbfFields(t, 0, t.length)) {
+    if (f !== 3 || w !== 2) continue;
+    let name = "";
+    const keys = [], values = [], feats = [];
+    for (const [lf, lw, ls, le] of pbfFields(t, s, e)) {
+      if (lf === 1 && lw === 2) name = t.toString("utf8", ls, le);
+      else if (lf === 3 && lw === 2) keys.push(t.toString("utf8", ls, le));
+      else if (lf === 4 && lw === 2) values.push(mvtValue(t, ls, le));
+      else if (lf === 2 && lw === 2) feats.push([ls, le]);
+    }
+    yield {
+      name,
+      *features() {
+        for (const [fs_, fe] of feats) {
+          let type = 0, tags = null;
+          for (const [ff, fw, a, b] of pbfFields(t, fs_, fe)) {
+            if (ff === 3 && fw === 0) type = a;
+            else if (ff === 2 && fw === 2) tags = [a, b];
+          }
+          const properties = {};
+          if (tags) for (let p = tags[0]; p < tags[1];) {
+            let k, v;
+            [k, p] = varint(t, p);
+            [v, p] = varint(t, p);
+            properties[keys[k]] = values[v];
+          }
+          yield { type, properties };
         }
-      }
-      for (const [ts, te] of tagLists) {
-        let p = ts;
-        while (p < te) {
-          let k, v;
-          [k, p] = varint(t, p);
-          [v, p] = varint(t, p);
-          const str = values[v];
-          if (str && keysWanted.has(keys[k])) {
-            const id = `${layerName}\0${keys[k]}`;
-            if (!byKey.has(id)) byKey.set(id, new Map());
-            const ranges = byKey.get(id);
-            for (let i = 0; i < str.length; i++) {
-              const r = Math.floor(str.charCodeAt(i) / 256) * 256;
-              if (!ranges.has(r)) ranges.set(r, str);
+      },
+    };
+  }
+}
+
+// ---------------------------------------------------------------- 실제로 그려질 글자 → 글꼴별 범위
+function compileLabelLayers(style) {
+  const spec = latest.layout_symbol;
+  const compile = (value, key) => normalizePropertyExpression(value, spec[key]); // 상수 · 식 모두 evaluate(globals, feature)
+  return style.layers
+    .filter((l) => l.type === "symbol" && l.layout?.["text-field"])
+    .map((l) => ({
+      id: l.id,
+      sourceLayer: l["source-layer"],
+      minzoom: l.minzoom ?? 0,
+      maxzoom: l.maxzoom ?? 24,
+      filter: featureFilter(l.filter).filter,
+      text: compile(l.layout["text-field"], "text-field"),
+      font: compile(l.layout["text-font"] ?? spec["text-font"].default, "text-font"),
+      transform: l.layout["text-transform"] ? compile(l.layout["text-transform"], "text-transform") : null,
+      alongLine: (l.layout["symbol-placement"] ?? "point") !== "point",
+    }));
+}
+function neededRanges(style, file) {
+  const compiled = compileLabelLayers(style);
+  const bySource = new Map();
+  for (const c of compiled) { if (!bySource.has(c.sourceLayer)) bySource.set(c.sourceLayer, []); bySource.get(c.sourceLayer).push(c); }
+  const need = new Map(); // 글꼴 → Map(범위 시작값 → 예시 글자)
+  const add = (stack, r, ex) => { if (!need.has(stack)) need.set(stack, new Map()); const m = need.get(stack); if (!m.has(r)) m.set(r, ex); };
+  for (const s of fontStacks(style)) for (const r of ALWAYS_RANGES) add(s, r, "(기본)");
+  let tiles = 0, labels = 0;
+  if (!file) return { need, tiles, labels };
+  for (const { maxZoom, zooms, data } of pmtilesTiles(file)) {
+    tiles++;
+    const zs = new Set();
+    for (const z of zooms) {
+      zs.add(z); zs.add(z + 0.5); zs.add(z + 0.999);
+      if (z === maxZoom) for (let oz = z + 1; oz <= 22; oz++) zs.add(oz); // 최대 줌 타일은 더 확대해서도 쓰인다
+    }
+    for (const layer of mvtLayers(data)) {
+      const cs = bySource.get(layer.name);
+      if (!cs) continue;
+      for (const feature of layer.features()) {
+        for (const c of cs) {
+          for (const zoom of zs) {
+            if (zoom < c.minzoom || zoom >= c.maxzoom) continue;
+            const g = { zoom };
+            if (!c.filter(g, feature)) continue;
+            const text = c.text.evaluate(g, feature);
+            if (!text) continue;
+            const fontDefault = c.font.evaluate(g, feature).join(",");
+            const transform = c.transform?.evaluate(g, feature);
+            const sections = typeof text === "string" ? [{ text, fontStack: null }] : text.sections;
+            for (const sec of sections) {
+              let str = sec.text ?? "";
+              if (transform === "uppercase") str = str.toLocaleUpperCase();
+              else if (transform === "lowercase") str = str.toLocaleLowerCase();
+              if (!str) continue;
+              labels++;
+              const stack = sec.fontStack || fontDefault;
+              let arabic = false;
+              for (let i = 0; i < str.length; i++) {
+                const cu = str.charCodeAt(i);
+                if ((cu >= 0x600 && cu <= 0x6ff) || (cu >= 0x750 && cu <= 0x77f) || (cu >= 0x8a0 && cu <= 0x8ff)) arabic = true;
+                add(stack, Math.floor(cu / 256) * 256, str);
+                const vertical = c.alongLine && VERTICAL_PUNCT.get(str[i]);
+                if (vertical) add(stack, Math.floor(vertical.charCodeAt(0) / 256) * 256, `${str} (세로 문장부호)`);
+              }
+              if (arabic) for (const r of ARABIC_PRESENTATION_RANGES) add(stack, r, `${str} (아랍 표현형)`);
             }
           }
         }
       }
     }
   }
-  return { byKey, tiles };
-}
-// 글꼴별로 필요한 범위: 그 글꼴을 쓰는 스타일 레이어가 읽는 (타일레이어, 속성)의 글자만 센다
-function neededByStack(style, byKey) {
-  const out = new Map();
-  for (const l of style.layers) {
-    if (!l.layout?.["text-field"]) continue;
-    const keys = collect(l.layout["text-field"], (a) => a[0] === "get" && typeof a[1] === "string", new Set());
-    for (const stack of fontStacks({ layers: [l] })) {
-      if (!out.has(stack)) out.set(stack, new Map(ALWAYS_RANGES.map((r) => [r, "(기본)"])));
-      const need = out.get(stack);
-      for (const k of keys) for (const [r, ex] of byKey.get(`${l["source-layer"]}\0${k}`) ?? []) if (!need.has(r)) need.set(r, ex);
-    }
-  }
-  return out;
+  return { need, tiles, labels };
 }
 const rangeName = (start) => `${start}-${start + 255}.pbf`;
 
@@ -235,34 +375,33 @@ function dirSize(d) {
 }
 
 // ---------------------------------------------------------------- 실행
-const style = buildStyle();
+const style = CHECK_ONLY ? JSON.parse(fs.readFileSync(path.join(ASSETS, "style.json"), "utf8")) : buildStyle(FLAVOR);
 const errors = validateStyleMin(style);
 if (errors.length) {
   for (const e of errors) console.error("스타일 오류:", e.message);
   process.exit(1);
 }
-const keys = textKeys(style);
 const stacks = fontStacks(style);
-console.log(`스타일: 레이어 ${style.layers.length}개, 글꼴 ${stacks.join(", ")}`);
-console.log(`라벨에 쓰는 속성: ${[...keys].sort().join(", ")}`);
+console.log(`스타일(${FLAVOR}): 레이어 ${style.layers.length}개, 글꼴 ${stacks.join(", ")}`);
 
-let byKey = new Map();
-if (fs.existsSync(PMTILES)) {
-  const scan = scanRanges(PMTILES, keys);
-  byKey = scan.byKey;
-  console.log(`지도 파일 글자 검사: 타일 ${scan.tiles}개 (${PMTILES})`);
-} else {
-  console.warn(`지도 파일이 없어 기본 범위만 넣습니다: ${PMTILES}`);
+if (STYLE_ONLY) {
+  const out = path.resolve(OUT ?? path.join(ASSETS, "style.json"));
+  fs.writeFileSync(out, JSON.stringify(style, null, 2) + "\n");
+  console.log(`스타일만 썼습니다: ${out}`);
+  process.exit(0);
 }
-const needed = neededByStack(style, byKey); // 글꼴 → Map(범위 시작값 → 예시 글자)
-for (const s of stacks) {
-  const rs = [...(needed.get(s)?.keys() ?? [])].sort((a, b) => a - b);
-  console.log(`  ${s}: 글자가 쓰는 범위 ${rs.length}개`);
-}
+
+const haveTiles = fs.existsSync(PMTILES);
+if (!haveTiles) console.warn(`지도 파일이 없어 기본 범위만 넣습니다: ${PMTILES}`);
+const t0 = Date.now();
+const { need, tiles, labels } = neededRanges(style, haveTiles ? PMTILES : null);
+if (haveTiles) console.log(`지도 파일 라벨 계산: 타일 ${tiles}개, 라벨 ${labels}건, ${((Date.now() - t0) / 1000).toFixed(1)}초`);
+for (const s of stacks) console.log(`  ${s}: 글자가 쓰는 범위 ${need.get(s)?.size ?? 0}개`);
+for (const s of need.keys()) if (!stacks.includes(s)) throw new Error(`스타일에 없는 글꼴이 라벨에 쓰였습니다: ${s}`);
 
 if (CHECK_ONLY) {
   const missing = [];
-  for (const [s, need] of needed) for (const [r, ex] of need) {
+  for (const [s, m] of need) for (const [r, ex] of m) {
     if (!fs.existsSync(path.join(ASSETS, "fonts", s, rangeName(r)))) missing.push(`${s}/${rangeName(r)}  예: ${JSON.stringify(ex).slice(0, 40)}`);
   }
   if (missing.length) {
@@ -291,7 +430,7 @@ for (const [orig, stack] of Object.entries(FONT_RENAME)) {
     const m = e.path.match(/^fonts\/([^/]+)\/(\d+)-(\d+)\.pbf$/);
     if (!m || m[1] !== orig) continue;
     const start = Number(m[2]);
-    if (e.size <= TINY_BYTES || needed.get(stack)?.has(start)) jobs.push([e.path, path.join(ASSETS, "fonts", stack, rangeName(start))]);
+    if (e.size <= TINY_BYTES || need.get(stack)?.has(start)) jobs.push([e.path, path.join(ASSETS, "fonts", stack, rangeName(start))]);
   }
 }
 for (const f of ["light.json", "light.png", "light@2x.json", "light@2x.png"]) jobs.push([`sprites/v4/${f}`, path.join(ASSETS, "sprites", f)]);
@@ -320,9 +459,8 @@ fs.writeFileSync(
 fs.writeFileSync(path.join(ASSETS, "style.json"), JSON.stringify(style, null, 2) + "\n");
 
 const { total, files } = dirSize(ASSETS);
-const fontSize = dirSize(path.join(ASSETS, "fonts"));
 for (const s of stacks) {
   const d = dirSize(path.join(ASSETS, "fonts", s));
   console.log(`  ${s}: 범위 파일 ${d.files}개, ${(d.total / 1024).toFixed(0)} KB`);
 }
-console.log(`완료: ${ASSETS}  파일 ${files}개, ${(total / 1024).toFixed(0)} KB (글꼴 ${(fontSize.total / 1024).toFixed(0)} KB)`);
+console.log(`완료: ${ASSETS}  파일 ${files}개, ${(total / 1024).toFixed(0)} KB`);

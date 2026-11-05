@@ -5,7 +5,7 @@
 | 부분 | 위치 | git | 크기 |
 |---|---|---|---|
 | 지도 타일 `korea-demo.pmtiles` (시연 지역만) | 만들기 `scripts/map/out/` → 기기 앱 폴더 | 올리지 않음 | 60.5 MB (최대 줌 15) |
-| 스타일 · 글꼴 · 아이콘 | `app/src/main/assets/map/` (APK 안) | 올림 | 3.9 MB (파일 694개, 글꼴 3.6 MB) |
+| 스타일 · 글꼴 · 아이콘 | `app/src/main/assets/map/` (APK 안) | 올림 | 1.1 MB (파일 670개, 글꼴 1.0 MB) |
 
 ## 바로 쓰기
 
@@ -63,23 +63,48 @@ Protomaps 원본의 최대 줌이 15다. 앱은 15보다 더 확대하면 15 타
 | `glyphs` | `asset://map/fonts/{fontstack}/{range}.pbf` |
 | `sprite` | `asset://map/sprites/light` (`light.json` · `light.png` · `light@2x.json` · `light@2x.png`) |
 | 글꼴 이름 (`text-font`) | `NotoSans-Regular`, `NotoSans-Medium`, `NotoSans-Italic` (공백 없음) |
-| 라벨 언어 | 한국어: `name:ko` → 없으면 `name`(현지 이름). 한국 밖 지명은 `name:ko`(없으면 `name:en`) 아래 줄에 현지 이름 |
-| 레이어 | Protomaps light 그대로 71개 (`background`, `earth`, `water`, `roads_*`, `buildings`, `pois`, `places_*` …). 앱 데이터 레이어는 없다 → 앱이 경로 · 머문 곳을 맨 위에 더한다 |
+| 라벨 언어 | 한국어 한 줄: `name:ko` → (한글 이름이면) `name` → `name:en` → `name` |
+| 한글 글자 간격 | 이름 라벨은 한글이면 `text-letter-spacing` -0.08em (아래 설명) |
+| 레이어 | 시연용(demo) 33개: `background`, `earth`, `landcover`, `landuse_park`, `water`, `roads_highway` · `roads_major` · `roads_link` · `roads_minor`, `roads_rail`, `boundaries`, `roads_labels_*`, `roads_shields`, `pois`, `places_*` … 앱 데이터 레이어는 없다 → 앱이 경로 · 머문 곳을 맨 위에 더한다 |
 | 출처 표시 | 소스 `attribution`에 들어 있다 (MapLibre 출처 표시 버튼에 나온다) |
 
+### 시연용(demo) 스타일이 빼고 바꾼 것
+
+Protomaps light 전체(71개 레이어)는 Pleos 에뮬레이터에서 지도를 끌 때 약 20fps였다 (렌더 스레드 CPU 한계). 차 화면에 필요한 것만 남겼다.
+
+- 뺀 것: 건물, 자잘한 땅 쓰임새(병원 · 학교 · 공업 · 놀이터 등), 산림 · 풀밭 다각형(공원 · 국립공원 · 보호구역 · 골프장 · 묘지만 남김), 보행로 · 서비스 도로, 테두리(차선 테두리는 고속도로 · 큰길만), 일방통행 화살표, 번지, 작은 개울
+- 합친 것: 터널 · 다리 레이어 19개를 빼고 일반 도로 레이어가 그 구간도 그린다 (영동고속도로 터널 구간이 끊기지 않는다)
+- 줄인 것: 골목길(`roads_minor`)은 줌 14부터, 골목 이름은 16부터, 장소 아이콘(`pois`)은 역 · 공항 · 항구 · 해변 · 국립공원 · 산 · 경기장 · 대학만
+- 브라우저 MapLibre GL JS로 같은 화면을 그려 비교한 값 (앱 fps가 아니라 대리 지표):
+
+| 위치 · 줌 | 전체(71개) 그리기 호출 / 정점 색인 | 시연용(33개) |
+|---|---|---|
+| 서울 시청 z14.5 | 262 / 571k | 124 / 121k |
+| 잠실 z15 | 442 / 211k | 188 / 43k |
+| 강릉 z14 | 383 / 244k | 206 / 68k |
+| 영동고속도로 z13 | 124 / 49k | 71 / 9k |
+
+전체 스타일이 필요하면 `node generate.mjs --flavor full` (레이어 · 글꼴 범위를 모두 그에 맞게 다시 만든다). 덜어낼 목록은 `generate.mjs` 위쪽 `DEMO_*` 설정에 있다.
+
+### 글자
+
 - 한글 · 한자 · 가나는 앱이 MapLibre `localIdeographFontFamily`(기기 글꼴)로 그린다. 그래서 글꼴 파일에는 그 글자가 없다.
-- 글꼴 범위 파일이 하나라도 없으면 MapLibre Native는 그 범위 글자가 든 타일의 라벨을 끝내 그리지 못한다 (`GlyphManager::processResponse`가 오류일 때 기다리는 타일을 풀어 주지 않음). 그래서 `generate.mjs`는
+- MapLibre Native(Android)는 기기 글꼴로 그린 한 자의 폭을 글꼴과 상관없이 1em으로 고정한다 (`LocalGlyphRasterizer` advance 24). 에뮬레이터 화면에서 재 보니 한글 잉크 폭이 약 0.78em이라 간격 0이어도 넓어 보였다 (원본 동 이름은 여기에 0.1em을 더 벌렸다). 그래서 한글 이름 라벨은 -0.08em으로 둔다. 더 좁히거나 넓히려면 `generate.mjs`의 `HANGUL_LETTER_SPACING` 하나만 바꾼다.
+- 글꼴 범위 파일이 하나라도 없으면 MapLibre Native는 그 범위 글자가 든 타일을 끝내 그리지 못한다 (`GlyphManager::processResponse`가 오류일 때 기다리는 타일을 풀어 주지 않음. 브라우저 GL JS에서도 타일 한 칸이 통째로 비는 것을 확인함). 그래서 `generate.mjs`는
   - 글자가 거의 없는 작은 범위 파일(8 KB 이하, 한글 · 한자 범위 포함)은 전부 넣고,
-  - 큰 범위 파일은 지도 파일(`korea-demo.pmtiles`) 안 라벨이 실제로 쓰는 범위만 넣는다 (예: 낮은 줌의 세계 지명 때문에 아랍 · 태국 · 키릴 문자 범위도 들어간다).
+  - 지도 파일(`korea-demo.pmtiles`)의 모든 지물에 스타일의 필터 · 라벨 식을 직접 계산해 실제로 그려질 글자의 범위를 넣는다 (최대 줌 타일은 줌 22까지 확대해 쓰이는 것까지),
+  - MapLibre가 바꿔 그리는 글자도 넣는다: 길 따라 놓인 라벨이 세로로 서면 문장부호를 세로쓰기 글자로 바꾸고(예: `램프-A`의 `-` → U+FE32, 범위 65024-65279), 아랍 문자는 표현형(U+FB50–FEFF)으로 바꾼다.
 - 레이어 id는 Protomaps 생성기가 정하며, 같은 패키지 버전(`@protomaps/basemaps` 5.7.2 고정)이면 바뀌지 않는다.
 
 ## 스타일 다시 만들기
 
 ```powershell
 cd scripts\map\style
-npm ci                     # @protomaps/basemaps 5.7.2, @maplibre/maplibre-gl-style-spec 24.4.1 (스타일 검사)
-node generate.mjs          # app/src/main/assets/map/ 을 다시 만든다 (인터넷 필요, 지도 파일이 있으면 그 글자 범위를 반영)
-node generate.mjs --check  # 인터넷 없이 확인만
+npm ci                              # @protomaps/basemaps 5.7.2, @maplibre/maplibre-gl-style-spec 24.4.1 (스타일 검사 · 식 계산)
+node generate.mjs                   # 시연용 스타일로 app/src/main/assets/map/ 을 다시 만든다 (인터넷 필요, 지도 파일이 있으면 그 글자 범위를 반영)
+node generate.mjs --flavor full     # Protomaps light 전체(71개 레이어)로 다시 만든다
+node generate.mjs --check           # 인터넷 없이 확인만: 지금 assets 의 style.json 이 쓸 글꼴 범위가 다 있는가
+node generate.mjs --flavor full --style-only --out 다른곳.json   # 스타일 JSON 만 따로 (비교용, assets 는 그대로)
 ```
 
 글꼴 · 아이콘은 `protomaps/basemaps-assets` 커밋 `028c18f7`에서 받는다 (`generate.mjs` 위쪽에 고정). 지도 파일을 넓히거나 새 빌드로 바꾸면 `--check`가 모자란 범위를 알려 준다.
