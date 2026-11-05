@@ -88,6 +88,10 @@ internal fun daySummaryLine(s: DaySummary): String = buildList {
     add(durationText(s.driveMillis))
 }.joinToString(SEPARATOR)
 
+/** 목록 행 머문 곳 줄: "경포해변 · 초당순두부마을 · 안목해변" (Rust가 앞 3개까지 골라 준다). 없으면 null. */
+internal fun stopNamesText(s: DaySummary): String? =
+    s.stopNames.takeIf { it.isNotEmpty() }?.joinToString(SEPARATOR)
+
 /** 1km 미만은 m, 그 이상은 소수 한 자리 km. */
 @Composable
 @ReadOnlyComposable

@@ -27,6 +27,9 @@
     <!-- 항목 시각 열 아래 칸: 끝난 시각. 예: ~ 09:32 -->
     <string name="entry_until">~ %1$s</string>
 
+    <!-- 하루 태그 알약. 예: #여행 -->
+    <string name="day_tag">#%1$s</string>
+
     <string name="timeline_failed_title">기록을 불러오지 못했어요</string>
     <string name="timeline_list_title">날짜별 기록</string>
 </resources>

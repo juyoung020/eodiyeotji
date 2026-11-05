@@ -50,6 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
@@ -128,6 +129,7 @@ fun TimelineScreen(
     onEntryClick: (String) -> Unit,
     onMapSelect: (String?) -> Unit,
     status: (@Composable () -> Unit)?,
+    headerAction: (@Composable () -> Unit)? = null,
 ) {
     val c = EodiTheme.colors
     val space = EodiTheme.space
@@ -142,7 +144,7 @@ fun TimelineScreen(
             val bodyPadding = Modifier.padding(start = space.page, end = space.page, bottom = space.page)
 
             Column(Modifier.fillMaxSize()) {
-                TimelineHeader(wide, status)
+                TimelineHeader(wide, status, headerAction)
                 when (val days = state.days) {
                     DaysState.Loading -> LoadingPane(Modifier.fillMaxSize())
                     is DaysState.Failed -> FailedPane(days.message, onRetry, Modifier.fillMaxSize())
@@ -210,9 +212,13 @@ fun TimelineScreen(
     }
 }
 
-/** 앱 표시(파란 핀 타일 + 이름). 넓은 창에서는 한 줄 소개를 옆에 붙인다. */
+/**
+ * 앱 표시(파란 핀 타일 + 이름). 넓은 창에서는 한 줄 소개를 옆에 붙인다.
+ * 오른쪽 끝 [action] 자리는 화면의 대표 동작 하나(예: ui/agent의 "어디였지? 물어보세요" 버튼)가 들어간다.
+ * 높이 76dp 버튼이 들어가도 머리 높이(104dp) 안에 맞는다. [status](디버그 전용)는 그 왼쪽에서 남는 폭만 쓴다.
+ */
 @Composable
-private fun TimelineHeader(wide: Boolean, status: (@Composable () -> Unit)?) {
+private fun TimelineHeader(wide: Boolean, status: (@Composable () -> Unit)?, action: (@Composable () -> Unit)?) {
     val c = EodiTheme.colors
     val space = EodiTheme.space
     Row(
@@ -239,10 +245,13 @@ private fun TimelineHeader(wide: Boolean, status: (@Composable () -> Unit)?) {
             Spacer(Modifier.width(20.dp))
             Text(stringResource(R.string.tagline), style = EodiTheme.type.body, color = c.textTertiary, maxLines = 1)
         }
-        Spacer(Modifier.weight(1f))
-        if (status != null) {
+        // 남는 폭은 디버그 상태 줄이 오른쪽 정렬로 쓴다 (좁으면 줄임표로 줄어든다)
+        Box(Modifier.weight(1f).padding(start = space.l), contentAlignment = Alignment.CenterEnd) {
+            if (status != null) status()
+        }
+        if (action != null) {
             Spacer(Modifier.width(space.l))
-            status()
+            action()
         }
     }
 }
@@ -280,7 +289,9 @@ private fun DayList(
 }
 
 /**
- * 날 한 줄: 왼쪽 날짜 타일(일 · 요일, 오늘은 파랑으로 채움), 가운데 "오늘"/"11월 5일" + 통계, 오른쪽 시간대.
+ * 날 한 줄: 왼쪽 날짜 타일(일 · 요일, 오늘은 파랑으로 채움), 가운데 글줄, 오른쪽 시간대.
+ * - 하루 제목이 있으면: 작은 날짜 줄("오늘 · 11월 6일") → 큰 제목 → 머문 곳 이름 → 통계
+ * - 없으면: 큰 날짜("오늘" / "11월 4일") → 머문 곳 이름 → 통계 (이름도 없으면 그 줄을 뺀다)
  * 고른 날(넓은 창에서 상세에 보이는 날)은 옅은 파랑 바탕 + 파랑 테두리.
  */
 @Composable
@@ -296,6 +307,9 @@ private fun DayRow(
     val type = EodiTheme.type
     val relative = relativeDayName(s.day, today)
     val isToday = s.day == today.toString()
+    val title = s.title?.takeIf { it.isNotBlank() }
+    val dateText = relative ?: dayListTitle(s.day, today)
+    val stops = stopNamesText(s)
     val bg by animateColorAsState(if (selected) c.accentSoft else c.surface, tween(SelectMs), label = "day-bg")
     val edge by animateColorAsState(if (selected) c.accent else Color.Transparent, tween(SelectMs), label = "day-edge")
     Surface(
@@ -310,22 +324,45 @@ private fun DayRow(
             DateTile(s.day, isToday, selected)
             Spacer(Modifier.width(20.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                // 첫 줄: 제목이 있으면 작은 날짜, 없으면 큰 날짜. 오른쪽 끝에 시간대.
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        relative ?: dayListTitle(s.day, today),
-                        style = type.title,
-                        color = if (isToday) c.accent else c.textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
+                    if (title != null) {
+                        Text(
+                            relative?.let { stringResource(R.string.timeline_relative_date, it, dayListTitle(s.day, today)) }
+                                ?: dateText,
+                            style = type.label,
+                            color = if (isToday) c.accent else c.textTertiary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else {
+                        Text(
+                            dateText,
+                            style = type.title,
+                            color = if (isToday) c.accent else c.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                     Spacer(Modifier.width(12.dp))
                     Text(timeRangeText(s.firstMs, s.lastMs), style = type.caption, color = c.textTertiary, maxLines = 1)
+                }
+                if (title != null) {
+                    Text(title, style = type.title, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                if (stops != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(EodiIcons.Pin, contentDescription = null, tint = c.stay, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stops, style = type.body, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
                 Text(
                     daySummaryLine(s),
                     style = type.meta,
-                    color = c.textSecondary,
+                    color = c.textTertiary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -422,15 +459,26 @@ private fun DetailHeader(summary: DaySummary?, today: LocalDate, onBack: (() -> 
                 Spacer(Modifier.width(20.dp))
             }
             if (summary != null) {
+                // 제목이 있으면 큰 글씨는 제목, 날짜는 위 작은 줄로. 없으면 날짜가 큰 글씨.
+                val title = summary.title?.takeIf { it.isNotBlank() }
+                val relative = relativeDayName(summary.day, today)
                 Column(Modifier.weight(1f)) {
-                    relativeDayName(summary.day, today)?.let { rel ->
-                        Text(rel, style = EodiTheme.type.label, color = c.accent)
+                    if (title != null) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (relative != null) {
+                                Text(relative, style = EodiTheme.type.label, color = c.accent)
+                                Spacer(Modifier.width(10.dp))
+                            }
+                            Text(dayTitle(summary.day, today), style = EodiTheme.type.label, color = c.textTertiary, maxLines = 1)
+                        }
+                    } else if (relative != null) {
+                        Text(relative, style = EodiTheme.type.label, color = c.accent)
                     }
                     Text(
-                        dayTitle(summary.day, today),
+                        title ?: dayTitle(summary.day, today),
                         style = EodiTheme.type.hero,
                         color = c.textPrimary,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.semantics { heading() },
                     )
@@ -438,8 +486,31 @@ private fun DetailHeader(summary: DaySummary?, today: LocalDate, onBack: (() -> 
             }
         }
         if (summary != null) {
+            if (summary.tags.isNotEmpty()) {
+                Spacer(Modifier.height(14.dp))
+                TagRow(summary.tags)
+            }
             Spacer(Modifier.height(20.dp))
             StatRow(summary)
+        }
+    }
+}
+
+/** 하루 태그 알약 줄 ("#여행 #가족"). 한 줄에 들어가는 만큼만 보이고 넘치면 오른쪽이 잘린다. */
+@Composable
+private fun TagRow(tags: List<String>) {
+    val c = EodiTheme.colors
+    Row(Modifier.fillMaxWidth().clipToBounds(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        for (tag in tags) {
+            Text(
+                stringResource(R.string.day_tag, tag),
+                style = EodiTheme.type.caption,
+                fontWeight = FontWeight.SemiBold,
+                color = c.textSecondary,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.background(c.surfaceHigh, RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 5.dp),
+            )
         }
     }
 }
