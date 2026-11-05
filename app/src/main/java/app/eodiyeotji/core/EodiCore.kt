@@ -19,6 +19,7 @@ import app.eodiyeotji.core.rust.DayDetail as RDayDetail
 import app.eodiyeotji.core.rust.DayEntry as RDayEntry
 import app.eodiyeotji.core.rust.DaySummary as RDaySummary
 import app.eodiyeotji.core.rust.GeoPoint as RGeoPoint
+import app.eodiyeotji.core.rust.MapBounds as RMapBounds
 import app.eodiyeotji.core.rust.StaySummary as RStaySummary
 import app.eodiyeotji.core.rust.TripSummary as RTripSummary
 
@@ -84,7 +85,12 @@ class EodiCore @Inject constructor(
      */
     suspend fun dayMap(day: String): DayMapData = withContext(Dispatchers.IO) {
         val m = store.dayMap(day)
-        DayMapData(m.day, m.geojson, m.bounds?.let { MapBoundsLatLon(it.minLat, it.minLon, it.maxLat, it.maxLon) })
+        DayMapData(
+            day = m.day,
+            geojson = m.geojson,
+            bounds = m.bounds?.toModel(),
+            entryBounds = m.entries.associate { it.key to it.bounds.toModel() },
+        )
     }
 
     suspend fun fixCount(): Long = withContext(Dispatchers.IO) { store.fixCount().toLong() }
@@ -145,10 +151,20 @@ data class DayDetail(
 /** 지도 화면 맞춤 범위. */
 data class MapBoundsLatLon(val minLat: Double, val minLon: Double, val maxLat: Double, val maxLon: Double)
 
-/** 하루치 지도 데이터 (Rust가 만든 GeoJSON 문자열 + 범위, 그릴 것이 없으면 bounds = null). */
-data class DayMapData(val day: String, val geojson: String, val bounds: MapBoundsLatLon?)
+/**
+ * 하루치 지도 데이터 (Rust가 만든 GeoJSON 문자열 + 범위, 그릴 것이 없으면 bounds = null).
+ * [entryBounds]: 타임라인 항목 키 → 그 항목의 범위 (항목을 누르면 지도를 옮길 때 쓴다).
+ */
+data class DayMapData(
+    val day: String,
+    val geojson: String,
+    val bounds: MapBoundsLatLon?,
+    val entryBounds: Map<String, MapBoundsLatLon> = emptyMap(),
+)
 
 private fun RGeoPoint.toModel() = LatLon(lat, lon)
+
+private fun RMapBounds.toModel() = MapBoundsLatLon(minLat, minLon, maxLat, maxLon)
 
 private fun RDaySummary.toModel() = DaySummary(
     day = day,

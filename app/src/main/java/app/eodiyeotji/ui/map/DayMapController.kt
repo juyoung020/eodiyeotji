@@ -122,6 +122,7 @@ internal class DayMapController(
         if (key == selected) return
         selected = key
         style?.let { applySelection(it) }
+        key?.let { revealEntry(it) }
     }
 
     // ------------------------------------------------------------ 내부
@@ -216,6 +217,24 @@ internal class DayMapController(
         }
     }
 
+    /**
+     * 고른 항목이 화면에 다 안 보이면 그 항목 범위로 부드럽게 옮긴다 (범위는 Rust가 계산해 준 값).
+     * 이미 다 보이면 지도를 움직이지 않는다 → 지도에서 직접 누른 경우 화면이 튀지 않는다.
+     */
+    private fun revealEntry(key: String) {
+        val m = map ?: return
+        val b = data?.entryBounds?.get(key) ?: return
+        val visible = m.projection.visibleRegion.latLngBounds
+        if (visible.contains(LatLng(b.minLat, b.minLon)) && visible.contains(LatLng(b.maxLat, b.maxLon))) return
+        val pad = (FIT_PADDING_DP * density).toInt()
+        val target = if (b.minLat == b.maxLat && b.minLon == b.maxLon) {
+            CameraUpdateFactory.newLatLngZoom(LatLng(b.minLat, b.minLon), MAX_FIT_ZOOM.coerceAtMost(m.cameraPosition.zoom.coerceAtLeast(REVEAL_MIN_ZOOM)))
+        } else {
+            CameraUpdateFactory.newLatLngBounds(LatLngBounds.from(b.maxLat, b.maxLon, b.minLat, b.minLon), pad)
+        }
+        m.easeCamera(target, REVEAL_MS)
+    }
+
     /** 지도를 누르면 손가락 크기(76dp) 안의 핀 → 경로 순서로 찾아 그 항목을 고른다. 빈 곳이면 선택 해제. */
     private fun onMapClick(m: MapLibreMap, latLng: LatLng): Boolean {
         if (style == null) return false
@@ -251,6 +270,8 @@ internal class DayMapController(
         const val TOUCH_RADIUS_DP = 38f
         const val MAX_FIT_ZOOM = 16.0
         const val MAX_ZOOM = 18.0
+        const val REVEAL_MIN_ZOOM = 14.0
+        const val REVEAL_MS = 400
 
         val isTrip: Expression = eq(get("kind"), literal("trip"))
         val isStay: Expression = eq(get("kind"), literal("stay"))

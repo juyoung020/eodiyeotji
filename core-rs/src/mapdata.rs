@@ -22,6 +22,14 @@ pub struct MapBounds {
     pub max_lon: f64,
 }
 
+/// 항목 하나(주행·머문 곳)의 범위. 타임라인에서 항목을 누르면 지도를 이 범위로 옮긴다.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct EntryBounds {
+    /// 타임라인 항목 키 (GeoJSON properties.key와 같다)
+    pub key: String,
+    pub bounds: MapBounds,
+}
+
 /// 하루치 지도 데이터.
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct DayMap {
@@ -30,24 +38,37 @@ pub struct DayMap {
     pub geojson: String,
     /// 그릴 것이 없으면 None.
     pub bounds: Option<MapBounds>,
+    /// 항목별 범위 (주행 → 머문 곳 순서).
+    pub entries: Vec<EntryBounds>,
 }
 
 /// 하루 상세를 지도 데이터로 바꾼다.
 pub fn day_map(d: &DayDetail) -> DayMap {
     let mut out = String::with_capacity(64 + d.trips.iter().map(|t| t.path.len() * 26 + 160).sum::<usize>());
     let mut b = Bounds::default();
+    let mut entries = Vec::with_capacity(d.trips.len() + d.stays.len());
     out.push_str(r#"{"type":"FeatureCollection","features":["#);
     let mut first = true;
     for t in &d.trips {
         sep(&mut out, &mut first);
-        trip_feature(&mut out, t, &mut b);
+        let mut eb = Bounds::default();
+        trip_feature(&mut out, t, &mut eb);
+        if let Some(r) = eb.get() {
+            b.merge(r);
+            entries.push(EntryBounds { key: format!("t{}", t.start_ms), bounds: r });
+        }
     }
     for s in &d.stays {
         sep(&mut out, &mut first);
-        stay_feature(&mut out, s, &mut b);
+        let mut eb = Bounds::default();
+        stay_feature(&mut out, s, &mut eb);
+        if let Some(r) = eb.get() {
+            b.merge(r);
+            entries.push(EntryBounds { key: format!("s{}", s.arrive_ms), bounds: r });
+        }
     }
     out.push_str("]}");
-    DayMap { day: d.day.clone(), geojson: out, bounds: b.get() }
+    DayMap { day: d.day.clone(), geojson: out, bounds: b.get(), entries }
 }
 
 fn sep(out: &mut String, first: &mut bool) {
@@ -109,6 +130,11 @@ impl Bounds {
         b.max_lon = b.max_lon.max(lon);
     }
 
+    fn merge(&mut self, r: MapBounds) {
+        self.add(r.min_lat, r.min_lon);
+        self.add(r.max_lat, r.max_lon);
+    }
+
     fn get(self) -> Option<MapBounds> {
         self.0
     }
@@ -166,6 +192,11 @@ mod tests {
         assert!(m.geojson.contains(r#""type":"Point","coordinates":[127.100000,37.600000]"#));
         assert!(m.geojson.contains(r#""kind":"stay","key":"s5000","arrive_ms":5000,"leave_ms":5000,"open":true"#));
         assert_eq!(m.bounds, Some(MapBounds { min_lat: 37.5, min_lon: 127.0, max_lat: 37.6, max_lon: 127.1 }));
+        assert_eq!(m.entries.len(), 2);
+        assert_eq!(m.entries[0].key, "t1000");
+        assert_eq!(m.entries[0].bounds, MapBounds { min_lat: 37.5, min_lon: 127.0, max_lat: 37.6, max_lon: 127.1 });
+        assert_eq!(m.entries[1].key, "s5000");
+        assert_eq!(m.entries[1].bounds, MapBounds { min_lat: 37.6, min_lon: 127.1, max_lat: 37.6, max_lon: 127.1 });
         // 괄호 짝이 맞는지 (간단한 형식 검사)
         assert_eq!(m.geojson.matches('{').count(), m.geojson.matches('}').count());
         assert_eq!(m.geojson.matches('[').count(), m.geojson.matches(']').count());
