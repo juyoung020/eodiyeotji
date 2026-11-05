@@ -93,6 +93,9 @@ pub(super) struct FakeBackend {
     /// 커뮤니티에 공유된 코스 (추천 코스 가짜 자료)
     pub posts: Vec<CoursePost>,
     pub reco_calls: Mutex<Vec<(Option<GeoPoint>, f64, u32)>>,
+    /// 이미 라벨이 붙은 날 (날짜, 제목) — 예전 제목 점검용
+    pub labeled: Mutex<Vec<(String, String)>>,
+    pub requeued: Mutex<Vec<String>>,
 }
 
 impl FakeBackend {
@@ -152,6 +155,11 @@ impl MemoryBackend for FakeBackend {
     fn mark_day_enrichment_failed(&self, day: String, retry_after_ms: i64) -> Result<(), CoreError> {
         self.failed.lock().unwrap().push((day, retry_after_ms));
         Ok(())
+    }
+    fn requeue_day_labels_where(&self, bad: &dyn Fn(&str) -> bool) -> Result<u32, CoreError> {
+        let days: Vec<String> = self.labeled.lock().unwrap().iter().filter(|(_, t)| bad(t)).map(|(d, _)| d.clone()).collect();
+        self.requeued.lock().unwrap().extend(days.iter().cloned());
+        Ok(days.len() as u32)
     }
     /// 실제(community.rs)와 같은 약속: 근처면 반경 안에서 인기·거리 점수순, 위치가 없으면 전국 하트순(거리 -1).
     fn recommend_drive_courses(&self, from: Option<GeoPoint>, radius_km: f64, k: u32) -> Result<Vec<CourseRecommendation>, CoreError> {
@@ -248,22 +256,8 @@ pub(super) fn fake_server(responses: Vec<String>, status: u16) -> FakeServer {
         for (i, stream) in listener.incoming().enumerate() {
             let Ok(mut stream) = stream else { continue };
             let mut reader = BufReader::new(stream.try_clone().unwrap());
-            let mut len = 0usize;
-            loop {
-                let mut line = String::new();
-                if reader.read_line(&mut line).unwrap_or(0) == 0 {
-                    break;
-                }
-                if let Some(v) = line.to_ascii_lowercase().strip_prefix("content-length:") {
-                    len = v.trim().parse().unwrap_or(0);
-                }
-                if line == "\r\n" {
-                    break;
-                }
-            }
-            let mut body = vec![0u8; len];
-            reader.read_exact(&mut body).unwrap();
-            rec.lock().unwrap().push(serde_json::from_slice::<Value>(&body).unwrap_or(json!(null)));
+            let Some(body) = read_request(&mut reader) else { continue };
+            rec.lock().unwrap().push(body);
             let text = &responses[i.min(responses.len() - 1)];
             let head = format!("HTTP/1.1 {status} X\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n");
             let _ = stream.write_all(head.as_bytes());
@@ -272,6 +266,28 @@ pub(super) fn fake_server(responses: Vec<String>, status: u16) -> FakeServer {
         }
     });
     FakeServer { url, bodies }
+}
+
+/// HTTP 요청 하나를 읽어 JSON 본문을 돌려준다 (연결이 닫혔으면 None).
+fn read_request(reader: &mut BufReader<std::net::TcpStream>) -> Option<Value> {
+    let mut len = 0usize;
+    let mut first = true;
+    loop {
+        let mut line = String::new();
+        if reader.read_line(&mut line).unwrap_or(0) == 0 {
+            return None;
+        }
+        if let Some(v) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+            len = v.trim().parse().unwrap_or(0);
+        }
+        if line == "\r\n" && !first {
+            break;
+        }
+        first = false;
+    }
+    let mut body = vec![0u8; len];
+    reader.read_exact(&mut body).ok()?;
+    Some(serde_json::from_slice::<Value>(&body).unwrap_or(json!(null)))
 }
 
 impl FakeServer {
@@ -509,7 +525,9 @@ fn tool_dispatch_date_passthrough_and_data_envelope() {
     assert_eq!(env["ok"], true);
     assert_eq!(env["data"]["hits"][0]["id"], 12);
     assert!(r.events().contains(&Ev::Rec(12, false)));
-    assert_eq!(r.answer(), "작년 8월 14일, 경포해변이에요.");
+    // LLM이 nav를 안 불러도 찾은 기억으로 안내 제안이 붙는다 (다음 행동은 한 번 누르기·"응" 한마디)
+    assert_eq!(r.answer(), "작년 8월 14일, 경포해변이에요. 그 코스로 안내할까요?");
+    assert_eq!(r.proposals().len(), 1);
     assert_eq!(r.done().timing.llm_calls, 2);
 }
 
@@ -574,7 +592,7 @@ fn tool_rounds_are_capped_then_wrap_up_without_tools() {
     assert_eq!(b.len(), MAX_TOOL_ROUNDS + 1);
     assert!(b[MAX_TOOL_ROUNDS].get("tools").is_none());
     assert!(last_msg(&b[MAX_TOOL_ROUNDS])["content"].as_str().unwrap().contains("도구는 더 쓸 수 없다"));
-    assert_eq!(r.answer(), "경포해변이에요.");
+    assert!(r.answer().starts_with("경포해변이에요."), "{}", r.answer());
 }
 
 #[test]
@@ -582,14 +600,64 @@ fn server_down_falls_back_to_on_device_search_and_cools_down() {
     let server = fake_server(vec!["{}".into()], 503);
     let backend = FakeBackend::new();
     let agent = server.agent(backend, AgentOptions::default());
-    // 사람 말이 있어 LLM으로 가지만 서버가 503 → 빠른 길 결과로 답
+    // 사람 말이 있어 LLM으로 가지만 서버가 503 → 빠른 길 결과로 바로 답한다 (서버 사정은 말하지 않는다)
     let r = ask(&agent, "엄마랑 갔던 순두부집", ctx(true));
-    assert!(r.answer().starts_with(SERVER_DOWN), "{}", r.answer());
-    assert!(r.answer().contains("경포해변") || r.answer().contains("초당순두부마을"));
+    assert!(r.answer().contains("경포해변") || r.answer().contains("초당순두부마을"), "{}", r.answer());
+    assert!(!r.answer().contains("연결"), "{}", r.answer());
     assert_eq!(r.done().source, AnswerSource::Fallback);
-    assert_eq!(server.bodies().len(), 1);
-    ask(&agent, "친구랑 간 카페", ctx(true));
+    assert_eq!(r.proposals().len(), 1, "대신 답해도 안내 제안은 한 번 누르면 된다");
+    assert_eq!(server.bodies().len(), 1, "5xx는 새 연결로 다시 보내지 않는다");
+    // 쿨다운 동안은 연결하지 않고, 기기 안에서도 못 찾으면 다시 묻기를 권하는 오류
+    let r = ask(&agent, "친구랑 간 제주도 한라산", ctx(true));
     assert_eq!(server.bodies().len(), 1, "쿨다운 동안 다시 연결하지 않는다");
+    assert_eq!(r.events().last(), Some(&Ev::Error(SERVER_DOWN.into())));
+}
+
+#[test]
+fn warm_up_failure_does_not_block_the_first_question() {
+    // 아무도 듣지 않는 주소 → 미리 데우기 실패
+    let dead = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/v1", dead.local_addr().unwrap());
+    drop(dead);
+    let agent = MemoryAgent::with_backend(FakeBackend::new(), cfg(&url), AgentOptions::default());
+    assert!(!agent.warm_up());
+    assert!(!agent.server_down(), "미리 데우기 실패로 서버를 꺼짐으로 보지 않는다");
+}
+
+/// 앱 시작 뒤 첫 질문이 실패하던 원인: 미리 데우기에 쓴 연결을 다시 쓰는데 서버가 그 연결을 닫아 버림.
+/// 새 연결로 한 번 다시 보내 첫 질문도 LLM으로 답해야 한다.
+#[test]
+fn stale_pooled_connection_is_retried_on_a_fresh_one() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/v1", listener.local_addr().unwrap());
+    let bodies = Arc::new(Mutex::new(vec![]));
+    let rec = bodies.clone();
+    std::thread::spawn(move || {
+        let mut conns = listener.incoming();
+        // 1번 연결: 미리 데우기에 keep-alive로 답하고, 다음 요청은 읽기만 하고 답 없이 닫는다
+        let mut s1 = conns.next().unwrap().unwrap();
+        let mut r1 = BufReader::new(s1.try_clone().unwrap());
+        rec.lock().unwrap().push(read_request(&mut r1).unwrap());
+        let warm = completion("");
+        let _ = write!(s1, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{warm}", warm.len());
+        let _ = s1.flush();
+        if let Some(b) = read_request(&mut r1) {
+            rec.lock().unwrap().push(b);
+        }
+        drop(r1);
+        let _ = s1.shutdown(std::net::Shutdown::Both);
+        // 2번 연결: 정상 답
+        let mut s2 = conns.next().unwrap().unwrap();
+        let mut r2 = BufReader::new(s2.try_clone().unwrap());
+        rec.lock().unwrap().push(read_request(&mut r2).unwrap());
+        let _ = write!(s2, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n{}", sse_text(&["속초중앙시장이에요."]));
+    });
+    let agent = MemoryAgent::with_backend(FakeBackend::new(), cfg(&url), llm_only());
+    assert!(agent.warm_up());
+    let r = ask(&agent, "속초에서 들렀던 시장", ctx(true));
+    assert_eq!(r.done().source, AnswerSource::Llm, "{:?}", r.events());
+    assert_eq!(r.answer(), "속초중앙시장이에요.");
+    assert_eq!(bodies.lock().unwrap().len(), 3, "미리 데우기 + 끊긴 요청 + 새 연결로 다시 보낸 요청");
 }
 
 #[test]
@@ -643,7 +711,7 @@ fn promise_without_tool_call_is_nudged_once() {
     assert_eq!(b.len(), 3);
     assert!(last_msg(&b[1])["content"].as_str().unwrap().contains("도구를 불러라"));
     assert_eq!(backend.queries.lock().unwrap().len(), 1);
-    assert!(r.answer().ends_with("속초중앙시장이에요."));
+    assert!(r.answer().starts_with("속초중앙시장이에요."), "{}", r.answer());
 }
 
 #[test]
@@ -667,7 +735,7 @@ fn labeling_retries_bad_json_once_then_defers() {
     let backend = FakeBackend::new();
     backend.pending.lock().unwrap().push(facts());
     assert_eq!(server.agent(backend.clone(), AgentOptions::default()).label_pending_days(5, TZ).bad_output, 1);
-    assert_eq!(server.bodies().len(), 2);
+    assert_eq!(server.bodies().len(), 3, "첫 요청 + 고쳐 쓰기 두 번");
     assert_eq!(backend.failed.lock().unwrap()[0], ("2025-08-14".into(), label::BAD_OUTPUT_RETRY_MS));
 }
 
@@ -682,4 +750,75 @@ fn labeling_stops_when_server_is_down() {
     assert_eq!(label::server_retry_ms(2), 120_000);
     assert_eq!(label::server_retry_ms(30), 3_600_000);
     let _ = DayRange::day(0);
+}
+
+#[test]
+fn title_rules_catch_route_dumps_and_cliches() {
+    let stops: Vec<String> = ["횡성휴게소", "경포해변", "초당할머니순두부", "안목해변"].iter().map(|s| s.to_string()).collect();
+    for bad in ["강릉 횡성휴게소 출발 바다 순두부", "경포해변 초당할머니순두부 안목해변", "행복한 강릉 여행", "2025 강릉 여행", "퇴근길 · 한양대학교병원 들름", "강릉에서 보낸 아주아주 길고 길었던 바다와 순두부의 하루"] {
+        assert!(label::title_problem(bad, &stops).is_some(), "{bad}");
+    }
+    for good in ["강릉 순두부 원정", "가을 남이섬 단풍 마실", "경포 바다·순두부 당일치기", "퇴근길에 성수 카페 한 잔"] {
+        assert_eq!(label::title_problem(good, &stops), None, "{good}");
+    }
+    // 휴게소만 들른 날은 휴게소가 이야기다
+    assert_eq!(label::title_problem("횡성휴게소 한우 맛보기", &["횡성휴게소".to_string()]), None);
+    // 들른 곳을 모르는 점검에서는 주유소 제목을 문제 삼지 않는다 (매번 다시 라벨링하지 않게)
+    assert_eq!(label::title_problem("응봉 주유소 들르기", &[]), None);
+    assert_eq!(label::season("2025-11-06"), "가을");
+    assert_eq!(label::season("2026-01-11"), "겨울");
+}
+
+#[test]
+fn labeling_asks_again_when_the_title_lists_the_route() {
+    let bad = r#"{"title":"강릉 횡성휴게소 출발 바다 순두부","summary":"강릉에 다녀왔어요.","tags":["강릉"],"episodes":[{"episode_id":12,"title":"강릉 여행","tags":["바다"]}]}"#;
+    let good = r#"{"title":"강릉 순두부 원정","summary":"강릉에 다녀왔어요.","tags":["강릉"],"episodes":[{"episode_id":12,"title":"강릉 여행","tags":["바다"]}]}"#;
+    let server = fake_server(vec![completion(bad), completion(good)], 200);
+    let backend = FakeBackend::new();
+    backend.pending.lock().unwrap().push(facts());
+    backend.labeled.lock().unwrap().extend([
+        ("2025-11-06".to_string(), "강릉 횡성휴게소 출발 바다 순두부".to_string()),
+        ("2025-12-02".to_string(), "퇴근길 · 한양대학교병원 들름".to_string()),
+        ("2026-05-16".to_string(), "블루보틀 성수에서 핸드드립".to_string()),
+    ]);
+    let agent = server.agent(backend.clone(), AgentOptions::default());
+    assert_eq!(agent.label_pending_days(5, TZ).labeled, 1);
+    assert_eq!(backend.saved.lock().unwrap()[0].title, "강릉 순두부 원정");
+    let b = server.bodies();
+    assert_eq!(b.len(), 2);
+    let fix = last_msg(&b[1])["content"].as_str().unwrap().to_string();
+    assert!(fix.contains("휴게소") || fix.contains("경로"), "{fix}");
+    assert!(b[0]["messages"][3]["content"].as_str().unwrap().contains("\"season\":\"여름\""));
+    // 예전 규칙으로 붙은 어색한 제목만, 그리고 한 번만 다시 대기열에
+    assert_eq!(*backend.requeued.lock().unwrap(), vec!["2025-11-06".to_string(), "2025-12-02".to_string()]);
+    agent.label_pending_days(5, TZ);
+    assert_eq!(backend.requeued.lock().unwrap().len(), 2);
+}
+
+#[test]
+fn answers_are_tidied_for_reading_aloud() {
+    use super::runner::tidy_answer;
+    let long = "엄마랑 함께 가신 식당을 찾아보겠습니다.\n\n- **2026년 7월 12일 (일)**: 을왕리 조개구이촌에 가셨어요.\n- **2026년 6월 6일**: 또 가셨어요.\n그곳으로 안내할까요?";
+    let d = tidy_answer(long, true);
+    assert!(!d.contains("**") && !d.contains("- "), "{d}");
+    assert!(d.ends_with("안내할까요?"), "물음은 남긴다: {d}");
+    assert!(d.chars().count() <= 90, "{d}");
+    assert_eq!(tidy_answer("경포해변이에요. 3.5km 거리예요.", false), "경포해변이에요. 3.5km 거리예요.");
+    assert_eq!(tidy_answer("  ", true), "");
+}
+
+#[test]
+fn chatter_before_a_tool_call_is_not_shown() {
+    let chatter_then_tool = sse_text(&["찾아보겠습니다. "]).replace("data: [DONE]\n\n", "") + &tool("c1", "find", r#"{"q":["속초","시장"]}"#);
+    let server = fake_server(vec![chatter_then_tool, sse_text(&["**속초중앙시장**이에요.\n- 10월 25일"])], 200);
+    let r = ask(&server.agent(FakeBackend::new(), llm_only()), "속초에서 들렀던 시장", ctx(true));
+    assert!(r.answer().starts_with("속초중앙시장이에요. 10월 25일"), "{}", r.answer());
+}
+
+#[test]
+fn llm_answer_that_found_nothing_gets_no_proposal() {
+    let server = fake_server(vec![tool("c1", "find", r#"{"q":["경포"]}"#), sse_text(&["기록에서 찾지 못했어요."])], 200);
+    let r = ask(&server.agent(FakeBackend::new(), llm_only()), "경포 갔던 날", ctx(true));
+    assert_eq!(r.answer(), "기록에서 찾지 못했어요.");
+    assert!(r.proposals().is_empty());
 }

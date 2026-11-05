@@ -1030,6 +1030,27 @@ pub(crate) fn pending_days(store: &EodiStore, conn: &Connection, limit: u32, now
     Ok(out)
 }
 
+/// 붙어 있는 라벨 중 제목이 [bad]인 날을 다시 대기열에 넣는다 (라벨 규칙이 바뀐 뒤 예전 규칙으로 붙은 어색한 제목 고치기).
+/// 라벨은 다음 라벨이 붙을 때까지 그대로 보인다. 다시 넣은 날 수를 돌려준다.
+pub(crate) fn requeue_labels_where(conn: &Connection, bad: &dyn Fn(&str) -> bool) -> Result<u32, CoreError> {
+    let days: Vec<(i64, String)> = {
+        let mut st = conn.prepare_cached(
+            "SELECT day, title FROM day_memory WHERE needs_llm = 1 AND title IS NOT NULL AND enriched_sig = sig",
+        )?;
+        let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        rows.collect::<Result<_, _>>()?
+    };
+    let mut n = 0;
+    let mut up = conn.prepare_cached("UPDATE day_memory SET enriched_sig = NULL, retry_at_ms = 0 WHERE day = ?1")?;
+    for (d, title) in days {
+        if bad(&title) {
+            up.execute([d])?;
+            n += 1;
+        }
+    }
+    Ok(n)
+}
+
 /// LLM 라벨 저장 (상위 모듈 `set_day_enrichment`).
 pub(crate) fn save_enrichment(conn: &mut Connection, d: i64, e: &DayEnrichment) -> Result<(), CoreError> {
     let title = clean(e.title.trim()).trim().to_owned();

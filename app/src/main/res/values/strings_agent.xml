@@ -21,6 +21,16 @@
     <string name="agent_failed">답을 받지 못했어요. 잠시 뒤 다시 물어봐 주세요.</string>
     <string name="agent_retry">다시 묻기</string>
 
+    <!-- 말로 묻기 (Pleos SpeechToText) · 답 읽기 (Pleos TextToSpeech) -->
+    <string name="agent_voice_listening">듣고 있어요</string>
+    <string name="agent_voice_hint">“작년 여름 바다 어디였지?”처럼 말씀하세요</string>
+    <string name="agent_voice_follow_up">이어서 말씀하세요</string>
+    <string name="agent_voice_follow_up_hint">“응”이라고 하면 안내를 시작해요</string>
+    <string name="agent_voice_follow_up_courses_hint">“2번으로 가자”처럼 말씀하세요</string>
+    <string name="agent_voice_done">다 말했어요</string>
+    <string name="agent_voice_cancel">듣기 취소</string>
+    <string name="agent_voice_stop_speaking">읽기 멈춤</string>
+
     <!-- 추천 카드 -->
     <!-- 예: 1년 전 · 2025년 8월 14일 (목) -->
     <string name="agent_date_line">%1$s · %2$s</string>

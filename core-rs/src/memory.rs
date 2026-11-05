@@ -314,5 +314,15 @@ impl EodiStore {
     }
 }
 
+impl EodiStore {
+    /// 이미 라벨이 붙은 날 중 제목이 [bad]인 날을 다시 라벨링 대기열에 넣는다 (기억 에이전트가 라벨 규칙을 바꾼 뒤 한 번).
+    /// 다시 붙을 때까지 예전 제목이 보인다. 반환: 다시 넣은 날 수.
+    pub(crate) fn requeue_day_labels_where(&self, bad: &dyn Fn(&str) -> bool) -> Result<u32, CoreError> {
+        let mut conn = self.lock()?;
+        self.flush_all(&mut conn)?;
+        episode::requeue_labels_where(&conn, bad)
+    }
+}
+
 #[cfg(test)]
 mod tests;

@@ -262,6 +262,32 @@ fn enrichment_queue_skips_routine_days_and_requeues_on_material_change() {
     assert!(store.episodes_for_day("2026-10-12".into()).unwrap().is_empty());
 }
 
+#[test]
+fn requeue_labels_where_puts_only_bad_titles_back_and_keeps_them_visible() {
+    let db = TempDb::new("requeue");
+    let store = db.open();
+    store.set_home_office(Some(pt(HOME)), Some(pt(OFFICE))).unwrap();
+    small_week(&store);
+    let label = |day: &str, title: &str| {
+        store
+            .set_day_enrichment(DayEnrichment { day: day.into(), title: title.into(), summary: "s".into(), tags: vec!["t".into()], episodes: vec![] })
+            .unwrap()
+    };
+    label("2026-10-10", "강릉 횡성휴게소 출발 바다 순두부");
+    label("2026-10-11", "성수 카페 한 잔");
+    assert_eq!(store.pending_day_enrichments(10).unwrap().into_iter().map(|d| d.day).collect::<Vec<_>>(), ["2026-10-05"]);
+
+    let n = store.requeue_day_labels_where(&|t: &str| t.contains("휴게소")).unwrap();
+    assert_eq!(n, 1);
+    let pending: Vec<String> = store.pending_day_enrichments(10).unwrap().into_iter().map(|d| d.day).collect();
+    assert_eq!(pending, ["2026-10-10", "2026-10-05"]);
+    // 다시 붙을 때까지 예전 제목이 보인다
+    let sum = store.day_summaries(30).unwrap().into_iter().find(|s| s.day == "2026-10-10").unwrap();
+    assert_eq!(sum.title.as_deref(), Some("강릉 횡성휴게소 출발 바다 순두부"));
+    // 라벨이 없는 날·평범한 날은 건드리지 않는다
+    assert_eq!(store.requeue_day_labels_where(&|_| true).unwrap(), 1, "2026-10-11만 남아 있다");
+}
+
 fn q(terms: &[&str]) -> MemoryQuery {
     MemoryQuery { terms: terms.iter().map(|t| t.to_string()).collect(), from_ms: None, to_ms: None, kinds: vec![], limit: 10 }
 }

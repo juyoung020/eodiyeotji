@@ -1,22 +1,19 @@
 package app.eodiyeotji.agent
 
-import android.content.Context
 import android.util.Log
 import app.eodiyeotji.BuildConfig
 import app.eodiyeotji.core.CourseLeg
+import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.LatLon
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.core.rust.AgentContext
 import app.eodiyeotji.core.rust.AgentListener
-import app.eodiyeotji.core.rust.EodiStore
 import app.eodiyeotji.core.rust.GeoPoint
 import app.eodiyeotji.core.rust.LabelReport
 import app.eodiyeotji.core.rust.LlmConfig
 import app.eodiyeotji.core.rust.MemoryAgent
 import app.eodiyeotji.pleos.PleosNavi
 import app.eodiyeotji.pleos.RouteStop
-import dagger.hilt.android.qualifiers.ApplicationContext
-import java.io.File
 import java.util.TimeZone
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -48,8 +45,8 @@ import app.eodiyeotji.core.rust.NavProposal as RNavProposal
  */
 @Singleton
 class AgentBridge @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val navi: PleosNavi,
+    private val core: EodiCore,
 ) {
     /** Rust 에이전트. DB를 여는 일이라 처음 쓸 때 IO 스레드에서 만든다. */
     private val agent: MemoryAgent by lazy { createAgent() }
@@ -102,7 +99,7 @@ class AgentBridge @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "에이전트 실패", e)
-                send(AgentEvent.Error("기억 찾기에 실패했어요."))
+                send(AgentEvent.Error("기억을 찾다가 문제가 생겼어요. 다시 물어봐 주세요."))
             }
             channel.close()
         }
@@ -169,13 +166,11 @@ class AgentBridge @Inject constructor(
 
     /**
      * Rust 에이전트 만들기. LLM 주소가 비어 있으면 Rust가 빠른 길(기기 안 검색)만 쓴다.
-     *
-     * [임시] EodiCore가 아직 Rust 저장소(EodiStore)를 내주지 않아 같은 DB 파일을 연결 하나 더로 연다 (SQLite WAL이라 읽기·쓰기 모두 안전,
-     * Rust가 바쁜 잠금을 기다린다). EodiCore에 저장소 접근자가 생기면 그것으로 바꾼다 — 이 경우 라벨 저장이 EodiCore.changes를 울리지 않는다.
+     * 앱과 같은 Rust 저장소([EodiCore.rust])를 쓴다 — 라벨을 저장하면 [DayLabeler]가 [EodiCore.notifyChanged]로
+     * 타임라인·하루 카드를 다시 그리게 한다 (예전에는 DB 연결을 하나 더 열어 화면이 새 제목을 몰랐다).
      */
     private fun createAgent(): MemoryAgent {
-        val db = File(context.filesDir, "eodi.db").absolutePath
-        val store = EodiStore.open(db, TimeZone.getDefault().rawOffset / 60_000)
+        val store = core.rust
         val config = LlmConfig(
             baseUrl = BuildConfig.LLM_BASE_URL,
             model = BuildConfig.LLM_MODEL,

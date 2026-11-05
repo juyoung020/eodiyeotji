@@ -24,7 +24,8 @@ import kotlinx.coroutines.launch
  * 여기는 가끔 깨어나 `labelPendingDays`를 부르기만 한다 ([EodiApp][app.eodiyeotji.EodiApp]이 [start], PlaceResolver와 같은 방식).
  *
  * 깨어나는 때: 기록 변경([EodiCore.changes], 30초 모아서), [TICK_MS]마다. 네트워크가 없으면 건너뛴다.
- * 시작할 때 LLM 서버에 고정 프롬프트를 한 번 미리 계산시켜 첫 질문을 빠르게 한다.
+ * 라벨을 붙이면 [EodiCore.notifyChanged]로 타임라인·하루 카드가 새 제목을 다시 읽게 한다.
+ * 시작할 때 LLM 서버에 고정 프롬프트를 한 번 미리 계산시켜 첫 질문을 빠르게 한다 (망이 붙을 때까지 기다렸다가, 실패해도 질문을 막지 않는다).
  */
 @Singleton
 class DayLabeler @Inject constructor(
@@ -44,7 +45,7 @@ class DayLabeler @Inject constructor(
             Log.w(TAG, "LLM_BASE_URL 없음 → 하루 라벨링 끔. local.properties에 LLM_BASE_URL=http://10.0.2.2:8181/v1 을 넣고 다시 빌드")
             return
         }
-        scope.launch { if (online()) bridge.warmUp() }
+        scope.launch { warmUp() }
         scope.launch { core.changes.collect { wake.trySend(Unit) } }
         scope.launch { while (true) { wake.trySend(Unit); delay(TICK_MS) } }
         scope.launch {
@@ -55,7 +56,8 @@ class DayLabeler @Inject constructor(
                 if (!online()) continue
                 try {
                     val r = bridge.labelPendingDays(BATCH)
-                    if (r.labeled > 0u || r.badOutput > 0u || r.serverDown) Log.i(TAG, "하루 라벨링: ${r.labeled}일, 형식 오류 ${r.badOutput}일, 서버 꺼짐=${r.serverDown}")
+                    Log.i(TAG, "하루 라벨링: ${r.labeled}일, 형식 오류 ${r.badOutput}일, 서버 꺼짐=${r.serverDown} (붙인 제목은 logcat EodiRust)")
+                    if (r.labeled > 0u) core.notifyChanged() // 타임라인·하루 카드가 새 제목을 다시 읽는다
                     if (r.labeled.toInt() == BATCH) wake.trySend(Unit) // 남은 날은 바로 다음 차례에
                 } catch (e: CancellationException) {
                     throw e
@@ -63,6 +65,19 @@ class DayLabeler @Inject constructor(
                     Log.w(TAG, "하루 라벨링 실패", e)
                 }
             }
+        }
+    }
+
+    /** 앱 시작 직후에는 망이 아직 안 붙었을 수 있다 → 붙을 때까지(최대 1분) 기다렸다가 데운다. 실패하면 한 번만 다시. */
+    private suspend fun warmUp() {
+        repeat(WARM_WAIT_STEPS) {
+            if (online()) {
+                val t0 = System.currentTimeMillis()
+                val ok = bridge.warmUp() || run { delay(3_000); bridge.warmUp() }
+                Log.i(TAG, "LLM 미리 데우기 ${if (ok) "완료" else "실패 (첫 질문은 그대로 LLM을 시도한다)"} ${System.currentTimeMillis() - t0}ms")
+                return
+            }
+            delay(2_000)
         }
     }
 
@@ -76,5 +91,6 @@ class DayLabeler @Inject constructor(
         const val SETTLE_MS = 30_000L
         const val TICK_MS = 15 * 60_000L
         const val BATCH = 5
+        const val WARM_WAIT_STEPS = 30
     }
 }

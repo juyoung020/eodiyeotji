@@ -26,7 +26,9 @@ const MAX_HISTORY_CHARS: usize = 12_000;
 const OLD_TOOL_KEEP: usize = 700;
 pub const SESSION_IDLE_MS: i64 = 10 * 60_000;
 
-pub const SERVER_DOWN: &str = "지금 AI 서버에 연결할 수 없어요.";
+/// LLM에 닿지 않고 기기 안 기록에서도 못 찾았을 때 (오류로 내보내 화면이 "다시 묻기"를 보인다).
+pub const SERVER_DOWN: &str = "AI 연결이 잠깐 끊겨 기기 안 기록만 찾아봤는데, 못 찾았어요. 다시 물어봐 주세요.";
+pub const CUT_OFF: &str = "답을 받다가 연결이 끊겼어요. 다시 물어봐 주세요.";
 pub const NOT_CONFIGURED: &str = "AI 연결이 아직 설정되지 않았어요.";
 pub const GIVE_UP: &str = "죄송해요, 지금은 찾지 못했어요. 조금 다르게 말씀해 주시겠어요?";
 const EMPTY_ANSWER: &str = "죄송해요, 답을 정리하지 못했어요. 다시 말씀해 주세요.";
@@ -167,14 +169,17 @@ impl MemoryAgent {
             self.fast_answer(&mut s, &mut t, &fast_hits[0], ctx, today);
             return self.finish(&mut s, t, u, AnswerSource::FastPath);
         }
-        if !llm_usable {
-            t.say(if self.llm.is_none() { NOT_CONFIGURED } else { SERVER_DOWN });
+        if self.llm.is_none() {
+            t.say(NOT_CONFIGURED);
             t.say(" ");
             match fast_hits.first() {
                 Some(top) => self.fast_answer(&mut s, &mut t, top, ctx, today),
                 None => t.say(NOT_FOUND),
             }
             return self.finish(&mut s, t, u, AnswerSource::Fallback);
+        }
+        if !llm_usable {
+            return self.offline_answer(&mut s, t, u, &fast_hits, ctx, today);
         }
 
         // 4) LLM 도구 루프
@@ -184,29 +189,74 @@ impl MemoryAgent {
             Ok(()) => {
                 if (course_topic_before || t.course_shown) && !t.memory_shown {
                     self.course_proposal_from_answer(&mut s, &mut t, ctx, pending_before);
+                } else if t.memory_shown {
+                    self.memory_proposal_after_llm(&mut s, &mut t, ctx, pending_before);
                 }
                 self.finish(&mut s, t, u, AnswerSource::Llm)
             }
             Err(LlmError::Cancelled) => l.on_error("취소했어요.".into()),
             Err(e) => {
-                eprintln!("[agent] LLM 실패: {e}");
-                if t.answer.is_empty() {
+                alog!("[agent] LLM 실패: {e}");
+                if t.answer.trim().is_empty() {
                     if matches!(e, LlmError::Unreachable(_)) {
                         self.mark_server_down();
                     }
                     t.msgs.clear();
-                    t.say(SERVER_DOWN);
-                    t.say(" ");
-                    match fast_hits.first() {
-                        Some(top) => self.fast_answer(&mut s, &mut t, top, ctx, today),
-                        None => t.say(NOT_FOUND),
-                    }
-                    self.finish(&mut s, t, u, AnswerSource::Fallback)
+                    t.answer.clear();
+                    self.offline_answer(&mut s, t, u, &fast_hits, ctx, today)
                 } else {
-                    l.on_error("답을 받다가 연결이 끊겼어요.".into());
+                    l.on_error(CUT_OFF.into());
                 }
             }
         }
+    }
+
+    /// LLM 서버에 닿지 않을 때: 기기 안 검색 결과가 있으면 그것으로 바로 답한다 (운전자에게 서버 사정은 필요 없다).
+    /// 없으면 다시 묻기를 권하는 오류 (화면은 "다시 묻기" 버튼을 보인다).
+    fn offline_answer(&self, s: &mut Session, mut t: Turn, u: &str, fast_hits: &[MemoryHit], ctx: &AgentContext, today: i64) {
+        match fast_hits.first() {
+            Some(top) => {
+                self.fast_answer(s, &mut t, top, ctx, today);
+                self.finish(s, t, u, AnswerSource::Fallback)
+            }
+            None => t.l.on_error(SERVER_DOWN.into()),
+        }
+    }
+
+    /// 기억 하나로 갈 안내 제안: 들른 곳이 여럿이면 코스(카드도 코스로 바꾼다), 하나면 그곳.
+    fn memory_proposal(&self, s: &mut Session, t: &mut Turn, top: &MemoryHit, ctx: &AgentContext) -> Option<NavProposal> {
+        let f = &top.episode.facts;
+        let title = top.episode.title.clone().or(top.day_title.clone()).unwrap_or(f.rule_label.clone());
+        if f.stops.len() > 1 {
+            let mut c = Ctx { backend: self.backend.as_ref(), ctx, cache: &mut s.tools, courses: &mut s.courses, proposal_seq: &mut s.proposal_seq };
+            if let Ok((route, _)) = tools::plan(f.id, true, &mut c) {
+                let p = tools::course_proposal(&mut s.proposal_seq, f.id, &title, &route);
+                t.recommend(top, Some(route));
+                return Some(p);
+            }
+        }
+        let stop = top.best_stop.clone().or_else(|| f.stops.first().cloned());
+        stop.filter(|x| !x.name.is_empty()).map(|x| tools::place_proposal(&mut s.proposal_seq, x))
+    }
+
+    /// LLM이 기억을 찾아 답했는데 안내 제안(nav)을 하지 않았으면, 찾은 기억으로 제안을 붙인다 —
+    /// 다음 행동(안내)이 버튼 한 번, 또는 말 한마디("응")가 되게. 못 찾았다고 답했으면 붙이지 않는다.
+    fn memory_proposal_after_llm(&self, s: &mut Session, t: &mut Turn, ctx: &AgentContext, pending_before: Option<String>) {
+        let pending_now = self.pending.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|p| p.id.clone());
+        if pending_now.is_some() && pending_now != pending_before {
+            return; // 이번 질문에서 이미 제안함
+        }
+        let answer = t.answer_text().to_string();
+        if ["못 찾", "찾지 못"].iter().any(|w| answer.contains(w)) && !answer.contains("까요?") {
+            return;
+        }
+        let Some(focus) = s.focus.clone() else { return };
+        let Some(p) = self.memory_proposal(s, t, &focus, ctx) else { return };
+        if !answer.contains("까요?") {
+            t.say(if matches!(p.action, super::NavAction::Course { .. }) { " 그 코스로 안내할까요?" } else { " 그곳으로 안내할까요?" });
+        }
+        *self.pending.lock().unwrap_or_else(|e| e.into_inner()) = Some(p.clone());
+        t.l.on_action_proposal(p);
     }
 
     /// 틀 문장 답 + 안내 제안 (LLM 없이).
@@ -217,20 +267,7 @@ impl MemoryAgent {
             .or_else(|| f.stops.first().map(|x| x.name.clone()).filter(|n| !n.is_empty()))
             .unwrap_or(title.clone());
         let when = spoken_date(&f.day, today);
-        // 안내 제안: 들른 곳이 여럿이면 코스, 하나면 그곳
-        let mut proposal: Option<NavProposal> = None;
-        if f.stops.len() > 1 {
-            let mut c = Ctx { backend: self.backend.as_ref(), ctx, cache: &mut s.tools, courses: &mut s.courses, proposal_seq: &mut s.proposal_seq };
-            if let Ok((route, _)) = tools::plan(f.id, true, &mut c) {
-                let p = tools::course_proposal(&mut s.proposal_seq, f.id, &title, &route);
-                t.recommend(top, Some(route));
-                proposal = Some(p);
-            }
-        }
-        if proposal.is_none() {
-            let stop = top.best_stop.clone().or_else(|| f.stops.first().cloned());
-            proposal = stop.filter(|x| !x.name.is_empty()).map(|x| tools::place_proposal(&mut s.proposal_seq, x));
-        }
+        let proposal = self.memory_proposal(s, t, top, ctx);
         let ask = match &proposal {
             Some(p) if matches!(p.action, super::NavAction::Course { .. }) => " 그 코스로 안내할까요?",
             Some(_) => " 그곳으로 안내할까요?",
@@ -277,10 +314,14 @@ impl MemoryAgent {
                 body["tool_choice"] = json!("auto");
                 body["parallel_tool_calls"] = json!(true);
             }
-            let r = llm.stream(body, &mut |p| t.say(p), &cancelled)?;
+            // 한 라운드의 글은 모았다가 도구를 안 부른 라운드에서만 다듬어 내보낸다: 작은 모델은 도구를 부르기 전에
+            // "찾아보겠습니다" 같은 말을 붙이고, 목록·별표를 섞어 길게 쓴다 → 운전자에게는 마지막 답 한두 문장만.
+            // (카드는 빠른 길에서 먼저 나오고, 도구 호출 한 번이 0.3~0.5초라 늦어지는 것은 그만큼이다.)
+            let mut said = String::new();
+            let r = llm.stream(body, &mut |p| said.push_str(p), &cancelled)?;
             t.llm_calls += 1;
             t.llm_ms += r.total_ms;
-            eprintln!(
+            alog!(
                 "[agent] LLM {}: 첫 토큰 {:?}ms 전체 {}ms 도구 {:?} timings={}",
                 t.llm_calls, r.first_token_ms, r.total_ms, r.tool_calls.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
                 r.timings.as_ref().map(|x| x.to_string()).unwrap_or_default()
@@ -290,13 +331,11 @@ impl MemoryAgent {
                 nudged = true;
                 t.msgs.push(json!({"role": "assistant", "content": r.content}));
                 t.msgs.push(json!({"role": "user", "content": "[앱] 말로만 하지 말고 지금 도구를 불러라."}));
-                t.say(" ");
                 continue;
             }
             if r.tool_calls.is_empty() || !allow_tools {
-                if r.content.is_empty() {
-                    t.say(EMPTY_ANSWER);
-                }
+                let text = tidy_answer(&said, ctx.is_driving);
+                t.say(if text.is_empty() { EMPTY_ANSWER } else { &text });
                 t.msgs.push(json!({"role": "assistant", "content": t.answer.clone()}));
                 return Ok(());
             }
@@ -329,7 +368,7 @@ impl MemoryAgent {
                     t.l.on_action_proposal(p.clone());
                 }
             }
-            eprintln!("[agent] 도구 라운드 {}: {}", round + 1, outcomes.iter().map(|o| format!("{}={}", o.call.name, if o.ok { "ok" } else { "fail" })).collect::<Vec<_>>().join(", "));
+            alog!("[agent] 도구 라운드 {}: {}", round + 1, outcomes.iter().map(|o| format!("{}={}", o.call.name, if o.ok { "ok" } else { "fail" })).collect::<Vec<_>>().join(", "));
             strikes = if outcomes.iter().all(|o| !o.ok) { strikes + 1 } else { 0 };
             if strikes >= MAX_STRIKES {
                 let sep = if t.answer.is_empty() { "" } else { " " };
@@ -357,7 +396,7 @@ impl MemoryAgent {
             s.turns.pop_front();
         }
         let timing = AgentTiming { to_recommendation_ms: t.to_rec_ms, first_text_ms: t.first_text_ms, total_ms: t.start.elapsed().as_millis() as u64, llm_calls: t.llm_calls, llm_ms: t.llm_ms };
-        eprintln!("[agent] 끝 ({source:?}): 카드 {:?}ms 첫 글자 {:?}ms 전체 {}ms LLM {}회 {}ms", timing.to_recommendation_ms, timing.first_text_ms, timing.total_ms, timing.llm_calls, timing.llm_ms);
+        alog!("[agent] 끝 ({source:?}): 카드 {:?}ms 첫 글자 {:?}ms 전체 {}ms LLM {}회 {}ms", timing.to_recommendation_ms, timing.first_text_ms, timing.total_ms, timing.llm_calls, timing.llm_ms);
         t.l.on_done(AgentDone { answer: t.answer.trim().to_string(), source, timing });
     }
 
@@ -369,18 +408,73 @@ impl MemoryAgent {
         body["tool_choice"] = json!("auto");
         match llm.complete(body) {
             Ok(r) => {
-                eprintln!("[agent] 미리 데우기 {}ms timings={}", r.total_ms, r.timings.map(|x| x.to_string()).unwrap_or_default());
+                alog!("[agent] 미리 데우기 {}ms timings={}", r.total_ms, r.timings.map(|x| x.to_string()).unwrap_or_default());
                 true
             }
+            // 미리 데우기는 앱 시작 직후(망이 아직 덜 붙었을 때)라 실패해도 서버가 꺼졌다고 보지 않는다
+            // — 예전에는 여기서 30초 동안 꺼짐으로 표시해 첫 질문이 "연결할 수 없어요"로 끝났다.
             Err(e) => {
-                eprintln!("[agent] 미리 데우기 실패: {e}");
-                if matches!(e, LlmError::Unreachable(_)) {
-                    self.mark_server_down();
-                }
+                alog!("[agent] 미리 데우기 실패 (첫 질문은 그대로 LLM을 시도한다): {e}");
                 false
             }
         }
     }
+}
+
+/// 모델 답을 소리로 읽기 좋게 다듬는다: 별표·제목표·목록 기호를 지우고 한 줄로, 문장 수를 줄인다
+/// (운전 중 2문장·90자, 정차 중 3문장·180자 안). 잘려 나간 끝 문장이 "…할까요?" 같은 물음이면 그것은 남긴다
+/// (운전자가 "응"으로 답할 수 있게).
+pub(crate) fn tidy_answer(raw: &str, driving: bool) -> String {
+    let (max_sentences, max_chars) = if driving { (2, 90) } else { (3, 180) };
+    let mut flat = String::new();
+    for line in raw.lines() {
+        let l = line.trim().trim_start_matches(['-', '*', '•', '#', '>']).trim();
+        if l.is_empty() {
+            continue;
+        }
+        if !flat.is_empty() {
+            flat.push(' ');
+        }
+        flat.push_str(l);
+    }
+    let flat: String = flat.replace("**", "").replace(['*', '`', '#'], "");
+    let flat = flat.split_whitespace().collect::<Vec<_>>().join(" ");
+    // 문장 나누기: . ? ! 뒤 (숫자 사이의 점 "3.5km"은 나누지 않는다)
+    let mut sentences: Vec<String> = vec![];
+    let mut cur = String::new();
+    let chars: Vec<char> = flat.chars().collect();
+    for (i, &c) in chars.iter().enumerate() {
+        cur.push(c);
+        let end = matches!(c, '?' | '!' | '。') || (c == '.' && !chars.get(i + 1).is_some_and(|n| n.is_ascii_digit()));
+        if end && chars.get(i + 1).is_none_or(|n| n.is_whitespace()) {
+            sentences.push(cur.trim().to_string());
+            cur.clear();
+        }
+    }
+    if !cur.trim().is_empty() {
+        sentences.push(cur.trim().to_string());
+    }
+    let mut out: Vec<String> = vec![];
+    let mut len = 0;
+    for s in &sentences {
+        let n = s.chars().count();
+        if out.len() >= max_sentences || (!out.is_empty() && len + n > max_chars) {
+            break;
+        }
+        len += n + 1;
+        out.push(s.clone());
+    }
+    if out.len() < sentences.len() {
+        if let Some(q) = sentences.iter().rev().find(|s| s.ends_with("까요?")) {
+            if !out.contains(q) {
+                if out.len() >= max_sentences && out.len() > 1 {
+                    out.pop();
+                }
+                out.push(q.clone());
+            }
+        }
+    }
+    out.join(" ")
 }
 
 /// "찾아볼게요·확인해 드릴게요"처럼 할 일을 말만 한 답인가.

@@ -1,5 +1,8 @@
 package app.eodiyeotji.ui.agent
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -131,27 +134,44 @@ fun AgentEntryButton(onClick: () -> Unit, modifier: Modifier = Modifier, driving
  * 주행 중이면 답 한 장과 큰 버튼 두 개(안내 / 취소)만 보인다.
  *
  * @param onClose 닫기(×) 눌렀을 때. null이면 닫기 버튼을 숨긴다.
- * @param onVoiceRequest 마이크를 눌렀을 때. TODO(통합): SpeechToText로 받아 [AgentViewModel.ask]에 넘긴다.
+ * @param onVoiceRequest 마이크를 눌렀을 때. null이면 Pleos SpeechToText로 듣고 알아들은 말을 [AgentViewModel.ask]에 넘긴다
+ *   (운전 중이면 답을 TextToSpeech로 읽는다, [AgentViewModel] 설명).
  */
 @Composable
 fun AgentPanel(
     onClose: (() -> Unit)?,
     modifier: Modifier = Modifier,
-    onVoiceRequest: () -> Unit = {},
+    onVoiceRequest: (() -> Unit)? = null,
     viewModel: AgentViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    AgentPanelContent(
-        state = state,
-        onAsk = viewModel::ask,
-        onConfirm = viewModel::confirm,
-        onSelectStop = viewModel::selectStop,
-        onRetry = viewModel::retry,
-        onClear = viewModel::clear,
-        onClose = onClose,
-        onVoiceRequest = onVoiceRequest,
-        modifier = modifier,
-    )
+    // Pleos 음성 인식이 없는 기기에서 Android 인식기로 대신 들을 때만 마이크 권한을 묻는다
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) viewModel.voice() else viewModel.micPermissionDenied()
+    }
+    val voice = onVoiceRequest ?: {
+        if (viewModel.needsMicPermission()) micPermission.launch(Manifest.permission.RECORD_AUDIO) else viewModel.voice()
+    }
+    Box(modifier) {
+        AgentPanelContent(
+            state = state,
+            onAsk = viewModel::ask,
+            onConfirm = viewModel::confirm,
+            onSelectStop = viewModel::selectStop,
+            onRetry = viewModel::retry,
+            onClear = viewModel::clear,
+            onClose = onClose,
+            onVoiceRequest = voice,
+        )
+        AgentVoiceLayer(
+            voice = state.voice,
+            driving = state.isDriving,
+            hasTurn = state.turn != null,
+            onMic = voice,
+            onCancelListening = viewModel::cancelVoice,
+            onStopSpeaking = viewModel::stopSpeaking,
+        )
+    }
 }
 
 /** 상태만 받아 그리는 화면 (미리보기·디버그 화면용). */
@@ -170,7 +190,7 @@ fun AgentPanelContent(
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Crossfade(targetState = state.isDriving, label = "agentMode") { driving ->
             if (driving) {
-                DrivingAgent(state.turn, onConfirm, onClear, onClose, onVoiceRequest)
+                DrivingAgent(state.turn, onConfirm, onClear, onClose, onVoiceRequest, onRetry)
             } else {
                 ParkedAgent(state.turn, onAsk, onConfirm, onSelectStop, onRetry, onClose, onVoiceRequest)
             }
@@ -415,7 +435,7 @@ private fun AnswerBlock(turn: AgentTurn, onRetry: () -> Unit) {
                     AnswerPhase.Failed -> {
                         if (turn.answer.isNotEmpty()) AnswerText(turn.answer, streaming = false, large = false)
                         Text(
-                            stringResource(R.string.agent_failed),
+                            turn.error ?: stringResource(R.string.agent_failed),
                             style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.error,
                         )
@@ -630,6 +650,7 @@ private fun DrivingAgent(
     onClear: () -> Unit,
     onClose: (() -> Unit)?,
     onVoiceRequest: () -> Unit,
+    onRetry: () -> Unit,
 ) {
     Box(Modifier.fillMaxSize().safeDrawingPadding().padding(PagePadding)) {
         Surface(
@@ -661,7 +682,7 @@ private fun DrivingAgent(
                         when (turn.phase) {
                             AnswerPhase.Thinking -> Thinking(large = true)
                             AnswerPhase.Failed -> Text(
-                                stringResource(R.string.agent_failed),
+                                turn.error ?: stringResource(R.string.agent_failed),
                                 style = MaterialTheme.typography.displaySmall,
                                 color = MaterialTheme.colorScheme.error,
                             )
@@ -672,13 +693,15 @@ private fun DrivingAgent(
                     Spacer(Modifier.height(24.dp))
                     val proposal = turn.proposals.firstOrNull()
                     val running = turn.action is ActionState.Running
+                    val failed = turn.phase == AnswerPhase.Failed
                     Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.fillMaxWidth()) {
                         BigButton(
-                            label = stringResource(R.string.agent_navigate),
-                            icon = AgentIcons.Navigate,
+                            // 답을 못 받았으면 같은 자리 큰 버튼이 "다시 묻기" (한 번 누르면 된다)
+                            label = stringResource(if (failed) R.string.agent_retry else R.string.agent_navigate),
+                            icon = if (failed) null else AgentIcons.Navigate,
                             primary = true,
-                            enabled = proposal != null && !running && turn.action !is ActionState.Done,
-                            onClick = { proposal?.let(onConfirm) },
+                            enabled = failed || (proposal != null && !running && turn.action !is ActionState.Done),
+                            onClick = { if (failed) onRetry() else proposal?.let(onConfirm) },
                             modifier = Modifier.weight(1.4f),
                         )
                         BigButton(
