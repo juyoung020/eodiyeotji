@@ -11,6 +11,8 @@ plugins {
 android {
     namespace = "app.eodiyeotji"
     compileSdk = 35
+    // AAOS 표준 Car API(CarPropertyManager: 기어·시동). 기기에서는 시스템이 제공하므로 APK에 넣지 않는다.
+    useLibrary("android.car")
     ndkVersion = "27.3.13750724"
 
     defaultConfig {
@@ -61,6 +63,9 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
+
+    implementation(libs.androidx.lifecycle.service)
+    implementation(libs.pleos.fusedlocation)
 
     implementation(libs.jna) { artifact { type = "aar" } }
 }
