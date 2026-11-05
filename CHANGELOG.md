@@ -43,6 +43,9 @@
 - GitHub 저장소 이름을 `hmg-app-contest` → `eodiyeotji`로 바꾸고 설명·토픽 정리
 - 빈 폴더(`src/`, `presentation/`, `submission/`)에 용도 안내 README를 넣어 저장소에 올라가게 함
 
+### Fixed
+- 세팅 문서의 Rust 빌드 안내 수정: `cargo ndk -o app/src/main/jniLibs`로 직접 넣으면 Gradle 결과물과 겹쳐 빌드가 실패하므로, `gradlew assembleDebug` 하나로 빌드하도록 바꿈 (`docs/50_개발환경_세팅.md`)
+
 ## [0.1.0] - 2026-11-05
 
 ### Added
