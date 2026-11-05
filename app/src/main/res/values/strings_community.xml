@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 왼쪽 레일 (ui/home) -->
+    <string name="nav_timeline">내 기록</string>
+    <string name="nav_community">커뮤니티</string>
+
+    <!-- 커뮤니티 머리 · 하위 탭 (ui/community) -->
+    <string name="community_title">커뮤니티</string>
+    <string name="community_tab_board">게시판</string>
+    <string name="community_tab_courses">드라이브 코스</string>
+    <string name="community_tab_reviews">여행 리뷰</string>
+
+    <!-- 공통 -->
+    <string name="community_sort_popular">인기순</string>
+    <string name="community_sort_recent">최신순</string>
+    <string name="community_near_me">내 근처 %1$dkm</string>
+    <string name="community_near_unknown">차 위치를 아직 몰라 전국을 보여 줘요</string>
+    <string name="community_hearts_description">하트 %1$d개</string>
+    <string name="community_heart_add">하트 누르기</string>
+    <string name="community_heart_remove">하트 취소</string>
+    <string name="community_close">닫기</string>
+    <string name="community_back">뒤로</string>
+    <string name="community_retry">다시 시도</string>
+    <string name="community_failed">불러오지 못했어요: %1$s</string>
+    <string name="community_mine">내 글</string>
+    <string name="community_ago_now">방금</string>
+    <string name="community_ago_minutes">%1$d분 전</string>
+    <string name="community_ago_hours">%1$d시간 전</string>
+    <string name="community_ago_days">%1$d일 전</string>
+    <string name="community_ago_weeks">%1$d주 전</string>
+    <string name="community_ago_months">%1$d개월 전</string>
+    <string name="community_date_md">%1$d월 %2$d일</string>
+    <string name="community_date_ymd">%1$d년 %2$d월 %3$d일</string>
+    <string name="community_byline">%1$s · %2$s</string>
+    <string name="community_stops_count">%1$d곳</string>
+
+    <!-- 드라이브 코스 -->
+    <string name="course_empty">아직 올라온 코스가 없어요</string>
+    <string name="course_empty_near">근처 %1$dkm 안에는 아직 코스가 없어요</string>
+    <string name="course_navigate">이 코스로 안내</string>
+    <string name="course_navigate_next">다음 구간 안내 (%1$d/%2$d)</string>
+    <string name="course_navi_sent">내비에 %1$d/%2$d 구간을 보냈어요</string>
+    <string name="course_navi_failed">내비에 보내지 못했어요</string>
+    <string name="course_stops_title">들르는 곳</string>
+    <string name="course_share_from_record">내 기록에서 올리기</string>
+    <string name="course_shared_done">코스를 올렸어요</string>
+
+    <!-- 내 기록에서 올리기 (ShareCourseSheet) -->
+    <string name="share_pick_title">어떤 기록을 올릴까요?</string>
+    <string name="share_pick_empty">올릴 수 있는 나들이·여행 기록이 아직 없어요</string>
+    <string name="share_already">올린 적 있음</string>
+    <string name="share_sheet_title">커뮤니티에 코스 올리기</string>
+    <string name="share_title_label">제목</string>
+    <string name="share_body_label">소개 (안 써도 돼요)</string>
+    <string name="share_stops_hint">빼고 싶은 곳은 눌러서 체크를 풀어 주세요</string>
+    <string name="share_hidden">집·회사 근처 %1$d곳은 자동으로 가렸어요</string>
+    <string name="share_unnamed">이름 모르는 %1$d곳은 뺐어요</string>
+    <string name="share_submit">올리기</string>
+    <string name="share_submitting">올리는 중…</string>
+    <string name="share_need_stop">한 곳 이상 골라 주세요</string>
+    <string name="share_reshare_note">이미 올린 기록이에요. 다시 올리면 내용만 바뀌고 하트는 그대로예요</string>
+    <string name="share_weather_loading">그날 날씨 찾는 중…</string>
+    <string name="share_failed">올리지 못했어요: %1$s</string>
+
+    <!-- 게시판 -->
+    <string name="board_write">글 쓰기</string>
+    <string name="board_write_title">질문·이야기 쓰기</string>
+    <string name="board_title_label">제목</string>
+    <string name="board_body_label">내용</string>
+    <string name="board_tags_label">태그 (띄어쓰기로 구분, 예: 강릉 맛집)</string>
+    <string name="board_submit">올리기</string>
+    <string name="board_comments">댓글 %1$d</string>
+    <string name="board_comment_hint">댓글 달기</string>
+    <string name="board_comment_send">등록</string>
+    <string name="board_empty">아직 글이 없어요</string>
+    <string name="board_no_comments">첫 댓글을 남겨 보세요</string>
+
+    <!-- 여행 리뷰 -->
+    <string name="review_popular_places">인기 장소</string>
+    <string name="review_feed">리뷰</string>
+    <string name="review_write">리뷰 쓰기</string>
+    <string name="review_pick_place">어디를 다녀왔나요?</string>
+    <string name="review_pick_empty">최근에 들른 곳이 아직 없어요</string>
+    <string name="review_rating_description">별 %1$d개</string>
+    <string name="review_text_hint">한 줄 후기 (안 써도 돼요)</string>
+    <string name="review_submit">등록</string>
+    <string name="review_count">리뷰 %1$d</string>
+    <string name="review_empty">리뷰가 없어요</string>
+    <string name="review_place_title">%1$s 리뷰</string>
+    <string name="review_posted">리뷰를 올렸어요</string>
+</resources>

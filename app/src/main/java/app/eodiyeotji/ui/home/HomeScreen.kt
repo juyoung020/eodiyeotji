@@ -1,19 +1,42 @@
 package app.eodiyeotji.ui.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -22,26 +45,88 @@ import app.eodiyeotji.R
 import app.eodiyeotji.ui.agent.AgentEntryButton
 import app.eodiyeotji.ui.agent.AgentPanel
 import app.eodiyeotji.ui.agent.AgentViewModel
+import app.eodiyeotji.ui.community.CommunityIcons
+import app.eodiyeotji.ui.community.CommunityRoute
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.timeline.TimelineRoute
 import java.util.Locale
 
+/** 왼쪽 레일 목적지. */
+enum class HomeTab { TIMELINE, COMMUNITY }
+
 /**
  * 앱 첫 화면 (MainActivity가 부른다).
- * - 정차 중: 타임라인. 머리의 "어디였지? 물어보세요"를 누르면 기억 에이전트가 위에 덮인다.
- * - 주행 중: 타임라인(긴 목록)을 감추고 기억 에이전트 주행 화면(음성 + 큰 카드 1장)만 보인다.
+ * - 정차 중: 왼쪽 레일 [내 기록 | 커뮤니티] + 고른 화면. 머리의 "어디였지? 물어보세요"를 누르면 기억 에이전트가 위에 덮인다.
+ * - 주행 중: 레일·타임라인·커뮤니티(긴 목록·피드)를 모두 감추고 기억 에이전트 주행 화면(음성 + 큰 카드 1장)만 보인다.
  */
 @Composable
 fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel()) {
     val agentState by agentViewModel.state.collectAsStateWithLifecycle()
     var agentOpen by rememberSaveable { mutableStateOf(false) }
+    var tab by rememberSaveable { mutableStateOf(HomeTab.TIMELINE) }
     Box(Modifier.fillMaxSize()) {
         if (agentState.isDriving) {
             AgentPanel(onClose = null, viewModel = agentViewModel)
         } else {
-            TimelineRoute(headerAction = { AgentEntryButton(onClick = { agentOpen = true }, Modifier.widthIn(max = 420.dp)) })
+            val entry: @Composable () -> Unit = { AgentEntryButton(onClick = { agentOpen = true }, Modifier.widthIn(max = 420.dp)) }
+            Row(Modifier.fillMaxSize().background(EodiTheme.colors.background)) {
+                NavRail(tab, onSelect = { tab = it })
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    when (tab) {
+                        HomeTab.TIMELINE -> TimelineRoute(headerAction = entry)
+                        HomeTab.COMMUNITY -> CommunityRoute(headerAction = entry)
+                    }
+                }
+            }
             if (agentOpen) AgentPanel(onClose = { agentOpen = false }, viewModel = agentViewModel)
         }
+    }
+}
+
+/** 왼쪽 레일: 앱 표시 + 목적지 2개 (한 칸 112dp, 아이콘 + 이름). 좁은 창(약 840dp)에서도 폭 120dp만 쓴다. */
+@Composable
+private fun NavRail(selected: HomeTab, onSelect: (HomeTab) -> Unit) {
+    val c = EodiTheme.colors
+    Column(
+        Modifier
+            .fillMaxHeight()
+            .width(120.dp)
+            .background(c.surface)
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Start + WindowInsetsSides.Vertical))
+            .padding(vertical = 24.dp, horizontal = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        RailItem(CommunityIcons.Clock, stringResource(R.string.nav_timeline), selected == HomeTab.TIMELINE) { onSelect(HomeTab.TIMELINE) }
+        RailItem(CommunityIcons.People, stringResource(R.string.nav_community), selected == HomeTab.COMMUNITY) { onSelect(HomeTab.COMMUNITY) }
+    }
+}
+
+@Composable
+private fun RailItem(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit) {
+    val c = EodiTheme.colors
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 112.dp)
+            .clip(RoundedCornerShape(EodiTheme.space.radiusM))
+            .background(if (selected) c.accentSoft else c.surface)
+            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
+            .padding(vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(icon, contentDescription = null, tint = if (selected) c.accent else c.textSecondary, modifier = Modifier.size(40.dp))
+        Spacer(Modifier.height(8.dp))
+        Text(
+            label,
+            style = EodiTheme.type.caption,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = if (selected) c.accent else c.textSecondary,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Clip,
+        )
     }
 }
 
