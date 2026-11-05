@@ -5,3 +5,6 @@ refs/github/poopilot/
 refs/github/ulw-research/
 *.apk
 *.aab
+
+# Rust 빌드 결과
+core-rs/target/
