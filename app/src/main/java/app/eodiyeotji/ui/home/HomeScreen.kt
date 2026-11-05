@@ -78,7 +78,7 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel()) {
                     }
                 }
             }
-            if (agentOpen) AgentPanel(onClose = { agentOpen = false }, viewModel = agentViewModel)
+            if (agentOpen) AgentPanel(onClose = { agentOpen = false; agentViewModel.clear() }, viewModel = agentViewModel) // 닫으면 대화를 비워 다음엔 새 질문부터
         }
     }
 }
