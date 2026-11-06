@@ -336,6 +336,7 @@ fn v5_database_gets_recent_table() {
     {
         let st = db.open();
         let c = st.lock().unwrap();
+        c.execute_batch(crate::edits::DROP_V7).unwrap();
         c.execute_batch("DROP TABLE search_recent;").unwrap();
         c.pragma_update(None, "user_version", 5).unwrap();
     }

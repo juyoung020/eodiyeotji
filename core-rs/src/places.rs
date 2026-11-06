@@ -2,7 +2,7 @@
 //!
 //! 역할 분담:
 //! - Rust(여기): 어떤 지점에 이름이 필요한지 고르고(가까운 지점은 한 곳으로 묶음), 받은 이름을 저장하고,
-//!   하루 상세·지도 데이터에 붙인다. 이름 출처 우선순위도 여기서 정한다: 내비(Navi) > 카카오(Kakao) > OSM.
+//!   하루 상세·지도 데이터에 붙인다. 이름 출처 우선순위도 여기서 정한다: 사용자(User) > 내비(Navi) > 카카오(Kakao) > OSM.
 //! - Kotlin: `pending_places`로 받은 지점을 내비 정보·온라인 지도 API로 찾아 `set_place_name`으로 돌려준다.
 //!   네트워크·API 호출만 하고, 고르기·묶기·우선순위 판단은 하지 않는다.
 //!
@@ -25,7 +25,8 @@
 //! - 지금 어느 주행에도 이어지지 않은 장소(주행이 다시 나뉘며 버려진 것)는 `pending_places`에 나오지 않는다.
 //!
 //! # 이름
-//! - 출처 우선순위 Navi > Kakao > Osm. 더 낮은 출처의 이름은 높은 출처의 이름을 바꾸지 못하고, 같은 출처면 바꾼다.
+//! - 출처 우선순위 User > Navi > Kakao > Osm. 더 낮은 출처의 이름은 높은 출처의 이름을 바꾸지 못하고, 같은 출처면 바꾼다.
+//!   User는 사용자가 "이 장소 이름 고치기"로 직접 붙인 이름이다 (`edits` 모듈의 `rename_place`). 내비 힌트·카카오도 바꾸지 못한다.
 //! - 이름은 장소에 붙으므로 그 장소에 이어진 모든 주행·머문 곳(다른 날 포함)에 같이 보인다.
 //! - 붙는 곳: `day_detail`의 `TripSummary.start_place`·`end_place`, `StaySummary.place`, `day_map` GeoJSON의
 //!   `name`·`from`·`to`(지도 글꼴로 그릴 수 있는 글자만, `mapdata::map_safe_name`), `DaySummary.stop_names`.
@@ -63,9 +64,11 @@ pub const HINT_RADIUS_M: f64 = 300.0;
 /// 내비 힌트는 도착 뒤 이 시간(ms) 안에 받은 것까지 그 도착에 붙는다.
 pub const HINT_AFTER_ARRIVAL_MS: i64 = 30 * 60_000;
 
-/// 이름 출처. 우선순위: Navi > Kakao > Osm (더 높은 출처의 이름이 오면 바꾼다).
+/// 이름 출처. 우선순위: User > Navi > Kakao > Osm (더 높은 출처의 이름이 오면 바꾼다).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum PlaceSource {
+    /// 사용자가 직접 고친 이름 ("이 장소 이름 고치기") — 무엇보다 우선
+    User,
     /// 차량 내비(NaviHelper) 목적지·경유지 이름 — 사용자가 직접 고른 곳이라 가장 정확
     Navi,
     /// 카카오 로컬 API (가게·건물 이름)
@@ -217,7 +220,7 @@ const HINT_WAYPOINT: i64 = 1;
 
 /// DB 구조 버전 2에서 더하는 표.
 pub(crate) const SCHEMA_V2: &str = "
--- 이름이 붙는 장소. source: NULL = 이름 없음, 0 = Navi, 1 = Kakao, 2 = Osm (작을수록 우선).
+-- 이름이 붙는 장소. source: NULL = 이름 없음, -1 = User(버전 7부터), 0 = Navi, 1 = Kakao, 2 = Osm (작을수록 우선).
 CREATE TABLE place (
     id INTEGER PRIMARY KEY,
     lat REAL NOT NULL,
@@ -256,23 +259,25 @@ pub(crate) fn now_ms() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
 }
 
-fn source_code(s: PlaceSource) -> i64 {
+pub(crate) fn source_code(s: PlaceSource) -> i64 {
     match s {
+        PlaceSource::User => -1,
         PlaceSource::Navi => 0,
         PlaceSource::Kakao => 1,
         PlaceSource::Osm => 2,
     }
 }
 
-fn source_from(code: i64) -> PlaceSource {
+pub(crate) fn source_from(code: i64) -> PlaceSource {
     match code {
+        -1 => PlaceSource::User,
         0 => PlaceSource::Navi,
         1 => PlaceSource::Kakao,
         _ => PlaceSource::Osm,
     }
 }
 
-fn place_exists(conn: &Connection, id: i64) -> rusqlite::Result<bool> {
+pub(crate) fn place_exists(conn: &Connection, id: i64) -> rusqlite::Result<bool> {
     Ok(conn.query_row("SELECT 1 FROM place WHERE id = ?1", [id], |_| Ok(())).optional()?.is_some())
 }
 
@@ -288,28 +293,29 @@ pub(crate) fn set_label(conn: &Connection, id: i64, l: &PlaceLabel) -> rusqlite:
     Ok(n > 0)
 }
 
+/// 지점 p에서 `radius_m` 안의 가장 가까운 장소 (거리가 같으면 번호가 작은 것). 없으면 None.
+pub(crate) fn nearest_place(conn: &Connection, p: Point, radius_m: f64) -> rusqlite::Result<Option<i64>> {
+    let dlat = radius_m / 111_000.0;
+    let dlon = radius_m / (111_000.0 * p.lat.to_radians().cos().max(0.01));
+    let mut st =
+        conn.prepare_cached("SELECT id, lat, lon FROM place WHERE lat BETWEEN ?1 AND ?2 AND lon BETWEEN ?3 AND ?4")?;
+    let rows = st.query_map(params![p.lat - dlat, p.lat + dlat, p.lon - dlon, p.lon + dlon], |r| {
+        Ok((r.get::<_, i64>(0)?, Point { lat: r.get(1)?, lon: r.get(2)? }))
+    })?;
+    let mut best: Option<(f64, i64)> = None;
+    for row in rows {
+        let (id, q) = row?;
+        let d = haversine_m(p, q);
+        if d <= radius_m && best.is_none_or(|(bd, bid)| (d, id) < (bd, bid)) {
+            best = Some((d, id));
+        }
+    }
+    Ok(best.map(|(_, id)| id))
+}
+
 /// 지점 p를 장소에 잇는다: 100m 안 가장 가까운 장소, 없으면 새 장소. `is_stay`면 장소에 머문 곳 표시를 한다.
 pub(crate) fn assign_place(conn: &Connection, p: Point, is_stay: bool) -> rusqlite::Result<i64> {
-    let dlat = PLACE_RADIUS_M / 111_000.0;
-    let dlon = PLACE_RADIUS_M / (111_000.0 * p.lat.to_radians().cos().max(0.01));
-    let nearest = {
-        let mut st = conn.prepare_cached(
-            "SELECT id, lat, lon FROM place WHERE lat BETWEEN ?1 AND ?2 AND lon BETWEEN ?3 AND ?4",
-        )?;
-        let rows = st.query_map(params![p.lat - dlat, p.lat + dlat, p.lon - dlon, p.lon + dlon], |r| {
-            Ok((r.get::<_, i64>(0)?, Point { lat: r.get(1)?, lon: r.get(2)? }))
-        })?;
-        let mut best: Option<(f64, i64)> = None;
-        for row in rows {
-            let (id, q) = row?;
-            let d = haversine_m(p, q);
-            if d <= PLACE_RADIUS_M && best.is_none_or(|(bd, bid)| (d, id) < (bd, bid)) {
-                best = Some((d, id));
-            }
-        }
-        best.map(|(_, id)| id)
-    };
-    match nearest {
+    match nearest_place(conn, p, PLACE_RADIUS_M)? {
         Some(id) => {
             if is_stay {
                 mark_stay(conn, id)?;

@@ -33,6 +33,9 @@ const NAVI_HOME: i64 = 0;
 const NAVI_OFFICE: i64 = 1;
 const CUR_HOME: i64 = 2;
 const CUR_OFFICE: i64 = 3;
+/// 사용자가 "여기를 집으로/회사로"로 직접 정한 곳 (DB 구조 버전 7부터, `edits` 모듈). 내비·추정보다 우선.
+const USER_HOME: i64 = 4;
+const USER_OFFICE: i64 = 5;
 
 /// 문자열 목록 칸(tags·stops)의 구분자: 항목 사이 = U+001F, 들른 곳 사이 = U+001E.
 const REC_SEP: char = '\u{1e}';
@@ -42,7 +45,8 @@ const FIELD_SEP: char = '\u{1f}';
 pub(crate) const SCHEMA_V3: &str = "
 -- 에피소드를 다시 만들 날 (현지 날짜 번호).
 CREATE TABLE memory_dirty_day (day INTEGER PRIMARY KEY);
--- 집·회사. kind 0 = 내비 집, 1 = 내비 회사 (set_home_office), 2 = 지금 쓰는 집, 3 = 지금 쓰는 회사 (내비 또는 추정).
+-- 집·회사. kind 0 = 내비 집, 1 = 내비 회사 (set_home_office), 2 = 지금 쓰는 집, 3 = 지금 쓰는 회사 (사용자·내비 또는 추정),
+-- 4 = 사용자가 정한 집, 5 = 사용자가 정한 회사 (버전 7부터).
 CREATE TABLE memory_anchor (kind INTEGER PRIMARY KEY, lat REAL NOT NULL, lon REAL NOT NULL);
 -- 날짜·장소별 머문 시간(ms): 밤(22~06시), 평일 낮(09~18시), 전체. 집·회사 추정과 자주 가는 곳 판단에 쓴다.
 CREATE TABLE day_place_dwell (
@@ -179,9 +183,28 @@ pub(crate) fn set_navi_anchors(conn: &Connection, home: Option<Point>, office: O
     write_anchor(conn, NAVI_OFFICE, office)
 }
 
-/// 지금 쓸 집·회사: 내비 즐겨찾기가 있으면 그것, 없으면 머문 시간으로 추정 (상위 모듈 설명).
+/// 사용자가 직접 정한 집(`office` = false)·회사(true). None이면 지운다 (내비·추정으로 돌아간다).
+pub(crate) fn set_user_anchor(conn: &Connection, office: bool, p: Option<Point>) -> rusqlite::Result<()> {
+    write_anchor(conn, if office { USER_OFFICE } else { USER_HOME }, p)
+}
+
+/// 집·회사를 누가 정했나: 0 = 사용자, 1 = 내비, 2 = 기록에서 추정. (집, 회사) 순서, 모르면 None.
+pub(crate) fn anchor_sources(conn: &Connection) -> rusqlite::Result<[Option<(Point, u8)>; 2]> {
+    let cur = current_anchors(conn)?;
+    let one = |user: i64, navi: i64, cur: Option<Point>| -> rusqlite::Result<Option<(Point, u8)>> {
+        Ok(match (read_anchor(conn, user)?, read_anchor(conn, navi)?, cur) {
+            (Some(p), _, _) => Some((p, 0)),
+            (None, Some(p), _) => Some((p, 1)),
+            (None, None, Some(p)) => Some((p, 2)),
+            _ => None,
+        })
+    };
+    Ok([one(USER_HOME, NAVI_HOME, cur.home)?, one(USER_OFFICE, NAVI_OFFICE, cur.office)?])
+}
+
+/// 지금 쓸 집·회사: 사용자가 정한 곳 → 내비 즐겨찾기 → 머문 시간으로 추정 순서 (상위 모듈 설명).
 fn resolve_anchors(conn: &Connection) -> rusqlite::Result<Anchors> {
-    let home = match read_anchor(conn, NAVI_HOME)? {
+    let home = match read_anchor(conn, USER_HOME)?.or(read_anchor(conn, NAVI_HOME)?) {
         Some(p) => Some(p),
         None => conn
             .query_row(
@@ -192,7 +215,7 @@ fn resolve_anchors(conn: &Connection) -> rusqlite::Result<Anchors> {
             )
             .optional()?,
     };
-    let office = match read_anchor(conn, NAVI_OFFICE)? {
+    let office = match read_anchor(conn, USER_OFFICE)?.or(read_anchor(conn, NAVI_OFFICE)?) {
         Some(p) => Some(p),
         None => {
             let mut st = conn.prepare_cached(

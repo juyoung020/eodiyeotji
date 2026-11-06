@@ -547,6 +547,8 @@ fn v4_database_gets_community_tables() {
     {
         let store = db.open();
         let c = store.lock().unwrap();
+        c.execute_batch(crate::edits::DROP_V7).unwrap();
+        c.execute_batch(crate::search_ui::DROP_V6).unwrap();
         c.execute_batch(DROP_V5).unwrap();
         c.pragma_update(None, "user_version", 4).unwrap();
     }

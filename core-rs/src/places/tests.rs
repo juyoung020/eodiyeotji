@@ -357,6 +357,7 @@ fn v1_database_is_migrated_without_losing_records() {
         store.ingest(drive(at(15, 0), 120, 36.0, 128.0, 1e-4)).unwrap();
         // 버전 1로 되돌린다: 버전 2에서 더한 표·칸을 지우고 user_version = 1
         let c = store.lock().unwrap();
+        c.execute_batch(crate::edits::DROP_V7).unwrap();
         c.execute_batch(crate::search_ui::DROP_V6).unwrap();
         c.execute_batch(crate::community::DROP_V5).unwrap();
         c.execute_batch(crate::photos::DROP_V4).unwrap();
