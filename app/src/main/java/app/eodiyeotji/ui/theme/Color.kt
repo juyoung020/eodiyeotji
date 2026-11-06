@@ -62,10 +62,10 @@ data class EodiColors(
 )
 
 internal val LightColors = EodiColors(
-    background = Color(0xFFF5F2EC),
+    background = Color(0xFFF7F9FC),
     surface = Color(0xFFFFFFFF),
-    surfaceHigh = Color(0xFFF2EEE6),
-    outline = Color(0xFFE3DDD2),
+    surfaceHigh = Color(0xFFF0F3F8),
+    outline = Color(0xFFE2E7EF),
     textPrimary = Color(0xFF151A24),
     textSecondary = Color(0xFF464D5C),
     textTertiary = Color(0xFF646B7A),
