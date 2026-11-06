@@ -372,8 +372,8 @@ data class TripSummary(
     val endPlace: PlaceLabel? = null,
 )
 
-/** 장소 이름 출처. 우선순위 NAVI > KAKAO > OSM. */
-enum class PlaceSource { NAVI, KAKAO, OSM }
+/** 장소 이름 출처. 우선순위 USER(사용자가 고친 이름) > NAVI > KAKAO > OSM. */
+enum class PlaceSource { USER, NAVI, KAKAO, OSM }
 
 /** 화면·지도에 붙는 장소 이름. category·address는 모르면 빈 문자열. */
 data class PlaceLabel(val name: String, val category: String, val address: String, val source: PlaceSource)
@@ -482,18 +482,20 @@ private fun RTripSummary.toModel() = TripSummary(
 
 private fun RStaySummary.toModel() = StaySummary(center.toModel(), arriveMs, leaveMs, place?.toModel(), order.toInt())
 
-private fun RPlaceLabel.toModel() = PlaceLabel(
+internal fun RPlaceLabel.toModel() = PlaceLabel(
     name, category, address,
     when (source) {
+        RPlaceSource.USER -> PlaceSource.USER
         RPlaceSource.NAVI -> PlaceSource.NAVI
         RPlaceSource.KAKAO -> PlaceSource.KAKAO
         RPlaceSource.OSM -> PlaceSource.OSM
     },
 )
 
-private fun PlaceLabel.toRust() = RPlaceLabel(
+internal fun PlaceLabel.toRust() = RPlaceLabel(
     name, category, address,
     when (source) {
+        PlaceSource.USER -> RPlaceSource.USER
         PlaceSource.NAVI -> RPlaceSource.NAVI
         PlaceSource.KAKAO -> RPlaceSource.KAKAO
         PlaceSource.OSM -> RPlaceSource.OSM

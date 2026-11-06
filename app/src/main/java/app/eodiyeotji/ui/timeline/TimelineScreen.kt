@@ -89,6 +89,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.BuildConfig
 import app.eodiyeotji.R
 import app.eodiyeotji.ui.place.PlaceThumbnail
+import app.eodiyeotji.ui.places.EditTarget
+import app.eodiyeotji.ui.places.PlaceEditHost
+import app.eodiyeotji.ui.places.PlaceEditViewModel
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.runtime.CompositionLocalProvider
 import app.eodiyeotji.ui.search.SearchSlot
 import app.eodiyeotji.ui.map.MapPhotoPin
 import app.eodiyeotji.core.DayEntry
@@ -132,7 +138,22 @@ fun TimelineRoute(
     val state by viewModel.state.collectAsStateWithLifecycle()
     var shareEpisode by rememberSaveable { mutableStateOf<Long?>(null) }
     var shared by remember { mutableStateOf(false) }
-    TimelineScreen(
+    // 항목 · 하루의 ⋯ 메뉴 (숨기기 · 지우기 · 이름 고치기 · 집 · 회사 · 저장, ui/places)
+    val editVm: PlaceEditViewModel = hiltViewModel()
+    val edits = remember(editVm) {
+        TimelineEdits(
+            onEntry = { e ->
+                editVm.open(
+                    when (e) {
+                        is DayEntry.Trip -> EditTarget.Trip(e.trip)
+                        is DayEntry.Stay -> EditTarget.Stay(e.stay)
+                    },
+                )
+            },
+            onDay = { editVm.open(EditTarget.Day(it)) },
+        )
+    }
+    CompositionLocalProvider(LocalTimelineEdits provides edits) { TimelineScreen(
         state = state,
         onShare = { shareEpisode = it },
         onSelectDay = viewModel::select,
@@ -146,7 +167,8 @@ fun TimelineRoute(
         compact = compact,
         headerBanner = headerBanner,
         search = search,
-    )
+    ) }
+    PlaceEditHost(editVm)
     // 하루 상세에서 바로 커뮤니티에 코스로 올리기 (커뮤니티 탭까지 가지 않는다)
     shareEpisode?.let { id ->
         BackHandler { shareEpisode = null }
@@ -427,6 +449,10 @@ private fun CompactDayDetail(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.semantics { heading() },
                     )
+                }
+                LocalTimelineEdits.current?.let { edits ->
+                    Spacer(Modifier.width(12.dp))
+                    MoreButton(stringResource(R.string.edit_more_day), { edits.onDay(summary) })
                 }
             }
         }
@@ -794,6 +820,10 @@ private fun DetailHeader(summary: DaySummary?, today: LocalDate, onBack: (() -> 
                     Spacer(Modifier.width(16.dp))
                     SecondaryPill(stringResource(R.string.timeline_share), CommunityIcons.Upload, onShare)
                 }
+                LocalTimelineEdits.current?.let { edits ->
+                    Spacer(Modifier.width(16.dp))
+                    MoreButton(stringResource(R.string.edit_more_day), { edits.onDay(summary) })
+                }
             }
         }
         if (summary != null) {
@@ -919,6 +949,7 @@ private fun EntryList(
         }
     }
     val last = entries.lastIndex
+    val edits = LocalTimelineEdits.current
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         state = listState,
@@ -933,9 +964,10 @@ private fun EntryList(
             val key = e.key
             val selected = key == selectedKey
             val rail = Rail(first = i == 0, last = i == last)
+            val onMore = edits?.let { ed -> { ed.onEntry(e) } }
             when (e) {
-                is DayEntry.Trip -> TripRow(e.trip, rail, selected, onClick = { onClick(key) })
-                is DayEntry.Stay -> StayRow(e.stay, rail, selected, onClick = { onClick(key) })
+                is DayEntry.Trip -> TripRow(e.trip, rail, selected, onClick = { onClick(key) }, onMore = onMore)
+                is DayEntry.Stay -> StayRow(e.stay, rail, selected, onClick = { onClick(key) }, onMore = onMore)
             }
         }
     }
@@ -946,7 +978,7 @@ private data class Rail(val first: Boolean, val last: Boolean)
 
 /** 주행: 제목은 "출발 → 도착" 이름, 둘째 줄은 거리 · 시간. 이름을 하나도 모르면 제목이 거리 · 시간이 된다. */
 @Composable
-private fun TripRow(trip: TripSummary, rail: Rail, selected: Boolean, onClick: () -> Unit) {
+private fun TripRow(trip: TripSummary, rail: Rail, selected: Boolean, onClick: () -> Unit, onMore: (() -> Unit)? = null) {
     val c = EodiTheme.colors
     val places = tripPlacesText(trip)
     EntryRow(
@@ -966,12 +998,13 @@ private fun TripRow(trip: TripSummary, rail: Rail, selected: Boolean, onClick: (
         here = false,
         selected = selected,
         onClick = onClick,
+        onMore = onMore,
     )
 }
 
 /** 머문 곳: 제목은 장소 이름, 둘째 줄은 분류 · 머문 시간. 아직 머무는 곳은 초록 "지금 여기" 표시. */
 @Composable
-private fun StayRow(stay: StaySummary, rail: Rail, selected: Boolean, onClick: () -> Unit) {
+private fun StayRow(stay: StaySummary, rail: Rail, selected: Boolean, onClick: () -> Unit, onMore: (() -> Unit)? = null) {
     val c = EodiTheme.colors
     val place = stay.place?.takeIf { it.name.isNotBlank() }
     val main: String
@@ -1003,6 +1036,7 @@ private fun StayRow(stay: StaySummary, rail: Rail, selected: Boolean, onClick: (
         here = stay.isOpen,
         selected = selected,
         onClick = onClick,
+        onMore = onMore,
         trailing = place?.let { p ->
             {
                 // 정차한 곳 대표 사진 (구글 지도 사진): 앨범에 붙인 사진처럼 흰 테두리 + 살짝 기울임(행마다 번갈아)
@@ -1029,6 +1063,7 @@ private val RowPadV = 16.dp
  * 선은 주행 구간에서 진한 파랑 실선, 머문 구간에서 회색 점선 → 언제 달렸고 언제 서 있었는지 한눈에 보인다.
  * 고른 항목은 옅은 파랑 바탕 + 파랑 테두리, 노드에 후광. 행 전체가 76dp 이상 터치 영역이다.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun EntryRow(
     kind: EntryKind,
@@ -1044,18 +1079,19 @@ private fun EntryRow(
     selected: Boolean,
     onClick: () -> Unit,
     trailing: (@Composable () -> Unit)? = null,
+    onMore: (() -> Unit)? = null,
 ) {
     val c = EodiTheme.colors
     val type = EodiTheme.type
     val bg by animateColorAsState(if (selected) c.accentSoft else Color.Transparent, tween(SelectMs), label = "entry-bg")
     val edge by animateColorAsState(if (selected) c.accent else Color.Transparent, tween(SelectMs), label = "entry-edge")
     val shape = RoundedCornerShape(EodiTheme.space.radiusM)
+    // 누르기 = 고르기, 길게 누르기 = ⋯ 메뉴 (기록 고치기)
     Surface(
-        onClick = onClick,
         color = bg,
         contentColor = c.textPrimary,
         shape = shape,
-        modifier = Modifier.fillMaxWidth().border(2.dp, edge, shape),
+        modifier = Modifier.fillMaxWidth().border(2.dp, edge, shape).clip(shape).combinedClickable(onLongClick = onMore, onClick = onClick),
     ) {
         Row(Modifier.height(IntrinsicSize.Min).heightIn(min = EodiTheme.space.touch)) {
             // 시각 열
@@ -1107,6 +1143,11 @@ private fun EntryRow(
             }
             if (trailing != null) {
                 Box(Modifier.padding(top = 12.dp, bottom = 12.dp, end = 16.dp)) { trailing() }
+            }
+            if (onMore != null) {
+                Box(Modifier.fillMaxHeight().padding(end = 8.dp), contentAlignment = Alignment.Center) {
+                    MoreButton(stringResource(R.string.edit_more_entry), onMore, size = 64.dp, filled = false)
+                }
             }
         }
     }

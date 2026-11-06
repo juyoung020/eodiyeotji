@@ -17,6 +17,13 @@ import app.eodiyeotji.core.forgetSearch
 import app.eodiyeotji.core.rememberSearch
 import app.eodiyeotji.core.searchSuggestions
 import app.eodiyeotji.core.searchTyped
+import app.eodiyeotji.core.LatLon
+import app.eodiyeotji.core.PlaceSpot
+import app.eodiyeotji.core.SearchRow
+import app.eodiyeotji.core.SearchRowKind
+import app.eodiyeotji.core.placeCard
+import app.eodiyeotji.core.placesSavedAt
+import app.eodiyeotji.core.setPlaceSaved
 import app.eodiyeotji.platform.Navigator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.LocalDate
@@ -44,6 +51,8 @@ data class SearchUiState(
     val suggestions: SearchSuggestions = SearchSuggestions(),
     /** "여기로 안내" 결과 (true = 내비에 넘김, false = 못 넘김), 잠깐 보인다 */
     val navi: Boolean? = null,
+    /** 장소 줄([SearchRowKind.PLACE])의 저장(♥) 여부 (줄 키 → 저장됨). 없는 키는 아직 모름. */
+    val saved: Map<String, Boolean> = emptyMap(),
 ) {
     /** 말도 칩도 없으면 처음 화면 */
     val idle: Boolean get() = query.isBlank() && !filter.isSet
@@ -192,6 +201,30 @@ class SearchViewModel @Inject constructor(
         if (BuildConfig.DEBUG) Log.i(TAG, "검색 \"${s.query}\" ${s.scope}: ${answer.total}건, Rust ${answer.elapsedMicros}µs")
         // 그사이 말 · 범위 · 칩이 바뀌었으면 버린다 (다음 검색이 곧 온다)
         _state.update { cur -> if (cur.query == s.query && cur.scope == s.scope && cur.filter == s.filter) cur.copy(answer = answer) else cur }
+        loadSaved(answer)
+    }
+
+    /** 장소 줄의 ♥ 상태를 한 번에 묻는다 (좌표 → 그 자리 장소가 저장됐는지, Rust). */
+    private suspend fun loadSaved(answer: SearchAnswer) {
+        val rows = answer.groups.flatMap { g -> g.rows.filter { it.kind == SearchRowKind.PLACE && it.place != null } }
+        if (rows.isEmpty()) return
+        val flags = runCatching { core.placesSavedAt(rows.map { LatLon(it.place!!.lat, it.place.lon) }) }.getOrNull() ?: return
+        _state.update { it.copy(saved = it.saved + rows.map { r -> r.key }.zip(flags)) }
+    }
+
+    /** 장소 줄의 ♥ 누르기: 그 자리 장소를 저장하거나 푼다. */
+    fun toggleSaved(row: SearchRow) {
+        val p = row.place ?: return
+        val now = _state.value.saved[row.key] == true
+        _state.update { it.copy(saved = it.saved + (row.key to !now)) }
+        viewModelScope.launch {
+            val ok = runCatching {
+                val card = core.placeCard(PlaceSpot.point(p.lat, p.lon)) ?: return@runCatching false
+                core.setPlaceSaved(card.id, !now)
+                true
+            }.getOrDefault(false)
+            if (!ok) _state.update { it.copy(saved = it.saved + (row.key to now)) }
+        }
     }
 
     private fun loadSuggestions() {
