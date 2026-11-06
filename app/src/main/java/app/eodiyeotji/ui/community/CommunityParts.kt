@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathBuilder
 import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -371,22 +372,93 @@ fun RatingStars(rating: Int, modifier: Modifier = Modifier, size: Dp = 24.dp) {
  */
 @Composable
 fun StopPhoto(name: String, address: String, lat: Double, lon: Double, order: Int?, size: Dp, modifier: Modifier = Modifier, radius: Dp = 16.dp) {
+    StopPhotoBox(name, address, lat, lon, order, modifier.size(size), radius = radius, iconSize = size / 3)
+}
+
+/** [StopPhoto]의 크기 자유판: 크기는 [modifier]로 (예: 카드 맨 위 큰 사진은 폭 가득 · 16:9). 사진 요청은 같다. */
+@Composable
+fun StopPhotoBox(name: String, address: String, lat: Double, lon: Double, order: Int?, modifier: Modifier = Modifier, radius: Dp = 16.dp, iconSize: Dp = 48.dp) {
     val c = EodiTheme.colors
     val shape = RoundedCornerShape(radius)
     val description = if (order != null) "$order $name" else name
+    val box = modifier.clip(shape).background(c.surfaceHigh, shape).semantics { contentDescription = description }
+    val fallback: @Composable () -> Unit = {
+        Box(Modifier.fillMaxSize().background(c.staySoft), contentAlignment = Alignment.Center) {
+            Icon(app.eodiyeotji.ui.theme.EodiIcons.Pin, null, tint = c.stay.copy(alpha = 0.7f), modifier = Modifier.size(iconSize))
+        }
+    }
+    // 미리보기(@Preview)에는 사진 저장소(Hilt)가 없으니 사진 없는 자리로 그린다
+    if (LocalInspectionMode.current) {
+        Box(box) { fallback() }
+        return
+    }
     PlaceThumbnail(
         name = name,
         address = address,
         lat = lat,
         lon = lon,
-        modifier = modifier.size(size).clip(shape).background(c.surfaceHigh, shape).semantics { contentDescription = description },
+        modifier = box,
         loading = { PhotoLoadingPlaceholder(c.staySoft) },
-        fallback = {
-            Box(Modifier.fillMaxSize().background(c.staySoft), contentAlignment = Alignment.Center) {
-                Icon(app.eodiyeotji.ui.theme.EodiIcons.Pin, null, tint = c.stay.copy(alpha = 0.7f), modifier = Modifier.size(size / 3))
-            }
-        },
+        fallback = fallback,
     )
+}
+
+/**
+ * 글쓴이 동그라미: 이름 첫 글자 + 이름마다 정해진 옅은 색 (같은 사람은 늘 같은 색).
+ * 색은 이름 해시로 테마 색 짝(옅은 바탕 · 진한 글자) 가운데 하나를 고른다.
+ */
+@Composable
+fun AuthorAvatar(author: String, modifier: Modifier = Modifier, size: Dp = 60.dp) {
+    val c = EodiTheme.colors
+    val palette = listOf(
+        c.accentSoft to c.accent,
+        c.staySoft to c.stay,
+        c.hereSoft to c.here,
+        c.memorySoft to c.memoryInk,
+        c.couponSoft to c.couponInk,
+        c.heartSoft to c.heart,
+    )
+    val (bg, ink) = palette[Math.floorMod(author.hashCode(), palette.size)]
+    Box(modifier.size(size).background(bg, CircleShape), contentAlignment = Alignment.Center) {
+        Text(
+            author.trim().take(1).ifEmpty { "?" },
+            style = EodiTheme.type.bodyStrong,
+            fontWeight = FontWeight.Bold,
+            color = ink,
+            maxLines = 1,
+        )
+    }
+}
+
+/**
+ * 글 머리 (게시글처럼): 동그라미 + 글쓴이(굵게) + 아랫줄 "강원 강릉시 · 4일 전" + 내 글이면 "내 글".
+ * 드라이브 코스 카드·상세가 쓴다 (여행 리뷰 카드도 같은 머리를 쓸 수 있게 공용으로 둔다).
+ */
+@Composable
+fun PostHeader(author: String, sub: String, mine: Boolean, modifier: Modifier = Modifier, trailing: (@Composable () -> Unit)? = null) {
+    val c = EodiTheme.colors
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        AuthorAvatar(author)
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    author,
+                    style = EodiTheme.type.bodyStrong,
+                    color = c.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (mine) MineBadge()
+            }
+            Text(sub, style = EodiTheme.type.caption, color = c.textTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (trailing != null) {
+            Spacer(Modifier.width(12.dp))
+            trailing()
+        }
+    }
 }
 
 /** 다녀온 날 줄: "11월 6일 · 가을 단풍철 · 맑음 14°C" (올해가 아니면 연도까지). */
