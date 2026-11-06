@@ -54,6 +54,8 @@ import app.eodiyeotji.ui.community.CourseViewModel
 import app.eodiyeotji.core.SearchScope
 import app.eodiyeotji.ui.review.ReviewViewModel
 import app.eodiyeotji.ui.search.SearchActions
+import app.eodiyeotji.ui.search.SearchViewModel
+import app.eodiyeotji.ui.places.PlacesRoute
 import app.eodiyeotji.ui.search.rememberSearchSlot
 import app.eodiyeotji.ui.search.searchHint
 import app.eodiyeotji.ui.search.searchScope
@@ -65,11 +67,11 @@ import app.eodiyeotji.ui.timeline.TimelineRoute
 import java.util.Locale
 
 /** 왼쪽 레일 목적지. */
-enum class HomeTab { TIMELINE, COMMUNITY }
+enum class HomeTab { TIMELINE, COMMUNITY, PLACES }
 
 /**
  * 앱 첫 화면 (MainActivity가 부른다).
- * - 정차 중: 왼쪽 레일 [내 기록 | 커뮤니티] + 고른 화면. 머리에는 검색 칸(손으로 · 말로 찾기, ui/search)과
+ * - 정차 중: 왼쪽 레일 [내 기록 | 커뮤니티 | 내 장소] + 고른 화면. 머리에는 검색 칸(손으로 · 말로 찾기, ui/search)과
  *   "어디였지? 물어보세요"(누르면 기억 에이전트가 위에 덮인다). 검색 결과를 열면 그날 · 코스 · 리뷰 · 글로 간다.
  * - 주행 중: 레일·타임라인·커뮤니티(긴 목록·피드)를 모두 감추고 기억 에이전트 주행 화면(음성 + 큰 카드 1장)만 보인다.
  */
@@ -134,8 +136,9 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                     agentOpen = true
                 },
             )
+            val recordsSearchVm: SearchViewModel = hiltViewModel(key = "search-records")
             val recordsSearch = rememberSearchSlot(
-                viewModel = hiltViewModel(key = "search-records"),
+                viewModel = recordsSearchVm,
                 scope = SearchScope.RECORDS,
                 agent = agentViewModel,
                 actions = actions,
@@ -160,6 +163,11 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                                 selectedTab = communityTab,
                                 onTabChange = { communityTab = it },
                             )
+                            // 저장한 곳 · 자주 가는 곳 · 집 · 회사 · 숨긴 기록. "기록 보기"는 그 이름으로 내 기록 검색.
+                            HomeTab.PLACES -> PlacesRoute(onOpenRecords = { name ->
+                                tab = HomeTab.TIMELINE
+                                recordsSearchVm.submit(name)
+                            })
                         }
                     }
                     // 코스 안내 중이면 어느 탭에서든 맨 아래에 진행 카드 (내비에서 돌아왔을 때 몇 번째 구간인지 바로 보이게).
@@ -172,7 +180,7 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
     }
 }
 
-/** 왼쪽 레일: 앱 표시(BrandMark) + 목적지 2개 (한 칸 112dp, 아이콘 + 이름). 좁은 창(약 840dp)에서도 폭 120dp만 쓴다. */
+/** 왼쪽 레일: 앱 표시(BrandMark) + 목적지 3개 (내 기록 · 커뮤니티 · 내 장소) (한 칸 112dp, 아이콘 + 이름). 좁은 창(약 840dp)에서도 폭 120dp만 쓴다. */
 @Composable
 private fun NavRail(selected: HomeTab, onSelect: (HomeTab) -> Unit) {
     val c = EodiTheme.colors
@@ -190,6 +198,7 @@ private fun NavRail(selected: HomeTab, onSelect: (HomeTab) -> Unit) {
         BrandMark(Modifier.padding(top = 4.dp, bottom = 20.dp), size = 64.dp)
         RailItem(CommunityIcons.Clock, stringResource(R.string.nav_timeline), selected == HomeTab.TIMELINE) { onSelect(HomeTab.TIMELINE) }
         RailItem(CommunityIcons.People, stringResource(R.string.nav_community), selected == HomeTab.COMMUNITY) { onSelect(HomeTab.COMMUNITY) }
+        RailItem(CommunityIcons.Heart, stringResource(R.string.nav_places), selected == HomeTab.PLACES) { onSelect(HomeTab.PLACES) }
     }
 }
 

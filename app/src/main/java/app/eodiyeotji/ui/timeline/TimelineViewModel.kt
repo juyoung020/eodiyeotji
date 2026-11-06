@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformLatest
 
@@ -107,8 +108,18 @@ class TimelineViewModel @Inject constructor(
         core.changes.debounce(REFRESH_DEBOUNCE_MS),
     )
 
+    /** 지난번 목록의 날들 (보던 날이 숨기기 · 지우기로 사라졌는지 알려고). */
+    private var lastDays: Set<String> = emptySet()
+
     private val days: StateFlow<DaysState> = refresh
         .mapLatest { loadDays() }
+        .onEach { d ->
+            if (d !is DaysState.Loaded) return@onEach
+            val now = d.days.mapTo(HashSet()) { it.day }
+            // 보던 날을 숨기거나 지웠으면 상세를 닫고 목록으로 돌아간다
+            selectedDay.value?.let { sel -> if (sel in lastDays && sel !in now) selectedDay.value = null }
+            lastDays = now
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), DaysState.Loading)
 
     /** 상세에 보일 날. 목록이 다시 읽히면(요약 값이 바뀌면) 상세도 다시 읽는다. */

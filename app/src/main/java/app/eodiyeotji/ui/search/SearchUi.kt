@@ -382,7 +382,7 @@ fun SearchResults(
                     if (answer.groups.isEmpty()) {
                         full("empty") { NoResults() }
                     }
-                    answer.groups.forEach { g -> group(g, columns, open, map, navigate) }
+                    answer.groups.forEach { g -> group(g, columns, open, map, navigate, state.saved, viewModel::toggleSaved) }
                     if (ai != null && !ai.primary) full("ai-bottom") { AskAiCard(ai, primary = false, onAsk = ask) }
                     full("bottom-space") { Spacer(Modifier.height(24.dp)) }
                 }
@@ -419,11 +419,17 @@ private fun LazyGridScope.group(
     onOpen: (SearchRow) -> Unit,
     onMap: (SearchRow) -> Unit,
     onNavigate: (SearchRow) -> Unit,
+    saved: Map<String, Boolean> = emptyMap(),
+    onHeart: (SearchRow) -> Unit = {},
 ) {
     full("h-${g.kind}") { GroupHeader(g.title, g.rows.size + g.more) }
     itemsIndexed(g.rows, key = { _, r -> "${g.kind}-${r.key}" }, contentType = { _, _ -> "row" }) { index, r ->
         // 사진은 묶음 위쪽 몇 줄만 (구글 사진 요청을 적게)
-        ResultRow(r, showPhoto = index < PhotoRows * columns, onOpen = onOpen, onMap = onMap, onNavigate = onNavigate)
+        ResultRow(
+            r, showPhoto = index < PhotoRows * columns, onOpen = onOpen, onMap = onMap, onNavigate = onNavigate,
+            saved = if (r.kind == SearchRowKind.PLACE && r.place != null) saved[r.key] ?: false else null,
+            onHeart = onHeart,
+        )
     }
     if (g.more > 0) full("more-${g.kind}") { MoreLine(g.more) }
 }
@@ -487,6 +493,8 @@ private fun ResultRow(
     onOpen: (SearchRow) -> Unit,
     onMap: (SearchRow) -> Unit,
     onNavigate: (SearchRow) -> Unit,
+    saved: Boolean? = null,
+    onHeart: (SearchRow) -> Unit = {},
 ) {
     val c = EodiTheme.colors
     val openLabel = stringResource(R.string.search_open)
@@ -532,6 +540,16 @@ private fun ResultRow(
             }
             val canMap = r.day != null && r.place != null && (r.kind == SearchRowKind.PLACE || r.kind == SearchRowKind.DAY)
             val canNavi = r.place != null && (r.kind == SearchRowKind.PLACE || r.kind == SearchRowKind.DAY || r.kind == SearchRowKind.REVIEW)
+            if (saved != null) {
+                // 장소 저장(♥): 저장한 곳은 내 장소에 모인다
+                Spacer(Modifier.width(8.dp))
+                RowAction(
+                    if (saved) CommunityIcons.HeartFilled else CommunityIcons.Heart,
+                    stringResource(if (saved) R.string.edit_saved else R.string.places_save),
+                    filled = false,
+                    tint = if (saved) c.heart else null,
+                ) { onHeart(r) }
+            }
             if (canMap) {
                 Spacer(Modifier.width(8.dp))
                 RowAction(SearchIcons.Map, stringResource(R.string.search_map), filled = false) { onMap(r) }
@@ -568,7 +586,7 @@ private fun RowPicture(r: SearchRow, showPhoto: Boolean) {
 
 /** 줄 오른쪽 작은 동작 (76dp 동그라미 + 아래 이름). */
 @Composable
-private fun RowAction(icon: ImageVector, label: String, filled: Boolean, onClick: () -> Unit) {
+private fun RowAction(icon: ImageVector, label: String, filled: Boolean, tint: Color? = null, onClick: () -> Unit) {
     val c = EodiTheme.colors
     Column(
         Modifier
@@ -582,7 +600,7 @@ private fun RowAction(icon: ImageVector, label: String, filled: Boolean, onClick
             Modifier.size(64.dp).background(if (filled) c.accent else c.surfaceHigh, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, null, tint = if (filled) c.onAccent else c.accent, modifier = Modifier.size(30.dp))
+            Icon(icon, null, tint = tint ?: if (filled) c.onAccent else c.accent, modifier = Modifier.size(30.dp))
         }
         Spacer(Modifier.height(4.dp))
         Text(label, style = EodiTheme.type.caption, color = c.textSecondary, maxLines = 1)

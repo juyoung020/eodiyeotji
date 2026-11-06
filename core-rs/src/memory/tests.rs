@@ -380,6 +380,8 @@ fn v2_database_is_migrated_to_v3() {
         let store = db.open();
         small_week(&store);
         let c = store.lock().unwrap();
+        c.execute_batch(crate::edits::DROP_V7).unwrap();
+        c.execute_batch(crate::search_ui::DROP_V6).unwrap();
         c.execute_batch(crate::community::DROP_V5).unwrap();
         c.execute_batch(crate::photos::DROP_V4).unwrap();
         c.execute_batch(crate::memory::DROP_V3).unwrap();

@@ -37,6 +37,13 @@
 //!
 //! # 하루(day)
 //! 현지 날짜는 `open`에 준 `tz_offset_minutes` 기준이다. 다른 오프셋으로 다시 열면 날짜별 요약을 전부 다시 만든다.
+//!
+//! # 숨긴 기록
+//! 사용자가 숨기거나 지운 주행·머문 곳·하루(`edits` 모듈)는 날짜별로 모을 때(`collect_days`) 빠진다.
+//! 머문 곳은 숨긴 주행이 있어도 원래대로 계산한 뒤에 뺀다 (주행 하나를 숨겼다고 앞뒤 머문 곳이 바뀌지 않게).
+//! 주행 안 머문 곳(드라이브스루 등)은 그 주행을 숨기면 같이 숨는다.
+//! 그래서 하루 상세·지도·날짜 목록뿐 아니라 이것을 바탕으로 만드는 에피소드·검색 색인·자주 가는 곳·
+//! 기억 에이전트·커뮤니티 공유 후보에서도 모두 빠진다.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -49,7 +56,7 @@ use crate::places::{self, PlaceLabel, REF_END, REF_START, REF_STAY};
 use crate::trip::{self, DriveMark, MarkKind, Segmenter, Stay, TripConfig};
 
 /// DB 구조 버전 (`PRAGMA user_version`). 구조를 바꾸면 올리고 `migrate`에 단계를 추가한다.
-pub(crate) const SCHEMA_VERSION: i32 = 6;
+pub(crate) const SCHEMA_VERSION: i32 = 7;
 /// 이보다 정확도가 나쁜(m) 점은 버린다.
 pub const MAX_ACCURACY_M: f32 = 100.0;
 /// 지도에 넘길 경로의 단순화 허용 오차(m).
@@ -378,7 +385,11 @@ fn migrate(conn: &mut Connection) -> Result<(), CoreError> {
         // 검색 화면의 최근 검색어
         tx.execute_batch(crate::search_ui::SCHEMA_V6)?;
     }
-    // 다음 버전은 여기에: if version < 7 { ... }
+    if version < 7 {
+        // 숨긴 기록 · 저장한 곳 (사용자가 고친 기록). 기존 기록은 그대로 보인다.
+        tx.execute_batch(crate::edits::SCHEMA_V7)?;
+    }
+    // 다음 버전은 여기에: if version < 8 { ... }
     tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     tx.commit()?;
     Ok(())
@@ -952,6 +963,7 @@ impl EodiStore {
     }
 
     /// 현지 날짜 d0..=d1에 속한 주행(출발 날짜)과 머문 곳(도착 날짜)을 날짜별로 모은다. 기록 없는 날은 빠진다.
+    /// 숨긴 주행·머문 곳(`edits::Hidden`)은 뺀다.
     fn collect_days(
         &self,
         conn: &Connection,
@@ -1010,6 +1022,7 @@ impl EodiStore {
         // 장소 이름 (쿼리 한 번으로 그 주행들의 이름 전부). 요약의 stop_names에도 쓴다.
         let labels = places::labels_between(conn, from, de)?;
         let label = |seg: i64, kind: i64, t: i64| labels.get(&(seg, kind, t)).cloned();
+        let hidden = crate::edits::Hidden::load(conn)?;
 
         // 주차 중 GPS 흔들림으로 생긴 잡음 주행은 빼고 본다 (trip::real_trips). 그 앞뒤 사이 주차는 아래에서 머문 곳 하나로 잡힌다.
         let real = trip::real_trips(&trips.iter().map(|t| t.distance_m).collect::<Vec<_>>(), &self.cfg);
@@ -1018,11 +1031,13 @@ impl EodiStore {
 
         let mut days: BTreeMap<i64, DayAcc> = BTreeMap::new();
         let in_range = |t: i64| Some(self.local_day(t)).filter(|d| (d0..=d1).contains(d));
+        let trip_day = |t: i64| in_range(t).filter(|_| !hidden.trip(t));
+        let stay_day = |t: i64| in_range(t).filter(|_| !hidden.stay(t));
         for (k, &i) in real.iter().enumerate() {
             let next_start = real.get(k + 1).map(|&n| (trips[n].start, trips[n].start_ms)).or(next);
             let t = &mut trips[i];
             let end_place = label(t.seg_start, REF_END, t.end_ms);
-            if let Some(d) = in_range(t.start_ms) {
+            if let Some(d) = trip_day(t.start_ms) {
                 days.entry(d).or_default().trips.push(TripSummary {
                     start_ms: t.start_ms,
                     end_ms: t.end_ms,
@@ -1034,8 +1049,10 @@ impl EodiStore {
                     end_place: end_place.clone(),
                 });
             }
-            for s in &t.stays {
-                if let Some(d) = in_range(s.arrive_ms) {
+            // 주행 안 머문 곳(드라이브스루 등)은 그 주행의 일부라 주행을 숨기면 같이 숨는다.
+            let trip_hidden = hidden.trip(t.start_ms);
+            for s in t.stays.iter().filter(|_| !trip_hidden) {
+                if let Some(d) = stay_day(s.arrive_ms) {
                     days.entry(d).or_default().stays.push(stay_summary(s, label(t.seg_start, REF_STAY, s.arrive_ms)));
                 }
             }
@@ -1046,7 +1063,7 @@ impl EodiStore {
                 None => None,
             };
             if let Some(s) = after {
-                if let Some(d) = in_range(s.arrive_ms) {
+                if let Some(d) = stay_day(s.arrive_ms) {
                     days.entry(d).or_default().stays.push(stay_summary(&s, end_place));
                 }
             }

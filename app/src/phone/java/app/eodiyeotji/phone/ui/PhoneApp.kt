@@ -87,6 +87,7 @@ import app.eodiyeotji.ui.home.CourseGuideViewModel
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.theme.SparkleBadge
 import app.eodiyeotji.ui.timeline.TimelineRoute
+import app.eodiyeotji.ui.places.PlacesRoute
 import app.eodiyeotji.ui.timeline.TimelineViewModel
 
 /** 아래 탭. 가운데 [ASK](기억 에이전트)는 한 번에 닿게 크게 둔다. */
@@ -140,6 +141,8 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
     var tab by rememberSaveable { mutableStateOf(PhoneTab.RECORDS) }
     var previousTab by rememberSaveable { mutableStateOf(PhoneTab.RECORDS) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    // 내 장소 (저장한 곳 · 자주 가는 곳 · 집 · 회사 · 숨긴 기록): 내 기록 머리의 ♥ 버튼으로 연다
+    var placesOpen by rememberSaveable { mutableStateOf(false) }
     val agent: AgentViewModel = hiltViewModel()
     val guide: CourseGuideViewModel = hiltViewModel()
     val moving by shell.moving.collectAsStateWithLifecycle()
@@ -223,7 +226,7 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
     val detailOpen = when (tab) {
         PhoneTab.RECORDS -> {
             val s by timeline.state.collectAsStateWithLifecycle()
-            s.selectedDay != null || recordsSearch.active
+            s.selectedDay != null || recordsSearch.active || placesOpen
         }
         PhoneTab.COMMUNITY -> {
             val cs by courseVm.state.collectAsStateWithLifecycle()
@@ -264,13 +267,24 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
         ) {
             Crossfade(targetState = tab, label = "phone-tab") { t ->
                 when (t) {
-                    PhoneTab.RECORDS -> TimelineRoute(
+                    PhoneTab.RECORDS -> if (placesOpen) {
+                        PlacesRoute(
+                            compact = true,
+                            onBack = { placesOpen = false },
+                            onOpenRecords = { name ->
+                                placesOpen = false
+                                recordsSearchVm.submit(name)
+                            },
+                        )
+                    } else TimelineRoute(
                         compact = true,
                         search = recordsSearch,
                         headerAction = {
-                            // 기록 상태(기록 중 · 대기 중 · 권한/알림/배터리 경고, 누르면 설명 시트) + 설정
+                            // 기록 상태(기록 중 · 대기 중 · 권한/알림/배터리 경고, 누르면 설명 시트) + 내 장소 + 설정
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 RecordingStatusChip(Modifier.weight(1f, fill = false))
+                                Spacer(Modifier.width(12.dp))
+                                HeaderIconButton(CommunityIcons.Heart, stringResource(R.string.nav_places)) { placesOpen = true }
                                 Spacer(Modifier.width(12.dp))
                                 HeaderIconButton(PhoneIcons.Tune, stringResource(R.string.phone_settings)) { settingsOpen = true }
                             }

@@ -13,7 +13,8 @@
 //! 에피소드를 다시 만든다 (`episode::flush_memory`). 주행 중 조회는 오늘 하루만 다시 만든다 (수 ms).
 //!
 //! # 집 · 회사
-//! - `set_home_office`(내비 즐겨찾기 HOME/OFFICE)가 1순위. None이면 기록에서 추정한다.
+//! - 사용자가 "여기를 집으로/회사로"로 직접 정한 곳(`edits` 모듈의 `set_my_anchor`)이 1순위,
+//!   `set_home_office`(내비 즐겨찾기 HOME/OFFICE)가 2순위. 둘 다 없으면 기록에서 추정한다.
 //! - 추정: 날짜별·장소별 머문 시간(`day_place_dwell`)을 모아 둔다. 집 = 밤(현지 22~06시)에 머문 시간 합이 가장 긴 장소
 //!   (4시간 이상), 회사 = 평일 낮(09~18시)에 머문 시간 합이 가장 긴 장소 중 집에서 500m 넘게 떨어진 곳 (8시간 이상).
 //!   합계만 다시 읽으므로 1년치도 1ms 안팎이다. 집·회사가 바뀌면 모든 날의 에피소드를 다시 만든다.
@@ -63,7 +64,10 @@ mod demo;
 mod episode;
 mod search;
 
-pub(crate) use episode::{day_title, episode_from_row, flush_memory, kind_code, EP_COLS, SCHEMA_V3};
+pub(crate) use episode::{
+    anchor_sources, current_anchors, day_title, episode_from_row, flush_memory, kind_code, set_user_anchor, Anchors,
+    ANCHOR_RADIUS_M, EP_COLS, SCHEMA_V3,
+};
 pub(crate) use search::{concepts, expand_terms, match_expr, search as search_hits, squash, SINGLE_OK};
 
 /// 테스트용: 버전 3에서 더한 표를 지운다 (버전 2 DB 흉내).
