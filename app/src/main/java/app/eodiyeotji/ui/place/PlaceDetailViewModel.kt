@@ -7,7 +7,9 @@ import androidx.lifecycle.viewModelScope
 import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.PlaceDetail
 import app.eodiyeotji.core.StopFact
-import app.eodiyeotji.core.addPlaceReviewWith
+import app.eodiyeotji.core.WithWhom
+import app.eodiyeotji.core.reviewKeywordOptions
+import app.eodiyeotji.core.writePlaceReview
 import app.eodiyeotji.core.placeDetail
 import app.eodiyeotji.core.setPlaceSaved
 import app.eodiyeotji.core.toggleReviewHeart
@@ -140,12 +142,18 @@ class PlaceDetailViewModel @Inject constructor(
     fun startReview() {
         val visit = _state.value.detail?.lastVisit ?: return
         _state.update { it.copy(draft = ReviewDraft(candidates = Load.Loaded(listOf(visit)), place = visit)) }
+        viewModelScope.launch {
+            val options = runCatching { core.reviewKeywordOptions() }.getOrNull() ?: return@launch
+            _state.update { s -> s.copy(draft = s.draft?.withOptions(options)) }
+        }
     }
 
     fun closeDraft() = _state.update { it.copy(draft = null) }
     fun pickPlace(p: StopFact?) = _state.update { s -> s.copy(draft = s.draft?.copy(place = p, error = null)) }
     fun setRating(r: Int) = _state.update { s -> s.copy(draft = s.draft?.copy(rating = r.coerceIn(1, 5))) }
     fun setText(t: String) = _state.update { s -> s.copy(draft = s.draft?.copy(text = t.take(500))) }
+    fun toggleKeyword(k: String) = _state.update { s -> s.copy(draft = s.draft?.toggleKeyword(k)) }
+    fun pickWith(w: WithWhom) = _state.update { s -> s.copy(draft = s.draft?.pickWith(w)) }
 
     fun submitDraft() {
         val d = _state.value.draft ?: return
@@ -155,7 +163,7 @@ class PlaceDetailViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val weather = core.visitWeather(visit)
-                core.addPlaceReviewWith(visit, d.rating, d.text, weather)
+                core.writePlaceReview(visit, d.rating, d.text, d.keywords, d.withWhom, weather)
                 _state.update { it.copy(draft = null, justPosted = true) }
                 _state.value.place?.let { load(it) }
                 delay(NOTICE_MS)

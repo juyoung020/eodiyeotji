@@ -558,3 +558,170 @@ fn v4_database_gets_community_tables() {
     assert!(store.seed_community_demo(NOW).unwrap() > 0);
     assert!(!store.board_posts(CommunitySort::Popular, 3).unwrap().is_empty());
 }
+
+#[test]
+fn v8_database_gets_review_detail_columns_and_old_demo_reviews_are_refreshed() {
+    let db = TempDb::new("v8");
+    {
+        let store = db.open();
+        assert!(store.seed_community_demo(NOW).unwrap() > 0);
+        let c = store.lock().unwrap();
+        // 버전 8 시절처럼: 칸 없음, 짧은 시연 리뷰, 자세한 리뷰로 바꾼 표시 없음
+        drop_v9(&c);
+        c.execute("UPDATE place_review SET text = '짧은 한 줄', my_heart = 1 WHERE id = 'r001'", []).unwrap();
+        c.execute("DELETE FROM meta WHERE key = 'community_reviews_v9'", []).unwrap();
+        c.pragma_update(None, "user_version", 8).unwrap();
+    }
+    let store = db.open();
+    let v: i32 = store.lock().unwrap().pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
+    assert_eq!(v, SCHEMA_VERSION);
+    // 칸이 기본값으로 생겨 예전 줄도 읽힌다
+    let r = store.place_reviews(CommunitySort::Recent, None, 500).unwrap();
+    assert_eq!(r.len(), REVIEWS.len());
+    assert!(r.iter().all(|x| x.keywords.is_empty() && x.with_whom.is_none() && x.time_of_day.is_none() && x.visit_nth == 0));
+    // 시연을 다시 부르면 넣지는 않고(0) 예전 시연 리뷰를 자세하게 바꾼다 — 내가 누른 하트는 그대로
+    assert_eq!(store.seed_community_demo(NOW + 1).unwrap(), 0);
+    let r001 = store.place_reviews(CommunitySort::Recent, None, 500).unwrap().into_iter().find(|x| x.id == "r001").unwrap();
+    assert_eq!(r001.text, REVIEWS[0].3);
+    assert_eq!(r001.keywords.len(), REVIEWS[0].6.len());
+    assert_eq!(r001.time_of_day, Some(REVIEWS[0].8));
+    assert!(r001.hearted_by_me);
+    assert_eq!(r001.hearts, REVIEWS[0].5 + 1);
+    // 한 번만
+    assert_eq!(demo::refresh_review_details(&store.lock().unwrap()).unwrap(), 0);
+}
+
+// ---- 자세한 리뷰 (키워드 · 누구와 · 때 · 머문 시간 · 몇 번째 방문) ----
+
+fn review_with(keywords: &[&str]) -> PlaceReview {
+    PlaceReview {
+        id: "x".into(),
+        place: place("p", 37.0, 127.0),
+        author: "a".into(),
+        mine: false,
+        rating: 5,
+        text: String::new(),
+        created_ms: 0,
+        hearts: 0,
+        hearted_by_me: false,
+        visited_day: "2026-11-01".into(),
+        season: String::new(),
+        weather: None,
+        keywords: keywords.iter().map(|k| k.to_string()).collect(),
+        with_whom: None,
+        time_of_day: None,
+        stay_min: 0,
+        visit_nth: 0,
+    }
+}
+
+#[test]
+fn demo_reviews_are_detailed_with_known_keywords() {
+    for r in REVIEWS {
+        let (name, text, keywords, stay, nth) = (r.0, r.3, r.6, r.9, r.10);
+        let sentences = text.split(". ").count();
+        assert!((2..=5).contains(&sentences), "{name}: 문장 {sentences}개");
+        assert!(text.chars().count() >= 60 && text.chars().count() <= MAX_REVIEW_CHARS, "{name}: 글 길이");
+        assert!((1..=MAX_REVIEW_KEYWORDS).contains(&keywords.len()), "{name}: 키워드 수");
+        assert!(keywords.iter().all(|k| REVIEW_KEYWORDS.contains(k)), "{name}: 정해진 키워드만");
+        assert!(stay > 0 && nth >= 1, "{name}: 머문 분 · 몇 번째");
+    }
+    // 같은 글이 두 번 쓰이지 않는다
+    let mut texts: Vec<&str> = REVIEWS.iter().map(|r| r.3).collect();
+    texts.sort();
+    texts.dedup();
+    assert_eq!(texts.len(), REVIEWS.len());
+}
+
+#[test]
+fn seeded_reviews_carry_details_and_visit_time_matches_time_of_day() {
+    let (_db, store) = seeded("review-detail");
+    let all = store.place_reviews(CommunitySort::Recent, None, 500).unwrap();
+    assert_eq!(all.len(), REVIEWS.len());
+    for r in &all {
+        let i: usize = r.id[1..].parse::<usize>().unwrap() - 1;
+        let d = &REVIEWS[i];
+        assert_eq!((r.place.name.as_str(), r.author.as_str(), r.rating, r.text.as_str()), (d.0, d.1, d.2, d.3));
+        assert_eq!(r.keywords, d.6.iter().map(|k| k.to_string()).collect::<Vec<_>>());
+        assert_eq!((r.with_whom, r.time_of_day, r.stay_min, r.visit_nth), (d.7, Some(d.8), d.9, d.10));
+        let hour = (r.place.arrive_ms + 9 * 3_600_000).rem_euclid(86_400_000) / 3_600_000;
+        assert_eq!(TimeOfDay::from_hour(hour), d.8, "{}: 다녀온 시각과 때", r.id);
+        assert!(r.place.arrive_ms < r.created_ms);
+    }
+}
+
+#[test]
+fn keyword_summary_counts_once_per_review_sorted_with_bar_ratio() {
+    let a = review_with(&["조용해요", "뷰가 좋아요", "조용해요"]);
+    let b = review_with(&["조용해요", "주차하기 편해요"]);
+    let c = review_with(&["주차하기 편해요", "모르는 키워드"]);
+    let d = review_with(&[]);
+    let (top, voters) = keyword_summary([&a, &b, &c, &d]);
+    let got: Vec<(&str, u32)> = top.iter().map(|k| (k.keyword.as_str(), k.count)).collect();
+    // 조용해요 2(한 리뷰 안 겹침은 한 번), 주차 2 → 같으면 키워드 표 순서(주차가 앞), 뷰 1
+    assert_eq!(got, [("주차하기 편해요", 2), ("조용해요", 2), ("뷰가 좋아요", 1)]);
+    assert_eq!(voters, 3, "키워드를 고른 리뷰 수");
+    assert_eq!(top[0].ratio, 1.0);
+    assert_eq!(top[2].ratio, 0.5);
+    let many: Vec<PlaceReview> = REVIEW_KEYWORDS.iter().map(|k| review_with(&[k])).collect();
+    assert_eq!(keyword_summary(&many).0.len(), KEYWORD_SUMMARY_TOP);
+    assert!(keyword_summary([&d]).0.is_empty());
+}
+
+#[test]
+fn clean_keywords_keeps_known_unique_up_to_five() {
+    let k = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    assert_eq!(clean_keywords(&k(&[" 조용해요 ", "없는 말", "조용해요", "친절해요"])), k(&["조용해요", "친절해요"]));
+    let six = k(&REVIEW_KEYWORDS[..6]);
+    assert_eq!(clean_keywords(&six), k(&REVIEW_KEYWORDS[..MAX_REVIEW_KEYWORDS]));
+}
+
+#[test]
+fn popular_places_show_top_keyword() {
+    let (_db, store) = seeded("top-keyword");
+    let top = store.popular_places(None, 500).unwrap();
+    let tofu = top.iter().find(|p| p.place.name == "초당할머니순두부").unwrap();
+    assert_eq!(tofu.top_keyword.as_deref(), Some("음식이 맛있어요"), "세 리뷰 모두 고른 키워드");
+    // 리뷰가 없고 코스에만 있는 곳은 키워드가 없다
+    assert!(top.iter().any(|p| p.review_count == 0 && p.top_keyword.is_none()));
+}
+
+#[test]
+fn write_review_keeps_keywords_with_whom_and_fills_visit_from_record_times() {
+    let (_db, store) = seeded("review-write-detail");
+    let mut p = place("경포해변", 37.8055, 128.9089);
+    // 2026-11-03 10:20 KST 도착, 1시간 25분 머묾
+    p.arrive_ms = NOW - 3 * 86_400_000 - 100 * 60_000;
+    p.leave_ms = p.arrive_ms + 85 * 60_000;
+    let kw = vec!["뷰가 좋아요".to_string(), "아무말".into(), "산책하기 좋아요".into(), "뷰가 좋아요".into()];
+    let r = store.write_place_review(p.clone(), 5, "좋았어요".into(), kw, Some(WithWhom::Family), None, NOW).unwrap();
+    assert_eq!(r.keywords, ["뷰가 좋아요", "산책하기 좋아요"]);
+    assert_eq!(r.with_whom, Some(WithWhom::Family));
+    assert_eq!(r.time_of_day, Some(TimeOfDay::Morning));
+    assert_eq!(r.stay_min, 85);
+    assert_eq!(r.visit_nth, 1, "내 기록에 이곳에 머문 날이 없으면 첫 방문");
+    // 다시 읽어도 같다 (저장된 값)
+    let again = store.reviews_of_place(p.clone(), CommunitySort::Recent, 1).unwrap();
+    assert_eq!(again[0], r);
+    // 장소 창 키워드 요약에 들어간다
+    let d = store.place_detail(p.clone()).unwrap();
+    assert!(d.keywords.iter().any(|k| k.keyword == "산책하기 좋아요"));
+    assert_eq!(d.keyword_voters, 4, "시연 리뷰 3 + 내 리뷰 1");
+    assert!(d.keywords.windows(2).all(|w| w[0].count >= w[1].count));
+    // 도착 시각을 모르면 때 · 몇 번째 방문은 모름
+    let mut q = p.clone();
+    q.arrive_ms = 0;
+    q.leave_ms = 0;
+    let r = store.write_place_review(q, 4, "".into(), vec![], None, None, NOW).unwrap();
+    assert_eq!((r.time_of_day, r.stay_min, r.visit_nth, r.with_whom), (None, 0, 0, None));
+    // 예전 함수는 키워드 없이 그대로 된다
+    let r = store.add_place_review_with(p, 3, "".into(), None, NOW).unwrap();
+    assert!(r.keywords.is_empty());
+}
+
+#[test]
+fn time_of_day_buckets() {
+    use TimeOfDay::*;
+    let got: Vec<TimeOfDay> = [4, 5, 10, 11, 16, 17, 20, 21, 0, 23].into_iter().map(TimeOfDay::from_hour).collect();
+    assert_eq!(got, [Night, Morning, Morning, Day, Day, Evening, Evening, Night, Night, Night]);
+}

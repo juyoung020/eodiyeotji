@@ -14,6 +14,8 @@
 //! - 리뷰는 하트 많은 순(같으면 최신, 그다음 id). 최대 [MAX_REVIEWS]개.
 //! - 평균 별점은 리뷰가 없으면 0. [PlaceDetail::rating_halves] = 평균을 반 별 단위로 반올림한 값 × 2 (별 그리기용, 0~10).
 //! - 하트 = 이곳 리뷰 하트 합 + 이곳이 들어간 코스 하트 합 (인기 장소 순위와 같은 셈).
+//! - "이런 점이 좋았어요" = 이곳 리뷰 전부(창에 담는 수와 상관없이)에서 고른 키워드 수, 많은 순 상위 5개
+//!   (`community::keyword_summary`). 막대 길이(ratio)도 여기서 계산한다.
 //!
 //! # 내 방문
 //! 내 기록의 장소(`place` 표) 중 누른 곳에서 [SAME_PLACE_M] 안이고 이름이 같은 곳, 또는 [PLACE_RADIUS_M](100m) 안이고
@@ -24,9 +26,12 @@
 
 use std::collections::HashSet;
 
-use rusqlite::params;
+use rusqlite::{params, Connection};
 
-use crate::community::{load_courses, load_reviews, sort_by_hearts, stop_point, valid_point, CommunitySort, PlaceReview, SAME_PLACE_M};
+use crate::community::{
+    keyword_summary, load_courses, load_reviews, sort_by_hearts, stop_point, valid_point, CommunitySort, KeywordCount, PlaceReview,
+    SAME_PLACE_M,
+};
 use crate::geo::{haversine_m, Point};
 use crate::memory::StopFact;
 use crate::offers::{norm, offers_at, same_name, shares_word, PartnerOffer, NEAR_M, UNNAMED_M};
@@ -53,6 +58,10 @@ pub struct PlaceDetail {
     pub hearts: u32,
     /// 이곳 리뷰 (하트 많은 순)
     pub reviews: Vec<PlaceReview>,
+    /// "이런 점이 좋았어요": 리뷰에서 많이 고른 키워드 상위 5개 (많은 순, 막대 길이 ratio 포함)
+    pub keywords: Vec<KeywordCount>,
+    /// 키워드를 하나라도 고른 리뷰 수 ("12명 참여")
+    pub keyword_voters: u32,
     /// 내가 이곳에 머문 날 수 (숨긴 기록 제외)
     pub visit_days: u32,
     /// 마지막으로 머문 날 "YYYY-MM-DD" (없으면 None)
@@ -97,6 +106,43 @@ pub(crate) fn rating_halves(avg: f64) -> u8 {
     (avg * 2.0).round().clamp(0.0, 10.0) as u8
 }
 
+/// 내 기록의 장소 하나 (번호, 좌표, 이름, 분류, 주소).
+pub(crate) type MyPlace = (i64, Point, Option<String>, String, String);
+
+/// [my_visits] 결과: (거리 m, 내 장소) 가까운 순, 머문 날들.
+pub(crate) type MyVisits = (Vec<(f64, MyPlace)>, HashSet<i64>);
+
+/// 누른 곳(정리한 이름 [qn], 좌표 [q])으로 보는 내 기록의 장소들(가까운 순, 거리 m와 함께)과 그곳들에 머문 날
+/// (같은 날은 한 번, 숨긴 기록 제외). 모듈 설명 "내 방문". 부르기 전에 기록을 반영(`flush_all`)해 둔다.
+pub(crate) fn my_visits(conn: &Connection, qn: &[char], q: Point) -> Result<MyVisits, CoreError> {
+    let dlat = SAME_PLACE_M / 111_000.0;
+    let dlon = SAME_PLACE_M / (111_000.0 * q.lat.to_radians().cos().max(0.01));
+    let mut mine: Vec<(f64, MyPlace)> = Vec::new();
+    {
+        let mut st = conn.prepare_cached(
+            "SELECT id, lat, lon, name, category, address FROM place WHERE lat BETWEEN ?1 AND ?2 AND lon BETWEEN ?3 AND ?4",
+        )?;
+        let mut rows = st.query(params![q.lat - dlat, q.lat + dlat, q.lon - dlon, q.lon + dlon])?;
+        while let Some(r) = rows.next()? {
+            let at = Point { lat: r.get(1)?, lon: r.get(2)? };
+            let name: Option<String> = r.get(3)?;
+            if same_my_place(qn, q, name.as_deref(), at) {
+                mine.push((haversine_m(q, at), (r.get(0)?, at, name, r.get(4)?, r.get(5)?)));
+            }
+        }
+    }
+    mine.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1 .0.cmp(&b.1 .0)));
+    let mut days: HashSet<i64> = HashSet::new();
+    let mut st = conn.prepare_cached("SELECT day FROM day_place_dwell WHERE place_id = ?1")?;
+    for (_, (id, ..)) in &mine {
+        let rows = st.query_map([id], |r| r.get::<_, i64>(0))?;
+        for d in rows {
+            days.insert(d?);
+        }
+    }
+    Ok((mine, days))
+}
+
 #[uniffi::export]
 impl EodiStore {
     /// 장소 상세 창 (모듈 설명). 좌표가 틀리면 `InvalidInput`.
@@ -130,36 +176,12 @@ impl EodiStore {
         let hearts = reviews.iter().map(|r| u64::from(r.hearts)).sum::<u64>() + course_hearts;
 
         // 내 방문 · 저장
-        let dlat = SAME_PLACE_M / 111_000.0;
-        let dlon = SAME_PLACE_M / (111_000.0 * q.lat.to_radians().cos().max(0.01));
-        type Mine = (i64, Point, Option<String>, String, String);
-        let mut mine: Vec<(f64, Mine)> = Vec::new();
-        {
-            let mut st = conn.prepare_cached(
-                "SELECT id, lat, lon, name, category, address FROM place WHERE lat BETWEEN ?1 AND ?2 AND lon BETWEEN ?3 AND ?4",
-            )?;
-            let mut rows = st.query(params![q.lat - dlat, q.lat + dlat, q.lon - dlon, q.lon + dlon])?;
-            while let Some(r) = rows.next()? {
-                let at = Point { lat: r.get(1)?, lon: r.get(2)? };
-                let name: Option<String> = r.get(3)?;
-                if same_my_place(&qn, q, name.as_deref(), at) {
-                    mine.push((haversine_m(q, at), (r.get(0)?, at, name, r.get(4)?, r.get(5)?)));
-                }
-            }
-        }
-        mine.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1 .0.cmp(&b.1 .0)));
-        let mut days: HashSet<i64> = HashSet::new();
+        let (mine, days) = my_visits(&conn, &qn, q)?;
         let mut saved_id: Option<i64> = None;
-        {
-            let mut st = conn.prepare_cached("SELECT day FROM day_place_dwell WHERE place_id = ?1")?;
-            for (_, (id, ..)) in &mine {
-                let rows = st.query_map([id], |r| r.get::<_, i64>(0))?;
-                for d in rows {
-                    days.insert(d?);
-                }
-                if saved_id.is_none() && is_saved(&conn, *id)? {
-                    saved_id = Some(*id);
-                }
+        for (_, (id, ..)) in &mine {
+            if is_saved(&conn, *id)? {
+                saved_id = Some(*id);
+                break;
             }
         }
         let place_id = saved_id.or_else(|| mine.first().map(|m| m.1 .0));
@@ -179,6 +201,7 @@ impl EodiStore {
             }
         }
 
+        let (keywords, keyword_voters) = keyword_summary(&reviews);
         reviews.truncate(MAX_REVIEWS);
         let offers = offers_at(&place.name, Some(q));
         Ok(PlaceDetail {
@@ -187,6 +210,8 @@ impl EodiStore {
             review_count,
             hearts: hearts.min(u64::from(u32::MAX)) as u32,
             reviews,
+            keywords,
+            keyword_voters,
             visit_days: days.len() as u32,
             last_visit_day: days.iter().max().map(|d| format_day(*d)),
             last_visit,

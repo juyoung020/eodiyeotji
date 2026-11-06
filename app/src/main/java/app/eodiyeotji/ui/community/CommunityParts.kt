@@ -515,15 +515,19 @@ fun weatherIcon(weather: String?): Pair<ImageVector, Color> {
     }
 }
 
-/** 날씨 아이콘이 붙은 다녀온 날 줄 (아이콘은 그날 날씨에 맞춘다). */
+/**
+ * 날씨 아이콘이 붙은 다녀온 날 줄 (아이콘은 그날 날씨에 맞춘다).
+ * [extra]는 뒤에 이어 붙일 조각 (리뷰: "아침 · 가족과 · 1시간 머묾"), [maxLines]는 넘칠 때 줄 수.
+ */
 @Composable
-fun VisitLine(v: Visit, modifier: Modifier = Modifier) {
+fun VisitLine(v: Visit, modifier: Modifier = Modifier, extra: List<String> = emptyList(), maxLines: Int = 1) {
     val c = EodiTheme.colors
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         val (icon, tint) = weatherIcon(v.weather)
         Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
         Spacer(Modifier.width(8.dp))
-        Text(visitText(v), style = EodiTheme.type.meta, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        val text = (listOf(visitText(v)) + extra).filter { it.isNotBlank() }.joinToString(" · ")
+        Text(text, style = EodiTheme.type.meta, color = c.textSecondary, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
     }
 }
 

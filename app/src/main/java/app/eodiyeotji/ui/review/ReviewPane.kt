@@ -1,6 +1,5 @@
 package app.eodiyeotji.ui.review
 
-import app.eodiyeotji.ui.offers.PlaceCouponBadge
 import androidx.compose.foundation.horizontalScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -22,6 +21,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
+import androidx.compose.foundation.lazy.staggeredgrid.items as staggeredItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -50,24 +53,20 @@ import app.eodiyeotji.R
 import app.eodiyeotji.core.PopularPlace
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.core.TravelReview
+import app.eodiyeotji.core.WithWhom
 import app.eodiyeotji.ui.community.CenterMessage
 import app.eodiyeotji.ui.community.ChoiceRow
 import app.eodiyeotji.ui.community.CommunityIcons
-import app.eodiyeotji.ui.community.HeartButton
 import app.eodiyeotji.ui.community.Load
 import app.eodiyeotji.ui.community.LoadingBox
-import app.eodiyeotji.ui.community.MineBadge
 import app.eodiyeotji.ui.community.Notice
 import app.eodiyeotji.ui.community.OverlayCard
 import app.eodiyeotji.ui.community.PrimaryPill
-import app.eodiyeotji.ui.community.RatingStars
 import app.eodiyeotji.ui.community.RoundIconButton
 import app.eodiyeotji.ui.community.SecondaryPill
 import app.eodiyeotji.ui.community.SortChoice
 import app.eodiyeotji.ui.community.StopPhoto
 import app.eodiyeotji.ui.community.TogglePill
-import app.eodiyeotji.ui.community.VisitLine
-import app.eodiyeotji.ui.community.agoText
 import app.eodiyeotji.ui.community.rememberTopGridState
 import app.eodiyeotji.ui.community.dateText
 import app.eodiyeotji.ui.community.localDate
@@ -135,6 +134,8 @@ fun ReviewPane(viewModel: ReviewViewModel = hiltViewModel()) {
                 onPick = viewModel::pickPlace,
                 onRating = viewModel::setRating,
                 onText = viewModel::setText,
+                onKeyword = viewModel::toggleKeyword,
+                onWith = viewModel::pickWith,
                 onSubmit = viewModel::submitDraft,
                 onClose = viewModel::closeDraft,
             )
@@ -200,6 +201,8 @@ private fun PlaceRow(rank: Int, p: PopularPlace, onClick: () -> Unit) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                // 리뷰에서 가장 많이 고른 키워드 (Rust가 셈)
+                p.topKeyword?.let { KeywordChip(it) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(CommunityIcons.HeartFilled, null, tint = c.heart, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.width(6.dp))
@@ -218,91 +221,41 @@ private fun PlaceRow(rank: Int, p: PopularPlace, onClick: () -> Unit) {
     }
 }
 
-/** "강원 강릉시 초당동 309-1" → "강원 강릉시" (보여 주기만). */
-private fun regionOf(address: String): String = address.split(' ').take(2).joinToString(" ")
-
 // ---------------------------------------------------------------- 리뷰 피드
 
+/** 리뷰 피드: 글 길이 · 펼침에 따라 카드 높이가 달라서 엇갈림 격자 (빈틈 없이). */
 @Composable
 private fun ReviewGrid(reviews: List<TravelReview>, onHeart: (String) -> Unit) {
-    LazyVerticalGrid(
-        state = rememberTopGridState(reviews.firstOrNull()?.review?.id),
-        columns = GridCells.Adaptive(minSize = 680.dp),
+    val state = rememberLazyStaggeredGridState()
+    // 정렬을 바꾸거나 새 리뷰를 올려 맨 위가 바뀌면 맨 위로 (rememberTopGridState와 같은 이유)
+    val firstKey = reviews.firstOrNull()?.review?.id
+    LaunchedEffect(firstKey) { state.scrollToItem(0) }
+    LazyVerticalStaggeredGrid(
+        columns = StaggeredGridCells.Adaptive(minSize = 680.dp),
+        state = state,
         contentPadding = PaddingValues(start = 32.dp, end = 32.dp, bottom = 32.dp),
         horizontalArrangement = Arrangement.spacedBy(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalItemSpacing = 16.dp,
         modifier = Modifier.fillMaxSize(),
     ) {
-        items(reviews, key = { it.review.id }, contentType = { "review" }) { r -> ReviewCard(r, onHeart = { onHeart(r.review.id) }) }
-    }
-}
-
-@Composable
-internal fun ReviewCard(t: TravelReview, onHeart: () -> Unit, showPlace: Boolean = true) {
-    val c = EodiTheme.colors
-    val r = t.review
-    Surface(
-        color = if (showPlace) c.surface else c.surfaceHigh,
-        shape = RoundedCornerShape(EodiTheme.space.radiusL),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(Modifier.padding(18.dp)) {
-            // 한 장소의 리뷰 모음에서는 장소 사진·이름이 위에 한 번만 있으면 된다
-            if (showPlace) {
-                StopPhoto(r.place.name, r.place.address, r.place.lat, r.place.lon, order = null, size = 148.dp)
-                Spacer(Modifier.width(20.dp))
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (showPlace) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(r.place.name, style = EodiTheme.type.bodyStrong, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                        if (r.mine) MineBadge()
-                    }
-                    Text(
-                        listOf(r.place.category, regionOf(r.place.address)).filter { it.isNotBlank() }.joinToString(" · "),
-                        style = EodiTheme.type.caption,
-                        color = c.textTertiary,
-                        maxLines = 1,
-                    )
-                    RatingStars(r.rating)
-                } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RatingStars(r.rating)
-                        if (r.mine) MineBadge()
-                    }
-                }
-                if (r.text.isNotBlank()) {
-                    Text(r.text, style = EodiTheme.type.body, color = c.textSecondary, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                }
-                VisitLine(t.visit)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        stringResource(R.string.community_byline, r.author, agoText(r.createdMs)),
-                        style = EodiTheme.type.caption,
-                        color = c.textTertiary,
-                        maxLines = 1,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (showPlace) {
-                        PlaceCouponBadge(t.offers)
-                        Spacer(Modifier.width(12.dp))
-                    }
-                    HeartButton(r.hearts, r.heartedByMe, onHeart, compact = true)
-                }
-            }
-        }
+        staggeredItems(reviews, key = { it.review.id }, contentType = { "review" }) { r -> RichReviewCard(r, onHeart = { onHeart(r.review.id) }) }
     }
 }
 
 // ---------------------------------------------------------------- 리뷰 쓰기
 
-/** 1단계: 내가 실제로 들른 곳(최근 머문 곳, 사진) 고르기 → 2단계: 별점 + 한 줄 → 등록. */
+/**
+ * 1단계: 내가 실제로 들른 곳(최근 머문 곳, 사진) 고르기 → 2단계: 별점 + 키워드(5개까지) + 누구와 + 후기 → 등록.
+ * 다녀온 때 · 머문 시간 · 몇 번째 방문은 Rust가 고른 방문 기록에서 채운다.
+ */
 @Composable
 internal fun WriteReviewSheet(
     d: ReviewDraft,
     onPick: (StopFact?) -> Unit,
     onRating: (Int) -> Unit,
     onText: (String) -> Unit,
+    onKeyword: (String) -> Unit,
+    onWith: (WithWhom) -> Unit,
     onSubmit: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -349,12 +302,15 @@ internal fun WriteReviewSheet(
                         }
                     }
                     StarPicker(d.rating, onRating)
+                    KeywordPicker(d.keywordOptions, d.keywords, d.keywordLimit, onKeyword)
+                    WithWhomPicker(d.withWhom, onWith)
                     OutlinedTextField(
                         value = d.text,
                         onValueChange = onText,
                         placeholder = { Text(stringResource(R.string.review_text_hint), style = EodiTheme.type.body) },
                         textStyle = EodiTheme.type.body,
-                        maxLines = 3,
+                        minLines = 3,
+                        maxLines = 6,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     d.error?.let { Text(stringResource(R.string.community_failed, it), style = EodiTheme.type.caption, color = c.error) }
