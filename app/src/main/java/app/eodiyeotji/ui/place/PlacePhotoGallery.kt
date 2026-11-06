@@ -38,10 +38,14 @@ import dagger.hilt.components.SingletonComponent
  * 사진 곁에 올린 사람 이름과 Google 표시를 둔다 (구글 Places 약관). 사진이 없으면 안내 글.
  */
 @Composable
-fun PlacePhotoGallery(stop: StopFact, modifier: Modifier = Modifier) {
+fun PlacePhotoGallery(stop: StopFact, modifier: Modifier = Modifier) =
+    PlacePhotoGallery(stop.name, stop.address, stop.lat, stop.lon, modifier)
+
+@Composable
+fun PlacePhotoGallery(name: String, address: String, lat: Double, lon: Double, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val repo = remember { EntryPointAccessors.fromApplication(context.applicationContext, PhotoEntryPoint::class.java).photos() }
-    val photos by produceState<List<PlacePhoto>?>(null, stop.name, stop.lat, stop.lon) { value = repo.photos(stop) }
+    val photos by produceState<List<PlacePhoto>?>(null, name, lat, lon) { value = repo.photos(name, address, lat, lon) }
     val c = EodiTheme.colors
     Box(modifier.background(c.ink), contentAlignment = Alignment.Center) {
         val list = photos
@@ -53,7 +57,7 @@ fun PlacePhotoGallery(stop: StopFact, modifier: Modifier = Modifier) {
                 HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { i ->
                     AsyncImage(
                         model = repo.imageRequest(list[i]),
-                        contentDescription = stop.name,
+                        contentDescription = name,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
                     )
