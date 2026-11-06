@@ -459,7 +459,7 @@ private fun REpisodeKind.toModel() = when (this) {
     REpisodeKind.TRIP -> EpisodeKind.TRIP
 }
 
-private fun EpisodeKind.toRust() = when (this) {
+internal fun EpisodeKind.toRust() = when (this) {
     EpisodeKind.COMMUTE_TO_WORK -> REpisodeKind.COMMUTE_TO_WORK
     EpisodeKind.COMMUTE_HOME -> REpisodeKind.COMMUTE_HOME
     EpisodeKind.ERRAND -> REpisodeKind.ERRAND

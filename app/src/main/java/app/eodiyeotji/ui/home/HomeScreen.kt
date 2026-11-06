@@ -46,7 +46,18 @@ import app.eodiyeotji.ui.agent.AgentEntryButton
 import app.eodiyeotji.ui.agent.AgentPanel
 import app.eodiyeotji.ui.agent.AgentViewModel
 import app.eodiyeotji.ui.community.CommunityIcons
+import app.eodiyeotji.ui.community.BoardViewModel
 import app.eodiyeotji.ui.community.CommunityRoute
+import app.eodiyeotji.ui.community.CommunityTab
+import app.eodiyeotji.ui.community.CourseViewModel
+import app.eodiyeotji.core.SearchScope
+import app.eodiyeotji.ui.review.ReviewViewModel
+import app.eodiyeotji.ui.search.SearchActions
+import app.eodiyeotji.ui.search.rememberSearchSlot
+import app.eodiyeotji.ui.search.searchHint
+import app.eodiyeotji.ui.search.searchScope
+import app.eodiyeotji.ui.timeline.TimelineViewModel
+import androidx.compose.foundation.layout.widthIn
 import app.eodiyeotji.ui.theme.BrandMark
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.timeline.TimelineRoute
@@ -57,7 +68,8 @@ enum class HomeTab { TIMELINE, COMMUNITY }
 
 /**
  * 앱 첫 화면 (MainActivity가 부른다).
- * - 정차 중: 왼쪽 레일 [내 기록 | 커뮤니티] + 고른 화면. 머리의 "어디였지? 물어보세요"를 누르면 기억 에이전트가 위에 덮인다.
+ * - 정차 중: 왼쪽 레일 [내 기록 | 커뮤니티] + 고른 화면. 머리에는 검색 칸(손으로 · 말로 찾기, ui/search)과
+ *   "어디였지? 물어보세요"(누르면 기억 에이전트가 위에 덮인다). 검색 결과를 열면 그날 · 코스 · 리뷰 · 글로 간다.
  * - 주행 중: 레일·타임라인·커뮤니티(긴 목록·피드)를 모두 감추고 기억 에이전트 주행 화면(음성 + 큰 카드 1장)만 보인다.
  */
 @Composable
@@ -79,14 +91,67 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                 )
             }
         } else {
-            val entry: @Composable () -> Unit = { AgentEntryButton(onClick = { agentOpen = true }) }
+            // 머리: [검색 칸 (손으로 · 말로 찾기)] + [✦ 물어보기 (기억 에이전트)]. 마이크는 검색 칸 안에 하나만 둔다.
+            val entry: @Composable () -> Unit = { AgentEntryButton(onClick = { agentOpen = true }, mic = false) }
+            val compactEntry: @Composable () -> Unit = {
+                AgentEntryButton(onClick = { agentOpen = true }, mic = false, modifier = Modifier.widthIn(max = 300.dp))
+            }
+            var communityTab by rememberSaveable { mutableStateOf(CommunityTab.COURSES) }
+            val timeline: TimelineViewModel = hiltViewModel()
+            val courses: CourseViewModel = hiltViewModel()
+            val reviews: ReviewViewModel = hiltViewModel()
+            val board: BoardViewModel = hiltViewModel()
+            val actions = SearchActions(
+                openDay = { day, entryKey ->
+                    tab = HomeTab.TIMELINE
+                    timeline.openDay(day, entryKey)
+                },
+                openCourse = { c ->
+                    tab = HomeTab.COMMUNITY
+                    communityTab = CommunityTab.COURSES
+                    courses.open(c)
+                },
+                openReview = { p ->
+                    tab = HomeTab.COMMUNITY
+                    communityTab = CommunityTab.REVIEWS
+                    reviews.openPlace(p)
+                },
+                openPost = { p ->
+                    tab = HomeTab.COMMUNITY
+                    communityTab = CommunityTab.BOARD
+                    board.open(p)
+                },
+                askAi = { text ->
+                    agentViewModel.ask(text)
+                    agentOpen = true
+                },
+            )
+            val recordsSearch = rememberSearchSlot(
+                viewModel = hiltViewModel(key = "search-records"),
+                scope = SearchScope.RECORDS,
+                agent = agentViewModel,
+                actions = actions,
+                hint = stringResource(R.string.search_hint_records_long),
+            )
+            val communitySearch = rememberSearchSlot(
+                viewModel = hiltViewModel(key = "search-community"),
+                scope = communityTab.searchScope(),
+                agent = agentViewModel,
+                actions = actions,
+                hint = stringResource(communityTab.searchHint()),
+            )
             Row(Modifier.fillMaxSize().background(EodiTheme.colors.background)) {
                 NavRail(tab, onSelect = { tab = it })
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                         when (tab) {
-                            HomeTab.TIMELINE -> TimelineRoute(headerAction = entry)
-                            HomeTab.COMMUNITY -> CommunityRoute(headerAction = entry)
+                            HomeTab.TIMELINE -> TimelineRoute(headerAction = entry, search = recordsSearch)
+                            HomeTab.COMMUNITY -> CommunityRoute(
+                                headerAction = compactEntry,
+                                search = communitySearch,
+                                selectedTab = communityTab,
+                                onTabChange = { communityTab = it },
+                            )
                         }
                     }
                     // 코스 안내 중이면 어느 탭에서든 맨 아래에 진행 카드 (내비에서 돌아왔을 때 몇 번째 구간인지 바로 보이게).

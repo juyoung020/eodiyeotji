@@ -8,6 +8,11 @@
             android:name=".record.DemoSeedReceiver"
             android:exported="true" />
 
+        <!-- 열려 있는 검색 칸에 말 넣기 (사용법은 ui/search/SearchDebugReceiver.kt) -->
+        <receiver
+            android:name=".ui.search.SearchDebugReceiver"
+            android:exported="true" />
+
         <!-- 기억 에이전트 화면만 띄워 보기 (실제 기억 에이전트, 사용법은 ui/agent/AgentDebugActivity.kt).
              주행 화면도 확인하므로 주행 중 사용 화면(DO)으로 선언한다. -->
         <activity

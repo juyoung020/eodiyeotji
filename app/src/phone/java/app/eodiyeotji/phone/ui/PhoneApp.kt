@@ -71,6 +71,14 @@ import app.eodiyeotji.ui.agent.AgentViewModel
 import app.eodiyeotji.ui.community.BoardViewModel
 import app.eodiyeotji.ui.community.CommunityIcons
 import app.eodiyeotji.ui.community.CommunityRoute
+import app.eodiyeotji.ui.community.CommunityTab
+import app.eodiyeotji.core.SearchScope
+import app.eodiyeotji.ui.review.ReviewViewModel
+import app.eodiyeotji.ui.search.SearchActions
+import app.eodiyeotji.ui.search.SearchViewModel
+import app.eodiyeotji.ui.search.rememberSearchSlot
+import app.eodiyeotji.ui.search.searchHint
+import app.eodiyeotji.ui.search.searchScope
 import app.eodiyeotji.ui.community.CourseViewModel
 import app.eodiyeotji.ui.community.LocalOverlayPresenter
 import app.eodiyeotji.ui.home.CourseGuideBanner
@@ -158,19 +166,68 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
         if (agent.needsMicPermission()) micPermission.launch(Manifest.permission.RECORD_AUDIO) else agent.voice()
     }
 
-    // 상세 화면이 열려 있는지 (아래 탭을 감춘다). 같은 ViewModel 인스턴스를 각 화면과 같이 본다.
+    // 검색: 내 기록 · 커뮤니티 맨 위 검색 칸 (손으로 · 말로). 결과를 열면 그 화면으로 간다.
+    var communityTab by rememberSaveable { mutableStateOf(CommunityTab.COURSES) }
+    val timeline: TimelineViewModel = hiltViewModel()
+    val courseVm: CourseViewModel = hiltViewModel()
+    val boardVm: BoardViewModel = hiltViewModel()
+    val reviewVm: ReviewViewModel = hiltViewModel()
+    val recordsSearchVm: SearchViewModel = hiltViewModel(key = "search-records")
+    val communitySearchVm: SearchViewModel = hiltViewModel(key = "search-community")
+    val actions = SearchActions(
+        openDay = { day, entryKey ->
+            select(PhoneTab.RECORDS)
+            timeline.openDay(day, entryKey)
+        },
+        openCourse = { c ->
+            select(PhoneTab.COMMUNITY)
+            communityTab = CommunityTab.COURSES
+            courseVm.open(c)
+        },
+        openReview = { p ->
+            select(PhoneTab.COMMUNITY)
+            communityTab = CommunityTab.REVIEWS
+            reviewVm.openPlace(p)
+        },
+        openPost = { p ->
+            select(PhoneTab.COMMUNITY)
+            communityTab = CommunityTab.BOARD
+            boardVm.open(p)
+        },
+        askAi = { text ->
+            select(PhoneTab.ASK)
+            agent.ask(text)
+        },
+    )
+    // 운전 중(동승자 아님)이면 결과 맨 위에 말로 찾기를 권한다 (막지는 않는다)
+    val driverMoving = moving && !passenger
+    val recordsSearch = rememberSearchSlot(
+        viewModel = recordsSearchVm,
+        scope = SearchScope.RECORDS,
+        agent = agent,
+        actions = actions,
+        hint = stringResource(R.string.search_hint_records),
+        drivingHint = driverMoving,
+    )
+    val communitySearch = rememberSearchSlot(
+        viewModel = communitySearchVm,
+        scope = communityTab.searchScope(),
+        agent = agent,
+        actions = actions,
+        hint = stringResource(communityTab.searchHint()),
+        drivingHint = driverMoving,
+    )
+
+    // 상세 화면이나 검색 결과가 열려 있는지 (아래 탭을 감춰 화면을 다 쓴다). 같은 ViewModel 인스턴스를 각 화면과 같이 본다.
     val detailOpen = when (tab) {
         PhoneTab.RECORDS -> {
-            val tl: TimelineViewModel = hiltViewModel()
-            val s by tl.state.collectAsStateWithLifecycle()
-            s.selectedDay != null
+            val s by timeline.state.collectAsStateWithLifecycle()
+            s.selectedDay != null || recordsSearch.active
         }
         PhoneTab.COMMUNITY -> {
-            val course: CourseViewModel = hiltViewModel()
-            val board: BoardViewModel = hiltViewModel()
-            val cs by course.state.collectAsStateWithLifecycle()
-            val bs by board.state.collectAsStateWithLifecycle()
-            cs.detail != null || bs.thread != null
+            val cs by courseVm.state.collectAsStateWithLifecycle()
+            val bs by boardVm.state.collectAsStateWithLifecycle()
+            cs.detail != null || bs.thread != null || communitySearch.active
         }
         PhoneTab.ASK -> false
     }
@@ -208,6 +265,7 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
                 when (t) {
                     PhoneTab.RECORDS -> TimelineRoute(
                         compact = true,
+                        search = recordsSearch,
                         headerAction = { HeaderIconButton(PhoneIcons.Tune, stringResource(R.string.phone_settings)) { settingsOpen = true } },
                         headerBanner = if (!permissions.location) {
                             { PermissionWarning(onFix = shell::openAppSettings) }
@@ -216,7 +274,13 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
                         },
                     )
                     PhoneTab.ASK -> AgentPanel(onClose = null, viewModel = agent, compact = true)
-                    PhoneTab.COMMUNITY -> CommunityRoute(headerAction = null, compact = true)
+                    PhoneTab.COMMUNITY -> CommunityRoute(
+                        headerAction = null,
+                        compact = true,
+                        search = communitySearch,
+                        selectedTab = communityTab,
+                        onTabChange = { communityTab = it },
+                    )
                 }
             }
         }

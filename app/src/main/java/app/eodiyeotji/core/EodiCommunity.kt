@@ -172,7 +172,7 @@ private fun LatLon?.toNear(radiusKm: Double) = this?.let { RNearFilter(RGeoPoint
 
 private fun StopFact.toR() = RStopFact(name, category, address, arriveMs, leaveMs, lat, lon, firstVisit)
 
-private fun RCoursePost.toDrive() = DriveCourse(toModel(), Visit(visitedDay, season, weather))
+internal fun RCoursePost.toDrive() = DriveCourse(toModel(), Visit(visitedDay, season, weather))
 
 private fun RPlaceReview.toTravel() = TravelReview(
     PlaceReview(id, place.toModel(), author, mine, rating.toInt(), text, createdMs, hearts.toInt(), heartedByMe),
@@ -192,7 +192,7 @@ private fun RSharePreview.toModel() = SharePreview(
     distanceM, shared, weatherUrl,
 )
 
-private fun RBoardPost.toModel() =
+internal fun RBoardPost.toModel() =
     BoardPost(id, title, body, author, mine, region, tags, createdMs, hearts.toInt(), heartedByMe, commentCount.toInt())
 
 private fun RBoardComment.toModel() = BoardComment(id, postId, author, mine, body, createdMs, hearts.toInt(), heartedByMe)

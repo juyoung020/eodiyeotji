@@ -168,7 +168,7 @@ pub(crate) fn match_expr(terms: &[String]) -> Option<String> {
 }
 
 /// 낱말을 뜻 묶음으로 모은다: 같은 동의어 묶음에 든 낱말은 한 묶음, 나머지는 낱말 하나가 한 묶음.
-fn concepts(terms: &[String]) -> Vec<Vec<String>> {
+pub(crate) fn concepts(terms: &[String]) -> Vec<Vec<String>> {
     let mut out: Vec<(Option<usize>, Vec<String>)> = Vec::new();
     for t in terms {
         let g = SYNONYMS.iter().position(|g| g.contains(&t.as_str()));
@@ -180,7 +180,8 @@ fn concepts(terms: &[String]) -> Vec<Vec<String>> {
     out.into_iter().map(|(_, v)| v).collect()
 }
 
-fn squash(s: &str) -> String {
+/// 띄어쓰기를 빼고 소문자로 (글자 그대로 포함 비교용).
+pub(crate) fn squash(s: &str) -> String {
     s.chars().filter(|c| !c.is_whitespace()).flat_map(char::to_lowercase).collect()
 }
 

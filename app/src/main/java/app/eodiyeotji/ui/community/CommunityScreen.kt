@@ -29,6 +29,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
 import app.eodiyeotji.ui.review.ReviewPane
+import app.eodiyeotji.ui.search.SearchSlot
 import app.eodiyeotji.ui.theme.EodiTheme
 
 enum class CommunityTab { BOARD, COURSES, REVIEWS }
@@ -41,10 +42,20 @@ private val OneLineHeader = 1400.dp
  * 위쪽 하위 탭 [게시판 · 드라이브 코스 · 여행 리뷰]. 각 탭은 자기 ViewModel을 가져 탭을 오가도 목록·정렬이 남는다.
  * [headerAction] 자리는 타임라인과 같은 대표 동작 하나(에이전트 "어디였지? 물어보세요").
  * [compact]: 폰 세로 화면 (상세를 열면 머리를 감춘다).
+ * [search]: 머리의 검색 칸 · 검색 중이면 하위 탭 화면 대신 결과 (지금 하위 탭 안에서 찾는다).
+ * [selectedTab]·[onTabChange]: 하위 탭을 밖에서 정할 때 (내 기록 검색 결과에서 코스 · 리뷰를 열 때). 없으면 이 화면이 기억한다.
  */
 @Composable
-fun CommunityRoute(headerAction: (@Composable () -> Unit)? = null, compact: Boolean = false) {
-    var tab by rememberSaveable { mutableStateOf(CommunityTab.COURSES) }
+fun CommunityRoute(
+    headerAction: (@Composable () -> Unit)? = null,
+    compact: Boolean = false,
+    search: SearchSlot? = null,
+    selectedTab: CommunityTab? = null,
+    onTabChange: ((CommunityTab) -> Unit)? = null,
+) {
+    var ownTab by rememberSaveable { mutableStateOf(CommunityTab.COURSES) }
+    val tab = selectedTab ?: ownTab
+    val selectTab: (CommunityTab) -> Unit = { t -> ownTab = t; onTabChange?.invoke(t) }
     // 폰 세로 화면: 코스 상세 · 게시글을 열면 머리(제목 · 하위 탭)를 감춰 상세가 화면을 다 쓴다. 차 화면은 그대로.
     val detailOpen = if (!compact) {
         false
@@ -68,32 +79,62 @@ fun CommunityRoute(headerAction: (@Composable () -> Unit)? = null, compact: Bool
                             CommunityTab.REVIEWS to stringResource(R.string.community_tab_reviews),
                         ),
                         selected = tab,
-                        onSelect = { tab = it },
+                        onSelect = selectTab,
                         big = true,
                     )
                 }
-                if (!detailOpen) Row(Modifier.fillMaxWidth().height(104.dp).padding(horizontal = 32.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        stringResource(R.string.community_title),
-                        style = EodiTheme.type.titleSmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        modifier = Modifier.semantics { heading() },
-                    )
-                    if (oneLine) {
-                        Spacer(Modifier.width(32.dp))
-                        tabs()
+                val searching = search?.active == true
+                if (compact && search != null) {
+                    // 폰: 제목 줄 · 하위 탭 아래에 검색 칸 한 줄 (검색 중에는 검색 칸 · 하위 탭만 위에 남는다)
+                    if (!detailOpen && !searching) Row(Modifier.fillMaxWidth().height(104.dp).padding(horizontal = 32.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            stringResource(R.string.community_title),
+                            style = EodiTheme.type.titleSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            modifier = Modifier.semantics { heading() },
+                        )
+                        Spacer(Modifier.weight(1f))
+                        if (headerAction != null) headerAction()
                     }
-                    Spacer(Modifier.weight(1f))
-                    if (headerAction != null) headerAction()
-                }
-                if (!oneLine && !detailOpen) {
-                    Box(Modifier.padding(start = 32.dp, end = 32.dp, bottom = 8.dp)) { tabs() }
+                    if (!detailOpen) {
+                        search.bar(Modifier.fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = if (searching) 16.dp else 0.dp, bottom = 12.dp))
+                        Box(Modifier.padding(start = 32.dp, end = 32.dp, bottom = 8.dp)) { tabs() }
+                    }
+                } else {
+                    if (!detailOpen) Row(Modifier.fillMaxWidth().height(104.dp).padding(horizontal = 32.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            stringResource(R.string.community_title),
+                            style = EodiTheme.type.titleSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            modifier = Modifier.semantics { heading() },
+                        )
+                        if (oneLine) {
+                            Spacer(Modifier.width(32.dp))
+                            tabs()
+                        }
+                        if (search != null) {
+                            // 하위 탭과 물어보기 버튼 사이를 검색 칸이 채운다
+                            Spacer(Modifier.width(24.dp))
+                            search.bar(Modifier.weight(1f))
+                            Spacer(Modifier.width(16.dp))
+                        } else {
+                            Spacer(Modifier.weight(1f))
+                        }
+                        if (headerAction != null) headerAction()
+                    }
+                    if (!oneLine && !detailOpen) {
+                        Box(Modifier.padding(start = 32.dp, end = 32.dp, bottom = 8.dp)) { tabs() }
+                    }
                 }
                 Box(Modifier.fillMaxSize()) {
-                    when (tab) {
-                        CommunityTab.BOARD -> BoardPane()
-                        CommunityTab.COURSES -> CoursePane()
-                        CommunityTab.REVIEWS -> ReviewPane()
+                    if (searching) {
+                        search!!.results(Modifier.fillMaxSize().padding(horizontal = 32.dp))
+                    } else {
+                        when (tab) {
+                            CommunityTab.BOARD -> BoardPane()
+                            CommunityTab.COURSES -> CoursePane()
+                            CommunityTab.REVIEWS -> ReviewPane()
+                        }
                     }
                 }
             }

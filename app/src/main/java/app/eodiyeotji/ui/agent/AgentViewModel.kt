@@ -20,7 +20,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
@@ -54,6 +57,8 @@ data class VoiceUi(
     val followUpCourses: Boolean = false,
     /** 잠깐 보이는 안내 ("말씀을 듣지 못했어요" 등) */
     val note: String? = null,
+    /** 검색 칸에 받아쓰는 중 ([AgentViewModel.dictate]) — 에이전트 화면의 듣기 표시는 띄우지 않는다 */
+    val dictating: Boolean = false,
 )
 
 /** 질문 하나와 그 답. 새 질문을 하면 통째로 바뀐다. */
@@ -126,9 +131,24 @@ class AgentViewModel @Inject constructor(
     private val note = MutableStateFlow<String?>(null)
     private val followUp = MutableStateFlow(false)
     private val followUpCourses = MutableStateFlow(false)
+    /** 검색 칸 받아쓰기 중 (알아들은 말을 묻지 않고 [dictated]로 넘긴다) */
+    private val dictating = MutableStateFlow(false)
+    private val _dictated = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
-    private val voice = combine(speech.state, tts.speaking, followUp, followUpCourses, note) { l, s, f, fc, n ->
-        VoiceUi(listening = l.listening, partial = l.partial, level = l.level, speaking = s, followUp = f && l.listening, followUpCourses = fc, note = n)
+    /** 검색 칸 마이크로 알아들은 말 (검색 칸에 넣는다). */
+    val dictated: SharedFlow<String> = _dictated.asSharedFlow()
+
+    private val voice = combine(speech.state, tts.speaking, combine(followUp, followUpCourses, dictating, ::Triple), note) { l, s, (f, fc, d), n ->
+        VoiceUi(
+            listening = l.listening,
+            partial = l.partial,
+            level = l.level,
+            speaking = s,
+            followUp = f && l.listening,
+            followUpCourses = fc,
+            note = n,
+            dictating = d && l.listening,
+        )
     }
 
     val state: StateFlow<AgentUiState> = combine(turn, driving.isDriving, voice) { t, d, v -> AgentUiState(isDriving = d, turn = t, voice = v) }
@@ -151,13 +171,31 @@ class AgentViewModel @Inject constructor(
         if (speech.state.value.listening) {
             speech.stop()
         } else {
+            dictating.value = false
             listen(followUp = false)
         }
+    }
+
+    /**
+     * 검색 칸 마이크: 듣고 알아들은 말을 묻지 않고 [dictated]로 넘긴다 (검색 칸에 들어간다).
+     * 듣는 중에 다시 누르면 "다 말했다".
+     */
+    fun dictate() {
+        if (speech.state.value.listening) {
+            speech.stop()
+            return
+        }
+        tts.stop()
+        note.value = null
+        followUp.value = false
+        dictating.value = true
+        speech.start()
     }
 
     /** 듣기 취소 (× 버튼). */
     fun cancelVoice() {
         followUp.value = false
+        dictating.value = false
         speech.cancel()
     }
 
@@ -183,6 +221,7 @@ class AgentViewModel @Inject constructor(
         tts.stop()
         speech.cancel()
         followUp.value = false
+        dictating.value = false
         note.value = null
         askJob?.cancel()
         actionJob?.cancel()
@@ -229,6 +268,7 @@ class AgentViewModel @Inject constructor(
     private fun listen(followUp: Boolean, courses: Boolean = false) {
         tts.stop()
         note.value = null
+        dictating.value = false
         this.followUp.value = followUp
         followUpCourses.value = courses
         // 이어 듣기는 한마디("응")라 짧게 기다린다
@@ -236,6 +276,15 @@ class AgentViewModel @Inject constructor(
     }
 
     private fun onSpeech(r: SpeechResult) {
+        if (dictating.value) {
+            dictating.value = false
+            when (r) {
+                is SpeechResult.Final -> _dictated.tryEmit(r.text)
+                SpeechResult.NoSpeech -> showNote(MSG_NO_SPEECH)
+                is SpeechResult.Failed -> showNote(r.message)
+            }
+            return
+        }
         val wasFollowUp = followUp.value
         followUp.value = false
         when (r) {
