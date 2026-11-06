@@ -7,7 +7,9 @@
 //! # 어느 장소에 붙나 ([offer_matches])
 //! - 이름이 같으면(띄어쓰기 · 대소문자 무시, 또는 4글자 이상인 한쪽을 다른 쪽이 품으면) 같은 곳이다.
 //!   단 양쪽 좌표가 있으면 [NAME_MAX_M] 안이어야 한다 (멀리 있는 같은 이름 지점은 다른 곳).
-//! - 이름이 조금 달라도(카카오 "초당순두부마을" ↔ "초당할머니순두부") 좌표가 [NEAR_M] 안이고 이름에서 3글자가 겹치면 같은 곳.
+//! - 이름이 조금 달라도(카카오 "강릉 초당할머니순두부 본점" ↔ "초당할머니순두부") 좌표가 [NEAR_M] 안이고 짧은 쪽 이름의
+//!   대부분([SIMILAR_RATIO])이 이어서 겹치면 같은 곳. 맛집 골목처럼 이웃 가게 이름이 몇 글자 겹치는 곳
+//!   ("초당할머니순두부" ↔ "원조초당순두부")은 다른 곳으로 본다 — 남의 가게 쿠폰 · 리뷰가 섞이면 안 된다.
 //! - 아직 이름을 모르는 곳은 좌표가 [UNNAMED_M] 안일 때만.
 //!
 //! # 코스 ([course_offers])
@@ -26,8 +28,10 @@ use crate::store::{CoreError, EodiStore};
 
 /// 이름이 같아도 이보다 멀면 다른 지점 (m).
 pub const NAME_MAX_M: f64 = 5_000.0;
-/// 이름이 조금 달라도 이 안이고 이름이 겹치면 같은 곳 (m).
+/// 이름이 조금 달라도 이 안이고 이름이 거의 같으면 같은 곳 (m).
 pub const NEAR_M: f64 = 300.0;
+/// 짧은 쪽 이름 중 이만큼이 이어서 겹쳐야 "거의 같은 이름".
+pub const SIMILAR_RATIO: f64 = 0.7;
 /// 이름을 아직 모르는 곳은 이 안일 때만 (m).
 pub const UNNAMED_M: f64 = 150.0;
 
@@ -189,9 +193,29 @@ pub(crate) fn same_name(a: &[char], b: &[char]) -> bool {
     short == long || (short.len() >= 4 && contains(long, short))
 }
 
-/// 3글자가 겹치는 이름
+/// 거의 같은 이름: 이어서 겹치는 가장 긴 부분이 3글자 이상이고 짧은 쪽 이름의 [SIMILAR_RATIO] 이상.
 pub(crate) fn shares_word(a: &[char], b: &[char]) -> bool {
-    a.len() >= 3 && a.windows(3).any(|w| contains(b, w))
+    let shorter = a.len().min(b.len());
+    if shorter < 3 {
+        return false;
+    }
+    let need = ((shorter as f64) * SIMILAR_RATIO).ceil().max(3.0) as usize;
+    longest_common_run(a, b) >= need
+}
+
+/// 두 이름에서 이어서 겹치는 가장 긴 글자 수 (이름이 짧아 단순 이중 반복으로 충분)
+fn longest_common_run(a: &[char], b: &[char]) -> usize {
+    let mut best = 0;
+    for i in 0..a.len() {
+        for j in 0..b.len() {
+            let mut k = 0;
+            while i + k < a.len() && j + k < b.len() && a[i + k] == b[j + k] {
+                k += 1;
+            }
+            best = best.max(k);
+        }
+    }
+    best
 }
 
 /// 이 장소에 이 쿠폰이 붙나 (모듈 설명).
@@ -225,13 +249,15 @@ pub fn course_offers_of(stops: &[StopFact]) -> CourseOffers {
     let mut place_count = 0;
     for s in stops {
         let found = offers_at(&s.name, Some(Point { lat: s.lat, lon: s.lon }));
-        if !found.is_empty() {
-            place_count += 1;
-        }
+        // 같은 곳을 두 번 들르면 새 쿠폰이 없으므로 곳 수도 한 번만 센다
+        let before = offers.len();
         for o in found {
             if !offers.iter().any(|x| x.id == o.id) {
                 offers.push(o);
             }
+        }
+        if offers.len() > before {
+            place_count += 1;
         }
     }
     CourseOffers { place_count, offers }

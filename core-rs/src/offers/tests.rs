@@ -71,9 +71,10 @@ fn matching_by_name_and_by_nearby_coordinates() {
     assert!(offers_at("이마트", None).is_empty(), "짧은 이름(체인 이름만)은 아무 이마트에나 붙지 않는다");
     // 같은 이름이라도 멀면 다른 지점
     assert!(offers_at("스타벅스 왕십리역점", p(35.1587, 129.1604)).is_empty());
-    // 이름이 조금 달라도 가깝고 이름이 겹치면 (카카오 이름 ↔ 쿠폰 이름)
-    let tofu = offers_at("초당순두부마을", p(37.7913, 128.9147));
-    assert_eq!(ids(&tofu), ["o-chodang-halmeoni", "o-chodang-wonjo"]);
+    // 이름이 조금 달라도 가깝고 거의 같으면 (카카오 이름 ↔ 쿠폰 이름)
+    assert_eq!(ids(&offers_at("테라로사커피 강릉", p(37.7072, 128.8692))), ["o-terarosa"]);
+    // 이웃 가게처럼 이름이 몇 글자만 겹치면 가까워도 다른 가게 (남의 가게 쿠폰이 섞이지 않는다)
+    assert_eq!(ids(&offers_at("초당할머니순두부", p(37.7913, 128.9147))), ["o-chodang-halmeoni"]);
     // 가까워도 이름이 전혀 다르면 다른 가게
     assert!(offers_at("경포 편의점", p(37.7915, 128.9143)).is_empty());
     // 이름을 아직 모르면 아주 가까울 때만
@@ -108,10 +109,10 @@ fn course_offers_follow_stop_order_and_count_places() {
     assert_eq!(ids(&c.offers), ["o-hoengseong", "o-sheep", "o-anmok-cafe"]);
     assert_eq!(c.offers[2].partner_name, "안목 바다정원 카페", "카페거리는 그 안의 가게 이름으로 보인다");
 
-    // 한 곳에 쿠폰 둘이면 곳은 하나, 쿠폰은 둘. 같은 곳을 두 번 들러도 쿠폰은 한 번
-    let tofu = [stop("초당순두부마을", 37.7913, 128.9147), stop("경포해변", 37.8055, 128.9083), stop("초당할머니순두부", 37.7915, 128.9142)];
+    // 같은 곳을 두 번 들러도 쿠폰은 한 번, 이웃 가게(원조초당순두부) 쿠폰은 붙지 않는다
+    let tofu = [stop("초당할머니순두부", 37.7913, 128.9147), stop("경포해변", 37.8055, 128.9083), stop("초당 할머니 순두부", 37.7915, 128.9142)];
     let c = course_offers_of(&tofu);
-    assert_eq!((c.place_count, ids(&c.offers)), (2, vec!["o-chodang-halmeoni", "o-chodang-wonjo"]));
+    assert_eq!((c.place_count, ids(&c.offers)), (1, vec!["o-chodang-halmeoni"]));
 
     assert_eq!(course_offers_of(&[]), CourseOffers { place_count: 0, offers: vec![] });
     assert_eq!(course_offers_of(&[stop("경포해변", 37.8055, 128.9083)]).place_count, 0);

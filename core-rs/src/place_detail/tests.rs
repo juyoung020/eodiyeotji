@@ -48,8 +48,8 @@ fn reviews_of_the_same_spot_sorted_by_hearts_with_rating_summary() {
     put_course(&store, "c1", &[stop("초당할머니순두부", lat, lon), stop("경포해변", 37.8055, 128.9083)], 7);
     put_course(&store, "c2", &[stop("경포해변", 37.8055, 128.9083)], 100);
 
-    // 카카오 이름이 조금 달라도(3글자 겹침, 300m 안) 같은 곳
-    let d = store.place_detail(stop("초당순두부마을", lat, lon)).unwrap();
+    // 카카오 이름이 조금 달라도(거의 같은 이름, 300m 안) 같은 곳
+    let d = store.place_detail(stop("초당할머니순두부 강릉", lat, lon)).unwrap();
     assert_eq!(ids(&d), ["b", "c", "a"]);
     assert_eq!(d.review_count, 3);
     assert!((d.avg_rating - 13.0 / 3.0).abs() < 1e-4);
@@ -117,8 +117,9 @@ fn same_spot_rules() {
     let mid = Point { lat: 37.504, lon: 127.0 }; // 약 445m
     assert!(same_spot(&n, q, "이마트성수점", mid), "같은 이름은 500m 안");
     assert!(!same_spot(&n, q, "이마트성수점", Point { lat: 37.51, lon: 127.0 }));
-    assert!(same_spot(&n, q, "이마트 왕십리점", near), "3글자 겹치면 300m 안");
-    assert!(!same_spot(&n, q, "이마트 왕십리점", mid));
+    assert!(same_spot(&n, q, "이마트 성수 1층", near), "거의 같은 이름은 300m 안");
+    assert!(!same_spot(&n, q, "이마트 성수 1층", mid));
+    assert!(!same_spot(&n, q, "이마트 왕십리점", near), "다른 지점(몇 글자만 겹침)은 가까워도 다른 곳");
     assert!(!same_spot(&n, q, "대림창고", near), "겹치는 글자가 없으면 다른 곳");
     assert!(same_spot(&n, q, "", near), "이름 모르는 곳은 150m 안");
     assert_eq!([rating_halves(0.0), rating_halves(4.74), rating_halves(4.76), rating_halves(5.0), rating_halves(f64::NAN)], [0, 9, 10, 10, 0]);
