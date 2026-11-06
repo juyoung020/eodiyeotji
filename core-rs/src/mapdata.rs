@@ -13,7 +13,7 @@
 //!   화면에 쓸 전체 이름은 `day_detail`의 `PlaceLabel`에 그대로 있다.
 //! - 화면 표시용 글(지도는 이 글을 그대로 그린다, 앱에서 계산하지 않는다):
 //!   - 머문 곳 properties 앞쪽(`kind` 바로 뒤)에 `"dwell"`(정차 시간 "18분 정차" / "1시간 5분 정차" / "잠깐 정차",
-//!     아직 머무는 곳은 "지금 여기")과, 그날 경로의 출발·도착 지점이면 `"tag":"출발"|"도착"|"출발·도착"` (`RouteEnds`).
+//!     아직 머무는 곳은 "지금 여기", 그날의 출발·도착 머문 곳은 밤새 머문 시간이 섞이므로 빈 글)과, 그날 경로의 출발·도착 지점이면 `"tag":"출발"|"도착"|"출발·도착"` (`RouteEnds`).
 //!   - 주행 가운데 지점(거리 기준)에 `Point`, properties `{"kind":"trip_label","key":"t<start_ms>","label":"12분 · 4.9km"}`
 //!     (200m 미만 주행은 없음). `key`가 주행과 같아 눌러서 그 주행을 고를 수 있다.
 //!   - 출발·도착 지점에 머문 곳이 없으면 `Point`, properties
@@ -259,7 +259,9 @@ fn stay_feature(out: &mut String, s: &StaySummary, tag: Option<&str>, b: &mut Bo
     out.push_str(r#"{"type":"Feature","geometry":{"type":"Point","coordinates":"#);
     coord(out, s.center.lat, s.center.lon);
     b.add(s.center.lat, s.center.lon);
-    let _ = write!(out, r#"}},"properties":{{"kind":"stay","dwell":"{}","#, dwell_text(s));
+    // 그날의 출발·도착 머문 곳(대개 집)은 밤새 머문 시간까지 세져 "63시간 정차"처럼 보이므로 정차 글을 비운다 (지금 여기는 그대로).
+    let dwell = if tag.is_some() && s.leave_ms != s.arrive_ms { String::new() } else { dwell_text(s) };
+    let _ = write!(out, r#"}},"properties":{{"kind":"stay","dwell":"{dwell}","#);
     if let Some(tag) = tag {
         let _ = write!(out, r#""tag":"{tag}","#);
     }
@@ -489,7 +491,7 @@ mod tests {
         let d = detail(vec![t1, t2], vec![home, cafe]);
         assert_eq!(route_ends(&d), RouteEnds { start_stay: Some(0), end_stay: None });
         let m = day_map(&d);
-        assert!(m.geojson.contains(r#""kind":"stay","dwell":"10분 정차","tag":"출발","key":"s0""#), "{}", m.geojson);
+        assert!(m.geojson.contains(r#""kind":"stay","dwell":"","tag":"출발","key":"s0""#), "{}", m.geojson);
         assert!(m.geojson.contains(r#""kind":"stay","dwell":"30분 정차","key":"s1800000""#));
         assert!(!m.geojson.contains(r#""role":"start""#), "출발은 머문 곳 글로 붙었다");
         assert!(m.geojson.contains(
@@ -519,7 +521,7 @@ mod tests {
         let d = detail(vec![out, back], vec![sea, home]);
         assert_eq!(route_ends(&d), RouteEnds { start_stay: Some(1), end_stay: Some(1) });
         let m = day_map(&d);
-        assert!(m.geojson.contains(r#""dwell":"12시간 정차","tag":"출발·도착","key":"s10800000""#), "{}", m.geojson);
+        assert!(m.geojson.contains(r#""dwell":"","tag":"출발·도착","key":"s10800000""#), "{}", m.geojson);
         assert!(m.geojson.contains(r#""kind":"stay","dwell":"1시간 정차","key":"s3600000""#));
         assert!(!m.geojson.contains("endpoint"));
 
