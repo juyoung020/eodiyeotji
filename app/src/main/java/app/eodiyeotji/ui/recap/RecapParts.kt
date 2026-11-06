@@ -27,6 +27,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import app.eodiyeotji.ui.place.LocalOpenPlace
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -237,7 +238,9 @@ fun RecallDrivingCard(modifier: Modifier = Modifier) {
 internal fun PhotoTile(stop: StopFact, modifier: Modifier, showName: Boolean = true, radius: Dp = 20.dp) {
     val c = EodiTheme.colors
     val shape = RoundedCornerShape(radius)
-    Box(modifier.clip(shape).background(c.staySoft, shape)) {
+    val openPlace = LocalOpenPlace.current
+    // 누르면 그곳 장소 창(사진 · 별점 · 리뷰)
+    Box(modifier.clip(shape).background(c.staySoft, shape).clickable { openPlace(stop) }) {
         val pin: @Composable () -> Unit = {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Icon(EodiIcons.Pin, contentDescription = null, tint = c.stay, modifier = Modifier.size(36.dp))

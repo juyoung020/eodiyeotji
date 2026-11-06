@@ -52,7 +52,7 @@ import app.eodiyeotji.ui.theme.MemoryStamp
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.ui.map.DayMap
 import app.eodiyeotji.ui.map.MapPhotoPin
-import app.eodiyeotji.ui.place.PlacePhotoGallery
+import app.eodiyeotji.ui.place.LocalOpenPlace
 import app.eodiyeotji.ui.place.PlaceThumbnail
 import app.eodiyeotji.ui.share.ComposableImageShare
 import app.eodiyeotji.ui.share.ShareButtonStyle
@@ -78,7 +78,8 @@ internal fun RecommendationCard(
 ) {
     val facts = rec.hit.episode.facts
     val stops = rec.stops
-    var showPhotos by rememberSaveable(facts.id) { mutableStateOf(false) }
+    // 들른 곳을 누르면 그곳 장소 창(사진 · 별점 · 리뷰 · 안내 · 저장)
+    val openPlace = LocalOpenPlace.current
     // 지도 강조는 사용자가 직접 고른 뒤부터 (처음부터 한 곳만 진하고 경로가 흐리면 하루 전체가 안 읽힌다)
     var picked by rememberSaveable(facts.id) { mutableStateOf(false) }
     Surface(
@@ -89,12 +90,10 @@ internal fun RecommendationCard(
         modifier = modifier.fillMaxWidth(),
     ) {
         Column {
-            // 위쪽: 지도 ↔ 고른 곳 대표 사진 (들른 곳 칩을 누르면 사진으로 바뀐다)
-            val photoStop = stops.getOrNull(selectedStop)?.takeIf { showPhotos }
+            // 위쪽: 그날 지도 (들른 곳 칩·핀을 누르면 지도에서 강조하고 장소 창을 연다)
             Box(Modifier.fillMaxWidth().height(mapHeight).clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))) {
                 val map = rec.map
                 when {
-                    photoStop != null -> PlacePhotoGallery(photoStop, Modifier.fillMaxSize())
                     !rec.mapLoaded -> Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerHigh))
                     // 지도에서도 고른 곳을 강조하고, 지도의 핀을 누르면 그곳을 고른다 (칩과 같은 동작)
                     map?.bounds != null -> DayMap(
@@ -105,32 +104,13 @@ internal fun RecommendationCard(
                             if (i >= 0) {
                                 picked = true
                                 onSelectStop(i)
+                                openPlace(stops[i])
                             }
                         },
                         modifier = Modifier.fillMaxSize(),
                         photoPins = remember(stops) { stops.map { MapPhotoPin("s${it.arriveMs}", it.name, it.address, it.lat, it.lon) } },
                     )
                     else -> CourseSketch(stops, selectedStop, Modifier.fillMaxSize())
-                }
-                if (stops.isNotEmpty()) {
-                    MediaToggle(
-                        photos = photoStop != null,
-                        onChange = { showPhotos = it },
-                        modifier = Modifier.align(Alignment.TopEnd).padding(14.dp),
-                    )
-                }
-                if (photoStop != null) {
-                    Text(
-                        "${selectedStop + 1}  ${photoStop.name}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = EodiTheme.colors.onInk,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.align(Alignment.TopStart).padding(14.dp)
-                            .background(EodiTheme.colors.scrim, RoundedCornerShape(12.dp))
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
-                    )
                 }
             }
             Column(Modifier.padding(start = 28.dp, end = 28.dp, top = 24.dp, bottom = 28.dp)) {
@@ -181,7 +161,7 @@ internal fun RecommendationCard(
                     Spacer(Modifier.height(20.dp))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         stops.forEachIndexed { i, stop ->
-                            StopChip(i + 1, stop, selected = i == selectedStop, onClick = { picked = true; onSelectStop(i); showPhotos = true })
+                            StopChip(i + 1, stop, selected = i == selectedStop, onClick = { picked = true; onSelectStop(i); openPlace(stop) })
                         }
                     }
                 }
@@ -190,29 +170,6 @@ internal fun RecommendationCard(
     }
 }
 
-/** 지도 | 사진 전환 (카드 위쪽 오른편). 차 화면에서 한눈에 보이고 누르기 쉽게 크게 (76dp). */
-@Composable
-private fun MediaToggle(photos: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
-    Row(
-        modifier.background(EodiTheme.colors.surface.copy(alpha = 0.95f), CircleShape).padding(6.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        listOf(false to stringResource(R.string.agent_media_map), true to stringResource(R.string.agent_media_photo)).forEach { (value, label) ->
-            val on = value == photos
-            Surface(
-                onClick = { onChange(value) },
-                shape = CircleShape,
-                color = if (on) MaterialTheme.colorScheme.primary else Color.Transparent,
-                contentColor = if (on) MaterialTheme.colorScheme.onPrimary else EodiTheme.colors.textPrimary,
-                modifier = Modifier.heightIn(min = AgentTouchMin - 12.dp),
-            ) {
-                Box(Modifier.padding(horizontal = 28.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
-                    Text(label, style = EodiTheme.type.label, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-    }
-}
 
 /** 들른 곳 칩: [① 경포해변]. 고른 칩은 진하게. */
 @Composable

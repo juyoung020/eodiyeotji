@@ -34,6 +34,7 @@ import app.eodiyeotji.agent.RecommendedCourse
 import app.eodiyeotji.core.CoursePost
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.ui.offers.CourseCouponBadge
+import app.eodiyeotji.ui.place.LocalOpenPlace
 import app.eodiyeotji.ui.place.PlaceThumbnail
 
 // 근처 추천 코스 카드 ("여기 근처 드라이브 추천코스"). 순위·거리·하트는 Rust가 끝내고 오고, 여기는 받은 순서대로 그리기만 한다.
@@ -164,11 +165,12 @@ private fun RankBadge(rank: Int, focused: Boolean, size: Int = 56) {
     }
 }
 
-/** 들른 곳 칩: [사진 ① 두물머리]. 카드 전체를 누르므로 칩은 누르지 않는다. */
+/** 들른 곳 칩: [사진 ① 두물머리]. 누르면 그곳 장소 창(사진 · 별점 · 리뷰), 칩 밖 카드를 누르면 그 코스를 고른다. */
 @Composable
 private fun CourseStopChip(number: Int, stop: StopFact) {
     val colors = MaterialTheme.colorScheme
-    Surface(shape = CircleShape, color = colors.surfaceContainerHighest) {
+    val openPlace = LocalOpenPlace.current
+    Surface(onClick = { openPlace(stop) }, shape = CircleShape, color = colors.surfaceContainerHighest) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 6.dp, end = 18.dp, top = 6.dp, bottom = 6.dp)) {
             Box(Modifier.size(44.dp)) {
                 PlaceThumbnail(

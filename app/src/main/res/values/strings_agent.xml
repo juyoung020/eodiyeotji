@@ -3,8 +3,6 @@
     <!-- 기억 에이전트 화면 (ui/agent): "어디였지? 물어보세요" -->
     <string name="agent_entry">어디였지? 물어보세요</string>
     <string name="agent_entry_short">물어보기</string>
-    <string name="agent_media_map">지도</string>
-    <string name="agent_media_photo">사진 보기</string>
     <string name="agent_entry_driving">어디였지? 말로 물어보세요</string>
     <string name="agent_field_hint">언제, 누구와, 어디였는지 물어보세요</string>
     <string name="agent_mic">말로 묻기</string>
