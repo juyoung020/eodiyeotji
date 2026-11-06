@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -46,6 +47,7 @@ import app.eodiyeotji.ui.agent.AgentPanel
 import app.eodiyeotji.ui.agent.AgentViewModel
 import app.eodiyeotji.ui.community.CommunityIcons
 import app.eodiyeotji.ui.community.CommunityRoute
+import app.eodiyeotji.ui.theme.BrandMark
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.timeline.TimelineRoute
 import java.util.Locale
@@ -97,7 +99,7 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
     }
 }
 
-/** 왼쪽 레일: 앱 표시 + 목적지 2개 (한 칸 112dp, 아이콘 + 이름). 좁은 창(약 840dp)에서도 폭 120dp만 쓴다. */
+/** 왼쪽 레일: 앱 표시(BrandMark) + 목적지 2개 (한 칸 112dp, 아이콘 + 이름). 좁은 창(약 840dp)에서도 폭 120dp만 쓴다. */
 @Composable
 private fun NavRail(selected: HomeTab, onSelect: (HomeTab) -> Unit) {
     val c = EodiTheme.colors
@@ -111,6 +113,8 @@ private fun NavRail(selected: HomeTab, onSelect: (HomeTab) -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // 앱 표시 (앱 아이콘을 줄인 모양): 어느 탭에서든 맨 위에
+        BrandMark(Modifier.padding(top = 4.dp, bottom = 20.dp), size = 64.dp)
         RailItem(CommunityIcons.Clock, stringResource(R.string.nav_timeline), selected == HomeTab.TIMELINE) { onSelect(HomeTab.TIMELINE) }
         RailItem(CommunityIcons.People, stringResource(R.string.nav_community), selected == HomeTab.COMMUNITY) { onSelect(HomeTab.COMMUNITY) }
     }
@@ -124,7 +128,7 @@ private fun RailItem(icon: ImageVector, label: String, selected: Boolean, onClic
             .fillMaxWidth()
             .heightIn(min = 112.dp)
             .clip(RoundedCornerShape(EodiTheme.space.radiusM))
-            .background(if (selected) c.accentSoft else c.surface)
+            .background(if (selected) c.accentSoft else Color.Transparent)
             .selectable(selected = selected, role = Role.Tab, onClick = onClick)
             .padding(vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

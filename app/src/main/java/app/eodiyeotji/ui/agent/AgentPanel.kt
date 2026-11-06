@@ -1,5 +1,7 @@
 package app.eodiyeotji.ui.agent
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.draw.drawBehind
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -76,6 +78,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
+import app.eodiyeotji.ui.theme.EodiTheme
+import app.eodiyeotji.ui.theme.MemoryAlbumArt
+import app.eodiyeotji.ui.theme.SparkleBadge
 import java.time.LocalDate
 
 /** 차량 터치 기준: 76dp 이상. */
@@ -118,7 +123,8 @@ fun AgentEntryButton(onClick: () -> Unit, modifier: Modifier = Modifier, driving
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
         ) {
-            Icon(AgentIcons.Sparkle, contentDescription = null, modifier = Modifier.size(32.dp))
+            // 반짝임은 기억 금색 (AI가 기억을 찾아 준다는 표시)
+            Icon(AgentIcons.Sparkle, contentDescription = null, tint = EodiTheme.colors.memoryInk, modifier = Modifier.size(32.dp))
             Spacer(Modifier.width(14.dp))
             Text(
                 stringResource(label),
@@ -313,7 +319,7 @@ private fun QuestionBar(
                 Icon(
                     AgentIcons.Sparkle,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = EodiTheme.colors.memoryInk,
                     modifier = Modifier.padding(start = 12.dp).size(32.dp),
                 )
             },
@@ -375,13 +381,9 @@ private fun EmptyState(onAsk: (String) -> Unit, modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.Center,
         modifier = modifier.verticalScroll(rememberScrollState()).padding(horizontal = PagePadding, vertical = 32.dp),
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.size(88.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-        ) {
-            Icon(AgentIcons.Sparkle, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(44.dp))
-        }
-        Spacer(Modifier.height(28.dp))
+        // 기억 앨범 그림: 지나온 점선 길 위의 사진 세 장 → 핀 + 반짝임
+        MemoryAlbumArt(Modifier.widthIn(max = 520.dp))
+        Spacer(Modifier.height(32.dp))
         Text(
             stringResource(R.string.agent_empty_title),
             style = MaterialTheme.typography.displaySmall,
@@ -397,7 +399,7 @@ private fun EmptyState(onAsk: (String) -> Unit, modifier: Modifier = Modifier) {
         Spacer(Modifier.height(48.dp))
         Text(
             stringResource(R.string.agent_examples),
-            style = MaterialTheme.typography.titleLarge,
+            style = EodiTheme.type.eyebrow,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(16.dp))
@@ -406,12 +408,15 @@ private fun EmptyState(onAsk: (String) -> Unit, modifier: Modifier = Modifier) {
                 Surface(
                     onClick = { onAsk(q) },
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    color = MaterialTheme.colorScheme.surface,
                     contentColor = MaterialTheme.colorScheme.onSurface,
+                    border = BorderStroke(2.dp, EodiTheme.colors.outline),
                     modifier = Modifier.heightIn(min = AgentTouchMin),
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 28.dp, vertical = 18.dp)) {
-                        Text("“$q”", style = MaterialTheme.typography.titleLarge)
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 22.dp, end = 28.dp, top = 18.dp, bottom = 18.dp)) {
+                        Icon(AgentIcons.Sparkle, contentDescription = null, tint = EodiTheme.colors.memoryInk, modifier = Modifier.size(26.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text(q, style = MaterialTheme.typography.titleLarge)
                     }
                 }
             }
@@ -432,12 +437,7 @@ private fun AnswerBlock(turn: AgentTurn, onRetry: () -> Unit) {
             Text(turn.question, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp))
         }
         Row(verticalAlignment = Alignment.Top) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.size(52.dp).background(MaterialTheme.colorScheme.primary, CircleShape),
-            ) {
-                Icon(AgentIcons.Sparkle, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(28.dp))
-            }
+            SparkleBadge(size = 52.dp)
             Spacer(Modifier.width(20.dp))
             Column(Modifier.weight(1f).padding(top = 6.dp)) {
                 when (turn.phase) {
@@ -565,7 +565,8 @@ private fun ProposalButton(p: AgentEvent.ActionProposal, primary: Boolean, runni
         Column(Modifier.weight(1f)) {
             Text(p.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (p.description.isNotBlank()) {
-                Text(p.description, style = AgentSubStyle, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.alpha(0.8f))
+                // 파랑 버튼 위 작은 글자는 굵게 · 흐리지 않게 (다크 파랑 위 흰 글자 대비 3.5:1 → 굵은 글자 기준 AA)
+                Text(p.description, style = AgentSubStyle, fontWeight = if (primary) FontWeight.Bold else null, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -665,7 +666,7 @@ private fun DrivingAgent(
     Box(Modifier.fillMaxSize().safeDrawingPadding().padding(PagePadding)) {
         Surface(
             shape = RoundedCornerShape(40.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            color = MaterialTheme.colorScheme.surface,
             modifier = Modifier.fillMaxSize(),
         ) {
             Column(Modifier.fillMaxSize().padding(48.dp)) {
@@ -687,6 +688,13 @@ private fun DrivingAgent(
                     turn.courses.getOrNull(turn.courseFocus)?.let {
                         DrivingCourseCard(it)
                         Spacer(Modifier.height(24.dp))
+                    }
+                    // 기억 답: 그날 사진 한 장 + "1년 전" 도장 + 제목 (한눈에 "아, 그 바다" 하게)
+                    if (turn.courses.isEmpty()) {
+                        turn.recommendations.firstOrNull()?.let {
+                            DrivingMemoryCard(it)
+                            Spacer(Modifier.height(24.dp))
+                        }
                     }
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                         when (turn.phase) {
@@ -732,19 +740,29 @@ private fun DrivingAgent(
 /** 운전 중 처음 화면: 큰 마이크 하나. */
 @Composable
 private fun DrivingPrompt(onVoiceRequest: () -> Unit, modifier: Modifier = Modifier) {
+    val ring = EodiTheme.colors.accent
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = modifier) {
-        Surface(
-            onClick = onVoiceRequest,
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            modifier = Modifier.size(180.dp),
+        // 큰 마이크 + 옅은 고리 두 겹 (움직이지 않는 그림 → 운전 중 시선을 끌지 않는다)
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(300.dp).drawBehind {
+                drawCircle(ring.copy(alpha = 0.07f), radius = size.minDimension / 2)
+                drawCircle(ring.copy(alpha = 0.12f), radius = size.minDimension * 0.4f)
+            },
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(AgentIcons.Mic, contentDescription = stringResource(R.string.agent_mic), modifier = Modifier.size(88.dp))
+            Surface(
+                onClick = onVoiceRequest,
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(180.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(AgentIcons.Mic, contentDescription = stringResource(R.string.agent_mic), modifier = Modifier.size(88.dp))
+                }
             }
         }
-        Spacer(Modifier.height(40.dp))
+        Spacer(Modifier.height(16.dp))
         Text(
             stringResource(R.string.agent_entry_driving),
             style = MaterialTheme.typography.displaySmall,

@@ -53,7 +53,6 @@ import app.eodiyeotji.ui.community.CenterMessage
 import app.eodiyeotji.ui.community.ChoiceRow
 import app.eodiyeotji.ui.community.CommunityIcons
 import app.eodiyeotji.ui.community.HeartButton
-import app.eodiyeotji.ui.community.HeartRed
 import app.eodiyeotji.ui.community.Load
 import app.eodiyeotji.ui.community.LoadingBox
 import app.eodiyeotji.ui.community.MineBadge
@@ -64,7 +63,6 @@ import app.eodiyeotji.ui.community.RatingStars
 import app.eodiyeotji.ui.community.RoundIconButton
 import app.eodiyeotji.ui.community.SecondaryPill
 import app.eodiyeotji.ui.community.SortChoice
-import app.eodiyeotji.ui.community.StarGold
 import app.eodiyeotji.ui.community.StopPhoto
 import app.eodiyeotji.ui.community.TogglePill
 import app.eodiyeotji.ui.community.VisitLine
@@ -203,12 +201,12 @@ private fun PlaceRow(rank: Int, p: PopularPlace, onClick: () -> Unit) {
                     overflow = TextOverflow.Ellipsis,
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(CommunityIcons.HeartFilled, null, tint = HeartRed, modifier = Modifier.size(24.dp))
+                    Icon(CommunityIcons.HeartFilled, null, tint = c.heart, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(p.hearts.toString(), style = EodiTheme.type.label, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.width(18.dp))
                     if (p.reviewCount > 0) {
-                        Icon(CommunityIcons.Star, null, tint = StarGold, modifier = Modifier.size(24.dp))
+                        Icon(CommunityIcons.Star, null, tint = c.star, modifier = Modifier.size(24.dp))
                         Spacer(Modifier.width(6.dp))
                         Text(String.format(Locale.ROOT, "%.1f", p.avgRating), style = EodiTheme.type.label, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.width(18.dp))
@@ -446,7 +444,7 @@ private fun StarPicker(rating: Int, onRating: (Int) -> Unit) {
             Box(
                 Modifier
                     .size(76.dp)
-                    .background(if (i <= rating) StarGold.copy(alpha = 0.14f) else c.surfaceHigh, CircleShape)
+                    .background(if (i <= rating) c.star.copy(alpha = 0.16f) else c.surfaceHigh, CircleShape)
                     .clickable(role = Role.RadioButton) { onRating(i) }
                     .semantics { contentDescription = desc },
                 contentAlignment = Alignment.Center,
@@ -454,7 +452,7 @@ private fun StarPicker(rating: Int, onRating: (Int) -> Unit) {
                 Icon(
                     if (i <= rating) CommunityIcons.Star else CommunityIcons.StarOutline,
                     null,
-                    tint = if (i <= rating) StarGold else c.textTertiary,
+                    tint = if (i <= rating) c.star else c.textTertiary,
                     modifier = Modifier.size(48.dp),
                 )
             }

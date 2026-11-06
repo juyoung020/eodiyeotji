@@ -58,6 +58,26 @@ object EodiIcons {
         }
     }
 
+    /** 반짝임 (기억 · AI 회상). 큰 별 하나 + 작은 별 하나, 채운 모양 */
+    val Sparkle: ImageVector by lazy {
+        icon("Sparkle") {
+            path(fill = Ink) {
+                moveTo(10f, 3f)
+                curveTo(10.6f, 7.4f, 12.6f, 9.4f, 17f, 10f)
+                curveTo(12.6f, 10.6f, 10.6f, 12.6f, 10f, 17f)
+                curveTo(9.4f, 12.6f, 7.4f, 10.6f, 3f, 10f)
+                curveTo(7.4f, 9.4f, 9.4f, 7.4f, 10f, 3f)
+                close()
+                moveTo(18f, 14f)
+                curveTo(18.3f, 16.1f, 18.9f, 16.7f, 21f, 17f)
+                curveTo(18.9f, 17.3f, 18.3f, 17.9f, 18f, 20f)
+                curveTo(17.7f, 17.9f, 17.1f, 17.3f, 15f, 17f)
+                curveTo(17.1f, 16.7f, 17.7f, 16.1f, 18f, 14f)
+                close()
+            }
+        }
+    }
+
     /** 다시 불러오기 */
     val Refresh: ImageVector by lazy {
         icon("Refresh") {
