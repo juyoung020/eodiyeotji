@@ -311,11 +311,16 @@ pub struct CoursePost {
 }
 
 /// 들른 곳(식당·카페·관광지) 리뷰 하나.
-/// 여행 리뷰 피드 한 칸: 한 장소 리뷰, 또는 여러 곳을 차례로 다녀온 여행 코스 후기.
-#[derive(Debug, Clone, PartialEq, uniffi::Enum)]
-pub enum TravelFeedItem {
-    Review { review: PlaceReview },
-    Course { course: CoursePost },
+/// 여행 코스 후기의 들른 곳 하나에 달린 리뷰: 평균 별점 · 리뷰 수 · 대표 리뷰 하나
+/// (코스 글쓴이가 그곳에 쓴 리뷰가 있으면 그것, 없으면 하트 많은 리뷰).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct StopReviews {
+    /// 리뷰가 없으면 0
+    pub avg_rating: f32,
+    pub review_count: u32,
+    pub pick: Option<PlaceReview>,
+    /// [pick]이 코스 글쓴이의 리뷰면 true
+    pub by_author: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
@@ -660,26 +665,12 @@ impl EodiStore {
         Ok(reviews)
     }
 
-    /// 여행 리뷰 한 피드: 장소 리뷰와 여행 코스 후기를 한 목록에 섞는다 (같은 정렬 기준, [sort_by_hearts]).
-    /// [near]가 있으면 리뷰는 그 장소가, 코스는 들른 곳 중 하나라도 반경 안인 것만. `limit` 0이면 50개 (최대 500).
-    pub fn travel_feed(&self, sort: CommunitySort, near: Option<NearFilter>, limit: u32) -> Result<Vec<TravelFeedItem>, CoreError> {
-        let near = check_near(near)?;
+    /// 여행 코스 후기의 들른 곳마다 리뷰 요약 ([StopReviews], 들른 곳 순서대로). 없는 코스면 `InvalidInput`.
+    pub fn course_stop_reviews(&self, post_id: String) -> Result<Vec<StopReviews>, CoreError> {
         let conn = self.lock()?;
-        let reviews = load_reviews(&conn, None)?
-            .into_iter()
-            .filter(|r| near.is_none_or(|(c, rad)| haversine_m(c, stop_point(&r.place)) <= rad))
-            .map(|review| TravelFeedItem::Review { review });
-        let courses = load_courses(&conn, None)?
-            .into_iter()
-            .filter(|p| near.is_none_or(|(c, r)| p.stops.iter().any(|s| haversine_m(c, stop_point(s)) <= r)))
-            .map(|course| TravelFeedItem::Course { course });
-        let mut items: Vec<TravelFeedItem> = reviews.chain(courses).collect();
-        sort_by_hearts(&mut items, sort, |i| match i {
-            TravelFeedItem::Review { review: r } => (r.hearts, r.created_ms, r.id.as_str()),
-            TravelFeedItem::Course { course: c } => (c.hearts, c.created_ms, c.id.as_str()),
-        });
-        items.truncate(clamp_limit(limit));
-        Ok(items)
+        let post = load_courses(&conn, Some(&post_id))?.pop().ok_or_else(|| CoreError::InvalidInput(format!("코스 없음: {post_id}")))?;
+        let reviews = load_reviews(&conn, None)?;
+        Ok(post.stops.iter().map(|stop| stop_reviews(&reviews, stop, &post.author)).collect())
     }
 
     /// 한 장소의 리뷰 (이름이 같고 500m 안인 곳, 모듈 설명 "같은 장소 묶기"). `limit` 0이면 50개.
@@ -1093,6 +1084,16 @@ fn norm_name(s: &str) -> String {
 }
 
 /// 이름(띄어쓰기 무시)이 같고 [SAME_PLACE_M] 안이면 같은 장소.
+/// 한 곳의 리뷰 요약: 같은 곳 리뷰의 평균 별점 · 수, 대표는 [author]의 리뷰(여럿이면 최신) → 없으면 하트 많은 순(같으면 최신).
+pub(crate) fn stop_reviews(reviews: &[PlaceReview], stop: &StopFact, author: &str) -> StopReviews {
+    let here: Vec<&PlaceReview> = reviews.iter().filter(|r| same_place(&r.place, stop)).collect();
+    let count = here.len() as u32;
+    let avg = if here.is_empty() { 0.0 } else { here.iter().map(|r| r.rating as f32).sum::<f32>() / count as f32 };
+    let own = here.iter().filter(|r| r.author == author).max_by_key(|r| r.created_ms);
+    let pick = own.or_else(|| here.iter().max_by(|a, b| a.hearts.cmp(&b.hearts).then(a.created_ms.cmp(&b.created_ms))));
+    StopReviews { avg_rating: avg, review_count: count, by_author: own.is_some(), pick: pick.map(|r| (*r).clone()) }
+}
+
 pub(crate) fn same_place(a: &StopFact, b: &StopFact) -> bool {
     norm_name(&a.name) == norm_name(&b.name) && haversine_m(stop_point(a), stop_point(b)) <= SAME_PLACE_M
 }

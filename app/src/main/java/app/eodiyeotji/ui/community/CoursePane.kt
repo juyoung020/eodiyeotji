@@ -46,6 +46,10 @@ import app.eodiyeotji.R
 import app.eodiyeotji.core.CommunitySort
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.core.Visit
+import app.eodiyeotji.core.StopReviews
+import app.eodiyeotji.core.TravelReview
+import app.eodiyeotji.ui.review.KeywordChip
+import kotlin.math.roundToInt
 import app.eodiyeotji.pleos.CourseProgress
 import app.eodiyeotji.ui.map.DayMap
 import app.eodiyeotji.ui.map.MapPhotoPin
@@ -232,6 +236,8 @@ internal fun CourseDetailScreen(
                         itemsIndexed(p.stops, key = { i, s -> "stop-$i-${s.name}" }) { i, s ->
                             StopRow(
                                 i + 1, s,
+                                reviews = d.stopReviews.getOrNull(i),
+                                author = p.author,
                                 selected = selectedKey == "s${i + 1}",
                                 onClick = { selectedKey = if (selectedKey == "s${i + 1}") null else "s${i + 1}" },
                                 onOpenPhoto = { onOpenPlace(s) },
@@ -286,7 +292,7 @@ internal fun CourseDetailScreen(
 }
 
 @Composable
-private fun StopRow(order: Int, s: StopFact, selected: Boolean, onClick: () -> Unit, onOpenPhoto: () -> Unit) {
+private fun StopRow(order: Int, s: StopFact, reviews: StopReviews?, author: String, selected: Boolean, onClick: () -> Unit, onOpenPhoto: () -> Unit) {
     val c = EodiTheme.colors
     Surface(
         onClick = onClick,
@@ -294,22 +300,77 @@ private fun StopRow(order: Int, s: StopFact, selected: Boolean, onClick: () -> U
         shape = RoundedCornerShape(EodiTheme.space.radiusM),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            // 사진을 누르면 그곳 사진 크게 보기, 줄의 나머지를 누르면 지도에서 그곳 고르기
-            Box(Modifier.clip(RoundedCornerShape(16.dp)).clickable(role = Role.Image, onClick = onOpenPhoto)) {
-                StopPhoto(s.name, s.address, s.lat, s.lon, order = order, size = 104.dp)
-                OrderDot(order, Modifier.align(Alignment.TopStart).padding(6.dp))
+        Column {
+            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                // 사진을 누르면 그곳 사진 크게 보기, 줄의 나머지를 누르면 지도에서 그곳 고르기
+                Box(Modifier.clip(RoundedCornerShape(16.dp)).clickable(role = Role.Image, onClick = onOpenPhoto)) {
+                    StopPhoto(s.name, s.address, s.lat, s.lon, order = order, size = 104.dp)
+                    OrderDot(order, Modifier.align(Alignment.TopStart).padding(6.dp))
+                }
+                Spacer(Modifier.width(18.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(s.name, style = EodiTheme.type.bodyStrong, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        listOf(s.category, s.address).filter { it.isNotBlank() }.joinToString(" · "),
+                        style = EodiTheme.type.meta,
+                        color = c.textTertiary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (reviews != null && reviews.reviewCount > 0) {
+                        Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            RatingStars(reviews.avgRating.roundToInt(), size = 22.dp)
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                stringResource(R.string.course_stop_rating, reviews.avgRating, reviews.reviewCount),
+                                style = EodiTheme.type.caption,
+                                color = c.textSecondary,
+                            )
+                        }
+                    }
+                }
             }
-            Spacer(Modifier.width(18.dp))
-            Column(Modifier.weight(1f)) {
-                Text(s.name, style = EodiTheme.type.bodyStrong, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            reviews?.pick?.let { t -> StopReviewQuote(t, if (reviews.byAuthor) author else null, onOpenPhoto) }
+        }
+    }
+}
+
+/**
+ * 들른 곳 줄 아래 그곳 리뷰 한 편 (옅은 바탕): "바다좋아 님이 남긴 리뷰"(글쓴이 것이면) · 별점 · 키워드 · 글 3줄.
+ * 누르면 그곳 장소 창 (리뷰 전부 · 안내 · 리뷰 쓰기).
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun StopReviewQuote(t: TravelReview, author: String?, onOpen: () -> Unit) {
+    val c = EodiTheme.colors
+    val r = t.review
+    Surface(
+        onClick = onOpen,
+        color = c.surfaceHigh,
+        shape = RoundedCornerShape(EodiTheme.space.radiusM),
+        modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+    ) {
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    listOf(s.category, s.address).filter { it.isNotBlank() }.joinToString(" · "),
-                    style = EodiTheme.type.meta,
-                    color = c.textTertiary,
+                    if (author != null) stringResource(R.string.course_stop_author_review, author) else stringResource(R.string.course_stop_top_review, r.author),
+                    style = EodiTheme.type.label,
+                    fontWeight = FontWeight.Bold,
+                    color = c.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
+                Spacer(Modifier.width(10.dp))
+                RatingStars(r.rating, size = 20.dp)
+            }
+            if (r.keywords.isNotEmpty()) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    r.keywords.take(3).forEach { KeywordChip(it) }
+                }
+            }
+            if (r.text.isNotBlank()) {
+                Text(r.text, style = EodiTheme.type.meta, color = c.textPrimary, maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
         }
     }

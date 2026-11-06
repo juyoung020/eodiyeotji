@@ -13,6 +13,8 @@ import app.eodiyeotji.core.LatLon
 import app.eodiyeotji.core.courseLegs
 import app.eodiyeotji.core.courseMap
 import app.eodiyeotji.core.courseOffers
+import app.eodiyeotji.core.courseStopReviews
+import app.eodiyeotji.core.StopReviews
 import app.eodiyeotji.core.driveCourses
 import app.eodiyeotji.core.lastKnownPosition
 import app.eodiyeotji.core.toggleCourseHeart
@@ -42,6 +44,8 @@ data class CourseDetail(
     val course: DriveCourse,
     val map: DayMapData? = null,
     val legs: List<CourseLeg> = emptyList(),
+    /** 들른 곳마다 리뷰 요약 (들른 곳 순서, 뒤따라 채운다) */
+    val stopReviews: List<StopReviews> = emptyList(),
     val naviFailed: Boolean = false,
 )
 
@@ -112,11 +116,12 @@ class CourseViewModel @Inject constructor(
         viewModelScope.launch {
             val map = runCatching { core.courseMap(id) }.onFailure { Log.w(TAG, "코스 지도 실패 $id", it) }.getOrNull()
             val legs = runCatching { core.courseLegs(id) }.getOrDefault(emptyList())
+            val reviews = runCatching { core.courseStopReviews(id) }.onFailure { Log.w(TAG, "들른 곳 리뷰 실패 $id", it) }.getOrDefault(emptyList())
             // 검색 결과에서 열면 쿠폰이 아직 안 붙어 있다 → 이 코스만 Rust에 묻는다
             val offers = if (course.offers.placeCount > 0) course.offers else runCatching { core.courseOffers(listOf(course.post.stops)) }.getOrNull()?.firstOrNull()
             _state.update { s ->
                 if (s.detail?.course?.post?.id == id) {
-                    s.copy(detail = s.detail.copy(map = map, legs = legs, course = s.detail.course.copy(offers = offers ?: s.detail.course.offers)))
+                    s.copy(detail = s.detail.copy(map = map, legs = legs, stopReviews = reviews, course = s.detail.course.copy(offers = offers ?: s.detail.course.offers)))
                 } else {
                     s
                 }

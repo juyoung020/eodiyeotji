@@ -149,22 +149,26 @@ fn popular_sort_is_by_hearts_and_recent_by_time() {
 }
 
 #[test]
-fn travel_feed_mixes_reviews_and_courses_in_one_order() {
-    let (_db, store) = seeded("feed");
-    let all = store.travel_feed(CommunitySort::Recent, None, 500).unwrap();
-    let reviews = all.iter().filter(|i| matches!(i, TravelFeedItem::Review { .. })).count();
-    assert_eq!(reviews, REVIEWS.len());
-    assert_eq!(all.len() - reviews, COURSES.len());
-    let key = |i: &TravelFeedItem| match i {
-        TravelFeedItem::Review { review: r } => (r.hearts, r.created_ms),
-        TravelFeedItem::Course { course: c } => (c.hearts, c.created_ms),
-    };
-    assert!(all.windows(2).all(|w| key(&w[0]).1 >= key(&w[1]).1), "최신순");
-    let pop = store.travel_feed(CommunitySort::Popular, None, 0).unwrap();
-    assert!(pop.windows(2).all(|w| key(&w[0]).0 >= key(&w[1]).0), "인기순");
-    // 근처: 강릉 경포 20km 안이면 강릉 리뷰·코스만
-    let near = store.travel_feed(CommunitySort::Popular, Some(NearFilter { center: gp(37.795, 128.896), radius_km: 20.0 }), 0).unwrap();
-    assert!(!near.is_empty() && near.len() < pop.len());
+fn course_stop_reviews_prefer_the_course_authors_review() {
+    let (_db, store) = seeded("stoprev");
+    let d01 = store.community_courses(CommunitySort::Recent, None, 0).unwrap().into_iter().find(|c| c.id == "d01").unwrap();
+    let got = store.course_stop_reviews("d01".into()).unwrap();
+    assert_eq!(got.len(), d01.stops.len());
+    // 경포해변: 코스 글쓴이(바다좋아)가 쓴 리뷰가 대표
+    let first = &got[0];
+    assert!(first.review_count >= 3 && first.avg_rating > 4.0 && first.avg_rating <= 5.0);
+    assert!(first.by_author);
+    assert_eq!(first.pick.as_ref().unwrap().author, "바다좋아");
+    // 글쓴이 리뷰가 없는 곳은 하트 많은 리뷰, 리뷰가 없는 곳은 비어 있다
+    for s in &got {
+        assert_eq!(s.pick.is_some(), s.review_count > 0);
+        if !s.by_author {
+            if let Some(p) = &s.pick {
+                assert_ne!(p.author, "바다좋아");
+            }
+        }
+    }
+    assert!(store.course_stop_reviews("없는코스".into()).is_err());
 }
 
 #[test]

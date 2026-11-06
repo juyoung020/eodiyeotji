@@ -44,7 +44,11 @@
     <string name="course_navi_legs_hint">%1$d구간 코스 · 도착하면 다음 구간을 자동으로 이어서 안내해요</string>
     <string name="course_back_to_list">여행 리뷰로</string>
     <string name="course_navi_failed">내비에 보내지 못했어요</string>
-    <string name="course_stops_title">들르는 곳</string>
+    <string name="course_stops_title">들른 곳과 리뷰</string>
+    <!-- 여행 코스 후기 상세: 들른 곳 줄의 별점 요약, 그 아래 리뷰 한 편의 머리 -->
+    <string name="course_stop_rating">%1$.1f · 리뷰 %2$d</string>
+    <string name="course_stop_author_review">%1$s 님이 남긴 리뷰</string>
+    <string name="course_stop_top_review">인기 리뷰 · %1$s 님</string>
     <string name="course_share_from_record">내 기록에서 올리기</string>
     <string name="course_share_short">올리기</string>
     <string name="course_shared_done">여행 코스 후기를 올렸어요</string>
@@ -83,14 +87,12 @@
     <string name="board_no_comments">첫 댓글을 남겨 보세요</string>
 
     <!-- 여행 리뷰 -->
-    <string name="review_write">리뷰 쓰기</string>
     <string name="review_pick_place">어디를 다녀왔나요?</string>
     <string name="review_pick_empty">최근에 들른 곳이 아직 없어요</string>
     <string name="review_rating_description">별 %1$d개</string>
     <string name="review_text_hint">후기 (안 써도 돼요) · 먹은 것, 주차, 붐비는 때, 팁</string>
     <string name="review_submit">등록</string>
     <string name="review_count">리뷰 %1$d</string>
-    <string name="review_empty">리뷰가 없어요</string>
     <!-- 여행 리뷰 피드의 여행 코스 후기 카드 (큰 사진 왼쪽 위 띠) -->
     <string name="review_trip_badge">여행 코스 · %1$d곳</string>
     <string name="review_share_trip">여행 코스 올리기</string>

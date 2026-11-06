@@ -46,7 +46,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
 import app.eodiyeotji.core.DriveCourse
-import app.eodiyeotji.core.TravelFeedItem
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.core.WithWhom
 import app.eodiyeotji.ui.community.CenterMessage
@@ -78,9 +77,9 @@ import app.eodiyeotji.ui.theme.EodiTheme
 import kotlinx.coroutines.delay
 
 /**
- * 커뮤니티 > 여행 리뷰: 장소 리뷰와 여행 코스 후기(여러 곳을 차례로 다녀온 글)를 한 피드에 같은 카드 모양으로.
- * 도구 줄: 인기순·최신순 + 내 근처 + 여행 코스 올리기(내 기록에서) + 리뷰 쓰기.
- * 장소 리뷰의 큰 사진 → 장소 창, 여행 코스 후기 카드 → 코스 상세(지도 · 들른 곳 · 이 코스로 안내, [CourseViewModel]).
+ * 커뮤니티 > 여행 리뷰: 여행 코스 후기(여러 곳을 차례로 다녀온 글) 피드. 도구 줄: 인기순·최신순 + 내 근처 + 여행 코스 올리기(내 기록에서).
+ * 카드를 누르면 코스 상세 — 지도 · 들른 곳마다 그곳 리뷰(글쓴이 리뷰 먼저, 별점 · 키워드 · 글) · 이 코스로 안내.
+ * 식당 · 카페 같은 한 곳 리뷰는 코스 안 들른 곳과 장소 창(사진을 누르면)에서 본다. 목록 · 상세 · 하트 · 올리기는 [CourseViewModel].
  */
 @Composable
 fun ReviewPane(viewModel: ReviewViewModel = hiltViewModel(), courses: CourseViewModel = hiltViewModel()) {
@@ -100,18 +99,17 @@ fun ReviewPane(viewModel: ReviewViewModel = hiltViewModel(), courses: CourseView
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
-                        SortChoice(state.sort, viewModel::setSort)
-                        TogglePill(stringResource(R.string.community_near_me, 30), state.nearOn, viewModel::toggleNear)
+                        SortChoice(course.sort, courses::setSort)
+                        TogglePill(stringResource(R.string.community_near_me, 30), course.nearOn, courses::toggleNear)
                     }
-                    SecondaryPill(
+                    PrimaryPill(
                         stringResource(if (compact) R.string.review_share_trip_short else R.string.review_share_trip),
                         CommunityIcons.Upload,
                         { picking = true },
                     )
-                    PrimaryPill(stringResource(R.string.review_write), CommunityIcons.Pen, { viewModel.startDraft() })
                 }
             }
-            if (state.nearOn && !state.nearKnown) {
+            if (course.nearOn && !course.nearKnown) {
                 Text(
                     stringResource(R.string.community_near_unknown),
                     style = EodiTheme.type.caption,
@@ -119,22 +117,27 @@ fun ReviewPane(viewModel: ReviewViewModel = hiltViewModel(), courses: CourseView
                     modifier = Modifier.padding(horizontal = 36.dp, vertical = 4.dp),
                 )
             }
-            LoadList(state.feed, viewModel::reload) { items ->
-                FeedGrid(items, onHeart = viewModel::toggleHeart, onOpenTrip = courses::open)
+            when (val l = course.list) {
+                Load.Loading -> LoadingBox()
+                is Load.Failed -> CenterMessage(stringResource(R.string.community_failed, l.message)) {
+                    SecondaryPill(stringResource(R.string.community_retry), EodiIcons.Refresh, courses::reload)
+                }
+                is Load.Loaded ->
+                    if (l.items.isEmpty()) {
+                        CenterMessage(if (course.nearOn) stringResource(R.string.course_empty_near, 30) else stringResource(R.string.course_empty))
+                    } else {
+                        TripGrid(l.items, onOpen = courses::open, onHeart = courses::toggleHeart)
+                    }
             }
         }
-        // 여행 코스 후기 상세 (지도 · 들른 곳 · 하트 · 이 코스로 안내). 닫으면 피드를 다시 읽어 하트 수를 맞춘다
+        // 여행 코스 후기 상세 (지도 · 들른 곳과 그곳 리뷰 · 하트 · 이 코스로 안내)
         course.detail?.let { d ->
-            val close = {
-                courses.closeDetail()
-                viewModel.reload()
-            }
-            BackHandler(onBack = close)
+            BackHandler(onBack = courses::closeDetail)
             val progress by courses.progress.collectAsStateWithLifecycle()
             CourseDetailScreen(
                 d,
                 progress = progress?.takeIf { it.courseId == d.course.post.id && !it.finished },
-                onBack = close,
+                onBack = courses::closeDetail,
                 onHeart = { courses.toggleHeart(d.course.post.id) },
                 onNavigate = courses::navigate,
                 onOpenPlace = openPlace,
@@ -147,19 +150,6 @@ fun ReviewPane(viewModel: ReviewViewModel = hiltViewModel(), courses: CourseView
                 viewModel.closePlace()
             }
         }
-        state.draft?.let { d ->
-            BackHandler(onBack = viewModel::closeDraft)
-            WriteReviewSheet(
-                d,
-                onPick = viewModel::pickPlace,
-                onRating = viewModel::setRating,
-                onText = viewModel::setText,
-                onKeyword = viewModel::toggleKeyword,
-                onWith = viewModel::pickWith,
-                onSubmit = viewModel::submitDraft,
-                onClose = viewModel::closeDraft,
-            )
-        }
         if (picking) {
             BackHandler { picking = false }
             ShareEpisodePicker(onPick = { picking = false; shareEpisode = it }, onDismiss = { picking = false })
@@ -168,37 +158,24 @@ fun ReviewPane(viewModel: ReviewViewModel = hiltViewModel(), courses: CourseView
             BackHandler { shareEpisode = null }
             ShareCourseSheet(episodeId = id, onDone = { shared ->
                 shareEpisode = null
-                if (shared != null) viewModel.onTripShared()
+                if (shared != null) courses.onShared()
             })
         }
-        state.notice?.let { res ->
-            LaunchedEffect(res) {
+        if (course.justShared) {
+            LaunchedEffect(Unit) {
                 delay(2_500)
-                viewModel.dismissNotice()
+                courses.dismissShared()
             }
-            Notice(stringResource(res), Modifier.align(Alignment.BottomCenter))
+            Notice(stringResource(R.string.course_shared_done), Modifier.align(Alignment.BottomCenter))
         }
     }
 }
 
+/** 여행 코스 후기 격자 (넓은 창 2칸, 좁은 창 1칸). 정렬을 바꾸거나 새 글을 올려 맨 위가 바뀌면 맨 위로. */
 @Composable
-private fun <T> LoadList(load: Load<T>, onRetry: () -> Unit, content: @Composable (List<T>) -> Unit) {
-    when (load) {
-        Load.Loading -> LoadingBox()
-        is Load.Failed -> CenterMessage(stringResource(R.string.community_failed, load.message)) {
-            SecondaryPill(stringResource(R.string.community_retry), EodiIcons.Refresh, onRetry)
-        }
-        is Load.Loaded -> if (load.items.isEmpty()) CenterMessage(stringResource(R.string.review_empty)) else content(load.items)
-    }
-}
-
-// ---------------------------------------------------------------- 피드
-
-@Composable
-private fun FeedGrid(items: List<TravelFeedItem>, onHeart: (String, Boolean) -> Unit, onOpenTrip: (DriveCourse) -> Unit) {
+private fun TripGrid(items: List<DriveCourse>, onOpen: (DriveCourse) -> Unit, onHeart: (String) -> Unit) {
     val state = rememberLazyStaggeredGridState()
-    // 정렬을 바꾸거나 새 글을 올려 맨 위가 바뀌면 맨 위로 (rememberTopGridState와 같은 이유)
-    val firstKey = items.firstOrNull()?.key
+    val firstKey = items.firstOrNull()?.post?.id
     LaunchedEffect(firstKey) { state.scrollToItem(0) }
     LazyVerticalStaggeredGrid(
         columns = StaggeredGridCells.Adaptive(minSize = 680.dp),
@@ -208,11 +185,8 @@ private fun FeedGrid(items: List<TravelFeedItem>, onHeart: (String, Boolean) -> 
         verticalItemSpacing = 16.dp,
         modifier = Modifier.fillMaxSize(),
     ) {
-        staggeredItems(items, key = { it.key }, contentType = { if (it is TravelFeedItem.Trip) "trip" else "review" }) { item ->
-            when (item) {
-                is TravelFeedItem.Review -> RichReviewCard(item.review, onHeart = { onHeart(item.review.review.id, false) })
-                is TravelFeedItem.Trip -> TripReviewCard(item.course, onOpen = { onOpenTrip(item.course) }, onHeart = { onHeart(item.course.post.id, true) })
-            }
+        staggeredItems(items, key = { it.post.id }, contentType = { "trip" }) { c ->
+            TripReviewCard(c, onOpen = { onOpen(c) }, onHeart = { onHeart(c.post.id) })
         }
     }
 }
