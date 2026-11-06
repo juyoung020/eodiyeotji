@@ -42,7 +42,7 @@ pleos-stt = { group = "ai.pleos.playground", name = "SpeechToText", version.ref 
 pleos-tts = { group = "ai.pleos.playground", name = "TextToSpeech", version.ref = "pleosSpeech" }
 androidx-lifecycle-service = { group = "androidx.lifecycle", name = "lifecycle-service", version.ref = "lifecycle" }
 # 지도 그리기 (C++ GPU 벡터 렌더러). 오프라인 PMTiles 파일을 pmtiles://file:// 로 읽는다
-maplibre-android = { group = "org.maplibre.gl", name = "android-sdk", version.ref = "maplibre" }
+maplibre-android = { group = "org.maplibre.gl", name = "android-sdk-opengl", version.ref = "maplibre" }
 # 들른 곳 대표 사진(구글 Places) 이미지 불러오기·디스크 캐시
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 # UniFFI가 만든 Kotlin 바인딩이 Rust 라이브러리를 부를 때 쓴다 (Android용은 aar)
