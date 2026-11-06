@@ -74,6 +74,7 @@ import app.eodiyeotji.ui.community.CommunityIcons
 import app.eodiyeotji.ui.community.CommunityRoute
 import app.eodiyeotji.ui.community.CommunityTab
 import app.eodiyeotji.core.SearchScope
+import app.eodiyeotji.ui.review.ReviewMode
 import app.eodiyeotji.ui.review.ReviewViewModel
 import app.eodiyeotji.ui.search.SearchActions
 import app.eodiyeotji.ui.search.SearchViewModel
@@ -187,8 +188,10 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
             timeline.openDay(day, entryKey)
         },
         openCourse = { c ->
+            // 들른 곳을 이은 코스 글은 여행 리뷰 > 여행 코스 후기에 있다
             select(PhoneTab.COMMUNITY)
-            communityTab = CommunityTab.COURSES
+            communityTab = CommunityTab.REVIEWS
+            reviewVm.setMode(ReviewMode.COURSES)
             courseVm.open(c)
         },
         openReview = { p ->

@@ -188,7 +188,7 @@ impl MemoryAgent {
         match self.llm_loop(&mut s, &mut t, u, ctx, range, &fast_hits, gen) {
             Ok(()) => {
                 if (course_topic_before || t.course_shown) && !t.memory_shown {
-                    self.course_proposal_from_answer(&mut s, &mut t, ctx, pending_before);
+                    self.course_proposal_from_answer(&mut s, &mut t, pending_before);
                 } else if t.memory_shown {
                     self.memory_proposal_after_llm(&mut s, &mut t, ctx, pending_before);
                 }

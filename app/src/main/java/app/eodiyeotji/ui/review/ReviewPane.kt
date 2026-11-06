@@ -56,6 +56,7 @@ import app.eodiyeotji.core.TravelReview
 import app.eodiyeotji.core.WithWhom
 import app.eodiyeotji.ui.community.CenterMessage
 import app.eodiyeotji.ui.community.ChoiceRow
+import app.eodiyeotji.ui.community.CoursePane
 import app.eodiyeotji.ui.community.CommunityIcons
 import app.eodiyeotji.ui.community.Load
 import app.eodiyeotji.ui.community.LoadingBox
@@ -76,10 +77,28 @@ import app.eodiyeotji.ui.theme.EodiTheme
 import java.util.Locale
 import kotlinx.coroutines.delay
 
-/** 커뮤니티 > 여행 리뷰: [인기 장소 | 리뷰] + (리뷰면) 정렬 + 내 근처 + 리뷰 쓰기. */
+/**
+ * 커뮤니티 > 여행 리뷰: [인기 장소 | 리뷰 | 여행 코스 후기] + (리뷰면) 정렬 + 내 근처 + 리뷰 쓰기.
+ * 여행 코스 후기는 들른 곳을 차례로 이은 코스 글(예전 "드라이브 코스" 글 그대로: 카드·상세·하트·이 코스로 안내·쿠폰)이다.
+ */
 @Composable
 fun ReviewPane(viewModel: ReviewViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val modeChoice: @Composable () -> Unit = {
+        ChoiceRow(
+            options = listOf(
+                ReviewMode.PLACES to stringResource(R.string.review_popular_places),
+                ReviewMode.FEED to stringResource(R.string.review_feed),
+                ReviewMode.COURSES to stringResource(R.string.review_travel_courses),
+            ),
+            selected = state.mode,
+            onSelect = viewModel::setMode,
+        )
+    }
+    if (state.mode == ReviewMode.COURSES) {
+        CoursePane(leading = modeChoice)
+        return
+    }
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             Row(
@@ -93,14 +112,7 @@ fun ReviewPane(viewModel: ReviewViewModel = hiltViewModel()) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    ChoiceRow(
-                        options = listOf(
-                            ReviewMode.PLACES to stringResource(R.string.review_popular_places),
-                            ReviewMode.FEED to stringResource(R.string.review_feed),
-                        ),
-                        selected = state.mode,
-                        onSelect = viewModel::setMode,
-                    )
+                    modeChoice()
                     if (state.mode == ReviewMode.FEED) SortChoice(state.sort, viewModel::setSort)
                     TogglePill(stringResource(R.string.community_near_me, 30), state.nearOn, viewModel::toggleNear)
                 }
@@ -117,6 +129,7 @@ fun ReviewPane(viewModel: ReviewViewModel = hiltViewModel()) {
             when (state.mode) {
                 ReviewMode.PLACES -> LoadList(state.places, viewModel::reload) { PlaceRanking(it, viewModel::openPlace) }
                 ReviewMode.FEED -> LoadList(state.feed, viewModel::reload) { ReviewGrid(it, viewModel::toggleHeart) }
+                ReviewMode.COURSES -> Unit
             }
         }
         // 인기 장소 줄(또는 검색 결과의 리뷰 줄)을 누르면 앱 공통 장소 상세 창으로 연다 (별점 · 리뷰 · 안내 · 리뷰 쓰기)

@@ -6,7 +6,7 @@
 //! | `find` | 기억 검색 (Rust search_memories) | q: 낱말 ≤3, from/to: YYYY-MM(-DD), kind |
 //! | `day` | 하루의 에피소드·들른 곳 | d: YYYY-MM-DD |
 //! | `course` | 에피소드 코스 (순서·거리·내비 구간) | id, here: 지금 위치에서 최적 순서 |
-//! | `courses` | 근처 인기 드라이브 추천 코스 (Rust recommend_drive_courses, 커뮤니티) | q: 테마·지역, km, k |
+//! | `courses` | 근처 인기 드라이브 길 추천 (Rust recommend_drive_routes, 들를 곳 없는 경치 길) | q: 테마·지역, km, k |
 //! | `nav` | 안내 **제안**만 (실행은 운전자 확인 뒤 confirm) | mode: course/place/search/pick, id, stop, kw, n |
 //!
 //! 결과는 언제나 `{"ok":true,"data":{…}}` 또는 `{"ok":false,"error":"…"}` 봉투에 담은 데이터이고, 작게 줄인다.
@@ -259,9 +259,7 @@ fn nav(call: &ToolCall, a: &Value, c: &mut Ctx) -> Result<Outcome, Bad> {
             }
             c.courses.focus = n as usize - 1;
             courses_changed = true;
-            let p = courses::shared_proposal(c.proposal_seq, &c.courses.list[c.courses.focus], c.ctx.current_location)
-                .ok_or_else(|| Bad("그 코스에는 들른 곳 정보가 없어 안내할 수 없습니다.".into()))?;
-            (p, None)
+            (courses::shared_proposal(c.proposal_seq, &c.courses.list[c.courses.focus]), None)
         }
         "course" => {
             let id = episode_id(a)?;

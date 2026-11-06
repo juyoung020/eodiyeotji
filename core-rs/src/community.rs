@@ -1,10 +1,10 @@
-//! 커뮤니티: 게시판 · 드라이브 코스 · 여행 리뷰, 그리고 근처 추천 코스.
+//! 커뮤니티: 게시판 · 드라이브 코스 · 여행 리뷰.
 //!
 //! - 게시판: 질문·이야기 글과 댓글. 하트, 인기순·최신순.
-//! - 드라이브 코스: 차로 달리기 좋은 길(해안도로·강변길·고갯길)과 그 길의 쉼터·전망대·휴게소 순서. 하트, 인기순·최신순,
-//!   내 기록(나들이·여행 에피소드)에서 올리기, 이 코스로 안내.
-//! - 여행 리뷰: 식당·카페·관광지 리뷰와 인기 장소 순위(하트·별점). 내가 들른 곳에서 리뷰 쓰기.
-//! - 추천 코스: "여기 근처 드라이브 추천코스" → 지금 위치 근처에서 인기 있는 드라이브 코스 상위 k개 (에이전트 도구).
+//! - 드라이브 코스: 차에서 즐기는 경치 길 하나 (들를 곳 없음, 강변북로 한강 야경·인천대교·헌화로 등). [drive] 모듈.
+//!   에이전트 "여기 근처 드라이브 추천코스"도 이 길들을 추천한다.
+//! - 여행 리뷰: 식당·카페·관광지 리뷰와 인기 장소 순위(하트·별점), 그리고 **여행 코스 후기**(들른 곳을 차례로 이은 코스:
+//!   쉼터·전망대·식당 순서, 하트, 내 기록(나들이·여행 에피소드)에서 올리기, 이 코스로 안내). 내가 들른 곳에서 리뷰 쓰기.
 //!
 //! 지금은 기기 안 저장소 + 시연용 커뮤니티 데이터([EodiStore::seed_community_demo])로 동작한다. 2차 단계에서 같은 모양으로
 //! 서버(`server/`)와 맞춘다 — 그래서 id는 문자열, 작성자는 이름 문자열이다.
@@ -13,7 +13,7 @@
 //! Kotlin은 받은 순서대로 그리기만 한다.
 //!
 //! # 저장 (DB 구조 버전 5)
-//! - `community_course`: 코스 한 줄. 들른 곳은 JSON 배열. 하트 = `others_hearts`(다른 사람들, 서버가 셀 값) +
+//! - `community_course`: 여행 코스 후기 한 줄. 들른 곳은 JSON 배열. 하트 = `others_hearts`(다른 사람들, 서버가 셀 값) +
 //!   `my_heart`(0/1, 내가 누름). 내가 올린 코스는 `id = "me-<에피소드 id>"`, `mine = 1`, `episode_id`가 있다.
 //! - `place_review`: 리뷰 한 줄 (장소 이름·분류·주소·좌표를 그대로 담는다). 하트는 코스와 같은 방식.
 //!   버전 9부터 키워드([REVIEW_KEYWORDS] 중 5개까지)·누구와·다녀온 때·머문 분·몇 번째 방문도 담는다 (내가 쓸 때는 기록에서 채움,
@@ -44,6 +44,8 @@ use crate::memory::{CourseLeg, Episode, EpisodeKind, MemoryQuery, StopFact};
 use crate::store::{format_day, join_names, parse_day, split_names, CoreError, EodiStore};
 
 pub(crate) mod demo;
+pub mod drive;
+mod drive_demo;
 pub mod weather;
 
 pub use weather::{open_meteo_url, parse_open_meteo_weather, season_label};
@@ -278,7 +280,7 @@ pub struct NearFilter {
     pub radius_km: f64,
 }
 
-/// 드라이브 코스 하나.
+/// 여행 코스 후기 하나 (들른 곳을 차례로 이은 코스).
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct CoursePost {
     pub id: String,
@@ -423,9 +425,9 @@ pub struct BoardComment {
 
 #[uniffi::export]
 impl EodiStore {
-    // ---- 드라이브 코스 ----
+    // ---- 여행 코스 후기 ----
 
-    /// 드라이브 코스 피드. [near]가 있으면 들른 곳 중 하나라도 반경 안인 코스만. `limit` 0이면 50개 (최대 500).
+    /// 여행 코스 후기 피드. [near]가 있으면 들른 곳 중 하나라도 반경 안인 코스만. `limit` 0이면 50개 (최대 500).
     pub fn community_courses(&self, sort: CommunitySort, near: Option<NearFilter>, limit: u32) -> Result<Vec<CoursePost>, CoreError> {
         let near = check_near(near)?;
         let conn = self.lock()?;
@@ -444,7 +446,8 @@ impl EodiStore {
         toggle_heart(&conn, "community_course", &id)?.ok_or_else(|| CoreError::InvalidInput(format!("코스 없음: {id}")))
     }
 
-    /// 근처 드라이브 추천 코스 상위 [k]개: 인기(하트)와 지금 위치에서의 거리, 코스 품질을 함께 본다 (에이전트 `courses` 도구).
+    /// 근처 여행 코스 후기 상위 [k]개: 인기(하트)와 지금 위치에서의 거리, 코스 품질을 함께 본다.
+    /// (에이전트 "근처 드라이브 추천코스"는 경치 길 [EodiStore::recommend_drive_routes]를 쓴다.)
     ///
     /// 점수 = 인기 × 거리 감쇠 × 품질 (클수록 위, [course_score]). 내가 올린 코스는 뺀다.
     /// - 인기 = 1 + ln(1 + 하트) — 하트 400개가 40개보다 낫지만 10배는 아니다 (로그로 눌러 거리가 묻히지 않게).
@@ -910,8 +913,9 @@ impl EodiStore {
 
     // ---- 시연 ----
 
-    /// 시연용 커뮤니티(가상의 사용자·드라이브 코스·리뷰·게시판·하트)를 넣는다 (디버그 빌드에서만 부른다).
-    /// 반환: 넣은 코스 + 리뷰 + 글 + 댓글 수. 이미 넣었으면 0. 내용은 `demo` 모듈 설명.
+    /// 시연용 커뮤니티(가상의 사용자·여행 코스 후기·드라이브 코스·리뷰·게시판·하트)를 넣는다 (디버그 빌드에서만 부른다).
+    /// 반환: 넣은 코스 + 드라이브 코스 + 리뷰 + 글 + 댓글 수. 이미 넣었으면 0 (버전 10 전에 넣었으면 드라이브 코스만 더 넣고 그 수).
+    /// 내용은 `demo` 모듈 설명.
     pub fn seed_community_demo(&self, now_ms: i64) -> Result<u32, CoreError> {
         if now_ms <= 0 {
             return Err(CoreError::InvalidInput(format!("now_ms {now_ms}")));

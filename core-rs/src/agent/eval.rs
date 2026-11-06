@@ -210,19 +210,19 @@ const NEAR: &str = "여기 근처 드라이브 추천코스 안내해줘";
 
 fn course_cases() -> Vec<CourseCase> {
     vec![
-        cc("near-drive", &[], NEAR, "list", "c-bukak"),
-        CourseCase { parked: false, ..cc("near-drive-driving", &[], NEAR, "list", "c-bukak") },
-        cc("near-worth-going", &[], "여기 근처 갈 만한 데 있어?", "list", "c-bukak"),
-        cc("popular", &[], "인기 코스 알려줘", "list", "c-bukak"),
-        cc("sea-theme", &[], "바다 보러 가기 좋은 드라이브 코스 추천해줘", "list", "c-eul"),
-        cc("far-region", &[], "강릉 쪽 드라이브 코스 추천해줘", "list", "c-gn"),
-        cc("free-phrasing", &[], "심심한데 차 끌고 바람 쐬러 나갈 만한 곳 없을까?", "list", "c-bukak"),
-        cc("pick-2", &[NEAR], "2번으로 가자", "pick", "c-yp"),
-        cc("pick-second-describe", &[NEAR], "두 번째 거 어디 들러?", "pick", "c-yp"),
-        cc("closer", &[NEAR, "2번으로 가자"], "더 가까운 데", "list", "c-bukak"),
-        cc("theme-follow", &[NEAR], "그거 말고 바다 쪽", "list", "c-eul"),
-        cc("llm-follow-shortest", &[NEAR], "그 중에 제일 짧게 다녀올 수 있는 걸로 안내해줘", "pick", "c-bukak"),
-        cc("yes-after-pick", &[NEAR, "2번으로 가자"], "응", "confirm", "c-yp"),
+        cc("near-drive", &[], NEAR, "list", "r-gangbyeon"),
+        CourseCase { parked: false, ..cc("near-drive-driving", &[], NEAR, "list", "r-gangbyeon") },
+        cc("near-worth-going", &[], "여기 근처 갈 만한 데 있어?", "list", "r-gangbyeon"),
+        cc("popular", &[], "인기 코스 알려줘", "list", "r-gangbyeon"),
+        cc("sea-theme", &[], "바다 보러 가기 좋은 드라이브 코스 추천해줘", "list", "r-incheon"),
+        cc("far-region", &[], "강릉 쪽 드라이브 코스 추천해줘", "list", "r-route7"),
+        cc("free-phrasing", &[], "심심한데 차 끌고 바람 쐬러 나갈 만한 곳 없을까?", "list", "r-gangbyeon"),
+        cc("pick-2", &[NEAR], "2번으로 가자", "pick", "r-olympic"),
+        cc("pick-second-describe", &[NEAR], "두 번째 거 어떤 길이야?", "pick", "r-olympic"),
+        cc("closer", &[NEAR, "2번으로 가자"], "더 가까운 데", "list", "r-gangbyeon"),
+        cc("theme-follow", &[NEAR], "그거 말고 바다 쪽", "list", "r-incheon"),
+        cc("llm-follow-shortest", &[NEAR], "그 중에 제일 짧게 다녀올 수 있는 걸로 안내해줘", "pick", "r-gangbyeon"),
+        cc("yes-after-pick", &[NEAR, "2번으로 가자"], "응", "confirm", "r-olympic"),
         cc("memory-after-courses", &[NEAR], "작년 여름에 갔던 바다 어디였지?", "memory", ""),
     ]
 }

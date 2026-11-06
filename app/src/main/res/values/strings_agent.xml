@@ -80,10 +80,9 @@
     <string name="agent_followup_pick_course">%1$d번으로 안내해줘</string>
 
     <!-- 근처 추천 코스 카드 -->
-    <string name="agent_courses_title">근처 인기 드라이브 코스</string>
-    <string name="agent_course_by">%1$s 님의 코스</string>
+    <string name="agent_courses_title">근처 인기 드라이브 길</string>
+    <string name="agent_course_by">%1$s 님의 길</string>
     <string name="agent_course_hearts">♥ %1$d</string>
     <string name="agent_course_from_here">여기서 %1$s</string>
     <string name="agent_course_focus">안내 제안 중</string>
-    <string name="agent_course_more_stops">+%1$d곳</string>
 </resources>

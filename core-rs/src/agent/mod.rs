@@ -62,7 +62,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::Value;
 
-use crate::community::{CommunitySort, CourseRecommendation};
+use crate::community::drive::{DriveRouteRecommendation, DriveRouteSort};
 use crate::ffi::GeoPoint;
 use crate::memory::{CourseLeg, CourseRoute, DayEnrichment, DayFacts, Episode, MemoryHit, MemoryQuery, StopFact};
 use crate::store::{CoreError, EodiStore};
@@ -87,7 +87,7 @@ pub struct AgentContext {
 pub enum NavAction {
     /// 코스: 구간마다 경유지 ≤ 2 + 목적지. 첫 구간을 요청하고, 도착(onDestinationArrived)하면 다음 구간.
     Course { episode_id: i64, title: String, legs: Vec<CourseLeg> },
-    /// 커뮤니티 추천 코스 (공유된 코스 [post_id]). 구간 규칙은 [NavAction::Course]와 같다.
+    /// 커뮤니티 드라이브 코스(경치 길 [post_id]): 시작점까지 → 끝점까지, 경유지 없는 두 구간. 구간 규칙은 [NavAction::Course]와 같다.
     SharedCourse { post_id: String, title: String, legs: Vec<CourseLeg> },
     /// 들른 곳 한 곳으로 안내
     Place { stop: StopFact },
@@ -160,9 +160,9 @@ pub trait AgentListener: Send + Sync {
     fn on_answer_delta(&self, text: String);
     /// 추천 카드 (같은 질문에서 여러 번 오면 마지막이 최신). 코스를 짰으면 [course] 포함.
     fn on_recommendation(&self, hit: MemoryHit, course: Option<CourseRoute>);
-    /// 근처 추천 코스 목록 (순서 = 순위, 1번이 맨 앞). [focus]: 지금 이야기하는(안내를 제안한) 코스의 자리 (0부터).
-    /// 후속 말("2번으로 가자", "바다 쪽은?")로 목록이 바뀌거나 고른 코스가 바뀌면 다시 온다 (마지막이 최신).
-    fn on_course_recommendations(&self, courses: Vec<CourseRecommendation>, focus: u32);
+    /// 근처 추천 드라이브 길 목록 (순서 = 순위, 1번이 맨 앞). [focus]: 지금 이야기하는(안내를 제안한) 길의 자리 (0부터).
+    /// 후속 말("2번으로 가자", "바다 쪽은?")로 목록이 바뀌거나 고른 길이 바뀌면 다시 온다 (마지막이 최신).
+    fn on_course_recommendations(&self, courses: Vec<DriveRouteRecommendation>, focus: u32);
     /// 안내 제안 ("그 코스로 안내할까요?"). 운전자가 "예"하면 `confirm(proposal.id)`.
     fn on_action_proposal(&self, proposal: NavProposal);
     /// 운전자가 말로 "응/안내해줘"라고 확인함 → Kotlin이 [action]을 바로 실행한다.
@@ -182,9 +182,10 @@ pub trait MemoryBackend: Send + Sync {
     fn mark_day_enrichment_failed(&self, day: String, retry_after_ms: i64) -> Result<(), CoreError>;
     /// 이미 붙은 라벨 중 제목이 [bad]인 날을 다시 대기열에 (반환: 다시 넣은 날 수).
     fn requeue_day_labels_where(&self, bad: &dyn Fn(&str) -> bool) -> Result<u32, CoreError>;
-    /// 추천 코스 상위 [k]개. [from]이 있으면 그 근처 [radius_km] 안 (인기 + 거리), 없으면 전국 인기순
-    /// (이때 `distance_km`는 -1 = 모름).
-    fn recommend_drive_courses(&self, from: Option<GeoPoint>, radius_km: f64, k: u32) -> Result<Vec<CourseRecommendation>, CoreError>;
+    /// 근처 드라이브 길 상위 [k]개: [from]에서 [radius_km] 안 (인기 + 길 위 가장 가까운 점까지 거리).
+    fn recommend_drive_routes(&self, from: GeoPoint, radius_km: f64, k: u32) -> Result<Vec<DriveRouteRecommendation>, CoreError>;
+    /// 전국 인기순 드라이브 길 [k]개. [from]이 있으면 거리도 (없으면 `distance_km` -1 = 모름).
+    fn popular_drive_routes(&self, from: Option<GeoPoint>, k: u32) -> Result<Vec<DriveRouteRecommendation>, CoreError>;
 }
 
 impl MemoryBackend for EodiStore {
@@ -209,14 +210,11 @@ impl MemoryBackend for EodiStore {
     fn requeue_day_labels_where(&self, bad: &dyn Fn(&str) -> bool) -> Result<u32, CoreError> {
         EodiStore::requeue_day_labels_where(self, bad)
     }
-    fn recommend_drive_courses(&self, from: Option<GeoPoint>, radius_km: f64, k: u32) -> Result<Vec<CourseRecommendation>, CoreError> {
-        match from {
-            Some(p) => EodiStore::recommend_drive_courses(self, p, radius_km, k),
-            None => Ok(EodiStore::community_courses(self, CommunitySort::Popular, None, k)?
-                .into_iter()
-                .map(|post| CourseRecommendation { score: post.hearts as f64, distance_km: -1.0, post })
-                .collect()),
-        }
+    fn recommend_drive_routes(&self, from: GeoPoint, radius_km: f64, k: u32) -> Result<Vec<DriveRouteRecommendation>, CoreError> {
+        EodiStore::recommend_drive_routes(self, Some(from), radius_km, k)
+    }
+    fn popular_drive_routes(&self, from: Option<GeoPoint>, k: u32) -> Result<Vec<DriveRouteRecommendation>, CoreError> {
+        Ok(EodiStore::drive_routes(self, DriveRouteSort::Popular, from, k)?.into_iter().filter(|r| !r.route.mine).collect())
     }
 }
 

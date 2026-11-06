@@ -11,7 +11,7 @@ use super::llm::{SseAccumulator, VisibleText};
 use super::runner::{GIVE_UP, MAX_TOOL_ROUNDS, NOT_CONFIGURED, SERVER_DOWN};
 use super::words::{self, Answer};
 use super::*;
-use crate::community::{CoursePost, CourseRecommendation};
+use crate::community::drive::{DriveRoutePost, DriveRouteRecommendation};
 use crate::memory::EpisodeKind;
 
 // ---------------------------------------------------------------- 고정 자료
@@ -90,9 +90,10 @@ pub(super) struct FakeBackend {
     pub pending: Mutex<Vec<DayFacts>>,
     pub saved: Mutex<Vec<DayEnrichment>>,
     pub failed: Mutex<Vec<(String, i64)>>,
-    /// 커뮤니티에 공유된 코스 (추천 코스 가짜 자료)
-    pub posts: Vec<CoursePost>,
-    pub reco_calls: Mutex<Vec<(Option<GeoPoint>, f64, u32)>>,
+    /// 커뮤니티에 공유된 드라이브 길 (추천 가짜 자료)
+    pub routes: Vec<DriveRoutePost>,
+    /// 근처 추천 부름 (위치, 반경, 개수)
+    pub reco_calls: Mutex<Vec<(GeoPoint, f64, u32)>>,
     /// 이미 라벨이 붙은 날 (날짜, 제목) — 예전 제목 점검용
     pub labeled: Mutex<Vec<(String, String)>>,
     pub requeued: Mutex<Vec<String>>,
@@ -100,7 +101,7 @@ pub(super) struct FakeBackend {
 
 impl FakeBackend {
     pub fn new() -> Arc<Self> {
-        Arc::new(Self { eps: episodes(), posts: super::course_tests::posts(), ..Default::default() })
+        Arc::new(Self { eps: episodes(), routes: super::course_tests::routes(), ..Default::default() })
     }
 }
 
@@ -161,21 +162,38 @@ impl MemoryBackend for FakeBackend {
         self.requeued.lock().unwrap().extend(days.iter().cloned());
         Ok(days.len() as u32)
     }
-    /// 실제(community.rs)와 같은 약속: 근처면 반경 안에서 인기·거리 점수순, 위치가 없으면 전국 하트순(거리 -1).
-    fn recommend_drive_courses(&self, from: Option<GeoPoint>, radius_km: f64, k: u32) -> Result<Vec<CourseRecommendation>, CoreError> {
+    /// 실제(community::drive)와 같은 약속: 반경 안에서 인기·거리 점수순. 거리는 시작·끝 중 가까운 쪽 (가짜라 선이 없다).
+    fn recommend_drive_routes(&self, from: GeoPoint, radius_km: f64, k: u32) -> Result<Vec<DriveRouteRecommendation>, CoreError> {
         self.reco_calls.lock().unwrap().push((from, radius_km, k));
-        let mut v: Vec<CourseRecommendation> = match from {
-            Some(p) => self.posts.iter().filter_map(|post| {
-                let s = post.stops.first()?;
-                let d = crate::geo::haversine_m(crate::geo::Point::from(p), crate::geo::Point { lat: s.lat, lon: s.lon }) / 1000.0;
-                (d <= radius_km).then(|| CourseRecommendation { post: post.clone(), distance_km: d, score: post.hearts as f64 / (1.0 + d / 15.0) })
-            }).collect(),
-            None => self.posts.iter().map(|post| CourseRecommendation { post: post.clone(), distance_km: -1.0, score: post.hearts as f64 }).collect(),
-        };
+        let mut v: Vec<DriveRouteRecommendation> = self
+            .routes
+            .iter()
+            .filter_map(|r| {
+                let d = fake_route_km(from, r);
+                (d <= radius_km).then(|| DriveRouteRecommendation { route: r.clone(), distance_km: d, score: r.hearts as f64 / (1.0 + d / 15.0) })
+            })
+            .collect();
         v.sort_by(|a, b| b.score.total_cmp(&a.score));
         v.truncate(k as usize);
         Ok(v)
     }
+    /// 전국 하트순 (위치가 있으면 거리도).
+    fn popular_drive_routes(&self, from: Option<GeoPoint>, k: u32) -> Result<Vec<DriveRouteRecommendation>, CoreError> {
+        let mut v: Vec<DriveRouteRecommendation> = self
+            .routes
+            .iter()
+            .map(|r| DriveRouteRecommendation { route: r.clone(), distance_km: from.map_or(-1.0, |p| fake_route_km(p, r)), score: 0.0 })
+            .collect();
+        v.sort_by_key(|a| std::cmp::Reverse(a.route.hearts));
+        v.truncate(k as usize);
+        Ok(v)
+    }
+}
+
+/// 가짜 거리(km): 시작·끝 중 가까운 쪽.
+fn fake_route_km(from: GeoPoint, r: &DriveRoutePost) -> f64 {
+    let p = crate::geo::Point::from(from);
+    [r.start, r.end].iter().map(|e| crate::geo::haversine_m(p, crate::geo::Point::from(*e)) / 1000.0).fold(f64::INFINITY, f64::min)
 }
 
 /// 받은 사건을 적어 둔다.
@@ -201,8 +219,8 @@ impl AgentListener for Recorder {
     fn on_recommendation(&self, hit: MemoryHit, course: Option<CourseRoute>) {
         self.0.lock().unwrap().push(Ev::Rec(hit.episode.facts.id, course.is_some()));
     }
-    fn on_course_recommendations(&self, courses: Vec<CourseRecommendation>, focus: u32) {
-        self.0.lock().unwrap().push(Ev::Courses(courses.into_iter().map(|c| c.post.id).collect(), focus));
+    fn on_course_recommendations(&self, courses: Vec<DriveRouteRecommendation>, focus: u32) {
+        self.0.lock().unwrap().push(Ev::Courses(courses.into_iter().map(|c| c.route.id).collect(), focus));
     }
     fn on_action_proposal(&self, proposal: NavProposal) {
         self.0.lock().unwrap().push(Ev::Proposal(proposal));

@@ -166,6 +166,12 @@ object CommunityIcons {
         }
     }
 
+    /** 재생 (미리보기 비행) */
+    val Play: ImageVector by lazy { icon("Play") { path(fill = Ink) { moveTo(8f, 5f); lineTo(19f, 12f); lineTo(8f, 19f); close() } } }
+
+    /** 멈춤 */
+    val Stop: ImageVector by lazy { icon("Stop") { path(fill = Ink) { moveTo(7f, 7f); lineTo(17f, 7f); lineTo(17f, 17f); lineTo(7f, 17f); close() } } }
+
     /** 구름 (흐림·안개) */
     val Cloud: ImageVector by lazy {
         icon("Cloud") {

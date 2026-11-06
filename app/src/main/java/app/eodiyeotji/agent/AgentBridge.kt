@@ -29,7 +29,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import app.eodiyeotji.core.rust.AgentDone as RAgentDone
-import app.eodiyeotji.core.rust.CourseRecommendation as RCourseRecommendation
+import app.eodiyeotji.core.rust.DriveRouteRecommendation as RDriveRouteRecommendation
 import app.eodiyeotji.core.rust.CourseRoute as RCourseRoute
 import app.eodiyeotji.core.rust.MemoryHit as RMemoryHit
 import app.eodiyeotji.core.rust.NavAction as RNavAction
@@ -71,7 +71,7 @@ class AgentBridge @Inject constructor(
                 trySendBlocking(AgentEvent.Recommendation(hit.toModel(), course?.toModel()))
             }
 
-            override fun onCourseRecommendations(courses: List<RCourseRecommendation>, focus: UInt) {
+            override fun onCourseRecommendations(courses: List<RDriveRouteRecommendation>, focus: UInt) {
                 trySendBlocking(AgentEvent.CourseRecommendations(courses.toModel(), focus.toInt()))
             }
 
