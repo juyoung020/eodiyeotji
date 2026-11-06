@@ -11,7 +11,12 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
+import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
@@ -35,13 +40,26 @@ class PlacePhotoRepository @Inject constructor(
 
     suspend fun photos(stop: StopFact): List<PlacePhoto> = photos(stop.name, stop.address, stop.lat, stop.lon)
 
-    /** 이름·주소·좌표로 찾은 그곳 사진 (정차한 곳마다 부른다). 이름이 없으면(아직 장소를 못 찾음) 빈 목록. */
+    /**
+     * 이름·주소·좌표로 찾은 그곳 사진 (정차한 곳마다 부른다). 이름이 없으면(아직 장소를 못 찾음) 빈 목록.
+     * 찾기는 화면과 따로 앱 범위에서 끝까지 한다: 화면을 넘겨도 찾던 결과가 버려지지 않고 저장돼 다음엔 바로 뜬다.
+     * 같은 곳을 여러 화면(지도 카드·목록 사진)이 동시에 물으면 구글에는 한 번만 묻는다.
+     */
     suspend fun photos(name: String, address: String, lat: Double, lon: Double): List<PlacePhoto> {
         if (key.isBlank() || name.isBlank()) return emptyList()
-        return runCatching {
-            core.placePhotos(name, address, lat, lon) { query -> search(query, lat, lon) }.photos
-        }.onFailure { Log.w(TAG, "사진 못 받음: $name: ${it.message}") }.getOrDefault(emptyList())
+        val id = String.format(Locale.ROOT, "%s@%.4f,%.4f", name, lat, lon)
+        val job = inflight.getOrPut(id) {
+            scope.async {
+                runCatching {
+                    core.placePhotos(name, address, lat, lon) { query -> search(query, lat, lon) }.photos
+                }.onFailure { Log.w(TAG, "사진 못 받음: $name: ${it.message}") }.getOrDefault(emptyList())
+            }.also { d -> d.invokeOnCompletion { inflight.remove(id, d) } }
+        }
+        return job.await()
     }
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val inflight = ConcurrentHashMap<String, Deferred<List<PlacePhoto>>>()
 
     /**
      * 화면에 그릴 사진 요청 (Coil). 구글은 같은 사진도 물을 때마다 다른 사진 이름(주소)을 주므로, 기기 저장 이름표는

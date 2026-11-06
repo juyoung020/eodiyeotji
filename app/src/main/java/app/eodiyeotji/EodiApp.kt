@@ -33,6 +33,8 @@ class EodiApp : Application(), ImageLoaderFactory {
     override fun newImageLoader(): ImageLoader =
         ImageLoader.Builder(this)
             .respectCacheHeaders(false)
+            // 하드웨어 비트맵은 에뮬레이터(시연 기기) GPU에서 가끔 까만 칸으로 그려진다 → 소프트웨어 비트맵 (사진이 작아 메모리 부담 적음)
+            .allowHardware(false)
             .memoryCache { MemoryCache.Builder(this).maxSizePercent(0.15).build() }
             .diskCache { DiskCache.Builder().directory(cacheDir.resolve("place_photos")).maxSizeBytes(PHOTO_DISK_BYTES).build() }
             .crossfade(true)
