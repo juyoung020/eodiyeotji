@@ -896,7 +896,7 @@ impl ShareCtx {
 
 impl EodiStore {
     /// 에피소드 하나와 그날 제목. 없는 id면 `InvalidInput`.
-    fn episode_by_id(&self, id: i64) -> Result<(Episode, Option<String>), CoreError> {
+    pub(crate) fn episode_by_id(&self, id: i64) -> Result<(Episode, Option<String>), CoreError> {
         let not_found = || CoreError::InvalidInput(format!("에피소드 없음: {id}"));
         let (day, title) = {
             let mut conn = self.lock()?;
@@ -909,7 +909,7 @@ impl EodiStore {
         Ok((ep, title))
     }
 
-    fn course_by_id(&self, id: &str) -> Result<CoursePost, CoreError> {
+    pub(crate) fn course_by_id(&self, id: &str) -> Result<CoursePost, CoreError> {
         let conn = self.lock()?;
         load_courses(&conn, Some(id))?.pop().ok_or_else(|| CoreError::InvalidInput(format!("코스 없음: {id}")))
     }

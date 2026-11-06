@@ -72,6 +72,7 @@ class RecordingService : LifecycleService() {
     @Inject lateinit var journal: SessionJournal
     @Inject lateinit var navi: Navigator
     @Inject lateinit var platform: RecordingPlatform
+    @Inject lateinit var monitor: RecordingMonitor
 
     private var running = false
     private var foregroundOk = false
@@ -103,10 +104,12 @@ class RecordingService : LifecycleService() {
     private suspend fun runRecorder() {
         if (!location.hasPermission() || !location.isSupported()) {
             Log.w(TAG, "위치 권한 없음 또는 위치 미지원 → 기록 서비스 중지")
+            monitor.set(RecordingPhase.OFF)
             withContext(Dispatchers.Main) { stopSelf() }
             return
         }
         Log.i(TAG, "기록 대기 시작")
+        monitor.set(RecordingPhase.WAITING)
 
         var recovered = journal.read()
         var session: Job? = null
@@ -120,6 +123,7 @@ class RecordingService : LifecycleService() {
                 recovered = null
                 if (edge.active) {
                     Log.i(TAG, "주행 기록 이어서 (시작 ${open.startMs})")
+                    monitor.set(RecordingPhase.DRIVING)
                     session = lifecycleScope.startCollecting()
                     if (naviAvailable) naviSession = lifecycleScope.startNavi()
                 } else {
@@ -133,6 +137,7 @@ class RecordingService : LifecycleService() {
             val current = session
             if (edge.active && current == null) {
                 Log.i(TAG, "주행 시작 t=${edge.tMs} (감지 전 점 ${edge.backlog.size}개)")
+                monitor.set(RecordingPhase.DRIVING)
                 safely("markDriveStart") { core.markDriveStart(edge.tMs) }
                 journal.open(edge.tMs)
                 if (edge.backlog.isNotEmpty()) flush(edge.backlog.toMutableList(), "감지 전")
@@ -143,12 +148,18 @@ class RecordingService : LifecycleService() {
                 session = null
                 safely("markDriveEnd") { core.markDriveEnd(edge.tMs) }
                 journal.close()
+                monitor.set(RecordingPhase.WAITING)
                 Log.i(TAG, "주행 끝 t=${edge.tMs}")
                 naviSession?.let { safely("내비 마감") { it.finish(edge.tMs) } }
                 naviSession = null
                 lastFix = null
             }
         }
+    }
+
+    override fun onDestroy() {
+        monitor.set(RecordingPhase.OFF)
+        super.onDestroy()
     }
 
     /** 주행 중에만 도는 내비 듣기. 힌트는 받는 즉시 Rust에 넘긴다 (드물게 오므로 묶지 않는다). */

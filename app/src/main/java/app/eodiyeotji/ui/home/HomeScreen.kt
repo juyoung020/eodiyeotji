@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
+import app.eodiyeotji.record.RecordingStatusChip
 import app.eodiyeotji.ui.agent.AgentEntryButton
 import app.eodiyeotji.ui.agent.AgentPanel
 import app.eodiyeotji.ui.agent.AgentViewModel
@@ -92,7 +93,14 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
             }
         } else {
             // 머리: [검색 칸 (손으로 · 말로 찾기)] + [✦ 물어보기 (기억 에이전트)]. 마이크는 검색 칸 안에 하나만 둔다.
-            val entry: @Composable () -> Unit = { AgentEntryButton(onClick = { agentOpen = true }, mic = false) }
+            // 내 기록 머리 오른쪽: 작은 기록 상태(기록 중 · 대기 중 · 권한 꺼짐, 누르면 설명) + 물어보기
+            val entry: @Composable () -> Unit = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RecordingStatusChip()
+                    Spacer(Modifier.width(12.dp))
+                    AgentEntryButton(onClick = { agentOpen = true }, mic = false)
+                }
+            }
             val compactEntry: @Composable () -> Unit = {
                 AgentEntryButton(onClick = { agentOpen = true }, mic = false, modifier = Modifier.widthIn(max = 300.dp))
             }

@@ -98,6 +98,9 @@ import app.eodiyeotji.core.StaySummary
 import app.eodiyeotji.core.TripSummary
 import app.eodiyeotji.ui.home.CoreStatusLine
 import app.eodiyeotji.ui.map.DayMap
+import app.eodiyeotji.ui.share.ShareButtonStyle
+import app.eodiyeotji.ui.share.ShareImageButton
+import app.eodiyeotji.ui.share.ShareTarget
 import app.eodiyeotji.ui.theme.AlbumPhoto
 import app.eodiyeotji.ui.theme.DottedRoute
 import app.eodiyeotji.ui.theme.EodiIcons
@@ -464,8 +467,14 @@ private fun CompactDayDetail(
                                     Column(Modifier.padding(start = 4.dp, end = 4.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                         StatRow(detail.summary)
                                         if (detail.summary.tags.isNotEmpty()) TagRow(detail.summary.tags)
+                                        // 커뮤니티에 올리기 옆에 카드로 공유(카톡 등, ui/share). 올릴 기록이 없는 날은 공유만 알약으로.
                                         if (shareEpisode != null) {
-                                            SecondaryPill(stringResource(R.string.timeline_share), CommunityIcons.Upload, { onShare(shareEpisode) }, Modifier.fillMaxWidth())
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                                SecondaryPill(stringResource(R.string.timeline_share), CommunityIcons.Upload, { onShare(shareEpisode) }, Modifier.weight(1f))
+                                                ShareImageButton(ShareTarget.Day(detail.summary.day), style = ShareButtonStyle.ICON)
+                                            }
+                                        } else {
+                                            ShareImageButton(ShareTarget.Day(detail.summary.day), Modifier.fillMaxWidth())
                                         }
                                         if (detail.entries.isEmpty()) {
                                             Text(stringResource(R.string.timeline_detail_empty), style = EodiTheme.type.body, color = c.textSecondary)

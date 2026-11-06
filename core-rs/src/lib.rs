@@ -17,6 +17,7 @@ pub mod memory;
 pub mod photos;
 pub mod places;
 pub mod search_ui;
+pub mod share;
 pub mod store;
 pub mod trip;
 
