@@ -64,7 +64,7 @@ import app.eodiyeotji.core.Visit
 import app.eodiyeotji.pleos.CourseProgress
 import app.eodiyeotji.ui.map.DayMap
 import app.eodiyeotji.ui.map.MapPhotoPin
-import app.eodiyeotji.ui.place.PlacePhotoViewer
+import app.eodiyeotji.ui.place.LocalOpenPlace
 import app.eodiyeotji.ui.theme.AlbumPhoto
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
@@ -87,8 +87,8 @@ fun CoursePane(viewModel: CourseViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var picking by rememberSaveable { mutableStateOf(false) }
     var shareEpisode by rememberSaveable { mutableStateOf<Long?>(null) }
-    var viewingPlace by remember { mutableStateOf<StopFact?>(null) }
-    val openPlace: (StopFact) -> Unit = remember { { viewingPlace = it } }
+    // 들르는 곳 사진을 누르면 장소 상세 창 (사진·별점·리뷰·안내·저장, ui/place/PlaceDetailSheet.kt)
+    val openPlace: (StopFact) -> Unit = LocalOpenPlace.current
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             CourseToolbar(
@@ -132,10 +132,6 @@ fun CoursePane(viewModel: CourseViewModel = hiltViewModel()) {
                 onNavigate = viewModel::navigate,
                 onOpenPlace = openPlace,
             )
-        }
-        // 들르는 곳 사진을 누르면: 지금은 그곳 사진 크게 보기 (장소 정보 시트가 생기면 여기서 바꾼다)
-        viewingPlace?.let { s ->
-            PlacePhotoViewer(s.name, s.address, s.lat, s.lon) { viewingPlace = null }
         }
         if (picking) {
             BackHandler { picking = false }
