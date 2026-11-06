@@ -1,10 +1,13 @@
 package app.eodiyeotji.place
 
+import android.content.Context
 import android.util.Log
 import app.eodiyeotji.BuildConfig
 import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.PlacePhoto
 import app.eodiyeotji.core.StopFact
+import coil.request.ImageRequest
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -17,13 +20,17 @@ import org.json.JSONObject
  *
  * - 장소 찾기: Text Search (`places:searchText`, 필드 `places.id,places.photos`)를 들른 곳 좌표 주변([BIAS_RADIUS_M])으로 좁혀 부른다.
  * - 저장: 결과(사진 이름·올린 사람)는 Rust가 기기 DB에 30일 둔다 → 같은 곳은 다시 묻지 않는다 ([EodiCore.placePhotos]).
- * - 이미지: [imageUrl]을 화면(Coil)이 받아 디스크에 캐시한다. 구글 약관대로 사진 곁에 올린 사람 이름을 보여 준다.
+ * - 이미지: [imageRequest]를 화면(Coil)이 받아 디스크에 둔다. 한 번 받은 사진은 그대로 다시 쓴다.
+ *   구글 약관대로 사진 곁에 올린 사람 이름을 보여 준다.
  *
  * 키는 `local.properties`의 `GOOGLE_PLACES_API_KEY` (구글 클라우드 프로젝트 eodiyeotji, Places API (New)만 허용).
  * 키가 없거나 네트워크가 안 되면 빈 목록 — 화면은 사진 칸 없이 그대로 보인다.
  */
 @Singleton
-class PlacePhotoRepository @Inject constructor(private val core: EodiCore) {
+class PlacePhotoRepository @Inject constructor(
+    private val core: EodiCore,
+    @ApplicationContext private val context: Context,
+) {
     private val key = BuildConfig.GOOGLE_PLACES_API_KEY
 
     suspend fun photos(stop: StopFact): List<PlacePhoto> = photos(stop.name, stop.address, stop.lat, stop.lon)
@@ -36,11 +43,19 @@ class PlacePhotoRepository @Inject constructor(private val core: EodiCore) {
         }.onFailure { Log.w(TAG, "사진 못 받음: $name: ${it.message}") }.getOrDefault(emptyList())
     }
 
-    /** 화면에 그릴 이미지 주소 (구글이 실제 이미지 주소로 넘겨 준다). [maxPx]는 긴 변 기준. */
-    fun imageUrl(photo: PlacePhoto, @Suppress("UNUSED_PARAMETER") maxPx: Int = PHOTO_PX): String =
-        // 구글은 사진 크기마다 따로 요금(하루 한도)을 센다 → 모든 화면이 같은 크기 한 장을 받아 디스크 캐시를 같이 쓴다.
-        // 작은 칸(썸네일·지도 카드)은 Coil이 줄여 그린다. 인자 maxPx는 부르는 쪽 호환용으로만 남긴다.
-        String.format(Locale.ROOT, "%s/%s/media?maxWidthPx=%d&maxHeightPx=%d&key=%s", BASE, photo.name, PHOTO_PX, PHOTO_PX, key)
+    /**
+     * 화면에 그릴 사진 요청 (Coil). 구글은 같은 사진도 물을 때마다 다른 사진 이름(주소)을 주므로, 기기 저장 이름표는
+     * 바뀌지 않는 값(장소 id · 올린 사람 · 원본 크기)으로 붙인다 → 한 번 받은 사진은 장소를 다시 찾아도 그대로 쓴다.
+     * 모든 화면이 같은 크기([PHOTO_PX]) 한 장을 같이 쓴다 (구글은 크기마다 따로 하루 한도를 센다). 작은 칸은 Coil이 줄여 그린다.
+     */
+    fun imageRequest(photo: PlacePhoto): ImageRequest {
+        val id = "${photo.name.substringBefore("/photos/")}/${photo.author}/${photo.widthPx}x${photo.heightPx}"
+        return ImageRequest.Builder(context)
+            .data(String.format(Locale.ROOT, "%s/%s/media?maxWidthPx=%d&maxHeightPx=%d&key=%s", BASE, photo.name, PHOTO_PX, PHOTO_PX, key))
+            .diskCacheKey("gphoto:$id:$PHOTO_PX")
+            .memoryCacheKey("gphoto:$id:$PHOTO_PX")
+            .build()
+    }
 
     private suspend fun search(query: String, lat: Double, lon: Double): String = withContext(Dispatchers.IO) {
         val body = JSONObject()
@@ -67,7 +82,8 @@ class PlacePhotoRepository @Inject constructor(private val core: EodiCore) {
         const val BASE = "https://places.googleapis.com/v1"
         const val BIAS_RADIUS_M = 300.0
 
-        /** 모든 화면이 함께 쓰는 사진 한 장의 긴 변(px): 카드 위쪽 넓게 보기·공유 카드까지 충분한 크기. */
+        /** 새로 받을 때의 긴 변(px): 카드 위쪽 넓게 보기·공유 카드까지 충분한 크기. 모든 화면이 이 한 장을 같이 쓴다. */
         const val PHOTO_PX = 1080
+
     }
 }

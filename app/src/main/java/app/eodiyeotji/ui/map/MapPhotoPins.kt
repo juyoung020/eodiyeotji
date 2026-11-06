@@ -34,8 +34,7 @@ internal suspend fun loadStayPhotos(
     pins.map { pin ->
         async {
             val photo = repo.photos(pin.name, pin.address, pin.lat, pin.lon).firstOrNull() ?: return@async null
-            val req = ImageRequest.Builder(context)
-                .data(repo.imageUrl(photo, PHOTO_PX))
+            val req = repo.imageRequest(photo).newBuilder(context)
                 .size(px)
                 .allowHardware(false) // Canvas로 다시 그리려면 소프트웨어 비트맵이어야 한다
                 .build()
@@ -48,4 +47,3 @@ internal suspend fun loadStayPhotos(
 
 /** 받아 둘 사진 크기: 카드 사진(68dp)을 가운데 잘라 꽉 채울 만큼. */
 private const val PHOTO_DECODE_DP = 96f
-private const val PHOTO_PX = 240

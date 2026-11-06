@@ -9,7 +9,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.place.PlacePhotoRepository
 import coil.imageLoader
-import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import dagger.hilt.EntryPoint
@@ -116,38 +115,27 @@ internal interface ShareEntryPoint {
 /**
  * 카드 앞쪽 [CARD_PHOTOS]곳의 대표 사진 (순서 번호 → 사진). 구글 Places 요청을 아끼려고:
  * - 장소 → 사진 이름은 Rust가 기기에 저장해 둔 값을 쓴다 (같은 곳은 다시 묻지 않는다).
- * - 이미지는 먼저 Coil 디스크 캐시만 본다 (상세 화면 사진 1200px · 지도 핀 240px). 없을 때만 카드 크기로 한 장 받는다.
+ * - 이미지는 기기에 받아 둔 사진을 먼저 쓴다 ([PlacePhotoRepository.imageRequest]). 없을 때만 한 장 받는다.
  * 사진이 없거나 못 받은 곳은 빠진다 (카드는 사진 칸 없이 그린다). 전체 [PHOTO_TIMEOUT_MS] 안에 끝낸다.
  */
 internal suspend fun loadCardPhotos(context: Context, repo: PlacePhotoRepository, card: ShareCardData): Map<Int, ImageBitmap> =
     withTimeoutOrNull(PHOTO_TIMEOUT_MS) {
         coroutineScope {
-            card.stops.take(CARD_PHOTOS).mapIndexed { i, s ->
+            card.stops.take(CARD_PHOTOS).map { s ->
                 async(Dispatchers.IO) {
                     val photo = repo.photos(s.name, s.address, s.lat, s.lon).firstOrNull() ?: return@async null
-                    val hero = i == 0
-                    val bmp = fetch(context, repo.imageUrl(photo, GALLERY_PX), cacheOnly = true)
-                        ?: (if (!hero) fetch(context, repo.imageUrl(photo, PIN_PX), cacheOnly = true) else null)
-                        ?: fetch(context, repo.imageUrl(photo, if (hero) HERO_PX else SMALL_PX), cacheOnly = false)
+                    val bmp = fetch(context, repo.imageRequest(photo))
                     bmp?.let { s.order to it.asImageBitmap() }
                 }
             }.awaitAll().filterNotNull().toMap()
         }
     } ?: emptyMap()
 
-private suspend fun fetch(context: Context, url: String, cacheOnly: Boolean): Bitmap? {
-    val req = ImageRequest.Builder(context)
-        .data(url)
+private suspend fun fetch(context: Context, photo: ImageRequest): Bitmap? {
+    val req = photo.newBuilder(context)
         .allowHardware(false) // 화면 밖에서 소프트웨어 Canvas로 그린다
-        .apply { if (cacheOnly) networkCachePolicy(CachePolicy.DISABLED) }
         .build()
     return ((context.imageLoader.execute(req) as? SuccessResult)?.drawable as? BitmapDrawable)?.bitmap
 }
 
-/** 상세 화면 사진(PlacePhotoGallery)·지도 핀 사진(MapPhotoPins)과 같은 주소 → 캐시를 같이 쓴다. */
-private const val GALLERY_PX = 1200
-private const val PIN_PX = 240
-/** 캐시에 없을 때 새로 받는 크기: 큰 칸(약 200dp × 3배) · 작은 칸. */
-private const val HERO_PX = 720
-private const val SMALL_PX = 400
 private const val PHOTO_TIMEOUT_MS = 8_000L

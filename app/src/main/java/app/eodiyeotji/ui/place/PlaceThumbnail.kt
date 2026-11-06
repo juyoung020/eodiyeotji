@@ -54,7 +54,7 @@ fun PlaceThumbnail(
         Thumb.Loading -> Box(modifier) { loading() }
         Thumb.None -> Box(modifier) { fallback() }
         is Thumb.Found -> SubcomposeAsyncImage(
-            model = repo.imageUrl(t.photo, THUMB_PX),
+            model = repo.imageRequest(t.photo),
             contentDescription = name,
             contentScale = ContentScale.Crop,
             loading = { loading() },
@@ -76,6 +76,4 @@ fun PhotoLoadingPlaceholder(color: Color, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxSize().alpha(pulse).background(color))
 }
 
-/** 썸네일 크기(긴 변 px): 화면에서 최대 약 96dp × 2배 밀도. */
-private const val THUMB_PX = 240
 private const val PULSE_MS = 700

@@ -28,7 +28,7 @@ class EodiApp : Application(), ImageLoaderFactory {
 
     /**
      * 장소 사진(구글 Places) 이미지 로더. 구글 응답의 캐시 헤더를 따르면 같은 사진을 볼 때마다 다시 받아 하루 한도를 쓴다
-     * → 헤더와 상관없이 디스크에 둔다 (장소 결과도 Rust DB에 30일 두는 것과 같은 기준, 오래된 것은 크기 한도로 밀려난다).
+     * → 헤더와 상관없이 디스크에 계속 둔다 (이름표는 바뀌지 않는 값이라 장소 결과를 30일마다 새로 받아도 같은 사진은 그대로 쓴다). 크기 한도를 넘을 때만 가장 오래 안 본 것부터 밀려난다.
      */
     override fun newImageLoader(): ImageLoader =
         ImageLoader.Builder(this)
@@ -49,6 +49,6 @@ class EodiApp : Application(), ImageLoaderFactory {
     }
 
     private companion object {
-        const val PHOTO_DISK_BYTES = 150L * 1024 * 1024
+        const val PHOTO_DISK_BYTES = 300L * 1024 * 1024
     }
 }

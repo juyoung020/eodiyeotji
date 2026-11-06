@@ -52,7 +52,7 @@ fun PlacePhotoGallery(stop: StopFact, modifier: Modifier = Modifier) {
                 val pager = rememberPagerState { list.size }
                 HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { i ->
                     AsyncImage(
-                        model = repo.imageUrl(list[i], MAX_PX),
+                        model = repo.imageRequest(list[i]),
                         contentDescription = stop.name,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
@@ -87,5 +87,3 @@ internal interface PhotoEntryPoint {
     fun photos(): PlacePhotoRepository
 }
 
-/** 받을 사진 크기(긴 변 px): 카드 위쪽 칸(최대 약 1100×400dp)을 채우는 정도. */
-private const val MAX_PX = 1200
