@@ -54,6 +54,10 @@ import app.eodiyeotji.ui.map.DayMap
 import app.eodiyeotji.ui.map.MapPhotoPin
 import app.eodiyeotji.ui.place.PlacePhotoGallery
 import app.eodiyeotji.ui.place.PlaceThumbnail
+import app.eodiyeotji.ui.share.ComposableImageShare
+import app.eodiyeotji.ui.share.ShareButtonStyle
+import app.eodiyeotji.ui.share.ShareImageButton
+import app.eodiyeotji.ui.share.ShareTarget
 import java.time.LocalDate
 
 private val CardShape = RoundedCornerShape(32.dp)
@@ -145,6 +149,11 @@ internal fun RecommendationCard(
                     )
                     Spacer(Modifier.width(12.dp))
                     KindBadge(kindText(facts.kind))
+                    // 이 나들이·여행을 사진 카드로 공유 (폰 판만 보인다, ui/share)
+                    if (ComposableImageShare.supported) {
+                        Spacer(Modifier.weight(1f))
+                        ShareImageButton(ShareTarget.Episode(facts.id), style = ShareButtonStyle.ICON)
+                    }
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(

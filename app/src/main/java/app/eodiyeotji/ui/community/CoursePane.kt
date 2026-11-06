@@ -58,6 +58,9 @@ import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.timeline.distanceText
 import app.eodiyeotji.ui.timeline.durationText
+import app.eodiyeotji.ui.share.ShareButtonStyle
+import app.eodiyeotji.ui.share.ShareImageButton
+import app.eodiyeotji.ui.share.ShareTarget
 import kotlinx.coroutines.delay
 
 /** 도구 줄이 이보다 좁으면 버튼 이름을 짧게 쓴다. */
@@ -342,6 +345,8 @@ private fun CourseDetailScreen(d: CourseDetail, progress: CourseProgress?, onBac
                     val total = d.legs.size
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         HeartButton(p.hearts, p.heartedByMe, onHeart)
+                        // 이 코스를 사진 카드로 공유 (폰 판만 보인다, ui/share)
+                        ShareImageButton(ShareTarget.Course(p.id), style = ShareButtonStyle.ICON)
                         val label = when {
                             progress == null -> stringResource(R.string.course_navigate)
                             progress.hasNextLeg -> stringResource(R.string.course_navigate_next, progress.leg + 1, progress.total)

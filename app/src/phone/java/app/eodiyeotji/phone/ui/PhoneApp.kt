@@ -65,6 +65,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
+import app.eodiyeotji.record.RecordingStatusChip
 import app.eodiyeotji.ui.agent.AgentIcons
 import app.eodiyeotji.ui.agent.AgentPanel
 import app.eodiyeotji.ui.agent.AgentViewModel
@@ -266,7 +267,14 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
                     PhoneTab.RECORDS -> TimelineRoute(
                         compact = true,
                         search = recordsSearch,
-                        headerAction = { HeaderIconButton(PhoneIcons.Tune, stringResource(R.string.phone_settings)) { settingsOpen = true } },
+                        headerAction = {
+                            // 기록 상태(기록 중 · 대기 중 · 권한/알림/배터리 경고, 누르면 설명 시트) + 설정
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                RecordingStatusChip(Modifier.weight(1f, fill = false))
+                                Spacer(Modifier.width(12.dp))
+                                HeaderIconButton(PhoneIcons.Tune, stringResource(R.string.phone_settings)) { settingsOpen = true }
+                            }
+                        },
                         headerBanner = if (!permissions.location) {
                             { PermissionWarning(onFix = shell::openAppSettings) }
                         } else {

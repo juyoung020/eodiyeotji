@@ -44,4 +44,7 @@ class CarRecordingPlatform @Inject constructor(
         if (!hasRecordingPermission() && location.isSupported()) listOf(PermissionStep(listOf(PleosLocationSource.PERMISSION))) else emptyList()
 
     override val foregroundServiceType: Int = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+
+    override fun permissionsFor(issue: RecordingIssue): List<String> =
+        if (issue == RecordingIssue.LOCATION_OFF) listOf(PleosLocationSource.PERMISSION) else emptyList()
 }

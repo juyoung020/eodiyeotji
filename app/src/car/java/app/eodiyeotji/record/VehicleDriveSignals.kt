@@ -19,6 +19,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.mapNotNull
@@ -46,6 +49,11 @@ sealed interface VehicleSignal {
 class VehicleDriveSignals @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : DriveSignalSource {
+    private val _linked = MutableStateFlow(false)
+
+    /** 기어 신호를 구독 중인지 (차량 서비스 연결 + 기어 속성 있음). 머리의 상태 표시 "차량 신호 연결됨". */
+    override val linked: StateFlow<Boolean> = _linked.asStateFlow()
+
     override fun edges(resumeDriving: Boolean, lastFixMs: Long): Flow<DriveEdge> = signals().toDriveEdges().debounced()
 
     // status·unregisterCallback은 Car API 35에서 deprecated지만, 기기(Pleos 2.1)는 API 34라서 대체 API가 없다.
@@ -75,6 +83,7 @@ class VehicleDriveSignals @Inject constructor(
             if (!ready) {
                 Log.w(TAG, "차량 서비스 연결 끊김 — 다시 연결되기를 기다린다")
                 manager = null
+                _linked.value = false
                 return@createCar
             }
             val m = c.getCarManager(Car.PROPERTY_SERVICE) as CarPropertyManager
@@ -83,6 +92,7 @@ class VehicleDriveSignals @Inject constructor(
         }
 
         awaitClose {
+            _linked.value = false
             runCatching { manager?.unregisterCallback(callback) }
             runCatching { car.disconnect() }
             thread.quitSafely()
@@ -100,6 +110,7 @@ class VehicleDriveSignals @Inject constructor(
         if (hasIgnition) {
             m.registerCallback(callback, VehiclePropertyIds.IGNITION_STATE, CarPropertyManager.SENSOR_RATE_ONCHANGE)
         }
+        _linked.value = gearProp != null || hasIgnition
         Log.i(TAG, "차량 신호 구독: 기어=${gearProp?.let { VehiclePropertyIds.toString(it) } ?: "없음"}, 시동=${if (hasIgnition) "있음" else "없음"}")
     }
 

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 공유 이미지 카드 (ui/share) — 카카오톡 등 공유 시트로 보낸다 (폰 판) -->
+    <string name="share_card_button">카드로 공유</string>
+    <string name="share_card_icon">사진 카드로 공유하기</string>
+    <string name="share_card_making">카드 만드는 중…</string>
+    <string name="share_card_chooser">어디였지 카드 보내기</string>
+    <string name="share_card_failed">공유 카드를 만들지 못했어요</string>
+    <string name="share_card_text_copied">보낼 글도 복사해 뒀어요. 대화창에 붙여 넣으면 돼요</string>
+    <string name="share_card_hidden">집·회사 근처 %1$d곳은 카드에서 뺐어요</string>
+
+    <!-- 카드 안 글 -->
+    <string name="share_card_distance_drive">%1$s · 운전 %2$s</string>
+    <string name="share_card_distance_course">%1$s · %2$s 코스</string>
+    <string name="share_card_stops">들른 곳 %1$d곳</string>
+    <string name="share_card_route">지나온 길</string>
+    <string name="share_card_course_route">들르는 순서</string>
+</resources>

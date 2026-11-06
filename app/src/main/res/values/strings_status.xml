@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 머리의 기록 상태 표시 · 설명 시트 (record/RecordingStatus.kt) -->
+    <string name="status_driving">기록 중</string>
+    <string name="status_waiting">대기 중</string>
+    <string name="status_off">기록 꺼짐</string>
+    <string name="status_location_off">위치 권한 꺼짐</string>
+    <string name="status_background_off">백그라운드 위치 꺼짐</string>
+    <string name="status_notifications_off">알림 꺼짐</string>
+    <string name="status_battery">배터리 최적화로 멈출 수 있음</string>
+    <string name="status_no_vehicle">차량 신호 없음</string>
+    <string name="status_a11y">기록 상태: %1$s. 눌러서 자세히 보기</string>
+
+    <string name="status_title_driving">지금 이동을 기록하고 있어요</string>
+    <string name="status_title_waiting">출발하면 자동으로 기록해요</string>
+    <string name="status_title_off">기록이 멈춰 있어요</string>
+    <string name="status_title_location_off">위치 권한이 꺼져 있어 기록하지 않아요</string>
+    <string name="status_title_background_off">앱을 닫으면 출발을 놓칠 수 있어요</string>
+    <string name="status_title_notifications_off">기록 중 알림이 보이지 않아요</string>
+    <string name="status_title_battery">배터리 절약 때문에 기록이 멈출 수 있어요</string>
+    <string name="status_title_no_vehicle">차량 신호를 기다리고 있어요</string>
+
+    <string name="status_body_driving">도착해서 멈추면 저절로 끝나요. 경로와 들른 곳은 기기 안에만 저장돼요.</string>
+    <string name="status_body_waiting">시작 버튼은 없어요. 출발을 알아채면 바로 기록을 시작해요.</string>
+    <string name="status_body_off">기록 서비스가 켜져 있지 않아요. 다시 켜 볼게요.</string>
+    <string name="status_body_location_off">어디였지는 위치로 길과 들른 곳을 기록해요. 위치 권한을 켜야 기록이 시작돼요.</string>
+    <string name="status_body_background_off">위치를 \"항상 허용\"으로 바꾸면 앱을 열지 않아도, 폰을 켠 직후에도 출발을 알아채요. 설정 → 권한 → 위치에서 바꿔 주세요.</string>
+    <string name="status_body_notifications_off">기록은 그대로 해요. 다만 기록 중이라는 알림이 안 보여 언제 기록하는지 알기 어려워요.</string>
+    <string name="status_body_battery">폰이 오래 쉰 앱을 멈추면 그동안의 길을 놓칠 수 있어요. 어디였지를 배터리 최적화에서 빼 주세요. 서 있을 때는 전력을 아주 적게 써요.</string>
+    <string name="status_body_no_vehicle">기어·시동 신호가 아직 오지 않았어요. 차량 서비스가 연결되면 저절로 이어져요.</string>
+
+    <string name="status_check_location">위치 권한</string>
+    <string name="status_check_background">항상 허용 (앱을 닫아도 기록)</string>
+    <string name="status_check_notifications">알림</string>
+    <string name="status_check_battery">배터리 최적화에서 빠짐</string>
+    <string name="status_check_vehicle">차량 신호 (기어 · 시동)</string>
+    <string name="status_check_service">자동 기록</string>
+    <string name="status_ok">켜짐</string>
+    <string name="status_bad">꺼짐</string>
+    <string name="status_vehicle_ok">차량 신호 연결됨</string>
+    <string name="status_vehicle_wait">기다리는 중</string>
+
+    <string name="status_fix_permission">권한 허용하기</string>
+    <string name="status_fix_settings">설정 열기</string>
+    <string name="status_fix_battery">최적화에서 빼기</string>
+    <string name="status_fix_restart">다시 켜기</string>
+    <string name="status_close">닫기</string>
+</resources>

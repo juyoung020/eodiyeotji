@@ -2,8 +2,11 @@ package app.eodiyeotji.platform
 
 import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.PowerManager
+import androidx.core.content.ContextCompat
 import app.eodiyeotji.phone.PhoneDriveSignals
 import app.eodiyeotji.phone.PhoneLocationSource
 import app.eodiyeotji.phone.PhoneNavigator
@@ -112,6 +115,29 @@ class PhoneRecordingPlatform @Inject constructor(
 
     override val foregroundServiceType: Int =
         if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
+
+    override val checkedIssues: List<RecordingIssue> = RecordingIssue.entries.toList()
+
+    /** 위치 → "항상 허용" → 알림 → 배터리 최적화 순 (머리 상태 표시는 맨 앞 하나만 보인다). */
+    override fun issues(): List<RecordingIssue> = buildList {
+        if (!hasRecordingPermission()) {
+            add(RecordingIssue.LOCATION_OFF)
+        } else if (Build.VERSION.SDK_INT >= 29 && !granted(Manifest.permission.ACCESS_BACKGROUND_LOCATION)) {
+            add(RecordingIssue.BACKGROUND_OFF)
+        }
+        if (Build.VERSION.SDK_INT >= 33 && !granted(Manifest.permission.POST_NOTIFICATIONS)) add(RecordingIssue.NOTIFICATIONS_OFF)
+        val power = context.getSystemService(PowerManager::class.java)
+        if (power != null && !power.isIgnoringBatteryOptimizations(context.packageName)) add(RecordingIssue.BATTERY_OPTIMIZED)
+    }
+
+    /** 앱 안에서 바로 묻는 것: 위치, 알림. "항상 허용"은 첫 실행에 한 번만 묻고 그다음은 설정 화면으로 보낸다. */
+    override fun permissionsFor(issue: RecordingIssue): List<String> = when (issue) {
+        RecordingIssue.LOCATION_OFF -> listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+        RecordingIssue.NOTIFICATIONS_OFF -> if (Build.VERSION.SDK_INT >= 33) listOf(Manifest.permission.POST_NOTIFICATIONS) else emptyList()
+        else -> emptyList()
+    }
+
+    private fun granted(p: String) = ContextCompat.checkSelfPermission(context, p) == PackageManager.PERMISSION_GRANTED
 
     private companion object {
         const val BACKGROUND_RATIONALE =
