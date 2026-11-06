@@ -8,6 +8,7 @@ uniffi::setup_scaffolding!();
 pub mod agent;
 pub mod community;
 pub mod course;
+pub mod drivedetect;
 pub mod ffi;
 pub mod geo;
 pub mod lastfix;

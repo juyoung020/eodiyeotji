@@ -12,8 +12,8 @@ import app.eodiyeotji.core.rust.GeoPoint
 import app.eodiyeotji.core.rust.LabelReport
 import app.eodiyeotji.core.rust.LlmConfig
 import app.eodiyeotji.core.rust.MemoryAgent
-import app.eodiyeotji.pleos.PleosNavi
-import app.eodiyeotji.pleos.RouteStop
+import app.eodiyeotji.platform.Navigator
+import app.eodiyeotji.platform.RouteStop
 import java.util.TimeZone
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -38,14 +38,14 @@ import app.eodiyeotji.core.rust.NavProposal as RNavProposal
 /**
  * 기억 에이전트 연결부 — 에이전트 자체(빠른 길·LLM 도구 루프·하루 라벨링)는 Rust `core-rs/src/agent`에 있고,
  * 여기는 ① Rust `MemoryAgent`를 백그라운드 스레드에서 부르고 ② 콜백을 [AgentEvent] 흐름으로 바꾸고
- * ③ 운전자가 확인한 [AgentNavAction]을 Pleos 내비로 실행하기만 한다 (계산 없음).
+ * ③ 운전자가 확인한 [AgentNavAction]을 내비([Navigator]: 차는 Pleos 내비, 폰은 지도 앱)로 실행하기만 한다 (계산 없음).
  *
  * 안내는 확인 없이 실행되지 않는다: Rust가 제안만 만들고, [confirm](화면의 "예") 또는 운전자의 다음 말 "응/안내해줘"가 있어야
  * 내비 명령이 나온다. 내비 경유지는 2개까지라 코스는 구간으로 나뉘어 오고, 첫 구간만 요청한 뒤 나머지는 [pendingLegs]에 둔다.
  */
 @Singleton
 class AgentBridge @Inject constructor(
-    private val navi: PleosNavi,
+    private val navi: Navigator,
     private val core: EodiCore,
 ) {
     /** Rust 에이전트. DB를 여는 일이라 처음 쓸 때 IO 스레드에서 만든다. */

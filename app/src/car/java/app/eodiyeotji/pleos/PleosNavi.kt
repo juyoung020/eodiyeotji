@@ -18,6 +18,10 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import app.eodiyeotji.BuildConfig
+import app.eodiyeotji.platform.NaviEvent
+import app.eodiyeotji.platform.NaviPoi
+import app.eodiyeotji.platform.Navigator
+import app.eodiyeotji.platform.RouteStop
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
@@ -28,52 +32,10 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-
-/**
- * 내비가 알려 준 장소 하나 (목적지 또는 경유지). 좌표를 모르면 [lat]·[lon]이 null
- * (Pleos 에뮬레이터 내비는 경유지 좌표를 0,0으로 준다. 이름·주소는 준다).
- */
-data class NaviPoi(
-    val name: String,
-    val address: String,
-    val lat: Double?,
-    val lon: Double?,
-    /** 내비 지도 데이터의 장소 ID·제공자 (모르면 빈 문자열). [PleosNavi.openPoiDetail]에 그대로 넘긴다. */
-    val poiId: String = "",
-    val poiProvider: String = "",
-)
-
-/** 내비에 경로를 요청할 때 넘기는 지점. */
-data class RouteStop(val name: String, val lat: Double, val lon: Double, val address: String = "")
-
-/** 우리가 쓰는 내비 이벤트만 추린 것. 제한속도·TBT·카메라 같은 잦은 이벤트는 내보내지 않는다. */
-sealed interface NaviEvent {
-    /** 내비 서비스에 연결됨. 이어서 현재 목적지·경유지 조회 결과가 온다. */
-    data object Connected : NaviEvent
-
-    /** 경로 안내 시작 ([name] = 다음에 도착할 곳 이름, 경유지가 있으면 첫 경유지). 어댑터가 곧바로 목적지·경유지를 다시 조회한다. */
-    data class RouteStarted(val name: String) : NaviEvent
-
-    /** 경로 안내 취소. */
-    data object RouteCancelled : NaviEvent
-
-    /** 목적지 조회 결과. 목적지가 없으면 null. */
-    data class Destination(val poi: NaviPoi?) : NaviEvent
-
-    /** 경유지 조회 결과 (순서대로, 최대 2개). */
-    data class Waypoints(val pois: List<NaviPoi>) : NaviEvent
-
-    /** 목적지 도착. SDK가 좌표를 주지 않는다 → 좌표는 앞서 받은 [Destination]에서 이름으로 찾는다. */
-    data class DestinationArrived(val name: String, val address: String) : NaviEvent
-
-    /** 경유지 도착. [index]: 0 = 첫째, 1 = 둘째. 좌표는 앞서 받은 [Waypoints]에서 찾는다. */
-    data class WaypointArrived(val index: Int, val name: String, val address: String) : NaviEvent
-}
 
 /**
  * Pleos NaviHelper SDK 얇은 어댑터. 차량 내비의 목적지·경유지·도착 이벤트를 [NaviEvent] 흐름으로 바꾼다.
@@ -88,12 +50,14 @@ sealed interface NaviEvent {
 @Singleton
 class PleosNavi @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+) : Navigator {
     /** 이 차(에뮬레이터)에 Pleos 내비 서비스가 있는지. 패키지 조회라서 백그라운드 스레드에서 부른다. */
     fun isAvailable(): Boolean =
         runCatching { context.packageManager.queryIntentServices(Intent(ACTION_NAVI_SERVICE), 0).isNotEmpty() }
             .onFailure { Log.w(TAG, "내비 서비스 확인 실패", it) }
             .getOrDefault(false)
+
+    override fun eventsAvailable(): Boolean = isAvailable()
 
     /**
      * 내비 이벤트 흐름. 모으는 동안만 SDK가 연결돼 있고, 취소하면 리스너 해제 → release 한다.
@@ -101,7 +65,7 @@ class PleosNavi @Inject constructor(
      * 연결 직후와 경로가 바뀔 때(시작·탐색 완료·재탐색·목적지/경유지 변경)마다 목적지·경유지를 스스로 다시 조회해
      * [NaviEvent.Destination] / [NaviEvent.Waypoints]로 내보낸다. [refresh]가 값을 낼 때도 한 번 더 조회한다.
      */
-    fun events(refresh: Flow<Unit> = emptyFlow()): Flow<NaviEvent> = callbackFlow {
+    override fun events(refresh: Flow<Unit>): Flow<NaviEvent> = callbackFlow {
         val helper = NaviHelper(context)
         val connected = AtomicBoolean(false)
         // 조회 요청은 콜백 스레드가 아니라 이 흐름의 코루틴에서 한다 (같은 요청이 몰리면 하나로 합친다)
@@ -193,11 +157,11 @@ class PleosNavi @Inject constructor(
     }
 
     /** 내비에 "그곳으로 안내"를 요청한다. 반환: 요청을 보냈으면 true (경로 탐색 성공 여부는 아니다). */
-    suspend fun requestRoute(name: String, lat: Double, lon: Double, address: String = ""): Boolean =
+    override suspend fun requestRoute(name: String, lat: Double, lon: Double, address: String): Boolean =
         oneShot("requestRoute") { it.requestRoute(routeInfo(name, lat, lon, address)) }
 
     /** 경유지(최대 2개)를 거쳐 목적지로 안내를 요청한다. 3개째부터는 버린다 (NaviHelper 제한). */
-    suspend fun requestRouteWithWaypoints(destination: RouteStop, waypoints: List<RouteStop>): Boolean =
+    override suspend fun requestRouteWithWaypoints(destination: RouteStop, waypoints: List<RouteStop>): Boolean =
         oneShot("requestRouteWithWaypoints") { helper ->
             val wps = waypoints.take(2).mapIndexed { i, p ->
                 RequestWaypointInfo(
@@ -215,15 +179,15 @@ class PleosNavi @Inject constructor(
      * 차량 내비의 장소 검색 화면을 [keyword]로 연다 (Pleos SDK에 이름 검색 API는 이것뿐이다).
      * 사용자가 결과를 골라 안내를 시작하면 [events]의 RouteStarted → Destination으로 내비 공식 이름·좌표가 들어온다.
      */
-    suspend fun openPlaceSearch(keyword: String): Boolean =
+    override suspend fun openPlaceSearch(keyword: String): Boolean =
         oneShot("openPlaceSearch") { it.requestNavigationScreen(NavigationScreenRequest.SearchPlace(keyword)) }
 
     /** 내비의 장소 상세 팝업을 연다 ([poiId]·[poiProvider]는 내비가 준 값 그대로). */
-    suspend fun openPoiDetail(poiId: String, poiProvider: String = ""): Boolean =
+    override suspend fun openPoiDetail(poiId: String, poiProvider: String): Boolean =
         oneShot("openPoiDetail") { it.requestNavigationScreen(NavigationScreenRequest.POIDetailPopup(poiId, poiProvider)) }
 
     /** 안내 취소 (시연·디버그용). */
-    suspend fun cancelRoute(): Boolean = oneShot("cancelRoute") { it.cancelRoute() }
+    override suspend fun cancelRoute(): Boolean = oneShot("cancelRoute") { it.cancelRoute() }
 
     /** 연결 → 요청 하나 → release. 내비가 없거나 연결이 [CONNECT_TIMEOUT_MS] 안에 안 되면 false. */
     private suspend fun oneShot(what: String, call: (NaviHelper) -> Unit): Boolean = withContext(Dispatchers.Default) {

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 차(Pleos Connect, Android Automotive) 판에만 들어가는 것. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 차량 앱 표시 (Android Automotive) -->
+    <uses-feature android:name="android.hardware.type.automotive" android:required="true" />
+
+    <!-- 차량 위치(Pleos FusedLocation): 이동 경로 자동 기록의 원천 데이터. dangerous → 첫 실행에 한 번만 묻는다 -->
+    <uses-permission android:name="pleos.car.permission.FUSED_LOCATION" />
+    <!-- 내비 목적지·경유지 조회(NaviHelper get*Info)·도착 이벤트: 들른 곳을 좌표 대신 실제 장소 이름으로 보여 주기 위해. normal -->
+    <uses-permission android:name="pleos.car.permission.NAVI_ROUTE" />
+    <!-- 내비 경로 요청(NaviHelper requestRoute): 기록한 장소를 골라 "그곳으로 안내"하기 위해. normal -->
+    <uses-permission android:name="pleos.car.permission.NAVI_ROUTE_SEARCH" />
+    <!-- 내비 화면 열기(NaviHelper requestNavigationScreen): 장소 이름을 내비 검색 화면으로 넘겨 공식 장소를 고르게 하기 위해. normal -->
+    <uses-permission android:name="pleos.car.permission.NAVI_CUSTOM_MAP" />
+    <!-- 기어(GEAR_SELECTION·CURRENT_GEAR)·시동(IGNITION_STATE) 읽기: 주행 시작·끝을 자동으로 알기 위해. normal → 묻지 않는다 -->
+    <uses-permission android:name="android.car.permission.CAR_POWERTRAIN" />
+    <!-- 포그라운드 서비스 종류 specialUse (이유는 record/RecordingService.kt KDoc). normal.
+         location 종류는 쓰지도 않는 Android 위치 권한을 추가로 요구해서 고르지 않았다 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- 운전 중 말로 묻기(Pleos SpeechToText): 차량 마이크로 "작년 여름 바다 어디였지?"를 듣고 글로 바꾸기 위해 -->
+    <uses-permission android:name="pleos.car.permission.STT_SERVICE" />
+    <!-- 운전 중 답 읽어 주기(Pleos TextToSpeech): 화면을 보지 않아도 짧은 답을 듣게 하기 위해 -->
+    <uses-permission android:name="pleos.car.permission.TTS_SERVICE" />
+
+    <application>
+        <activity android:name=".MainActivity">
+            <!-- 주행 중에도 쓰는 화면: 주행 중에는 기억 에이전트 주행 화면(음성 + 큰 카드 1장)만 보인다 (ui/home/HomeScreen.kt) -->
+            <meta-data
+                android:name="distractionOptimized"
+                android:value="true" />
+        </activity>
+
+        <!-- 자동 기록: 주행(기어 P 해제·시동)을 감지해 위치를 모아 Rust 코어에 저장 -->
+        <service
+            android:name=".record.RecordingService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Automatic trip logging: while the vehicle is in gear, records the car's position from the Pleos FusedLocation SDK so the driver can review past trips. Idle (vehicle signal listener only) while parked." />
+        </service>
+    </application>
+
+</manifest>

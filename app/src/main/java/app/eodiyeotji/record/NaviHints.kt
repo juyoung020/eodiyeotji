@@ -3,9 +3,9 @@ package app.eodiyeotji.record
 import android.util.Log
 import app.eodiyeotji.core.LocationFix
 import app.eodiyeotji.core.NaviHint
-import app.eodiyeotji.pleos.NaviEvent
-import app.eodiyeotji.pleos.NaviPoi
-import app.eodiyeotji.pleos.PleosNavi
+import app.eodiyeotji.platform.NaviEvent
+import app.eodiyeotji.platform.NaviPoi
+import app.eodiyeotji.platform.Navigator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -92,7 +92,7 @@ internal class NaviHintTracker {
  * 주행 중 타이머·폴링 없음 → 이벤트가 없으면 CPU를 쓰지 않는다.
  */
 internal class NaviSession(
-    navi: PleosNavi,
+    navi: Navigator,
     scope: CoroutineScope,
     private val lastFix: () -> LocationFix?,
     private val send: suspend (NaviHint) -> Unit,

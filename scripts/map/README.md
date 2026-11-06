@@ -51,7 +51,7 @@ Protomaps 원본의 최대 줌이 15다. 앱은 15보다 더 확대하면 15 타
 | 10 (Pleos 에뮬레이터) | `/data/local/tmp`에 올린 뒤 `run-as app.eodiyeotji --user 10`으로 복사 | 2번 (앱 내부 폴더) | **디버그 빌드(debuggable)** 가 설치돼 있어야 함 |
 
 - `adb shell`은 사용자 0으로 돌아서 `/storage/emulated/10/...`이 보이지 않는다 (Permission denied). Pleos 에뮬레이터는 user 빌드(`ro.debuggable=0`)라 `adb root`도 안 된다. 그래서 사용자 10에는 `run-as`가 유일한 길이다.
-- 앱을 지우면(uninstall) 2번 폴더도 지워진다 → 다시 `push-map.ps1`. 덮어쓰기 설치(`installDebug`, `install -r`)는 파일이 남는다.
+- 앱을 지우면(uninstall) 2번 폴더도 지워진다 → 다시 `push-map.ps1`. 덮어쓰기 설치(`installCarDebug`, `install -r`)는 파일이 남는다.
 - 지우기: `push-map.ps1 -Remove`
 
 ## 스타일 약속 (`app/src/main/assets/map/style.json`)

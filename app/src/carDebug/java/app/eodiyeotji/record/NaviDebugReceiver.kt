@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import app.eodiyeotji.pleos.PleosNavi
-import app.eodiyeotji.pleos.RouteStop
+import app.eodiyeotji.platform.RouteStop
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

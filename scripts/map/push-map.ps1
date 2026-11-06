@@ -13,7 +13,7 @@
     - 사용자 0: adb push 로 1번(외부 앱 폴더)에 바로 넣는다.
     - 그 밖의 사용자 (Pleos 에뮬레이터는 화면 사용자가 10): adb shell 은 사용자 0 저장소만 보이므로 1번에 쓸 수 없다.
       /data/local/tmp 에 올린 뒤 `run-as app.eodiyeotji --user 10` 으로 2번(앱 내부 폴더)에 복사한다.
-      run-as 는 디버그 빌드(debuggable)에서만 된다 → 에뮬레이터에 debug APK 가 깔려 있어야 한다 (./gradlew installDebug).
+      run-as 는 디버그 빌드(debuggable)에서만 된다 → 에뮬레이터에 debug APK 가 깔려 있어야 한다 (./gradlew installCarDebug).
       Pleos 에뮬레이터 이미지는 user 빌드라 adb root 가 안 되므로 다른 길은 없다.
   - 앱을 다시 깔면(uninstall) 2번 폴더가 지워진다 → 이 스크립트를 다시 돌린다. 덮어쓰기 설치(install -r)는 남는다.
   - 앱을 다시 설치할 필요는 없다. 지도 화면을 다시 열면 새 파일을 읽는다.
@@ -62,7 +62,7 @@ if ($User -eq 0) {
         throw @"
 run-as 를 쓸 수 없습니다: $probe
 사용자 $User 의 앱 폴더에는 디버그 빌드(debuggable)일 때만 넣을 수 있습니다.
-에뮬레이터에 debug APK 를 설치한 뒤(예: ./gradlew installDebug) 다시 실행하세요.
+에뮬레이터에 debug APK 를 설치한 뒤(예: ./gradlew installCarDebug) 다시 실행하세요.
 "@
     }
     if ($Remove) { Sh "run-as $Package --user $User rm -f files/map/$name" | Out-Null; Write-Host "지웠습니다: files/map/$name (사용자 $User)"; return }

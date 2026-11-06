@@ -3,11 +3,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application>
-        <!-- 에뮬레이터에서 adb로 내비 연동 확인 (사용법은 record/NaviDebugReceiver.kt) -->
-        <receiver
-            android:name=".record.NaviDebugReceiver"
-            android:exported="true" />
-
         <!-- 시연용 1년치 기록 넣기 (사용법은 record/DemoSeedReceiver.kt) -->
         <receiver
             android:name=".record.DemoSeedReceiver"

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 폰(어느 차에서나 혼자 쓰는) 판에만 들어가는 것. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- GPS가 없는 기기에도 설치는 된다 (네트워크 위치로 덜 정확하게 기록) -->
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+
+    <!-- 폰 위치: 주행 감지(서 있을 때는 저전력 위치)와 주행 경로 기록. dangerous → 첫 실행에 묻는다 -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- 앱을 열지 않아도(부팅 직후 포함) 출발을 감지해 기록하기 위해 "항상 허용". 설명 창을 띄운 뒤 따로 묻는다 -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <!-- 포그라운드 서비스 종류 location (Android 14+). normal -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- 기록 중임을 알리는 상시 알림 (Android 13+). dangerous → 첫 실행에 같이 묻는다 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- "이 코스로 안내": 설치된 지도 앱을 찾아 길 안내를 넘기기 위해 (Android 11+ 패키지 공개 범위, phone/PhoneNavigator.kt) -->
+    <queries>
+        <package android:name="com.nhn.android.nmap" />
+        <package android:name="net.daum.android.map" />
+        <package android:name="com.skt.tmap.ku" />
+        <package android:name="com.google.android.apps.maps" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+
+    <application>
+        <!-- 자동 기록: 위치로 주행을 감지해(Rust drivedetect) 위치를 모아 Rust 코어에 저장 -->
+        <service
+            android:name=".record.RecordingService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+    </application>
+
+</manifest>

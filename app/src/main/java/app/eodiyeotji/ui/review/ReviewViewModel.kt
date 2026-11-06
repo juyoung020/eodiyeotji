@@ -19,7 +19,7 @@ import app.eodiyeotji.core.toggleReviewHeart
 import app.eodiyeotji.core.travelReviews
 import app.eodiyeotji.core.visitWeather
 import app.eodiyeotji.ui.community.Load
-import app.eodiyeotji.pleos.PleosNavi
+import app.eodiyeotji.platform.Navigator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException
@@ -69,7 +69,7 @@ data class ReviewUiState(
 @HiltViewModel
 class ReviewViewModel @Inject constructor(
     private val core: EodiCore,
-    private val navi: PleosNavi,
+    private val navi: Navigator,
 ) : ViewModel() {
     private val _state = MutableStateFlow(ReviewUiState())
     val state: StateFlow<ReviewUiState> = _state.asStateFlow()
