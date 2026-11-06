@@ -214,7 +214,7 @@ fn role_of(a: &Anchors, p: Point) -> Option<AnchorRole> {
     }
 }
 
-fn is_saved(conn: &Connection, id: i64) -> rusqlite::Result<bool> {
+pub(crate) fn is_saved(conn: &Connection, id: i64) -> rusqlite::Result<bool> {
     Ok(conn
         .prepare_cached("SELECT 1 FROM saved_place WHERE place_id = ?1")?
         .query_row([id], |_| Ok(()))
