@@ -37,8 +37,10 @@ class PlacePhotoRepository @Inject constructor(private val core: EodiCore) {
     }
 
     /** 화면에 그릴 이미지 주소 (구글이 실제 이미지 주소로 넘겨 준다). [maxPx]는 긴 변 기준. */
-    fun imageUrl(photo: PlacePhoto, maxPx: Int): String =
-        String.format(Locale.ROOT, "%s/%s/media?maxWidthPx=%d&maxHeightPx=%d&key=%s", BASE, photo.name, maxPx, maxPx, key)
+    fun imageUrl(photo: PlacePhoto, @Suppress("UNUSED_PARAMETER") maxPx: Int = PHOTO_PX): String =
+        // 구글은 사진 크기마다 따로 요금(하루 한도)을 센다 → 모든 화면이 같은 크기 한 장을 받아 디스크 캐시를 같이 쓴다.
+        // 작은 칸(썸네일·지도 카드)은 Coil이 줄여 그린다. 인자 maxPx는 부르는 쪽 호환용으로만 남긴다.
+        String.format(Locale.ROOT, "%s/%s/media?maxWidthPx=%d&maxHeightPx=%d&key=%s", BASE, photo.name, PHOTO_PX, PHOTO_PX, key)
 
     private suspend fun search(query: String, lat: Double, lon: Double): String = withContext(Dispatchers.IO) {
         val body = JSONObject()
@@ -64,5 +66,8 @@ class PlacePhotoRepository @Inject constructor(private val core: EodiCore) {
         const val TAG = "EodiPhoto"
         const val BASE = "https://places.googleapis.com/v1"
         const val BIAS_RADIUS_M = 300.0
+
+        /** 모든 화면이 함께 쓰는 사진 한 장의 긴 변(px): 카드 위쪽 넓게 보기·공유 카드까지 충분한 크기. */
+        const val PHOTO_PX = 1080
     }
 }

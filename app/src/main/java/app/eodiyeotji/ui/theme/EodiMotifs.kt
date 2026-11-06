@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -209,8 +210,15 @@ fun AlbumPhoto(modifier: Modifier = Modifier, tilt: Float = 0f, radius: Dp = 14.
             .background(if (c.isDark) c.surfaceHigh else c.surface, outer)
             .padding(4.dp)
             .clip(RoundedCornerShape(radius))
-            .background(c.staySoft),
-    ) { content() }
+            .background(c.surfaceHigh),
+    ) {
+        // 사진이 오기 전·못 받았을 때 보이는 자리: 옅은 칸 가운데 핀 (사진이 오면 그 위를 덮는다)
+        Icon(
+            EodiIcons.Pin, contentDescription = null, tint = c.textTertiary.copy(alpha = 0.55f),
+            modifier = Modifier.align(Alignment.Center).fillMaxSize(0.36f),
+        )
+        content()
+    }
 }
 
 /** 핀 하나 ([tip] = 뾰족한 끝, [r] = 머리 반지름). 가운데 구멍은 뚫는다. */
