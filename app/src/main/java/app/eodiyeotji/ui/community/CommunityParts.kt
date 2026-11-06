@@ -74,6 +74,15 @@ object CommunityIcons {
     private fun ImageVector.Builder.stroke(width: Float = 2.25f, b: PathBuilder.() -> Unit) =
         path(stroke = Ink, strokeLineWidth = width, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round, pathBuilder = b)
 
+    /** 구름 윤곽 (24 칸 기준, [dy]만큼 위아래로 옮김) */
+    private fun PathBuilder.cloud(dy: Float = 0f) {
+        moveTo(7f, 18f + dy)
+        arcToRelative(4f, 4f, 0f, false, true, -0.6f, -7.95f)
+        arcToRelative(6f, 6f, 0f, false, true, 11.4f, 1.2f)
+        arcToRelative(3.4f, 3.4f, 0f, false, true, -0.3f, 6.75f)
+        close()
+    }
+
     private fun PathBuilder.heart() {
         moveTo(12f, 20.5f)
         curveTo(12f, 20.5f, 3f, 15f, 3f, 8.8f)
@@ -156,7 +165,36 @@ object CommunityIcons {
         }
     }
 
-    /** 날씨 (해 + 구름) */
+    /** 구름 (흐림·안개) */
+    val Cloud: ImageVector by lazy {
+        icon("Cloud") {
+            stroke(2f) { cloud() }
+        }
+    }
+
+    /** 비 (구름 + 빗줄기: 비·이슬비·소나기·뇌우) */
+    val Rain: ImageVector by lazy {
+        icon("Rain") {
+            stroke(2f) {
+                cloud(dy = -3f)
+                moveTo(8.5f, 17.5f); lineTo(7.5f, 20.5f); moveTo(12.5f, 17.5f); lineTo(11.5f, 20.5f); moveTo(16.5f, 17.5f); lineTo(15.5f, 20.5f)
+            }
+        }
+    }
+
+    /** 눈 (구름 + 눈송이 점) */
+    val Snow: ImageVector by lazy {
+        icon("Snow") {
+            stroke(2f) { cloud(dy = -3f) }
+            path(fill = Ink) {
+                for (x in listOf(8f, 12f, 16f)) {
+                    moveTo(x, 18f); arcToRelative(1.2f, 1.2f, 0f, true, true, 0f, 2.4f); arcToRelative(1.2f, 1.2f, 0f, true, true, 0f, -2.4f); close()
+                }
+            }
+        }
+    }
+
+    /** 날씨 (해: 맑음·구름 조금) */
     val Sun: ImageVector by lazy {
         icon("Sun") {
             stroke(2f) {
@@ -392,12 +430,26 @@ fun agoText(ms: Long, nowMs: Long = System.currentTimeMillis()): String {
 /** 시각 → 현지 날짜 (리뷰 쓸 곳 목록의 "11월 2일"). */
 fun localDate(ms: Long): LocalDate = Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).toLocalDate()
 
-/** 날씨 아이콘이 붙은 다녀온 날 줄. */
+/** 날씨 글("흐림 · 19°C") → 아이콘과 색. 글이 없으면 해. */
+@Composable
+fun weatherIcon(weather: String?): Pair<ImageVector, Color> {
+    val c = EodiTheme.colors
+    val w = weather.orEmpty()
+    return when {
+        "눈" in w -> CommunityIcons.Snow to c.trip
+        "비" in w || "소나기" in w || "뇌우" in w -> CommunityIcons.Rain to c.trip
+        "흐림" in w || "안개" in w -> CommunityIcons.Cloud to c.textSecondary
+        else -> CommunityIcons.Sun to c.stay
+    }
+}
+
+/** 날씨 아이콘이 붙은 다녀온 날 줄 (아이콘은 그날 날씨에 맞춘다). */
 @Composable
 fun VisitLine(v: Visit, modifier: Modifier = Modifier) {
     val c = EodiTheme.colors
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Icon(CommunityIcons.Sun, null, tint = c.stay, modifier = Modifier.size(24.dp))
+        val (icon, tint) = weatherIcon(v.weather)
+        Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
         Spacer(Modifier.width(8.dp))
         Text(visitText(v), style = EodiTheme.type.meta, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
