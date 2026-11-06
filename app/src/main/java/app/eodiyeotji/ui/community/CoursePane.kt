@@ -81,9 +81,12 @@ internal val CompactToolbar = 900.dp
 /** 이 폭 이상이면 상세를 지도 | 정보 두 칸으로 나눈다. */
 private val WideDetail = 1100.dp
 
-/** 커뮤니티 > 드라이브 코스: 정렬·근처·내 기록에서 올리기 + 코스 카드 격자. 카드를 누르면 상세(지도·들르는 곳·안내). */
+/**
+ * 커뮤니티 > 여행 리뷰 > 여행 코스 후기: 정렬·근처·내 기록에서 올리기 + 코스 카드 격자. 카드를 누르면 상세(지도·들르는 곳·안내).
+ * [leading]: 도구 줄 맨 앞에 둘 것 (여행 리뷰의 [인기 장소 | 리뷰 | 여행 코스 후기] 고르기).
+ */
 @Composable
-fun CoursePane(viewModel: CourseViewModel = hiltViewModel()) {
+fun CoursePane(viewModel: CourseViewModel = hiltViewModel(), leading: (@Composable () -> Unit)? = null) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var picking by rememberSaveable { mutableStateOf(false) }
     var shareEpisode by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -92,6 +95,7 @@ fun CoursePane(viewModel: CourseViewModel = hiltViewModel()) {
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             CourseToolbar(
+                leading = leading,
                 sort = state.sort,
                 nearOn = state.nearOn,
                 onSort = viewModel::setSort,
@@ -155,7 +159,14 @@ fun CoursePane(viewModel: CourseViewModel = hiltViewModel()) {
 }
 
 @Composable
-private fun CourseToolbar(sort: CommunitySort, nearOn: Boolean, onSort: (CommunitySort) -> Unit, onNear: () -> Unit, onShare: () -> Unit) {
+private fun CourseToolbar(
+    leading: (@Composable () -> Unit)?,
+    sort: CommunitySort,
+    nearOn: Boolean,
+    onSort: (CommunitySort) -> Unit,
+    onNear: () -> Unit,
+    onShare: () -> Unit,
+) {
     // 좁은 창: 버튼 이름을 줄이고, 정렬·근처는 옆으로 밀어 볼 수 있게 한다 (버튼 글자가 잘리지 않게 버튼이 먼저 자리를 받는다)
     BoxWithConstraints(Modifier.fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = 8.dp, bottom = 16.dp)) {
         val compact = maxWidth < CompactToolbar
@@ -165,6 +176,7 @@ private fun CourseToolbar(sort: CommunitySort, nearOn: Boolean, onSort: (Communi
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
+                leading?.invoke()
                 SortChoice(sort, onSort)
                 TogglePill(stringResource(R.string.community_near_me, 30), nearOn, onNear)
             }
@@ -369,7 +381,7 @@ private fun RouteLine(stops: List<StopFact>, modifier: Modifier = Modifier) {
 
 /** 조용한 정보 칩 (옅은 회색 바탕, 작은 글씨). */
 @Composable
-private fun MetaChip(text: String, icon: (@Composable () -> Unit)? = null) {
+internal fun MetaChip(text: String, icon: (@Composable () -> Unit)? = null) {
     val c = EodiTheme.colors
     Row(
         Modifier.background(c.surfaceHigh, CircleShape).padding(start = if (icon != null) 10.dp else 14.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
@@ -385,7 +397,7 @@ private fun MetaChip(text: String, icon: (@Composable () -> Unit)? = null) {
 
 /** 다녀온 날·계절·날씨 칩 (아이콘은 그날 날씨). */
 @Composable
-private fun VisitChip(v: Visit) {
+internal fun VisitChip(v: Visit) {
     val text = visitText(v)
     if (text.isBlank()) return
     val (icon, tint) = weatherIcon(v.weather)
@@ -394,7 +406,7 @@ private fun VisitChip(v: Visit) {
 
 /** 글자 + › 모양 가벼운 동작 (카드 아래 "코스 보기"). 누르는 자리는 76dp. */
 @Composable
-private fun TextAction(text: String, onClick: () -> Unit) {
+internal fun TextAction(text: String, onClick: () -> Unit) {
     val c = EodiTheme.colors
     Row(
         Modifier

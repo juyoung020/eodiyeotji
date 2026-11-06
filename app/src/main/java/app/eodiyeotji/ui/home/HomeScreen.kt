@@ -52,6 +52,7 @@ import app.eodiyeotji.ui.community.CommunityRoute
 import app.eodiyeotji.ui.community.CommunityTab
 import app.eodiyeotji.ui.community.CourseViewModel
 import app.eodiyeotji.core.SearchScope
+import app.eodiyeotji.ui.review.ReviewMode
 import app.eodiyeotji.ui.review.ReviewViewModel
 import app.eodiyeotji.ui.search.SearchActions
 import app.eodiyeotji.ui.search.SearchViewModel
@@ -117,8 +118,10 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                     timeline.openDay(day, entryKey)
                 },
                 openCourse = { c ->
+                    // 들른 곳을 이은 코스 글은 여행 리뷰 > 여행 코스 후기에 있다
                     tab = HomeTab.COMMUNITY
-                    communityTab = CommunityTab.COURSES
+                    communityTab = CommunityTab.REVIEWS
+                    reviews.setMode(ReviewMode.COURSES)
                     courses.open(c)
                 },
                 openReview = { p ->

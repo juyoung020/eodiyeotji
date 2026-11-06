@@ -1,10 +1,8 @@
 package app.eodiyeotji.agent
 
 import app.eodiyeotji.core.CourseLeg
-import app.eodiyeotji.core.CourseOffers
-import app.eodiyeotji.core.courseOffersNow
-import app.eodiyeotji.core.CoursePost
 import app.eodiyeotji.core.CourseRoute
+import app.eodiyeotji.core.DriveRoute
 import app.eodiyeotji.core.Episode
 import app.eodiyeotji.core.EpisodeFacts
 import app.eodiyeotji.core.EpisodeKind
@@ -12,7 +10,7 @@ import app.eodiyeotji.core.MemoryHit
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.core.toModel as toCoreModel
 import app.eodiyeotji.core.rust.AgentDone as RAgentDone
-import app.eodiyeotji.core.rust.CourseRecommendation as RCourseRecommendation
+import app.eodiyeotji.core.rust.DriveRouteRecommendation as RDriveRouteRecommendation
 import app.eodiyeotji.core.rust.AnswerSource as RAnswerSource
 import app.eodiyeotji.core.rust.CourseLeg as RCourseLeg
 import app.eodiyeotji.core.rust.CourseRoute as RCourseRoute
@@ -35,7 +33,7 @@ sealed interface AgentEvent {
     data class Recommendation(val hit: MemoryHit, val course: CourseRoute?) : AgentEvent
 
     /**
-     * 근처 추천 코스 목록 (순서 = 순위). [focus]: 지금 이야기하는(안내를 제안한) 코스의 자리.
+     * 근처 추천 드라이브 길 목록 (순서 = 순위). [focus]: 지금 이야기하는(안내를 제안한) 길의 자리.
      * 후속 말("2번으로 가자", "바다 쪽은?")마다 다시 온다 — 마지막이 최신.
      */
     data class CourseRecommendations(val courses: List<RecommendedCourse>, val focus: Int) : AgentEvent
@@ -58,13 +56,12 @@ enum class AnswerSource { FAST_PATH, LLM, FALLBACK, CONFIRM }
 /** 지연 (ms, 질문 시작부터). */
 data class Timing(val toRecommendationMs: Long?, val firstTextMs: Long?, val totalMs: Long, val llmCalls: Int, val llmMs: Long)
 
-/** 추천 코스 하나. [rank]는 1부터, [distanceKm]은 지금 위치~코스 첫 곳 (위치를 모르면 null), [offers]는 들른 곳의 제휴 쿠폰. */
+/** 추천 드라이브 길 하나 (들를 곳 없는 경치 길). [rank]는 1부터, [distanceKm]은 지금 위치~길 위 가장 가까운 점 (위치를 모르면 null). */
 data class RecommendedCourse(
     val rank: Int,
-    val post: CoursePost,
+    val route: DriveRoute,
     val distanceKm: Double?,
     val score: Double,
-    val offers: CourseOffers = CourseOffers.NONE,
 )
 
 /** 운전자 확인을 기다리는 안내 제안. */
@@ -74,7 +71,7 @@ data class AgentProposal(val id: String, val summary: String, val action: AgentN
 sealed interface AgentNavAction {
     /** 코스: 구간마다 경유지 ≤ 2 + 목적지. 첫 구간을 요청하고 나머지는 도착하면 [AgentBridge.continueCourse]. */
     data class Course(val episodeId: Long, val title: String, val legs: List<CourseLeg>) : AgentNavAction
-    /** 커뮤니티 추천 코스. 구간 규칙은 [Course]와 같다. */
+    /** 커뮤니티 드라이브 길: 시작점까지 → 끝점까지 (경유지 없는 두 구간). 구간 규칙은 [Course]와 같다. */
     data class SharedCourse(val postId: String, val title: String, val legs: List<CourseLeg>) : AgentNavAction
     data class Place(val stop: StopFact) : AgentNavAction
     data class Search(val keyword: String) : AgentNavAction
@@ -113,14 +110,9 @@ internal fun RNavAction.toModel(): AgentNavAction = when (this) {
     is RNavAction.Search -> AgentNavAction.Search(keyword)
 }
 
-/** 에이전트 콜백 스레드(UI 밖)에서 부른다. 코스 쿠폰은 목록 전체를 한 번에 (Rust offers.rs). */
-internal fun List<RCourseRecommendation>.toModel(): List<RecommendedCourse> {
-    val posts = map { it.post.toCoreModel() }
-    val offers = runCatching { courseOffersNow(posts.map { it.stops }) }.getOrNull()
-    return mapIndexed { i, r ->
-        RecommendedCourse(i + 1, posts[i], r.distanceKm.takeIf { it >= 0.0 }, r.score, offers?.getOrNull(i) ?: CourseOffers.NONE)
-    }
-}
+/** 에이전트 콜백 스레드(UI 밖)에서 부른다. */
+internal fun List<RDriveRouteRecommendation>.toModel(): List<RecommendedCourse> =
+    mapIndexed { i, r -> RecommendedCourse(i + 1, r.route.toCoreModel(), r.distanceKm.takeIf { it >= 0.0 }, r.score) }
 
 internal fun RNavProposal.toModel() = AgentProposal(id, summary, action.toModel())
 

@@ -60,7 +60,7 @@ import org.maplibre.android.maps.MapView
  * - 네이티브 라이브러리(libmaplibre.so) 올리기: 처음 한 번 100ms 넘게 걸린다. 이미 올렸으면 바로 돌아온다.
  * - 기본 옵션 만들기(createFromAttributes): 안에서 filesDir을 확인한다.
  */
-private object MapLibreNative {
+internal object MapLibreNative {
     suspend fun prepare(context: Context): MapLibreMapOptions = withContext(Dispatchers.IO) {
         LibraryLoader.load()
         MapLibreMapOptions.createFromAttributes(context)
@@ -72,7 +72,7 @@ private val InitialCenter = LatLng(37.5665, 126.9780)
 private const val INITIAL_ZOOM = 11.0
 
 /** 한글 지명은 지도 파일의 글꼴 대신 기기 글꼴로 그린다 (Hangul Syllables · CJK 범위). */
-private const val LOCAL_IDEOGRAPH_FONT = "sans-serif"
+internal const val LOCAL_IDEOGRAPH_FONT = "sans-serif"
 
 /**
  * 하루 지도. 기기 안 지도 파일 위에 그날의 주행 경로(선)와 머문 곳(핀)을 그린다.
@@ -238,7 +238,13 @@ private val MapNoticeSmall = TextStyle(fontSize = 16.sp, lineHeight = 20.sp, fon
  * 컴포저블이 사라지면(다른 날 상세로 바뀌는 게 아니라 화면에서 빠질 때) 남은 단계를 마저 내리고 onDestroy 한다.
  */
 @Composable
-private fun rememberMapViewWithLifecycle(context: Context, baseOptions: MapLibreMapOptions, loadingColor: Int): MapView {
+internal fun rememberMapViewWithLifecycle(
+    context: Context,
+    baseOptions: MapLibreMapOptions,
+    loadingColor: Int,
+    /** 기울이기·돌리기 손짓 (3D 미리보기 지도) */
+    tiltAndRotate: Boolean = false,
+): MapView {
     val mapView = remember {
         MapLibre.getInstance(context)
         val options = baseOptions
@@ -249,8 +255,8 @@ private fun rememberMapViewWithLifecycle(context: Context, baseOptions: MapLibre
             // 출처는 MapNotice로 직접 보여 준다 (차 안에서 i 버튼 → 외부 링크 대화상자를 띄우지 않는다)
             .attributionEnabled(false)
             .compassEnabled(false)
-            .rotateGesturesEnabled(false)
-            .tiltGesturesEnabled(false)
+            .rotateGesturesEnabled(tiltAndRotate)
+            .tiltGesturesEnabled(tiltAndRotate)
         MapView(context, options)
     }
     val lifecycle = LocalLifecycleOwner.current.lifecycle

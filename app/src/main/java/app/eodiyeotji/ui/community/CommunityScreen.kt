@@ -28,7 +28,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
+import app.eodiyeotji.ui.review.ReviewMode
 import app.eodiyeotji.ui.review.ReviewPane
+import app.eodiyeotji.ui.review.ReviewViewModel
 import app.eodiyeotji.ui.search.SearchSlot
 import app.eodiyeotji.ui.theme.EodiTheme
 
@@ -39,7 +41,7 @@ private val OneLineHeader = 1400.dp
 
 /**
  * 커뮤니티 (정차 중에만 보인다 — 주행 중에는 HomeRoute가 에이전트 주행 화면만 띄운다).
- * 위쪽 하위 탭 [게시판 · 드라이브 코스 · 여행 리뷰]. 각 탭은 자기 ViewModel을 가져 탭을 오가도 목록·정렬이 남는다.
+ * 위쪽 하위 탭 [게시판 · 드라이브 코스(경치 길) · 여행 리뷰(장소 리뷰 · 여행 코스 후기)]. 각 탭은 자기 ViewModel을 가져 탭을 오가도 목록·정렬이 남는다.
  * [headerAction] 자리는 타임라인과 같은 대표 동작 하나(에이전트 "어디였지? 물어보세요").
  * [compact]: 폰 세로 화면 (상세를 열면 머리를 감춘다).
  * [search]: 머리의 검색 칸 · 검색 중이면 하위 탭 화면 대신 결과 (지금 하위 탭 안에서 찾는다).
@@ -61,9 +63,12 @@ fun CommunityRoute(
         false
     } else {
         when (tab) {
-            CommunityTab.COURSES -> hiltViewModel<CourseViewModel>().state.collectAsStateWithLifecycle().value.detail != null
+            CommunityTab.COURSES -> hiltViewModel<DriveRouteViewModel>().state.collectAsStateWithLifecycle().value.detail != null
             CommunityTab.BOARD -> hiltViewModel<BoardViewModel>().state.collectAsStateWithLifecycle().value.thread != null
-            CommunityTab.REVIEWS -> false
+            // 여행 리뷰 > 여행 코스 후기의 코스 상세
+            CommunityTab.REVIEWS ->
+                hiltViewModel<ReviewViewModel>().state.collectAsStateWithLifecycle().value.mode == ReviewMode.COURSES &&
+                    hiltViewModel<CourseViewModel>().state.collectAsStateWithLifecycle().value.detail != null
         }
     }
     val c = EodiTheme.colors
@@ -132,7 +137,7 @@ fun CommunityRoute(
                     } else {
                         when (tab) {
                             CommunityTab.BOARD -> BoardPane()
-                            CommunityTab.COURSES -> CoursePane()
+                            CommunityTab.COURSES -> DriveRoutePane()
                             CommunityTab.REVIEWS -> ReviewPane()
                         }
                     }

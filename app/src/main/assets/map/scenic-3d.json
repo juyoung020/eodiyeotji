@@ -1,0 +1,245 @@
+{
+  "version": 8,
+  "name": "eodi-scenic-3d",
+  "metadata": {
+    "comment": "드라이브 코스 3D 미리보기 스타일 (ui/map/ScenicMapStyle.kt가 읽는다). OpenFreeMap 벡터 타일(online-underlay.json과 같은 소스, OpenMapTiles 스키마) + 건물 3D(fill-extrusion, render_height) + 산 음영(AWS Terrain Tiles terrarium raster-dem 위 hillshade). {{이름}} 자리는 때(낮·노을·밤) 색으로 바뀌고, __ROUTE_GEOJSON__ 자리에 Rust drive_route_map GeoJSON(길·시작·끝·풍경 글자)이 그대로 들어간다. MapLibre Native 13은 3D 지형(terrain)을 지원하지 않아 산은 음영으로만 그린다."
+  },
+  "glyphs": "asset://map/fonts/{fontstack}/{range}.pbf",
+  "light": { "anchor": "viewport", "color": "{{light}}", "intensity": 0.4, "position": [1.2, 210, 35] },
+  "sources": {
+    "ofm": {
+      "type": "vector",
+      "url": "https://tiles.openfreemap.org/planet",
+      "attribution": "© OpenFreeMap © OpenMapTiles © OpenStreetMap"
+    },
+    "dem": {
+      "type": "raster-dem",
+      "tiles": ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+      "encoding": "terrarium",
+      "tileSize": 256,
+      "maxzoom": 13,
+      "attribution": "Terrain Tiles (Mapzen · AWS Open Data)"
+    },
+    "route": { "type": "geojson", "data": "__ROUTE_GEOJSON__" }
+  },
+  "layers": [
+    { "id": "background", "type": "background", "paint": { "background-color": "{{land}}" } },
+    {
+      "id": "landcover",
+      "type": "fill",
+      "source": "ofm",
+      "source-layer": "landcover",
+      "filter": ["in", ["get", "class"], ["literal", ["wood", "grass", "farmland", "wetland"]]],
+      "paint": { "fill-color": "{{green}}", "fill-opacity": 0.75 }
+    },
+    { "id": "park", "type": "fill", "source": "ofm", "source-layer": "park", "paint": { "fill-color": "{{park}}", "fill-opacity": 0.7 } },
+    {
+      "id": "hills",
+      "type": "hillshade",
+      "source": "dem",
+      "paint": {
+        "hillshade-exaggeration": 0.55,
+        "hillshade-shadow-color": "{{hillShadow}}",
+        "hillshade-highlight-color": "{{hillHighlight}}",
+        "hillshade-accent-color": "{{hillAccent}}",
+        "hillshade-illumination-direction": 300
+      }
+    },
+    { "id": "water", "type": "fill", "source": "ofm", "source-layer": "water", "paint": { "fill-color": "{{water}}" } },
+    {
+      "id": "waterway",
+      "type": "line",
+      "source": "ofm",
+      "source-layer": "waterway",
+      "minzoom": 9,
+      "paint": { "line-color": "{{water}}", "line-width": ["interpolate", ["linear"], ["zoom"], 9, 0.5, 15, 3] }
+    },
+    {
+      "id": "road-minor",
+      "type": "line",
+      "source": "ofm",
+      "source-layer": "transportation",
+      "minzoom": 12,
+      "filter": ["in", ["get", "class"], ["literal", ["minor", "service", "tertiary"]]],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": { "line-color": "{{roadMinor}}", "line-width": ["interpolate", ["exponential", 1.6], ["zoom"], 12, 0.5, 16, 6] }
+    },
+    {
+      "id": "road-major-casing",
+      "type": "line",
+      "source": "ofm",
+      "source-layer": "transportation",
+      "minzoom": 7,
+      "filter": ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary", "secondary"]]],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": { "line-color": "{{roadCasing}}", "line-width": ["interpolate", ["exponential", 1.6], ["zoom"], 7, 1.5, 16, 14] }
+    },
+    {
+      "id": "road-major",
+      "type": "line",
+      "source": "ofm",
+      "source-layer": "transportation",
+      "minzoom": 7,
+      "filter": ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary", "secondary"]]],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": { "line-color": "{{roadMajor}}", "line-width": ["interpolate", ["exponential", 1.6], ["zoom"], 7, 0.8, 16, 11] }
+    },
+    {
+      "id": "road-lights",
+      "type": "line",
+      "source": "ofm",
+      "source-layer": "transportation",
+      "minzoom": 9,
+      "filter": ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary"]]],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": {
+        "line-color": "{{roadLight}}",
+        "line-opacity": 0.55,
+        "line-blur": 2,
+        "line-width": ["interpolate", ["exponential", 1.6], ["zoom"], 9, 1, 16, 8]
+      }
+    },
+    {
+      "id": "buildings-3d",
+      "type": "fill-extrusion",
+      "source": "ofm",
+      "source-layer": "building",
+      "minzoom": 13,
+      "paint": {
+        "fill-extrusion-color": [
+          "interpolate", ["linear"], ["coalesce", ["get", "render_height"], 8],
+          0, "{{buildingLow}}",
+          40, "{{buildingMid}}",
+          150, "{{buildingHigh}}"
+        ],
+        "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 13, 0, 13.6, ["coalesce", ["get", "render_height"], 8]],
+        "fill-extrusion-base": ["interpolate", ["linear"], ["zoom"], 13, 0, 13.6, ["coalesce", ["get", "render_min_height"], 0]],
+        "fill-extrusion-opacity": 0.9,
+        "fill-extrusion-vertical-gradient": true
+      }
+    },
+    {
+      "id": "boundary",
+      "type": "line",
+      "source": "ofm",
+      "source-layer": "boundary",
+      "filter": ["all", ["<=", ["get", "admin_level"], 4], ["!=", ["get", "maritime"], 1]],
+      "paint": { "line-color": "{{boundary}}", "line-width": 1, "line-dasharray": [3, 2] }
+    },
+    {
+      "id": "water-name",
+      "type": "symbol",
+      "source": "ofm",
+      "source-layer": "water_name",
+      "layout": { "text-field": ["coalesce", ["get", "name:ko"], ["get", "name"]], "text-font": ["NotoSans-Italic"], "text-size": 14 },
+      "paint": { "text-color": "{{waterLabel}}", "text-halo-color": "{{water}}", "text-halo-width": 1 }
+    },
+    {
+      "id": "place",
+      "type": "symbol",
+      "source": "ofm",
+      "source-layer": "place",
+      "filter": ["in", ["get", "class"], ["literal", ["city", "town", "village", "suburb"]]],
+      "layout": {
+        "text-field": ["coalesce", ["get", "name:ko"], ["get", "name"]],
+        "text-font": ["NotoSans-Regular"],
+        "text-size": ["match", ["get", "class"], "city", 18, "town", 16, 14],
+        "symbol-sort-key": ["coalesce", ["get", "rank"], 99],
+        "text-padding": 8
+      },
+      "paint": { "text-color": "{{label}}", "text-halo-color": "{{labelHalo}}", "text-halo-width": 1.5, "text-opacity": 0.85 }
+    },
+    {
+      "id": "route-halo",
+      "type": "line",
+      "source": "route",
+      "filter": ["==", ["get", "kind"], "route"],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": {
+        "line-color": "{{routeHalo}}",
+        "line-opacity": 0.45,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 8, 14, 12, 26, 16, 44],
+        "line-blur": ["interpolate", ["linear"], ["zoom"], 8, 8, 12, 14, 16, 22]
+      }
+    },
+    {
+      "id": "route-glow",
+      "type": "line",
+      "source": "route",
+      "filter": ["==", ["get", "kind"], "route"],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": {
+        "line-color": "{{routeGlow}}",
+        "line-opacity": 0.8,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 8, 5, 12, 10, 16, 16],
+        "line-blur": 3
+      }
+    },
+    {
+      "id": "route-core",
+      "type": "line",
+      "source": "route",
+      "filter": ["==", ["get", "kind"], "route"],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": { "line-color": "{{routeCore}}", "line-width": ["interpolate", ["linear"], ["zoom"], 8, 2, 12, 4, 16, 6] }
+    },
+    {
+      "id": "sight-dot",
+      "type": "circle",
+      "source": "route",
+      "filter": ["==", ["get", "kind"], "highlight"],
+      "paint": {
+        "circle-radius": 6,
+        "circle-color": "{{routeGlow}}",
+        "circle-stroke-color": "{{labelHalo}}",
+        "circle-stroke-width": 2,
+        "circle-pitch-alignment": "map"
+      }
+    },
+    {
+      "id": "sight-label",
+      "type": "symbol",
+      "source": "route",
+      "filter": ["==", ["get", "kind"], "highlight"],
+      "layout": {
+        "text-field": ["get", "name"],
+        "text-font": ["NotoSans-Medium"],
+        "text-size": 17,
+        "text-variable-anchor": ["bottom", "top", "left", "right"],
+        "text-radial-offset": 0.9,
+        "text-max-width": 9,
+        "text-allow-overlap": false
+      },
+      "paint": { "text-color": "{{sightText}}", "text-halo-color": "{{labelHalo}}", "text-halo-width": 2.5 }
+    },
+    {
+      "id": "ends",
+      "type": "circle",
+      "source": "route",
+      "filter": ["in", ["get", "kind"], ["literal", ["start", "end"]]],
+      "paint": {
+        "circle-radius": 11,
+        "circle-color": ["match", ["get", "kind"], "start", "{{start}}", "{{end}}"],
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": 4,
+        "circle-pitch-alignment": "viewport"
+      }
+    },
+    {
+      "id": "ends-label",
+      "type": "symbol",
+      "source": "route",
+      "filter": ["in", ["get", "kind"], ["literal", ["start", "end"]]],
+      "layout": {
+        "text-field": ["get", "name"],
+        "text-font": ["NotoSans-Medium"],
+        "text-size": 19,
+        "text-anchor": "top",
+        "text-offset": [0, 1.1],
+        "text-allow-overlap": true,
+        "text-ignore-placement": true
+      },
+      "paint": { "text-color": "{{label}}", "text-halo-color": "{{labelHalo}}", "text-halo-width": 3 }
+    }
+  ]
+}

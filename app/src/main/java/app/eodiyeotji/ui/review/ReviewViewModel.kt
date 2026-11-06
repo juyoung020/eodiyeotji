@@ -32,7 +32,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class ReviewMode { PLACES, FEED }
+/** 여행 리뷰 안 나누기: 인기 장소 · 리뷰 · 여행 코스 후기(들른 곳을 차례로 이은 코스 글, ui/community/CoursePane.kt). */
+enum class ReviewMode { PLACES, FEED, COURSES }
 
 /** 열어 달라는 장소 (화면이 앱 공통 장소 상세 창으로 넘기고 바로 비운다). */
 @Immutable
@@ -130,7 +131,10 @@ class ReviewViewModel @Inject constructor(
     }
 
     /** 인기 장소 열기 → 화면이 장소 상세 창(ui/place/PlaceDetailSheet)을 연다. 검색 결과의 리뷰 줄도 여기로 온다. */
-    fun openPlace(p: PopularPlace) = _state.update { it.copy(placeReviews = PlaceReviews(p)) }
+    fun openPlace(p: PopularPlace) = _state.update {
+        // 여행 코스 후기를 보던 중이면 장소 창을 띄울 리뷰 화면으로 돌아온다
+        it.copy(placeReviews = PlaceReviews(p), mode = if (it.mode == ReviewMode.COURSES) ReviewMode.PLACES else it.mode)
+    }
 
     fun closePlace() = _state.update { it.copy(placeReviews = null) }
 

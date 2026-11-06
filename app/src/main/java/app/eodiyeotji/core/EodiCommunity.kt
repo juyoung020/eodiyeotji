@@ -20,7 +20,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 /*
- * 커뮤니티(게시판 · 드라이브 코스 · 여행 리뷰) 화면용 입구 (core-rs/src/community.rs).
+ * 커뮤니티(게시판 · 여행 리뷰 · 여행 코스 후기) 화면용 입구 (core-rs/src/community.rs). 드라이브 코스(경치 길)는 EodiDriveRoutes.kt.
  * 정렬·거르기·하트 집계·공유할 곳 거르기·계절·날씨 해석은 Rust가 하고, 여기서는 옮겨 담기만 한다.
  * 날씨를 받는 네트워크 호출만 Kotlin이 한다 (주소는 Rust가 만들고, 응답 해석도 Rust).
  */
@@ -28,7 +28,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 /** 다녀온 날 · 계절 · 그날 날씨 ("2025-11-06", "가을 · 단풍철", "맑음 · 14°C"). */
 data class Visit(val day: String, val season: String, val weather: String?)
 
-/** 드라이브 코스 + 다녀온 날 정보 + 들른 곳의 제휴 쿠폰. */
+/** 여행 코스 후기(들른 곳을 차례로 이은 코스) + 다녀온 날 정보 + 들른 곳의 제휴 쿠폰. */
 data class DriveCourse(val post: CoursePost, val visit: Visit, val offers: CourseOffers = CourseOffers.NONE)
 
 /** 여행 리뷰 + 들른 날 정보 + 그 장소의 제휴 쿠폰. */
@@ -60,7 +60,7 @@ data class BoardComment(
     val hearts: Int, val heartedByMe: Boolean,
 )
 
-// ---- 드라이브 코스 ----
+// ---- 여행 코스 후기 ----
 
 suspend fun EodiCore.driveCourses(sort: CommunitySort, near: LatLon? = null, radiusKm: Double = 30.0, limit: Int = 100): List<DriveCourse> =
     withContext(Dispatchers.IO) { rust.communityCourses(sort.toR(), near.toNear(radiusKm), limit.toUInt()).map { it.toDrive() }.withOffers() }
@@ -103,6 +103,9 @@ suspend fun EodiCore.shareCourseWith(episodeId: Long, title: String, body: Strin
 
 /** 미리보기의 그날 날씨 (Open-Meteo, 짧게 기다리고 못 받으면 null — 날씨 없이 올린다). */
 suspend fun EodiCore.weatherFor(preview: SharePreview): String? = fetchWeather(preview.weatherUrl, preview.day)
+
+/** 드라이브 코스로 올릴 주행의 그날 날씨 (못 받으면 null). */
+suspend fun EodiCore.weatherFor(trip: DriveTripCandidate): String? = fetchWeather(trip.weatherUrl, trip.day)
 
 // ---- 여행 리뷰 ----
 
