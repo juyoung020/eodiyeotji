@@ -28,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,6 +80,8 @@ fun PlacesRoute(
     val c = EodiTheme.colors
     val space = EodiTheme.space
     if (onBack != null) BackHandler(onBack = onBack)
+    // 화면에 들어올 때마다 다시 읽는다 (다른 화면에서 저장 · 숨기기를 했을 수 있다)
+    LaunchedEffect(Unit) { viewModel.reload() }
     Surface(Modifier.fillMaxSize(), color = c.background, contentColor = c.textPrimary) {
         Box(Modifier.fillMaxSize().safeDrawingPadding()) {
             Column(Modifier.fillMaxSize()) {
