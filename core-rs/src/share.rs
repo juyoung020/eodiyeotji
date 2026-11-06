@@ -22,10 +22,10 @@ use crate::geo::{haversine_m, simplify, Point};
 use crate::memory::{EpisodeKind, StopFact};
 use crate::store::{format_day, parse_day, CoreError, EodiStore, StaySummary, TripSummary};
 
-/// 집·회사에서 이 거리(m) 안의 들른 곳은 카드에서 뺀다.
-pub const STOP_PRIVACY_M: f64 = 300.0;
+/// 집·회사에서 이 거리(m) 안의 들른 곳은 카드에서 뺀다 (커뮤니티 올리기와 같은 기준).
+pub const STOP_PRIVACY_M: f64 = crate::community::PRIVACY_RADIUS_M;
 /// 집·회사에서 이 거리(m) 안의 경로 점은 지우고 선을 끊는다 (들른 곳 기준보다 넓게: 선 끝이 집을 가리키지 않게).
-pub const ROUTE_TRIM_M: f64 = 500.0;
+pub const ROUTE_TRIM_M: f64 = 1_200.0;
 /// 길 그림 가장자리 여백 (그림 칸 짧은 변에 대한 비율). 순서 동그라미가 잘리지 않게.
 pub const SKETCH_MARGIN: f64 = 0.12;
 /// 길 그림의 최소 범위(m). 몇십 m 안에서 맴돈 날이 화면 가득 확대되지 않게.

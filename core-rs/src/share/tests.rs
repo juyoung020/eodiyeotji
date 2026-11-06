@@ -76,9 +76,9 @@ fn frame_of_one_point_or_nothing_is_the_center() {
 
 #[test]
 fn trim_cuts_the_route_where_it_passes_home_and_drops_tiny_pieces() {
-    // 2km 북쪽으로 가는 길의 1km 지점이 집 → 집 앞뒤 500m 점이 사라지고 두 조각이 된다
-    let path = north(37.0, 127.0, 21);
-    let home = path[10];
+    // 6km 북쪽으로 가는 길의 3km 지점이 집 → 집 앞뒤 ROUTE_TRIM_M 안의 점이 사라지고 두 조각이 된다
+    let path = north(37.0, 127.0, 61);
+    let home = path[30];
     let parts = trim_near(&path, &[home], ROUTE_TRIM_M);
     assert_eq!(parts.len(), 2);
     for part in &parts {
@@ -121,10 +121,10 @@ fn card_hides_stops_near_home_renumbers_and_trims_the_route() {
     let card = raw(stops, vec![path]).build(&[home], 1.6);
     assert_eq!(card.hidden_count, 1);
     assert_eq!(card.stops.iter().map(|s| (s.order, s.name.as_str())).collect::<Vec<_>>(), [(1, "바다 카페"), (2, "순두부집")]);
-    // 남은 경로는 집 500m 밖부터: 4.5km 남짓
-    assert!((card.distance_m - 4_500.0).abs() < 120.0, "{}", card.distance_m);
+    // 남은 경로는 집 ROUTE_TRIM_M 밖부터: 5km − 1.2km 남짓
+    assert!((card.distance_m - (5_000.0 - ROUTE_TRIM_M)).abs() < 120.0, "{}", card.distance_m);
     assert_eq!(card.lines.len(), 1);
-    // 그림의 선 시작점은 집이 아니라 집에서 500m 넘게 떨어진 곳 (그림 안에서 집 쪽 끝이 비어 있다)
+    // 그림의 선 시작점은 집이 아니라 집에서 ROUTE_TRIM_M 넘게 떨어진 곳 (그림 안에서 집 쪽 끝이 비어 있다)
     let first = card.lines[0].points[0];
     let near_home_y = card.lines[0].points.iter().map(|q| q.y).fold(f32::MIN, f32::max);
     assert_eq!(first.y, near_home_y, "남쪽(집 쪽) 끝이 선의 시작");

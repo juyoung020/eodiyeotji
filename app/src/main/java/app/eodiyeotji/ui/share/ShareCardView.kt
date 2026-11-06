@@ -36,6 +36,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -266,5 +267,9 @@ private fun Pill(label: String, bg: Color, fg: Color) {
 @Composable
 private fun androidx.compose.ui.unit.Dp.toPxInt(): Int = with(androidx.compose.ui.platform.LocalDensity.current) { roundToPx() }
 
+/** 카드 글자. 한국어가 낱말 중간("마/실")에서 끊기지 않게 어절 단위로 줄을 바꾼다 (Android 13 이상). */
 private fun text(size: TextUnit, weight: FontWeight, line: TextUnit = TextUnit.Unspecified) =
-    TextStyle(fontSize = size, fontWeight = weight, lineHeight = line)
+    TextStyle(
+        fontSize = size, fontWeight = weight, lineHeight = line,
+        lineBreak = LineBreak.Paragraph.copy(wordBreak = LineBreak.WordBreak.Phrase),
+    )
