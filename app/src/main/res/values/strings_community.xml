@@ -42,12 +42,12 @@
     <string name="course_navigate_again">마지막 구간 다시 안내</string>
     <string name="course_navi_auto">%1$d/%2$d 구간 안내 중 · 도착하면 다음 구간으로 자동으로 넘어가요</string>
     <string name="course_navi_legs_hint">%1$d구간 코스 · 도착하면 다음 구간을 자동으로 이어서 안내해요</string>
-    <string name="course_back_to_list">코스 목록</string>
+    <string name="course_back_to_list">여행 리뷰로</string>
     <string name="course_navi_failed">내비에 보내지 못했어요</string>
     <string name="course_stops_title">들르는 곳</string>
     <string name="course_share_from_record">내 기록에서 올리기</string>
     <string name="course_share_short">올리기</string>
-    <string name="course_shared_done">코스를 올렸어요</string>
+    <string name="course_shared_done">여행 코스 후기를 올렸어요</string>
     <string name="course_view">코스 보기</string>
     <string name="course_more_stops">+%1$d</string>
     <string name="course_more_stops_description">들르는 곳 %1$d곳 더 보기</string>
@@ -83,8 +83,6 @@
     <string name="board_no_comments">첫 댓글을 남겨 보세요</string>
 
     <!-- 여행 리뷰 -->
-    <string name="review_popular_places">인기 장소</string>
-    <string name="review_feed">리뷰</string>
     <string name="review_write">리뷰 쓰기</string>
     <string name="review_pick_place">어디를 다녀왔나요?</string>
     <string name="review_pick_empty">최근에 들른 곳이 아직 없어요</string>
@@ -93,6 +91,10 @@
     <string name="review_submit">등록</string>
     <string name="review_count">리뷰 %1$d</string>
     <string name="review_empty">리뷰가 없어요</string>
+    <!-- 여행 리뷰 피드의 여행 코스 후기 카드 (큰 사진 왼쪽 위 띠) -->
+    <string name="review_trip_badge">여행 코스 · %1$d곳</string>
+    <string name="review_share_trip">여행 코스 올리기</string>
+    <string name="review_share_trip_short">코스 올리기</string>
     <string name="review_posted">리뷰를 올렸어요</string>
     <!-- 자세한 리뷰 카드 -->
     <string name="review_more">더보기</string>
@@ -156,5 +158,4 @@
     <string name="drive_share_body_label">무엇이 보이는지, 언제 가면 좋은지 (2~4문장)</string>
     <string name="drive_share_when">언제 가면 가장 좋아요?</string>
     <string name="drive_share_trimmed">집·회사 근처 1.2km는 자동으로 지웠어요</string>
-    <string name="review_travel_courses">여행 코스 후기</string>
 </resources>

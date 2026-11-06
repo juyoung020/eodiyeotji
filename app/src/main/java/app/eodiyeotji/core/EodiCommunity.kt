@@ -11,6 +11,7 @@ import app.eodiyeotji.core.rust.NearFilter as RNearFilter
 import app.eodiyeotji.core.rust.PlaceReview as RPlaceReview
 import app.eodiyeotji.core.rust.SharePreview as RSharePreview
 import app.eodiyeotji.core.rust.StopFact as RStopFact
+import app.eodiyeotji.core.rust.TravelFeedItem as RTravelFeedItem
 import app.eodiyeotji.core.rust.parseOpenMeteoWeather
 import app.eodiyeotji.core.rust.reviewKeywordLimit as rustReviewKeywordLimit
 import app.eodiyeotji.core.rust.reviewKeywordOptions as rustReviewKeywordOptions
@@ -33,6 +34,19 @@ data class DriveCourse(val post: CoursePost, val visit: Visit, val offers: Cours
 
 /** 여행 리뷰 + 들른 날 정보 + 그 장소의 제휴 쿠폰. */
 data class TravelReview(val review: PlaceReview, val visit: Visit, val offers: List<PartnerOffer> = emptyList())
+
+/** 여행 리뷰 피드 한 칸: 한 장소 리뷰, 또는 여러 곳을 차례로 다녀온 여행 코스 후기. [key]는 목록 key. */
+sealed interface TravelFeedItem {
+    val key: String
+
+    data class Review(val review: TravelReview) : TravelFeedItem {
+        override val key: String get() = "r:" + review.review.id
+    }
+
+    data class Trip(val course: DriveCourse) : TravelFeedItem {
+        override val key: String get() = "c:" + course.post.id
+    }
+}
 
 /** 내 기록(나들이·여행)을 코스로 올리기 전 미리보기. [hiddenCount] = 집·회사 근처라 자동으로 가린 곳 수. */
 data class SharePreview(
@@ -111,6 +125,20 @@ suspend fun EodiCore.weatherFor(trip: DriveTripCandidate): String? = fetchWeathe
 
 suspend fun EodiCore.travelReviews(sort: CommunitySort, near: LatLon? = null, radiusKm: Double = 30.0, limit: Int = 100): List<TravelReview> =
     withContext(Dispatchers.IO) { rust.placeReviews(sort.toR(), near.toNear(radiusKm), limit.toUInt()).map { it.toTravel() }.withOffers() }
+
+/** 여행 리뷰 피드: 장소 리뷰와 여행 코스 후기를 한 목록으로 (섞는 순서는 Rust `travel_feed`). 쿠폰은 종류별로 한 번에 붙인다. */
+suspend fun EodiCore.travelFeed(sort: CommunitySort, near: LatLon? = null, radiusKm: Double = 30.0, limit: Int = 100): List<TravelFeedItem> =
+    withContext(Dispatchers.IO) {
+        val items = rust.travelFeed(sort.toR(), near.toNear(radiusKm), limit.toUInt())
+        val reviews = items.filterIsInstance<RTravelFeedItem.Review>().map { it.review.toTravel() }.withOffers().iterator()
+        val trips = items.filterIsInstance<RTravelFeedItem.Course>().map { it.course.toDrive() }.withOffers().iterator()
+        items.map {
+            when (it) {
+                is RTravelFeedItem.Review -> TravelFeedItem.Review(reviews.next())
+                is RTravelFeedItem.Course -> TravelFeedItem.Trip(trips.next())
+            }
+        }
+    }
 
 suspend fun EodiCore.reviewsOfPlace(place: StopFact, sort: CommunitySort, limit: Int = 50): List<TravelReview> =
     withContext(Dispatchers.IO) { rust.reviewsOfPlace(place.toR(), sort.toR(), limit.toUInt()).map { it.toTravel() }.withOffers() }

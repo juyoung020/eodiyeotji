@@ -1,5 +1,9 @@
 package app.eodiyeotji.ui.review
 
+import app.eodiyeotji.ui.community.StopPhotoBox
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -48,13 +52,16 @@ import app.eodiyeotji.core.KeywordCount
 import app.eodiyeotji.core.PlaceReview
 import app.eodiyeotji.core.TimeOfDay
 import app.eodiyeotji.core.TravelReview
+import app.eodiyeotji.core.DriveCourse
+import app.eodiyeotji.core.StopFact
+import app.eodiyeotji.ui.offers.CourseCouponBadge
+import app.eodiyeotji.ui.timeline.distanceText
 import app.eodiyeotji.core.WithWhom
 import app.eodiyeotji.ui.community.CommunityIcons
 import app.eodiyeotji.ui.community.HeartButton
 import app.eodiyeotji.ui.community.MineBadge
 import app.eodiyeotji.ui.community.PostHeader
 import app.eodiyeotji.ui.community.RatingStars
-import app.eodiyeotji.ui.community.StopPhoto
 import app.eodiyeotji.ui.community.VisitLine
 import app.eodiyeotji.ui.community.agoText
 import app.eodiyeotji.ui.offers.PlaceCouponBadge
@@ -93,7 +100,16 @@ internal fun RichReviewCard(t: TravelReview, onHeart: () -> Unit, modifier: Modi
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(horizontal = 22.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (showPlace) ReviewPlaceRow(r)
+            if (showPlace) {
+                val openPlace = LocalOpenPlace.current
+                FeedHero(
+                    r.place,
+                    title = r.place.name,
+                    sub = listOf(r.place.category, regionOf(r.place.address)).filter { it.isNotBlank() }.joinToString(" · "),
+                    mine = r.mine,
+                    onClickLabel = placeDetailOpenLabel(),
+                ) { openPlace(r.place) }
+            }
             val sub = listOfNotNull(
                 r.visitNth.takeIf { it > 0 }?.let { stringResource(R.string.review_visit_nth, it) },
                 agoText(r.createdMs),
@@ -140,39 +156,128 @@ internal fun RichReviewCard(t: TravelReview, onHeart: () -> Unit, modifier: Modi
     }
 }
 
-/** 카드 맨 위 장소 줄 (사진 · 이름 · 분류 · 지역). 누르면 장소 상세 창. 누르는 자리 76dp 이상. */
+/**
+ * 여행 코스 후기 카드: 장소 리뷰 카드와 같은 모양 (큰 사진 · 제목 → 글쓴이 → 들른 곳 칩 → 글 → 다녀온 줄 → 쿠폰 · 하트).
+ * 큰 사진은 첫 번째 들른 곳, 왼쪽 위에 "여행 코스 · N곳". 카드를 누르면 코스 상세 (지도 · 들른 곳 · 이 코스로 안내).
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ReviewPlaceRow(r: PlaceReview) {
+internal fun TripReviewCard(t: DriveCourse, onOpen: () -> Unit, onHeart: () -> Unit, modifier: Modifier = Modifier) {
     val c = EodiTheme.colors
-    val openPlace = LocalOpenPlace.current
+    val p = t.post
+    Surface(
+        onClick = onOpen,
+        color = c.surface,
+        contentColor = c.textPrimary,
+        shape = RoundedCornerShape(EodiTheme.space.radiusL),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(horizontal = 22.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            p.stops.firstOrNull()?.let { first ->
+                FeedHero(
+                    first,
+                    title = p.title,
+                    sub = p.region,
+                    mine = p.mine,
+                    label = stringResource(R.string.review_trip_badge, p.stops.size),
+                    onClickLabel = stringResource(R.string.course_view),
+                    onClick = onOpen,
+                )
+            }
+            PostHeader(p.author, agoText(p.createdMs), mine = false)
+            if (p.stops.isNotEmpty()) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    p.stops.forEachIndexed { i, s -> StopChip(i + 1, s.name) }
+                }
+            }
+            if (p.body.isNotBlank()) {
+                Text(p.body, style = EodiTheme.type.body, color = c.textPrimary, maxLines = CollapsedLines, overflow = TextOverflow.Ellipsis)
+            }
+            VisitLine(t.visit, extra = listOf(distanceText(p.distanceM), durationText(p.durationMs)), maxLines = 2)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CourseCouponBadge(t.offers)
+                Spacer(Modifier.weight(1f))
+                HeartButton(p.hearts, p.heartedByMe, onHeart, compact = true)
+            }
+        }
+    }
+}
+
+/** 들른 곳 칩 "1  경포해변" (코랄 번호 = 지도 핀 번호와 같은 색). 보여 주기만 한다. */
+@Composable
+private fun StopChip(order: Int, name: String) {
+    val c = EodiTheme.colors
     Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(EodiTheme.space.radiusM))
-            .clickable(onClickLabel = placeDetailOpenLabel(), role = Role.Button) { openPlace(r.place) }
-            .heightIn(min = EodiTheme.space.touch),
+        Modifier.background(c.surfaceHigh, CircleShape).padding(start = 6.dp, end = 14.dp, top = 5.dp, bottom = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        StopPhoto(r.place.name, r.place.address, r.place.lat, r.place.lon, order = null, size = 96.dp)
-        Spacer(Modifier.width(18.dp))
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    r.place.name,
-                    style = EodiTheme.type.bodyStrong,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                if (r.mine) MineBadge()
-            }
+        Box(Modifier.size(26.dp).background(c.stay, CircleShape), contentAlignment = Alignment.Center) {
+            Text(order.toString(), style = EodiTheme.type.caption, color = c.onMarker, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(name, style = EodiTheme.type.caption, color = c.textPrimary, maxLines = 1)
+    }
+}
+
+/**
+ * 카드 맨 위 큰 사진 (게시글처럼 카드 폭 가득, 2.1:1): [photo] 곳의 대표 사진 위 아래쪽에 [title] · [sub],
+ * [label]이 있으면 왼쪽 위에 작은 띠. 누르면 [onClick] (장소 리뷰 → 장소 창, 여행 코스 후기 → 코스 상세).
+ */
+@Composable
+private fun FeedHero(
+    photo: StopFact,
+    title: String,
+    sub: String,
+    mine: Boolean,
+    onClickLabel: String,
+    label: String? = null,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(18.dp)
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .aspectRatio(2.1f)
+            .clip(shape)
+            .clickable(onClickLabel = onClickLabel, role = Role.Button, onClick = onClick),
+    ) {
+        StopPhotoBox(photo.name, photo.address, photo.lat, photo.lon, order = null, modifier = Modifier.fillMaxSize(), radius = 18.dp)
+        if (label != null) {
             Text(
-                listOf(r.place.category, regionOf(r.place.address)).filter { it.isNotBlank() }.joinToString(" · "),
+                label,
                 style = EodiTheme.type.caption,
-                color = c.textTertiary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(14.dp)
+                    .background(Color.Black.copy(alpha = 0.55f), CircleShape)
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
             )
+        }
+        Box(
+            Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.62f))))
+                .padding(start = 20.dp, end = 20.dp, top = 36.dp, bottom = 16.dp),
+        ) {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        title,
+                        style = EodiTheme.type.title,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (mine) MineBadge()
+                }
+                if (sub.isNotBlank()) {
+                    Text(sub, style = EodiTheme.type.caption, color = Color.White.copy(alpha = 0.85f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
         }
     }
 }

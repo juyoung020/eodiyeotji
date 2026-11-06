@@ -1,9 +1,6 @@
 package app.eodiyeotji.ui.community
 
 import app.eodiyeotji.ui.offers.CourseCouponBadge
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.horizontalScroll
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,50 +19,36 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
-import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
-import androidx.compose.foundation.lazy.staggeredgrid.items
-import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
 import app.eodiyeotji.core.CommunitySort
-import app.eodiyeotji.core.DriveCourse
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.core.Visit
 import app.eodiyeotji.pleos.CourseProgress
 import app.eodiyeotji.ui.map.DayMap
 import app.eodiyeotji.ui.map.MapPhotoPin
-import app.eodiyeotji.ui.place.LocalOpenPlace
-import app.eodiyeotji.ui.theme.AlbumPhoto
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.timeline.distanceText
@@ -73,122 +56,12 @@ import app.eodiyeotji.ui.timeline.durationText
 import app.eodiyeotji.ui.share.ShareButtonStyle
 import app.eodiyeotji.ui.share.ShareImageButton
 import app.eodiyeotji.ui.share.ShareTarget
-import kotlinx.coroutines.delay
 
-/** 도구 줄이 이보다 좁으면 버튼 이름을 짧게 쓴다. */
+/** 도구 줄이 이보다 좁으면 버튼 이름을 짧게 쓴다 (여행 리뷰 · 드라이브 코스 도구 줄). */
 internal val CompactToolbar = 900.dp
 
 /** 이 폭 이상이면 상세를 지도 | 정보 두 칸으로 나눈다. */
 private val WideDetail = 1100.dp
-
-/**
- * 커뮤니티 > 여행 리뷰 > 여행 코스 후기: 정렬·근처·내 기록에서 올리기 + 코스 카드 격자. 카드를 누르면 상세(지도·들르는 곳·안내).
- * [leading]: 도구 줄 맨 앞에 둘 것 (여행 리뷰의 [인기 장소 | 리뷰 | 여행 코스 후기] 고르기).
- */
-@Composable
-fun CoursePane(viewModel: CourseViewModel = hiltViewModel(), leading: (@Composable () -> Unit)? = null) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
-    var picking by rememberSaveable { mutableStateOf(false) }
-    var shareEpisode by rememberSaveable { mutableStateOf<Long?>(null) }
-    // 들르는 곳 사진을 누르면 장소 상세 창 (사진·별점·리뷰·안내·저장, ui/place/PlaceDetailSheet.kt)
-    val openPlace: (StopFact) -> Unit = LocalOpenPlace.current
-    Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize()) {
-            CourseToolbar(
-                leading = leading,
-                sort = state.sort,
-                nearOn = state.nearOn,
-                onSort = viewModel::setSort,
-                onNear = viewModel::toggleNear,
-                onShare = { picking = true },
-            )
-            if (state.nearOn && !state.nearKnown) {
-                Text(
-                    stringResource(R.string.community_near_unknown),
-                    style = EodiTheme.type.caption,
-                    color = EodiTheme.colors.textTertiary,
-                    modifier = Modifier.padding(horizontal = 36.dp, vertical = 4.dp),
-                )
-            }
-            when (val l = state.list) {
-                Load.Loading -> LoadingBox()
-                is Load.Failed -> CenterMessage(stringResource(R.string.community_failed, l.message)) {
-                    SecondaryPill(stringResource(R.string.community_retry), EodiIcons.Refresh, viewModel::reload)
-                }
-                is Load.Loaded ->
-                    if (l.items.isEmpty()) {
-                        CenterMessage(
-                            if (state.nearOn) stringResource(R.string.course_empty_near, 30) else stringResource(R.string.course_empty),
-                        )
-                    } else {
-                        CourseGrid(l.items, onOpen = viewModel::open, onHeart = viewModel::toggleHeart, onOpenPlace = openPlace)
-                    }
-            }
-        }
-        state.detail?.let { d ->
-            BackHandler(onBack = viewModel::closeDetail)
-            val progress by viewModel.progress.collectAsStateWithLifecycle()
-            CourseDetailScreen(
-                d,
-                progress = progress?.takeIf { it.courseId == d.course.post.id && !it.finished },
-                onBack = viewModel::closeDetail,
-                onHeart = { viewModel.toggleHeart(d.course.post.id) },
-                onNavigate = viewModel::navigate,
-                onOpenPlace = openPlace,
-            )
-        }
-        if (picking) {
-            BackHandler { picking = false }
-            ShareEpisodePicker(onPick = { picking = false; shareEpisode = it }, onDismiss = { picking = false })
-        }
-        shareEpisode?.let { id ->
-            BackHandler { shareEpisode = null }
-            ShareCourseSheet(episodeId = id, onDone = { shared ->
-                shareEpisode = null
-                if (shared != null) viewModel.onShared()
-            })
-        }
-        if (state.justShared) {
-            LaunchedEffect(Unit) {
-                delay(2_500)
-                viewModel.dismissShared()
-            }
-            Notice(stringResource(R.string.course_shared_done), Modifier.align(Alignment.BottomCenter))
-        }
-    }
-}
-
-@Composable
-private fun CourseToolbar(
-    leading: (@Composable () -> Unit)?,
-    sort: CommunitySort,
-    nearOn: Boolean,
-    onSort: (CommunitySort) -> Unit,
-    onNear: () -> Unit,
-    onShare: () -> Unit,
-) {
-    // 좁은 창: 버튼 이름을 줄이고, 정렬·근처는 옆으로 밀어 볼 수 있게 한다 (버튼 글자가 잘리지 않게 버튼이 먼저 자리를 받는다)
-    BoxWithConstraints(Modifier.fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = 8.dp, bottom = 16.dp)) {
-        val compact = maxWidth < CompactToolbar
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Row(
-                Modifier.weight(1f).horizontalScroll(rememberScrollState()),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                leading?.invoke()
-                SortChoice(sort, onSort)
-                TogglePill(stringResource(R.string.community_near_me, 30), nearOn, onNear)
-            }
-            Spacer(Modifier.width(16.dp))
-            PrimaryPill(
-                stringResource(if (compact) R.string.course_share_short else R.string.course_share_from_record),
-                CommunityIcons.Upload,
-                onShare,
-            )
-        }
-    }
-}
 
 @Composable
 fun SortChoice(sort: CommunitySort, onSort: (CommunitySort) -> Unit) {
@@ -202,169 +75,10 @@ fun SortChoice(sort: CommunitySort, onSort: (CommunitySort) -> Unit) {
     )
 }
 
-/** 카드 한 장 폭: 이보다 좁아지면 칸 수를 줄이고, 한 칸일 때는 이 폭에서 멈추고 가운데에 둔다. */
-private val PostMinWidth = 500.dp
-private val PostMaxWidth = 640.dp
-private val PostGap = 24.dp
-
-/**
- * 코스 글 피드: 넓은 창은 2~3칸 엇갈림 격자(글 길이만큼 카드 높이가 달라도 빈틈 없이), 좁은 창은 가운데 한 줄.
- * 칸 수는 창 폭에서 바로 정한다 (카드 폭 [PostMinWidth] 이상, 한 칸이면 [PostMaxWidth]까지).
- */
-@Composable
-internal fun CourseGrid(items: List<DriveCourse>, onOpen: (DriveCourse) -> Unit, onHeart: (String) -> Unit, onOpenPlace: (StopFact) -> Unit) {
-    val state = rememberLazyStaggeredGridState()
-    val firstKey = items.firstOrNull()?.post?.id
-    // 정렬을 바꾸거나 새 글을 올려 맨 위 글이 바뀌면 맨 위로 (rememberTopGridState와 같은 이유)
-    LaunchedEffect(firstKey) { state.scrollToItem(0) }
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val inner = maxWidth - 64.dp
-        val cols = ((inner + PostGap) / (PostMinWidth + PostGap)).toInt().coerceAtLeast(1)
-        val side = if (cols == 1) maxOf(32.dp, (maxWidth - PostMaxWidth) / 2) else 32.dp
-        LazyVerticalStaggeredGrid(
-            columns = StaggeredGridCells.Fixed(cols),
-            state = state,
-            contentPadding = PaddingValues(start = side, end = side, bottom = 40.dp),
-            horizontalArrangement = Arrangement.spacedBy(PostGap),
-            verticalItemSpacing = PostGap,
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            items(items, key = { it.post.id }, contentType = { "course" }) { c ->
-                CoursePostCard(c, onOpen = { onOpen(c) }, onHeart = { onHeart(c.post.id) }, onOpenPlace = onOpenPlace)
-            }
-        }
-    }
-}
-
-/**
- * 코스 글 카드 (사람이 올린 게시글처럼 읽히게): 글쓴이 머리 → 큰 대표 사진(+ 나머지 들르는 곳 작은 사진) →
- * 제목 → 글쓴이 소개 → 들르는 곳 순서 → 조용한 정보 칩(다녀온 날·날씨 / 곳·거리·시간 / 쿠폰) → 하트 · 코스 보기.
- * 태그는 상세에서만 보여 준다.
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-internal fun CoursePostCard(c: DriveCourse, onOpen: () -> Unit, onHeart: () -> Unit, onOpenPlace: (StopFact) -> Unit) {
-    val colors = EodiTheme.colors
-    val type = EodiTheme.type
-    val p = c.post
-    Surface(
-        onClick = onOpen,
-        color = colors.surface,
-        contentColor = colors.textPrimary,
-        shape = RoundedCornerShape(EodiTheme.space.radiusL),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 22.dp, bottom = 12.dp)) {
-            PostHeader(p.author, stringResource(R.string.community_byline, p.region, agoText(p.createdMs)), p.mine)
-            Spacer(Modifier.height(18.dp))
-            CourseHero(p.stops, onOpenPlace = onOpenPlace, onMore = onOpen)
-            Spacer(Modifier.height(18.dp))
-            Text(p.title, style = type.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (p.body.isNotBlank()) {
-                Spacer(Modifier.height(8.dp))
-                Text(p.body, style = type.body, color = colors.textSecondary, maxLines = 3, overflow = TextOverflow.Ellipsis)
-            }
-            RouteLine(p.stops, Modifier.padding(top = 14.dp))
-            Spacer(Modifier.height(16.dp))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                maxLines = 2,
-            ) {
-                VisitChip(c.visit)
-                MetaChip(courseStatsText(p.stops.size, p.distanceM, p.durationMs))
-                CourseCouponBadge(c.offers)
-            }
-            Spacer(Modifier.height(16.dp))
-            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.outline))
-            Spacer(Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                HeartButton(p.hearts, p.heartedByMe, onHeart)
-                Spacer(Modifier.weight(1f))
-                TextAction(stringResource(R.string.course_view), onOpen)
-            }
-        }
-    }
-}
-
 /** "4곳 · 56.2km · 4시간" */
 @Composable
 private fun courseStatsText(stops: Int, distanceM: Double, durationMs: Long): String =
     listOf(stringResource(R.string.community_stops_count, stops), distanceText(distanceM), durationText(durationMs)).joinToString(" · ")
-
-/** 카드 아래 작은 사진 한 칸 (흰 테두리 포함, 누르는 자리 76dp 이상). */
-private val StripThumb = 84.dp
-
-/** 작은 사진 줄이 큰 사진 아래로 걸쳐 내려오는 만큼. */
-private val StripOverlap = 40.dp
-
-private val StripGap = 10.dp
-
-/** 큰 사진 아래 보여 주는 작은 사진 수 (더 있으면 "+N"). 넓은 카드에서 4곳까지는 "+1" 대신 사진 네 장. */
-private const val MaxStripThumbs = 3
-
-/**
- * 대표 사진: 첫 들르는 곳을 폭 가득 16:9로 (앨범에 붙인 사진처럼 흰 테두리), 나머지 곳은 아래 모서리에 걸친 작은 사진 줄.
- * 사진을 누르면 그곳 사진 보기, 다 못 보여 준 곳은 "+N" (누르면 코스 상세).
- */
-@Composable
-private fun CourseHero(stops: List<StopFact>, onOpenPlace: (StopFact) -> Unit, onMore: () -> Unit) {
-    val first = stops.firstOrNull()
-    val rest = stops.drop(1)
-    BoxWithConstraints(Modifier.fillMaxWidth().padding(bottom = if (rest.isEmpty()) 0.dp else StripOverlap)) {
-        // 카드 폭에 들어가는 칸 수만큼만 (좁은 폰 화면에서 줄이 카드 밖으로 넘치지 않게). 다 못 넣으면 마지막 칸은 "+N"
-        val slots = ((maxWidth - 32.dp + StripGap) / (StripThumb + StripGap)).toInt().coerceIn(1, MaxStripThumbs + 1)
-        val shown = if (rest.size <= slots) rest else rest.take(slots - 1)
-        val hidden = rest.size - shown.size
-        AlbumPhoto(Modifier.fillMaxWidth().aspectRatio(2.1f), radius = 18.dp) {
-            if (first != null) {
-                StopPhotoBox(
-                    first.name, first.address, first.lat, first.lon, order = 1,
-                    modifier = Modifier.fillMaxSize().clickable(role = Role.Image) { onOpenPlace(first) },
-                    radius = 18.dp,
-                    iconSize = 72.dp,
-                )
-            }
-        }
-        if (rest.isNotEmpty()) {
-            Row(
-                Modifier.align(Alignment.BottomStart).padding(start = 16.dp).offset(y = StripOverlap),
-                horizontalArrangement = Arrangement.spacedBy(StripGap),
-            ) {
-                shown.forEachIndexed { i, s ->
-                    AlbumPhoto(Modifier.size(StripThumb), radius = 12.dp) {
-                        StopPhotoBox(
-                            s.name, s.address, s.lat, s.lon, order = i + 2,
-                            modifier = Modifier.fillMaxSize().clickable(role = Role.Image) { onOpenPlace(s) },
-                            radius = 12.dp,
-                            iconSize = 30.dp,
-                        )
-                    }
-                }
-                if (hidden > 0) {
-                    val desc = stringResource(R.string.course_more_stops_description, hidden)
-                    AlbumPhoto(Modifier.size(StripThumb), radius = 12.dp) {
-                        Box(
-                            Modifier
-                                .fillMaxSize()
-                                .background(EodiTheme.colors.surfaceHigh)
-                                .clickable(onClickLabel = desc, onClick = onMore)
-                                .semantics { contentDescription = desc },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                stringResource(R.string.course_more_stops, hidden),
-                                style = EodiTheme.type.bodyStrong,
-                                fontWeight = FontWeight.Bold,
-                                color = EodiTheme.colors.textSecondary,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 /** 들르는 곳 순서 한 줄: "경포해변 → 주문진수산시장 → 하조대 → 낙산사" (넘치면 …). */
 @Composable

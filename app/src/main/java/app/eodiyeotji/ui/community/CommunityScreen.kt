@@ -28,9 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
-import app.eodiyeotji.ui.review.ReviewMode
 import app.eodiyeotji.ui.review.ReviewPane
-import app.eodiyeotji.ui.review.ReviewViewModel
 import app.eodiyeotji.ui.search.SearchSlot
 import app.eodiyeotji.ui.theme.EodiTheme
 
@@ -65,10 +63,8 @@ fun CommunityRoute(
         when (tab) {
             CommunityTab.COURSES -> hiltViewModel<DriveRouteViewModel>().state.collectAsStateWithLifecycle().value.detail != null
             CommunityTab.BOARD -> hiltViewModel<BoardViewModel>().state.collectAsStateWithLifecycle().value.thread != null
-            // 여행 리뷰 > 여행 코스 후기의 코스 상세
-            CommunityTab.REVIEWS ->
-                hiltViewModel<ReviewViewModel>().state.collectAsStateWithLifecycle().value.mode == ReviewMode.COURSES &&
-                    hiltViewModel<CourseViewModel>().state.collectAsStateWithLifecycle().value.detail != null
+            // 여행 리뷰 피드에서 연 여행 코스 후기 상세
+            CommunityTab.REVIEWS -> hiltViewModel<CourseViewModel>().state.collectAsStateWithLifecycle().value.detail != null
         }
     }
     val c = EodiTheme.colors

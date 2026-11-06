@@ -284,7 +284,7 @@ pub struct NearFilter {
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct CoursePost {
     pub id: String,
-    /// 예: "7번 국도 동해안 드라이브"
+    /// 예: "강릉에서 양양까지, 바다 따라 하루 여행"
     pub title: String,
     /// 한두 문장 소개
     pub body: String,
@@ -311,6 +311,13 @@ pub struct CoursePost {
 }
 
 /// 들른 곳(식당·카페·관광지) 리뷰 하나.
+/// 여행 리뷰 피드 한 칸: 한 장소 리뷰, 또는 여러 곳을 차례로 다녀온 여행 코스 후기.
+#[derive(Debug, Clone, PartialEq, uniffi::Enum)]
+pub enum TravelFeedItem {
+    Review { review: PlaceReview },
+    Course { course: CoursePost },
+}
+
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct PlaceReview {
     pub id: String,
@@ -651,6 +658,28 @@ impl EodiStore {
         sort_by_hearts(&mut reviews, sort, |r| (r.hearts, r.created_ms, r.id.as_str()));
         reviews.truncate(clamp_limit(limit));
         Ok(reviews)
+    }
+
+    /// 여행 리뷰 한 피드: 장소 리뷰와 여행 코스 후기를 한 목록에 섞는다 (같은 정렬 기준, [sort_by_hearts]).
+    /// [near]가 있으면 리뷰는 그 장소가, 코스는 들른 곳 중 하나라도 반경 안인 것만. `limit` 0이면 50개 (최대 500).
+    pub fn travel_feed(&self, sort: CommunitySort, near: Option<NearFilter>, limit: u32) -> Result<Vec<TravelFeedItem>, CoreError> {
+        let near = check_near(near)?;
+        let conn = self.lock()?;
+        let reviews = load_reviews(&conn, None)?
+            .into_iter()
+            .filter(|r| near.is_none_or(|(c, rad)| haversine_m(c, stop_point(&r.place)) <= rad))
+            .map(|review| TravelFeedItem::Review { review });
+        let courses = load_courses(&conn, None)?
+            .into_iter()
+            .filter(|p| near.is_none_or(|(c, r)| p.stops.iter().any(|s| haversine_m(c, stop_point(s)) <= r)))
+            .map(|course| TravelFeedItem::Course { course });
+        let mut items: Vec<TravelFeedItem> = reviews.chain(courses).collect();
+        sort_by_hearts(&mut items, sort, |i| match i {
+            TravelFeedItem::Review { review: r } => (r.hearts, r.created_ms, r.id.as_str()),
+            TravelFeedItem::Course { course: c } => (c.hearts, c.created_ms, c.id.as_str()),
+        });
+        items.truncate(clamp_limit(limit));
+        Ok(items)
     }
 
     /// 한 장소의 리뷰 (이름이 같고 500m 안인 곳, 모듈 설명 "같은 장소 묶기"). `limit` 0이면 50개.

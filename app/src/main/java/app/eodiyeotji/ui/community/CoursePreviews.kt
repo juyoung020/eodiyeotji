@@ -1,7 +1,9 @@
 package app.eodiyeotji.ui.community
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -13,9 +15,10 @@ import app.eodiyeotji.core.CoursePost
 import app.eodiyeotji.core.DriveCourse
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.core.Visit
+import app.eodiyeotji.ui.review.TripReviewCard
 import app.eodiyeotji.ui.theme.EodiTheme
 
-// 드라이브 코스 글 카드 미리보기 전용 예시 (사진은 미리보기에서 핀 자리로 그려진다). 크기는 Pleos 앱 영역(넓게 1682, 나눈 창 841).
+// 여행 코스 후기 카드 미리보기 전용 예시 (사진은 미리보기에서 핀 자리로 그려진다). 크기는 Pleos 앱 영역(넓게 1682, 나눈 창 841).
 
 private const val PreviewNow = 1_793_900_000_000L
 private const val Day = 86_400_000L
@@ -58,32 +61,18 @@ private val SampleCourses = listOf(
 @Composable
 private fun PreviewFeed(dark: Boolean = false) {
     EodiTheme(darkTheme = dark) {
-        Box(Modifier.fillMaxSize().background(EodiTheme.colors.background)) {
-            CourseGrid(SampleCourses, onOpen = {}, onHeart = {}, onOpenPlace = {})
-        }
-    }
-}
-
-@Preview(name = "코스 글 피드 (넓은 창)", widthDp = 1682, heightDp = 1210)
-@Composable
-private fun CourseFeedWidePreview() = PreviewFeed()
-
-@Preview(name = "코스 글 피드 (나눈 창)", widthDp = 841, heightDp = 1210)
-@Composable
-private fun CourseFeedNarrowPreview() = PreviewFeed()
-
-@Preview(name = "코스 글 피드 (넓은 창, 다크)", widthDp = 1682, heightDp = 1210)
-@Composable
-private fun CourseFeedDarkPreview() = PreviewFeed(dark = true)
-
-@Preview(name = "코스 글 카드 한 장", widthDp = 640, heightDp = 1000)
-@Composable
-private fun CoursePostCardPreview() {
-    EodiTheme {
-        Box(Modifier.background(EodiTheme.colors.background).padding(24.dp)) {
-            Box(Modifier.width(560.dp)) {
-                CoursePostCard(SampleCourses.first(), onOpen = {}, onHeart = {}, onOpenPlace = {})
+        Box(Modifier.fillMaxSize().background(EodiTheme.colors.background).padding(32.dp)) {
+            Column(Modifier.width(680.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                SampleCourses.take(2).forEach { TripReviewCard(it, onOpen = {}, onHeart = {}) }
             }
         }
     }
 }
+
+@Preview(name = "여행 코스 후기 카드", widthDp = 841, heightDp = 1210)
+@Composable
+private fun TripCardPreview() = PreviewFeed()
+
+@Preview(name = "여행 코스 후기 카드 (다크)", widthDp = 841, heightDp = 1210)
+@Composable
+private fun TripCardDarkPreview() = PreviewFeed(dark = true)

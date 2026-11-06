@@ -9,15 +9,17 @@ import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.LatLon
 import app.eodiyeotji.core.PopularPlace
 import app.eodiyeotji.core.StopFact
-import app.eodiyeotji.core.TravelReview
 import app.eodiyeotji.core.ReviewKeywordOptions
 import app.eodiyeotji.core.WithWhom
 import app.eodiyeotji.core.reviewKeywordOptions
 import app.eodiyeotji.core.lastKnownPosition
-import app.eodiyeotji.core.popularPlaces
 import app.eodiyeotji.core.reviewCandidates
 import app.eodiyeotji.core.toggleReviewHeart
-import app.eodiyeotji.core.travelReviews
+import app.eodiyeotji.core.travelFeed
+import app.eodiyeotji.core.toggleCourseHeart
+import app.eodiyeotji.core.TravelFeedItem
+import androidx.annotation.StringRes
+import app.eodiyeotji.R
 import app.eodiyeotji.core.visitWeather
 import app.eodiyeotji.core.writePlaceReview
 import app.eodiyeotji.ui.community.Load
@@ -25,15 +27,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-
-/** 여행 리뷰 안 나누기: 인기 장소 · 리뷰 · 여행 코스 후기(들른 곳을 차례로 이은 코스 글, ui/community/CoursePane.kt). */
-enum class ReviewMode { PLACES, FEED, COURSES }
 
 /** 열어 달라는 장소 (화면이 앱 공통 장소 상세 창으로 넘기고 바로 비운다). */
 @Immutable
@@ -71,20 +69,20 @@ data class ReviewDraft(
 
 @Immutable
 data class ReviewUiState(
-    val mode: ReviewMode = ReviewMode.PLACES,
     val sort: CommunitySort = CommunitySort.POPULAR,
     val nearOn: Boolean = false,
     val nearKnown: Boolean = true,
-    val places: Load<PopularPlace> = Load.Loading,
-    val feed: Load<TravelReview> = Load.Loading,
+    /** 장소 리뷰와 여행 코스 후기가 섞인 한 목록 (순서는 Rust) */
+    val feed: Load<TravelFeedItem> = Load.Loading,
     val placeReviews: PlaceReviews? = null,
     val draft: ReviewDraft? = null,
-    val justPosted: Boolean = false,
+    /** 화면 아래 알림 한 줄 (리뷰를 올림 · 코스를 올림) */
+    @StringRes val notice: Int? = null,
 )
 
 /**
- * 커뮤니티 > 여행 리뷰: 인기 장소 순위(하트 합·별점·리뷰 수) / 리뷰 피드(인기순·최신순) / 내가 들른 곳 리뷰 쓰기.
- * 순위·장소 묶기·근처 거르기는 Rust. 리뷰를 쓸 때 그날 날씨를 한 번 받아 같이 저장한다(못 받으면 날씨 없이).
+ * 커뮤니티 > 여행 리뷰: 장소 리뷰와 여행 코스 후기를 한 피드로 (인기순·최신순·내 근처) / 내가 들른 곳 리뷰 쓰기.
+ * 섞는 순서·근처 거르기는 Rust (`travel_feed`). 코스 후기를 누르면 상세(지도·들른 곳·안내)는 [app.eodiyeotji.ui.community.CourseViewModel]이 맡는다. 리뷰를 쓸 때 그날 날씨를 한 번 받아 같이 저장한다(못 받으면 날씨 없이).
  */
 @HiltViewModel
 class ReviewViewModel @Inject constructor(
@@ -97,8 +95,6 @@ class ReviewViewModel @Inject constructor(
     init {
         reload()
     }
-
-    fun setMode(m: ReviewMode) = _state.update { it.copy(mode = m) }
 
     fun setSort(sort: CommunitySort) {
         if (_state.value.sort == sort) return
@@ -117,39 +113,41 @@ class ReviewViewModel @Inject constructor(
             val s = _state.value
             try {
                 val near: LatLon? = if (s.nearOn) core.lastKnownPosition() else null
-                val places = async { core.popularPlaces(near, NEAR_KM, limit = 100) }
-                val feed = async { core.travelReviews(s.sort, near, NEAR_KM) }
-                val (p, f) = places.await() to feed.await()
-                _state.update { it.copy(places = Load.Loaded(p), feed = Load.Loaded(f), nearKnown = !s.nearOn || near != null) }
+                val f = core.travelFeed(s.sort, near, NEAR_KM)
+                _state.update { it.copy(feed = Load.Loaded(f), nearKnown = !s.nearOn || near != null) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 val msg = e.message ?: e.javaClass.simpleName
-                _state.update { it.copy(places = Load.Failed(msg), feed = Load.Failed(msg)) }
+                _state.update { it.copy(feed = Load.Failed(msg)) }
             }
         }
     }
 
-    /** 인기 장소 열기 → 화면이 장소 상세 창(ui/place/PlaceDetailSheet)을 연다. 검색 결과의 리뷰 줄도 여기로 온다. */
-    fun openPlace(p: PopularPlace) = _state.update {
-        // 여행 코스 후기를 보던 중이면 장소 창을 띄울 리뷰 화면으로 돌아온다
-        it.copy(placeReviews = PlaceReviews(p), mode = if (it.mode == ReviewMode.COURSES) ReviewMode.PLACES else it.mode)
-    }
+    /** 장소 열기 → 화면이 장소 상세 창(ui/place/PlaceDetailSheet)을 연다. 검색 결과의 리뷰 줄이 여기로 온다. */
+    fun openPlace(p: PopularPlace) = _state.update { it.copy(placeReviews = PlaceReviews(p)) }
 
     fun closePlace() = _state.update { it.copy(placeReviews = null) }
 
-    fun toggleHeart(id: String) {
-        _state.update { it.flipReview(id) }
+    /** 리뷰 하트 ([trip] = 여행 코스 후기). 누르자마자 화면에 반영하고, 실패하면 되돌린다. */
+    fun toggleHeart(id: String, trip: Boolean = false) {
+        _state.update { it.flipHeart(id, trip) }
         viewModelScope.launch {
             try {
-                core.toggleReviewHeart(id)
+                if (trip) core.toggleCourseHeart(id) else core.toggleReviewHeart(id)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "하트 실패 $id", e)
-                _state.update { it.flipReview(id) }
+                _state.update { it.flipHeart(id, trip) }
             }
         }
+    }
+
+    /** 내 기록에서 여행 코스를 올린 뒤: 최신순으로 바꿔 내 글이 맨 위에 보이게. */
+    fun onTripShared() {
+        _state.update { it.copy(sort = CommunitySort.RECENT, nearOn = false, notice = R.string.course_shared_done) }
+        reload()
     }
 
     // ---- 리뷰 쓰기 ----
@@ -185,7 +183,7 @@ class ReviewViewModel @Inject constructor(
             try {
                 val weather = core.visitWeather(place)
                 core.writePlaceReview(place, d.rating, d.text, d.keywords, d.withWhom, weather)
-                _state.update { it.copy(draft = null, mode = ReviewMode.FEED, sort = CommunitySort.RECENT, justPosted = true) }
+                _state.update { it.copy(draft = null, sort = CommunitySort.RECENT, notice = R.string.review_posted) }
                 reload()
             } catch (e: CancellationException) {
                 throw e
@@ -195,7 +193,7 @@ class ReviewViewModel @Inject constructor(
         }
     }
 
-    fun dismissPosted() = _state.update { it.copy(justPosted = false) }
+    fun dismissNotice() = _state.update { it.copy(notice = null) }
 
     private companion object {
         const val TAG = "EodiReviews"
@@ -203,9 +201,18 @@ class ReviewViewModel @Inject constructor(
     }
 }
 
-private fun TravelReview.flip(id: String): TravelReview =
-    if (review.id != id) this else copy(review = review.copy(heartedByMe = !review.heartedByMe, hearts = review.hearts + if (review.heartedByMe) -1 else 1))
+private fun TravelFeedItem.flip(id: String, trip: Boolean): TravelFeedItem = when (this) {
+    is TravelFeedItem.Review -> if (trip || review.review.id != id) this else {
+        val r = review.review
+        copy(review = review.copy(review = r.copy(heartedByMe = !r.heartedByMe, hearts = r.hearts + if (r.heartedByMe) -1 else 1)))
+    }
+    is TravelFeedItem.Trip -> if (!trip || course.post.id != id) this else {
+        val p = course.post
+        copy(course = course.copy(post = p.copy(heartedByMe = !p.heartedByMe, hearts = p.hearts + if (p.heartedByMe) -1 else 1)))
+    }
+}
 
-private fun Load<TravelReview>.flip(id: String): Load<TravelReview> = if (this is Load.Loaded) Load.Loaded(items.map { it.flip(id) }) else this
-
-private fun ReviewUiState.flipReview(id: String) = copy(feed = feed.flip(id))
+private fun ReviewUiState.flipHeart(id: String, trip: Boolean): ReviewUiState {
+    val f = feed
+    return if (f is Load.Loaded) copy(feed = Load.Loaded(f.items.map { it.flip(id, trip) })) else this
+}

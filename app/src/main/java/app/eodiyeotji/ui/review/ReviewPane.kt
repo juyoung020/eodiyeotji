@@ -18,14 +18,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.lazy.staggeredgrid.items as staggeredItems
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -44,19 +40,25 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
-import app.eodiyeotji.core.PopularPlace
+import app.eodiyeotji.core.DriveCourse
+import app.eodiyeotji.core.TravelFeedItem
 import app.eodiyeotji.core.StopFact
-import app.eodiyeotji.core.TravelReview
 import app.eodiyeotji.core.WithWhom
 import app.eodiyeotji.ui.community.CenterMessage
-import app.eodiyeotji.ui.community.ChoiceRow
-import app.eodiyeotji.ui.community.CoursePane
+import app.eodiyeotji.ui.community.CourseViewModel
+import app.eodiyeotji.ui.community.CourseDetailScreen
+import app.eodiyeotji.ui.community.CompactToolbar
+import app.eodiyeotji.ui.community.ShareCourseSheet
+import app.eodiyeotji.ui.community.ShareEpisodePicker
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import app.eodiyeotji.ui.community.CommunityIcons
 import app.eodiyeotji.ui.community.Load
 import app.eodiyeotji.ui.community.LoadingBox
@@ -68,55 +70,46 @@ import app.eodiyeotji.ui.community.SecondaryPill
 import app.eodiyeotji.ui.community.SortChoice
 import app.eodiyeotji.ui.community.StopPhoto
 import app.eodiyeotji.ui.community.TogglePill
-import app.eodiyeotji.ui.community.rememberTopGridState
 import app.eodiyeotji.ui.community.dateText
 import app.eodiyeotji.ui.community.localDate
 import app.eodiyeotji.ui.place.LocalOpenPlace
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
-import java.util.Locale
 import kotlinx.coroutines.delay
 
 /**
- * 커뮤니티 > 여행 리뷰: [인기 장소 | 리뷰 | 여행 코스 후기] + (리뷰면) 정렬 + 내 근처 + 리뷰 쓰기.
- * 여행 코스 후기는 들른 곳을 차례로 이은 코스 글(예전 "드라이브 코스" 글 그대로: 카드·상세·하트·이 코스로 안내·쿠폰)이다.
+ * 커뮤니티 > 여행 리뷰: 장소 리뷰와 여행 코스 후기(여러 곳을 차례로 다녀온 글)를 한 피드에 같은 카드 모양으로.
+ * 도구 줄: 인기순·최신순 + 내 근처 + 여행 코스 올리기(내 기록에서) + 리뷰 쓰기.
+ * 장소 리뷰의 큰 사진 → 장소 창, 여행 코스 후기 카드 → 코스 상세(지도 · 들른 곳 · 이 코스로 안내, [CourseViewModel]).
  */
 @Composable
-fun ReviewPane(viewModel: ReviewViewModel = hiltViewModel()) {
+fun ReviewPane(viewModel: ReviewViewModel = hiltViewModel(), courses: CourseViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val modeChoice: @Composable () -> Unit = {
-        ChoiceRow(
-            options = listOf(
-                ReviewMode.PLACES to stringResource(R.string.review_popular_places),
-                ReviewMode.FEED to stringResource(R.string.review_feed),
-                ReviewMode.COURSES to stringResource(R.string.review_travel_courses),
-            ),
-            selected = state.mode,
-            onSelect = viewModel::setMode,
-        )
-    }
-    if (state.mode == ReviewMode.COURSES) {
-        CoursePane(leading = modeChoice)
-        return
-    }
+    val course by courses.state.collectAsStateWithLifecycle()
+    var picking by rememberSaveable { mutableStateOf(false) }
+    var shareEpisode by rememberSaveable { mutableStateOf<Long?>(null) }
+    val openPlace: (StopFact) -> Unit = LocalOpenPlace.current
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            Row(
-                Modifier.fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = 8.dp, bottom = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                // 좁은 창: 왼쪽 선택들은 옆으로 밀어 볼 수 있고, "리뷰 쓰기"는 항상 다 보인다
-                Row(
-                    Modifier.weight(1f).horizontalScroll(rememberScrollState()),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    modeChoice()
-                    if (state.mode == ReviewMode.FEED) SortChoice(state.sort, viewModel::setSort)
-                    TogglePill(stringResource(R.string.community_near_me, 30), state.nearOn, viewModel::toggleNear)
+            BoxWithConstraints(Modifier.fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = 8.dp, bottom = 16.dp)) {
+                val compact = maxWidth < CompactToolbar
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // 좁은 창: 왼쪽 선택들은 옆으로 밀어 볼 수 있고, 버튼은 항상 다 보인다
+                    Row(
+                        Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        SortChoice(state.sort, viewModel::setSort)
+                        TogglePill(stringResource(R.string.community_near_me, 30), state.nearOn, viewModel::toggleNear)
+                    }
+                    SecondaryPill(
+                        stringResource(if (compact) R.string.review_share_trip_short else R.string.review_share_trip),
+                        CommunityIcons.Upload,
+                        { picking = true },
+                    )
+                    PrimaryPill(stringResource(R.string.review_write), CommunityIcons.Pen, { viewModel.startDraft() })
                 }
-                PrimaryPill(stringResource(R.string.review_write), CommunityIcons.Pen, { viewModel.startDraft() })
             }
             if (state.nearOn && !state.nearKnown) {
                 Text(
@@ -126,15 +119,29 @@ fun ReviewPane(viewModel: ReviewViewModel = hiltViewModel()) {
                     modifier = Modifier.padding(horizontal = 36.dp, vertical = 4.dp),
                 )
             }
-            when (state.mode) {
-                ReviewMode.PLACES -> LoadList(state.places, viewModel::reload) { PlaceRanking(it, viewModel::openPlace) }
-                ReviewMode.FEED -> LoadList(state.feed, viewModel::reload) { ReviewGrid(it, viewModel::toggleHeart) }
-                ReviewMode.COURSES -> Unit
+            LoadList(state.feed, viewModel::reload) { items ->
+                FeedGrid(items, onHeart = viewModel::toggleHeart, onOpenTrip = courses::open)
             }
         }
-        // 인기 장소 줄(또는 검색 결과의 리뷰 줄)을 누르면 앱 공통 장소 상세 창으로 연다 (별점 · 리뷰 · 안내 · 리뷰 쓰기)
+        // 여행 코스 후기 상세 (지도 · 들른 곳 · 하트 · 이 코스로 안내). 닫으면 피드를 다시 읽어 하트 수를 맞춘다
+        course.detail?.let { d ->
+            val close = {
+                courses.closeDetail()
+                viewModel.reload()
+            }
+            BackHandler(onBack = close)
+            val progress by courses.progress.collectAsStateWithLifecycle()
+            CourseDetailScreen(
+                d,
+                progress = progress?.takeIf { it.courseId == d.course.post.id && !it.finished },
+                onBack = close,
+                onHeart = { courses.toggleHeart(d.course.post.id) },
+                onNavigate = courses::navigate,
+                onOpenPlace = openPlace,
+            )
+        }
+        // 검색 결과의 리뷰 줄을 누르면 앱 공통 장소 상세 창으로 연다 (별점 · 리뷰 · 안내 · 리뷰 쓰기)
         state.placeReviews?.let { pr ->
-            val openPlace = LocalOpenPlace.current
             LaunchedEffect(pr) {
                 openPlace(pr.place.place)
                 viewModel.closePlace()
@@ -153,12 +160,23 @@ fun ReviewPane(viewModel: ReviewViewModel = hiltViewModel()) {
                 onClose = viewModel::closeDraft,
             )
         }
-        if (state.justPosted) {
-            LaunchedEffect(Unit) {
+        if (picking) {
+            BackHandler { picking = false }
+            ShareEpisodePicker(onPick = { picking = false; shareEpisode = it }, onDismiss = { picking = false })
+        }
+        shareEpisode?.let { id ->
+            BackHandler { shareEpisode = null }
+            ShareCourseSheet(episodeId = id, onDone = { shared ->
+                shareEpisode = null
+                if (shared != null) viewModel.onTripShared()
+            })
+        }
+        state.notice?.let { res ->
+            LaunchedEffect(res) {
                 delay(2_500)
-                viewModel.dismissPosted()
+                viewModel.dismissNotice()
             }
-            Notice(stringResource(R.string.review_posted), Modifier.align(Alignment.BottomCenter))
+            Notice(stringResource(res), Modifier.align(Alignment.BottomCenter))
         }
     }
 }
@@ -174,74 +192,13 @@ private fun <T> LoadList(load: Load<T>, onRetry: () -> Unit, content: @Composabl
     }
 }
 
-// ---------------------------------------------------------------- 인기 장소
+// ---------------------------------------------------------------- 피드
 
 @Composable
-private fun PlaceRanking(places: List<PopularPlace>, onOpen: (PopularPlace) -> Unit) {
-    LazyVerticalGrid(
-        state = rememberTopGridState(places.firstOrNull()?.place?.name),
-        columns = GridCells.Adaptive(minSize = 680.dp),
-        contentPadding = PaddingValues(start = 32.dp, end = 32.dp, bottom = 32.dp),
-        horizontalArrangement = Arrangement.spacedBy(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        items(places.size, key = { i -> "${places[i].place.name}@${places[i].place.lat}" }) { i ->
-            PlaceRow(i + 1, places[i]) { onOpen(places[i]) }
-        }
-    }
-}
-
-@Composable
-private fun PlaceRow(rank: Int, p: PopularPlace, onClick: () -> Unit) {
-    val c = EodiTheme.colors
-    Surface(onClick = onClick, color = c.surface, shape = RoundedCornerShape(EodiTheme.space.radiusL), modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                rank.toString(),
-                style = EodiTheme.type.titleSmall,
-                color = if (rank <= 3) c.accent else c.textTertiary,
-                modifier = Modifier.width(56.dp),
-            )
-            StopPhoto(p.place.name, p.place.address, p.place.lat, p.place.lon, order = null, size = 120.dp)
-            Spacer(Modifier.width(20.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(p.place.name, style = EodiTheme.type.bodyStrong, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(
-                    listOf(p.place.category, regionOf(p.place.address)).filter { it.isNotBlank() }.joinToString(" · "),
-                    style = EodiTheme.type.meta,
-                    color = c.textTertiary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                // 리뷰에서 가장 많이 고른 키워드 (Rust가 셈)
-                p.topKeyword?.let { KeywordChip(it) }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(CommunityIcons.HeartFilled, null, tint = c.heart, modifier = Modifier.size(24.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(p.hearts.toString(), style = EodiTheme.type.label, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.width(18.dp))
-                    if (p.reviewCount > 0) {
-                        Icon(CommunityIcons.Star, null, tint = c.star, modifier = Modifier.size(24.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(String.format(Locale.ROOT, "%.1f", p.avgRating), style = EodiTheme.type.label, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.width(18.dp))
-                    }
-                    Text(stringResource(R.string.review_count, p.reviewCount), style = EodiTheme.type.label, color = c.textSecondary)
-                }
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------- 리뷰 피드
-
-/** 리뷰 피드: 글 길이 · 펼침에 따라 카드 높이가 달라서 엇갈림 격자 (빈틈 없이). */
-@Composable
-private fun ReviewGrid(reviews: List<TravelReview>, onHeart: (String) -> Unit) {
+private fun FeedGrid(items: List<TravelFeedItem>, onHeart: (String, Boolean) -> Unit, onOpenTrip: (DriveCourse) -> Unit) {
     val state = rememberLazyStaggeredGridState()
-    // 정렬을 바꾸거나 새 리뷰를 올려 맨 위가 바뀌면 맨 위로 (rememberTopGridState와 같은 이유)
-    val firstKey = reviews.firstOrNull()?.review?.id
+    // 정렬을 바꾸거나 새 글을 올려 맨 위가 바뀌면 맨 위로 (rememberTopGridState와 같은 이유)
+    val firstKey = items.firstOrNull()?.key
     LaunchedEffect(firstKey) { state.scrollToItem(0) }
     LazyVerticalStaggeredGrid(
         columns = StaggeredGridCells.Adaptive(minSize = 680.dp),
@@ -251,7 +208,12 @@ private fun ReviewGrid(reviews: List<TravelReview>, onHeart: (String) -> Unit) {
         verticalItemSpacing = 16.dp,
         modifier = Modifier.fillMaxSize(),
     ) {
-        staggeredItems(reviews, key = { it.review.id }, contentType = { "review" }) { r -> RichReviewCard(r, onHeart = { onHeart(r.review.id) }) }
+        staggeredItems(items, key = { it.key }, contentType = { if (it is TravelFeedItem.Trip) "trip" else "review" }) { item ->
+            when (item) {
+                is TravelFeedItem.Review -> RichReviewCard(item.review, onHeart = { onHeart(item.review.review.id, false) })
+                is TravelFeedItem.Trip -> TripReviewCard(item.course, onOpen = { onOpenTrip(item.course) }, onHeart = { onHeart(item.course.post.id, true) })
+            }
+        }
     }
 }
 

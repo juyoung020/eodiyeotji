@@ -112,6 +112,20 @@ fn seeding_is_idempotent_and_fills_every_table() {
 }
 
 #[test]
+fn old_demo_trip_posts_are_rewritten_once() {
+    let (_db, store) = seeded("trips");
+    {
+        let conn = store.lock().unwrap();
+        conn.execute("UPDATE community_course SET title = '7번 국도 동해안 드라이브', others_hearts = 512 WHERE id = 'd01'", []).unwrap();
+        conn.execute("DELETE FROM meta WHERE key = 'community_trips_v2'", []).unwrap();
+    }
+    assert_eq!(store.seed_community_demo(NOW + 1).unwrap(), 0);
+    let d01 = store.community_courses(CommunitySort::Popular, None, 0).unwrap().into_iter().find(|c| c.id == "d01").unwrap();
+    assert_eq!(d01.title, COURSES[0].1);
+    assert_eq!(d01.hearts, COURSES[0].8 + 1, "내가 누른 하트는 그대로");
+}
+
+#[test]
 fn demo_weather_looks_like_a_real_reading() {
     let w = demo::demo_weather("2026-10-20", 0);
     assert_eq!(w, "맑음 · 18°C");
@@ -126,12 +140,31 @@ fn popular_sort_is_by_hearts_and_recent_by_time() {
     let pop = store.community_courses(CommunitySort::Popular, None, 5).unwrap();
     assert_eq!(pop.len(), 5);
     assert!(pop.windows(2).all(|w| w[0].hearts >= w[1].hearts));
-    assert_eq!(pop[0].title, "7번 국도 동해안 드라이브", "가장 하트 많은 코스 (강릉)");
+    assert_eq!(pop[0].title, "강릉에서 양양까지, 바다 따라 하루 여행", "가장 하트 많은 코스 (강릉)");
     let recent = store.community_courses(CommunitySort::Recent, None, 0).unwrap();
     assert!(recent.windows(2).all(|w| w[0].created_ms >= w[1].created_ms));
     let reviews = store.place_reviews(CommunitySort::Popular, None, 0).unwrap();
     assert!(reviews.windows(2).all(|w| w[0].hearts >= w[1].hearts));
     assert_eq!(reviews[0].place.name, "초당할머니순두부");
+}
+
+#[test]
+fn travel_feed_mixes_reviews_and_courses_in_one_order() {
+    let (_db, store) = seeded("feed");
+    let all = store.travel_feed(CommunitySort::Recent, None, 500).unwrap();
+    let reviews = all.iter().filter(|i| matches!(i, TravelFeedItem::Review { .. })).count();
+    assert_eq!(reviews, REVIEWS.len());
+    assert_eq!(all.len() - reviews, COURSES.len());
+    let key = |i: &TravelFeedItem| match i {
+        TravelFeedItem::Review { review: r } => (r.hearts, r.created_ms),
+        TravelFeedItem::Course { course: c } => (c.hearts, c.created_ms),
+    };
+    assert!(all.windows(2).all(|w| key(&w[0]).1 >= key(&w[1]).1), "최신순");
+    let pop = store.travel_feed(CommunitySort::Popular, None, 0).unwrap();
+    assert!(pop.windows(2).all(|w| key(&w[0]).0 >= key(&w[1]).0), "인기순");
+    // 근처: 강릉 경포 20km 안이면 강릉 리뷰·코스만
+    let near = store.travel_feed(CommunitySort::Popular, Some(NearFilter { center: gp(37.795, 128.896), radius_km: 20.0 }), 0).unwrap();
+    assert!(!near.is_empty() && near.len() < pop.len());
 }
 
 #[test]
@@ -159,11 +192,11 @@ fn hearts_toggle_and_survive_reopen() {
         let store = db.open();
         store.seed_community_demo(NOW).unwrap();
         // d02: 다른 사람 438, 내 하트 없음
-        assert_eq!(store.toggle_course_heart("d02".into()).unwrap(), 439);
-        assert_eq!(store.toggle_course_heart("d02".into()).unwrap(), 438);
-        assert_eq!(store.toggle_course_heart("d02".into()).unwrap(), 439);
-        // d01은 이미 내가 누른 상태 (512 + 1)
-        assert_eq!(store.toggle_course_heart("d01".into()).unwrap(), 512);
+        assert_eq!(store.toggle_course_heart("d02".into()).unwrap(), 128);
+        assert_eq!(store.toggle_course_heart("d02".into()).unwrap(), 127);
+        assert_eq!(store.toggle_course_heart("d02".into()).unwrap(), 128);
+        // d01은 이미 내가 누른 상태 (148 + 1)
+        assert_eq!(store.toggle_course_heart("d01".into()).unwrap(), 148);
         assert_eq!(store.toggle_review_heart("r001".into()).unwrap(), 133);
         assert_eq!(store.toggle_board_post_heart("b01".into()).unwrap(), 35);
         assert_eq!(store.toggle_board_comment_heart("b01-c1".into()).unwrap(), 22);
@@ -175,7 +208,7 @@ fn hearts_toggle_and_survive_reopen() {
     let store = db.open();
     let all = store.community_courses(CommunitySort::Popular, None, 0).unwrap();
     let d02 = all.iter().find(|c| c.id == "d02").unwrap();
-    assert!(d02.hearted_by_me && d02.hearts == 439);
+    assert!(d02.hearted_by_me && d02.hearts == 128);
     assert!(!all.iter().find(|c| c.id == "d01").unwrap().hearted_by_me);
 }
 
@@ -187,9 +220,9 @@ fn popular_places_sum_review_and_course_hearts_per_place() {
     let top = store.popular_places(None, 500).unwrap();
     assert!(top.windows(2).all(|w| w[0].hearts >= w[1].hearts));
     let dumul = top.iter().find(|p| p.place.name == "두물머리").unwrap();
-    // 리뷰 3개(141+64+23) + 코스 d04(455+1 내 하트)·d05(377)·d06(212)
+    // 리뷰 3개(141+64+23) + 코스 d04(132+1 내 하트)·d05(109)·d06(61)
     assert_eq!(dumul.review_count, 3);
-    assert_eq!(dumul.hearts, 141 + 64 + 23 + 456 + 377 + 212);
+    assert_eq!(dumul.hearts, 141 + 64 + 23 + 133 + 109 + 61);
     assert!((dumul.avg_rating - 14.0 / 3.0).abs() < 1e-4);
     assert_eq!(dumul.place.arrive_ms, 0, "장소 묶음은 들른 시각이 없다");
     // 같은 이름 = 한 줄
