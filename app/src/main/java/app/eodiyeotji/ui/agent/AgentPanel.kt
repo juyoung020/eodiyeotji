@@ -78,6 +78,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
+import app.eodiyeotji.record.RecordingStatusChip
 import app.eodiyeotji.ui.recap.RecallDrivingCard
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.theme.MemoryAlbumArt
@@ -780,6 +781,9 @@ private fun DrivingAgent(
         ) {
             Column(Modifier.fillMaxSize().padding(48.dp)) {
                 if (turn == null) {
+                    // 지금 이 주행을 알아서 기록하고 있다는 표시 (누를 수 없는 작은 점 + 글)
+                    RecordingStatusChip(interactive = false)
+                    Spacer(Modifier.height(16.dp))
                     // 지나가며 떠오른 기억이 있으면 마이크 위에 작게 (ui/recap, 없으면 그리지 않는다)
                     RecallDrivingCard()
                     DrivingPrompt(onVoiceRequest, Modifier.weight(1f).fillMaxWidth())

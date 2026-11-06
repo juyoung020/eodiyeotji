@@ -175,7 +175,12 @@ class RecordingStatusViewModel @Inject constructor(
  * 차 화면 · 폰 화면 머리 오른쪽에 둔다. 차는 글자 20sp(caption)로 작게, 누르는 자리는 76dp를 지킨다.
  */
 @Composable
-fun RecordingStatusChip(modifier: Modifier = Modifier, viewModel: RecordingStatusViewModel = hiltViewModel()) {
+fun RecordingStatusChip(
+    modifier: Modifier = Modifier,
+    /** false면 누를 수 없는 표시만, 글자는 크게 (주행 중 화면: 한눈에 보이고 자세한 상태 창은 열지 않는다) */
+    interactive: Boolean = true,
+    viewModel: RecordingStatusViewModel = hiltViewModel(),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var open by rememberSaveable { mutableStateOf(false) }
     LifecycleResumeEffect(Unit) {
@@ -191,13 +196,13 @@ fun RecordingStatusChip(modifier: Modifier = Modifier, viewModel: RecordingStatu
         modifier
             .heightIn(min = EodiTheme.space.touch)
             .clip(CircleShape)
-            .clickable(role = Role.Button) { open = true }
+            .then(if (interactive) Modifier.clickable(role = Role.Button) { open = true } else Modifier)
             .semantics(mergeDescendants = true) { contentDescription = a11y },
         contentAlignment = Alignment.Center,
     ) {
         Row(
             Modifier
-                .background(if (warn) c.staySoft else c.surface, CircleShape)
+                .background(if (warn) c.staySoft else if (interactive) c.surface else c.surfaceHigh, CircleShape)
                 .padding(start = 16.dp, end = 20.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -205,7 +210,7 @@ fun RecordingStatusChip(modifier: Modifier = Modifier, viewModel: RecordingStatu
             Spacer(Modifier.width(10.dp))
             Text(
                 label,
-                style = EodiTheme.type.caption,
+                style = if (interactive) EodiTheme.type.caption else EodiTheme.type.label,
                 fontWeight = if (warn) FontWeight.Bold else FontWeight.SemiBold,
                 color = if (warn) c.textPrimary else c.textSecondary,
                 maxLines = 1,
