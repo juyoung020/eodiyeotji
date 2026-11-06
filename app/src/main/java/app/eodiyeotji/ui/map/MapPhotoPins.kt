@@ -38,8 +38,12 @@ internal suspend fun loadStayPhotos(
                 .size(px)
                 .allowHardware(false) // Canvas로 다시 그리려면 소프트웨어 비트맵이어야 한다
                 .build()
-            val bmp = ((context.imageLoader.execute(req) as? SuccessResult)?.drawable as? BitmapDrawable)?.bitmap
-                ?: return@async null
+            val result = context.imageLoader.execute(req)
+            val bmp = ((result as? SuccessResult)?.drawable as? BitmapDrawable)?.bitmap
+            if (bmp == null) {
+                android.util.Log.w("EodiMapPhoto", "지도 사진 못 그림: ${pin.name} ${(result as? coil.request.ErrorResult)?.throwable} ${(result as? SuccessResult)?.drawable?.javaClass}")
+                return@async null
+            }
             pin.key to bmp
         }
     }.awaitAll().filterNotNull().toMap()

@@ -46,6 +46,7 @@ import app.eodiyeotji.core.DayMapData
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.theme.MapInk
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.maplibre.android.LibraryLoader
 import org.maplibre.android.MapLibre
@@ -183,6 +184,12 @@ private fun DayMapContent(
         }
         val repo = EntryPointAccessors.fromApplication(context.applicationContext, MapPhotoEntryPoint::class.java).photos()
         value = withContext(Dispatchers.Default) { loadStayPhotos(context.applicationContext, repo, photoPins, density) }
+        // 앱을 막 켠 때처럼 사진 몇 장이 잠깐 안 받아지면 숫자 칸으로 남는다 → 빠진 게 있으면 잠시 뒤 한 번 더 (받은 건 캐시라 바로)
+        if (value.size < photoPins.size) {
+            delay(PHOTO_RETRY_MS)
+            val again = withContext(Dispatchers.Default) { loadStayPhotos(context.applicationContext, repo, photoPins, density) }
+            if (again.size > value.size) value = again
+        }
     }
     LaunchedEffect(controller, marks, stayPhotos, palette) {
         val m = marks
@@ -289,3 +296,6 @@ private fun rememberMapViewWithLifecycle(context: Context, baseOptions: MapLibre
 internal interface MapPhotoEntryPoint {
     fun photos(): PlacePhotoRepository
 }
+
+/** 지도 사진이 빠졌을 때 다시 받기까지 기다리는 시간 */
+private const val PHOTO_RETRY_MS = 3_000L
