@@ -17,6 +17,7 @@ pub mod mapdata;
 pub mod memory;
 pub mod photos;
 pub mod places;
+pub mod recap;
 pub mod saved;
 pub mod search_ui;
 pub mod share;

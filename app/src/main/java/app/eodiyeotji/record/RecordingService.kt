@@ -20,6 +20,7 @@ import app.eodiyeotji.platform.DriveSignalSource
 import app.eodiyeotji.platform.LocationSource
 import app.eodiyeotji.platform.Navigator
 import app.eodiyeotji.platform.RecordingPlatform
+import app.eodiyeotji.recap.RecallCenter
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
@@ -47,6 +48,7 @@ import kotlinx.coroutines.withContext
  * - 폰: 위치로 판단(`PhoneDriveSignals` + Rust `drivedetect`). 서 있을 때는 저전력 위치만 드물게 받는다.
  * 주행 중에는 차량 내비([Navigator])도 듣는다: 목적지·경유지 도착 이벤트와, 주행이 끝날 때 남아 있는 목적지·경유지를
  *   [EodiCore.addNaviHint]로 넘긴다 → Rust가 가까운 도착 지점·머문 곳의 이름으로 쓴다 ([NaviSession]). 내비 이벤트가 없으면(폰) 건너뛴다.
+ * 저장한 위치 묶음은 회상([RecallCenter])에도 넘긴다: 예전에 들렀던 곳 근처를 지나면 짧게 알려 준다 (시동 뒤엔 "N년 전 오늘" 한 번).
  * 모든 작업은 Dispatchers.Default/IO에서 한다.
  *
  * ## 포그라운드 서비스 종류 ([RecordingPlatform.foregroundServiceType], 매니페스트는 판마다)
@@ -73,6 +75,7 @@ class RecordingService : LifecycleService() {
     @Inject lateinit var navi: Navigator
     @Inject lateinit var platform: RecordingPlatform
     @Inject lateinit var monitor: RecordingMonitor
+    @Inject lateinit var recall: RecallCenter
 
     private var running = false
     private var foregroundOk = false
@@ -143,6 +146,7 @@ class RecordingService : LifecycleService() {
                 if (edge.backlog.isNotEmpty()) flush(edge.backlog.toMutableList(), "감지 전")
                 session = lifecycleScope.startCollecting()
                 if (naviAvailable) naviSession = lifecycleScope.startNavi()
+                recall.onDriveStart()
             } else if (!edge.active && current != null) {
                 current.cancelAndJoin() // 위치 수신 중지 + 남은 묶음 저장까지 끝난 뒤 돌아온다
                 session = null
@@ -153,6 +157,7 @@ class RecordingService : LifecycleService() {
                 naviSession?.let { safely("내비 마감") { it.finish(edge.tMs) } }
                 naviSession = null
                 lastFix = null
+                recall.onDriveEnd()
             }
         }
     }
@@ -199,6 +204,8 @@ class RecordingService : LifecycleService() {
         buffer.clear()
         val stored = safely("ingest") { core.ingest(batch) } ?: return
         journal.touch(batch.last().tMs)
+        // 지나가는 곳 근처에 기억할 만한 곳이 있으면 짧게 회상 (규칙 · 횟수 제한은 Rust recap.rs)
+        if (reason != "주행 끝") recall.onBatch(batch)
         if (BuildConfig.DEBUG) {
             val total = safely("fixCount") { core.fixCount() }
             val last = batch.last()
