@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
+import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.core.AnchorInfo
 import app.eodiyeotji.core.AnchorRole
 import app.eodiyeotji.core.AnchorSource
@@ -61,6 +62,7 @@ import app.eodiyeotji.ui.community.Notice
 import app.eodiyeotji.ui.community.PrimaryPill
 import app.eodiyeotji.ui.community.SecondaryPill
 import app.eodiyeotji.ui.place.PhotoLoadingPlaceholder
+import app.eodiyeotji.ui.place.LocalOpenPlace
 import app.eodiyeotji.ui.place.PlaceThumbnail
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
@@ -182,13 +184,23 @@ private fun CardGrid(
     }
 }
 
-/** 장소 카드: [사진] 이름 / 분류 · 주소 / 다녀온 날 · [♥] + [여기로 안내] [기록 보기]. */
+/** 장소 카드: [사진] 이름 / 분류 · 주소 / 다녀온 날 · [♥] + [여기로 안내] [기록 보기]. 카드를 누르면 장소 상세 창 (이름 있는 곳). */
 @Composable
 private fun PlaceCardView(card: PlaceCard, offers: List<PartnerOffer>, onHeart: () -> Unit, onNavigate: () -> Unit, onRecords: (() -> Unit)?) {
     val c = EodiTheme.colors
     val type = EodiTheme.type
     val label = card.label
-    Surface(color = c.surface, contentColor = c.textPrimary, shape = RoundedCornerShape(EodiTheme.space.radiusL)) {
+    val openPlace = LocalOpenPlace.current
+    val open: () -> Unit = {
+        if (label != null) openPlace(StopFact(label.name, label.category, label.address, 0, 0, card.lat, card.lon, false))
+    }
+    Surface(
+        onClick = open,
+        enabled = label != null,
+        color = c.surface,
+        contentColor = c.textPrimary,
+        shape = RoundedCornerShape(EodiTheme.space.radiusL),
+    ) {
         Column(Modifier.padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(120.dp).clip(RoundedCornerShape(EodiTheme.space.radiusM)).background(c.staySoft), contentAlignment = Alignment.Center) {

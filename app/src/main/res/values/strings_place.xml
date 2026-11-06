@@ -18,5 +18,20 @@
 
     <!-- 들른 곳 사진 칸에 구글 사진이 하나도 없을 때 -->
     <string name="place_no_photos">이곳은 사진이 없어요</string>
-    <string name="place_photos_open">사진 크게 보기</string>
+    <!-- 장소 상세 창 (ui/place/PlaceDetailSheet.kt): 장소를 누르면 뜨는 사진 · 별점 · 리뷰 창 -->
+    <string name="place_detail_open">장소 정보 보기</string>
+    <string name="place_detail_navigate">안내</string>
+    <string name="place_detail_navi_ok">내비로 안내를 보냈어요</string>
+    <string name="place_detail_navi_fail">안내를 시작하지 못했어요</string>
+    <string name="place_detail_save">저장</string>
+    <string name="place_detail_saved">저장됨</string>
+    <string name="place_detail_write">리뷰 쓰기</string>
+    <string name="place_detail_write_need_visit">리뷰는 내가 다녀온 곳에만 쓸 수 있어요</string>
+    <!-- 내 방문: "3번 다녀옴 · 마지막 2025년 11월 7일" -->
+    <string name="place_detail_visits">%1$d번 다녀옴 · 마지막 %2$s</string>
+    <string name="place_detail_no_visits">아직 다녀온 기록이 없어요</string>
+    <string name="place_detail_sort_hearts">하트 많은 순</string>
+    <string name="place_detail_empty">아직 리뷰가 없어요 · 첫 리뷰를 남겨 보세요</string>
+    <string name="place_detail_failed">장소 정보를 불러오지 못했어요</string>
+    <string name="place_detail_rating_description">별점 %1$.1f</string>
 </resources>

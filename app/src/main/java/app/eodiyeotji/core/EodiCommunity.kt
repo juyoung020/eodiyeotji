@@ -190,7 +190,7 @@ internal fun List<TravelReview>.withOffers(): List<TravelReview> {
 
 internal fun RCoursePost.toDrive() = DriveCourse(toModel(), Visit(visitedDay, season, weather))
 
-private fun RPlaceReview.toTravel() = TravelReview(
+internal fun RPlaceReview.toTravel() = TravelReview(
     PlaceReview(id, place.toModel(), author, mine, rating.toInt(), text, createdMs, hearts.toInt(), heartedByMe),
     Visit(visitedDay, season, weather),
 )

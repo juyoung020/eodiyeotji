@@ -88,6 +88,7 @@ import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.theme.SparkleBadge
 import app.eodiyeotji.ui.timeline.TimelineRoute
 import app.eodiyeotji.ui.places.PlacesRoute
+import app.eodiyeotji.ui.place.PlaceDetailHost
 import app.eodiyeotji.ui.timeline.TimelineViewModel
 
 /** 아래 탭. 가운데 [ASK](기억 에이전트)는 한 번에 닿게 크게 둔다. */
@@ -121,6 +122,8 @@ fun PhoneApp(shell: PhoneShellViewModel = hiltViewModel()) {
                         PhoneHome(shell)
                     }
                 }
+                // 장소 상세 창(별점 · 리뷰)은 어느 탭에서든 아래 시트로 뜬다
+                PlaceDetailHost()
                 // 시트는 맨 위에 (아래 탭 · 운전 중 띠까지 덮는다)
                 PhoneSheetHost(sheets)
             }

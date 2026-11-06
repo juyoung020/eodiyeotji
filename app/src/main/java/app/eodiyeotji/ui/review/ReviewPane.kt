@@ -71,6 +71,7 @@ import app.eodiyeotji.ui.community.agoText
 import app.eodiyeotji.ui.community.rememberTopGridState
 import app.eodiyeotji.ui.community.dateText
 import app.eodiyeotji.ui.community.localDate
+import app.eodiyeotji.ui.place.LocalOpenPlace
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
 import java.util.Locale
@@ -119,15 +120,13 @@ fun ReviewPane(viewModel: ReviewViewModel = hiltViewModel()) {
                 ReviewMode.FEED -> LoadList(state.feed, viewModel::reload) { ReviewGrid(it, viewModel::toggleHeart) }
             }
         }
+        // 인기 장소 줄(또는 검색 결과의 리뷰 줄)을 누르면 앱 공통 장소 상세 창으로 연다 (별점 · 리뷰 · 안내 · 리뷰 쓰기)
         state.placeReviews?.let { pr ->
-            BackHandler(onBack = viewModel::closePlace)
-            PlaceReviewsSheet(
-                pr,
-                onClose = viewModel::closePlace,
-                onHeart = viewModel::toggleHeart,
-                onNavigate = viewModel::navigateToPlace,
-                onWrite = viewModel::writeForPlace,
-            )
+            val openPlace = LocalOpenPlace.current
+            LaunchedEffect(pr) {
+                openPlace(pr.place.place)
+                viewModel.closePlace()
+            }
         }
         state.draft?.let { d ->
             BackHandler(onBack = viewModel::closeDraft)
@@ -239,7 +238,7 @@ private fun ReviewGrid(reviews: List<TravelReview>, onHeart: (String) -> Unit) {
 }
 
 @Composable
-private fun ReviewCard(t: TravelReview, onHeart: () -> Unit, showPlace: Boolean = true) {
+internal fun ReviewCard(t: TravelReview, onHeart: () -> Unit, showPlace: Boolean = true) {
     val c = EodiTheme.colors
     val r = t.review
     Surface(
@@ -295,57 +294,11 @@ private fun ReviewCard(t: TravelReview, onHeart: () -> Unit, showPlace: Boolean 
     }
 }
 
-// ---------------------------------------------------------------- 장소별 리뷰
-
-@Composable
-private fun PlaceReviewsSheet(pr: PlaceReviews, onClose: () -> Unit, onHeart: (String) -> Unit, onNavigate: () -> Unit, onWrite: () -> Unit) {
-    val p = pr.place
-    OverlayCard(onDismiss = onClose, maxWidth = 1200.dp) {
-        Column(Modifier.padding(32.dp).heightIn(max = 1050.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                StopPhoto(p.place.name, p.place.address, p.place.lat, p.place.lon, order = null, size = 120.dp)
-                Spacer(Modifier.width(20.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.review_place_title, p.place.name), style = EodiTheme.type.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(p.place.address, style = EodiTheme.type.meta, color = EodiTheme.colors.textTertiary, maxLines = 1)
-                }
-                RoundIconButton(CommunityIcons.Close, stringResource(R.string.community_close), onClose)
-            }
-            Spacer(Modifier.height(20.dp))
-            // 리뷰를 보고 바로 할 일: 그곳으로 안내 · 그곳 리뷰 쓰기
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                PrimaryPill(stringResource(R.string.review_navigate_here), EodiIcons.Navi, onNavigate)
-                SecondaryPill(stringResource(R.string.review_write_here), CommunityIcons.Pen, onWrite)
-                pr.navi?.let { ok ->
-                    Text(
-                        stringResource(if (ok) R.string.review_navi_sent else R.string.course_navi_failed),
-                        style = EodiTheme.type.caption,
-                        color = if (ok) EodiTheme.colors.textSecondary else EodiTheme.colors.error,
-                    )
-                }
-            }
-            Spacer(Modifier.height(20.dp))
-            when (val l = pr.reviews) {
-                Load.Loading -> Box(Modifier.fillMaxWidth().height(240.dp)) { LoadingBox() }
-                is Load.Failed -> Text(stringResource(R.string.community_failed, l.message), color = EodiTheme.colors.error)
-                is Load.Loaded ->
-                    if (l.items.isEmpty()) {
-                        Text(stringResource(R.string.review_empty), style = EodiTheme.type.body, color = EodiTheme.colors.textSecondary)
-                    } else {
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            items(l.items, key = { it.review.id }) { r -> ReviewCard(r, onHeart = { onHeart(r.review.id) }, showPlace = false) }
-                        }
-                    }
-            }
-        }
-    }
-}
-
 // ---------------------------------------------------------------- 리뷰 쓰기
 
 /** 1단계: 내가 실제로 들른 곳(최근 머문 곳, 사진) 고르기 → 2단계: 별점 + 한 줄 → 등록. */
 @Composable
-private fun WriteReviewSheet(
+internal fun WriteReviewSheet(
     d: ReviewDraft,
     onPick: (StopFact?) -> Unit,
     onRating: (Int) -> Unit,

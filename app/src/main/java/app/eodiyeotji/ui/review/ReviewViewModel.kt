@@ -14,12 +14,10 @@ import app.eodiyeotji.core.addPlaceReviewWith
 import app.eodiyeotji.core.lastKnownPosition
 import app.eodiyeotji.core.popularPlaces
 import app.eodiyeotji.core.reviewCandidates
-import app.eodiyeotji.core.reviewsOfPlace
 import app.eodiyeotji.core.toggleReviewHeart
 import app.eodiyeotji.core.travelReviews
 import app.eodiyeotji.core.visitWeather
 import app.eodiyeotji.ui.community.Load
-import app.eodiyeotji.platform.Navigator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException
@@ -33,10 +31,9 @@ import kotlinx.coroutines.launch
 
 enum class ReviewMode { PLACES, FEED }
 
-/** 장소 하나의 리뷰 모아 보기. */
+/** 열어 달라는 장소 (화면이 앱 공통 장소 상세 창으로 넘기고 바로 비운다). */
 @Immutable
-/** [navi]: "여기로 안내"를 누른 결과 (null = 아직 안 누름, true = 내비에 보냄, false = 실패). */
-data class PlaceReviews(val place: PopularPlace, val reviews: Load<TravelReview> = Load.Loading, val navi: Boolean? = null)
+data class PlaceReviews(val place: PopularPlace)
 
 /** 리뷰 쓰기: 들른 곳 고르기 → 별점 + 한 줄. */
 @Immutable
@@ -69,7 +66,6 @@ data class ReviewUiState(
 @HiltViewModel
 class ReviewViewModel @Inject constructor(
     private val core: EodiCore,
-    private val navi: Navigator,
 ) : ViewModel() {
     private val _state = MutableStateFlow(ReviewUiState())
     val state: StateFlow<ReviewUiState> = _state.asStateFlow()
@@ -111,41 +107,10 @@ class ReviewViewModel @Inject constructor(
         }
     }
 
-    fun openPlace(p: PopularPlace) {
-        _state.update { it.copy(placeReviews = PlaceReviews(p)) }
-        viewModelScope.launch {
-            val r = try {
-                Load.Loaded(core.reviewsOfPlace(p.place, CommunitySort.POPULAR))
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Load.Failed(e.message ?: e.javaClass.simpleName)
-            }
-            _state.update { s -> s.placeReviews?.takeIf { it.place == p }?.let { s.copy(placeReviews = it.copy(reviews = r)) } ?: s }
-        }
-    }
+    /** 인기 장소 열기 → 화면이 장소 상세 창(ui/place/PlaceDetailSheet)을 연다. 검색 결과의 리뷰 줄도 여기로 온다. */
+    fun openPlace(p: PopularPlace) = _state.update { it.copy(placeReviews = PlaceReviews(p)) }
 
     fun closePlace() = _state.update { it.copy(placeReviews = null) }
-
-    /** 리뷰를 보던 곳으로 바로 안내 (경유지 없이 목적지 하나). */
-    fun navigateToPlace() {
-        val p = _state.value.placeReviews?.place ?: return
-        viewModelScope.launch {
-            val s = p.place
-            val ok = runCatching { navi.requestRoute(s.name, s.lat, s.lon, s.address) }.getOrDefault(false)
-            _state.update { st -> st.placeReviews?.takeIf { it.place == p }?.let { st.copy(placeReviews = it.copy(navi = ok)) } ?: st }
-        }
-    }
-
-    /**
-     * 리뷰를 보던 곳의 리뷰 쓰기. 리뷰는 내가 실제로 들른 곳에만 쓰므로, 내 들른 곳 목록에 그곳이 있으면
-     * 그 방문(날짜·날씨)으로 곳 고르기 단계를 건너뛰고, 없으면 평소처럼 들른 곳 목록을 보여 준다.
-     */
-    fun writeForPlace() {
-        val p = _state.value.placeReviews?.place?.place ?: return
-        _state.update { it.copy(placeReviews = null) }
-        startDraft(preferName = p.name)
-    }
 
     fun toggleHeart(id: String) {
         _state.update { it.flipReview(id) }
@@ -163,7 +128,7 @@ class ReviewViewModel @Inject constructor(
 
     // ---- 리뷰 쓰기 ----
 
-    fun startDraft(preferName: String? = null) {
+    fun startDraft() {
         _state.update { it.copy(draft = ReviewDraft()) }
         viewModelScope.launch {
             val r = try {
@@ -173,8 +138,7 @@ class ReviewViewModel @Inject constructor(
             } catch (e: Exception) {
                 Load.Failed(e.message ?: e.javaClass.simpleName)
             }
-            val visited = preferName?.let { name -> (r as? Load.Loaded)?.items?.firstOrNull { it.name == name } }
-            _state.update { s -> s.copy(draft = s.draft?.copy(candidates = r, place = s.draft.place ?: visited)) }
+            _state.update { s -> s.copy(draft = s.draft?.copy(candidates = r)) }
         }
     }
 
@@ -215,7 +179,4 @@ private fun TravelReview.flip(id: String): TravelReview =
 
 private fun Load<TravelReview>.flip(id: String): Load<TravelReview> = if (this is Load.Loaded) Load.Loaded(items.map { it.flip(id) }) else this
 
-private fun ReviewUiState.flipReview(id: String) = copy(
-    feed = feed.flip(id),
-    placeReviews = placeReviews?.let { it.copy(reviews = it.reviews.flip(id)) },
-)
+private fun ReviewUiState.flipReview(id: String) = copy(feed = feed.flip(id))

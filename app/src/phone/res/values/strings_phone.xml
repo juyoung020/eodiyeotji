@@ -29,8 +29,8 @@
     <string name="course_navi_auto">%1$d/%2$d 구간 안내 중 · 도착하면 아래 카드의 \'다음 구간\'을 눌러 주세요</string>
     <string name="course_navi_legs_hint">%1$d구간 코스 · 지도 앱에는 경유지를 2곳씩 나눠 보내요. 구간이 끝나면 \'다음 구간\'을 눌러 주세요</string>
     <string name="course_navi_failed">지도 앱을 열지 못했어요</string>
-    <string name="review_navigate_here">지도 앱으로 안내</string>
-    <string name="review_navi_sent">지도 앱으로 넘겼어요</string>
+    <string name="place_detail_navi_ok">지도 앱으로 넘겼어요</string>
+    <string name="place_detail_navi_fail">지도 앱을 열지 못했어요</string>
 
     <!-- ===== 폰 화면에만 있는 문구 (src/phone) ===== -->
     <string name="phone_tab_ask">물어보기</string>

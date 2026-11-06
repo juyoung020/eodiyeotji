@@ -90,9 +90,5 @@
     <string name="review_submit">등록</string>
     <string name="review_count">리뷰 %1$d</string>
     <string name="review_empty">리뷰가 없어요</string>
-    <string name="review_place_title">%1$s 리뷰</string>
     <string name="review_posted">리뷰를 올렸어요</string>
-    <string name="review_navigate_here">여기로 안내</string>
-    <string name="review_write_here">이곳 리뷰 쓰기</string>
-    <string name="review_navi_sent">내비에 보냈어요</string>
 </resources>

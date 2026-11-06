@@ -172,7 +172,7 @@ fn valid_text(day: &str) -> String {
 }
 
 /// 띄어쓰기 · 대소문자를 뺀 이름
-fn norm(s: &str) -> Vec<char> {
+pub(crate) fn norm(s: &str) -> Vec<char> {
     s.chars().filter(|c| !c.is_whitespace() && !matches!(c, '·' | '-' | '_' | '(' | ')')).flat_map(char::to_lowercase).collect()
 }
 
@@ -181,7 +181,7 @@ fn contains(hay: &[char], needle: &[char]) -> bool {
 }
 
 /// 같은 이름 (모듈 설명)
-fn same_name(a: &[char], b: &[char]) -> bool {
+pub(crate) fn same_name(a: &[char], b: &[char]) -> bool {
     if a.is_empty() || b.is_empty() {
         return false;
     }
@@ -190,7 +190,7 @@ fn same_name(a: &[char], b: &[char]) -> bool {
 }
 
 /// 3글자가 겹치는 이름
-fn shares_word(a: &[char], b: &[char]) -> bool {
+pub(crate) fn shares_word(a: &[char], b: &[char]) -> bool {
     a.len() >= 3 && a.windows(3).any(|w| contains(b, w))
 }
 

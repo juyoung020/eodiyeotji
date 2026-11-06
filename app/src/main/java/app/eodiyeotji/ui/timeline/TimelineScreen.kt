@@ -95,7 +95,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.BuildConfig
 import app.eodiyeotji.R
-import app.eodiyeotji.ui.place.PlacePhotoViewer
+import app.eodiyeotji.ui.place.LocalOpenPlace
+import app.eodiyeotji.ui.place.placeDetailOpenLabel
 import app.eodiyeotji.ui.place.PlaceThumbnail
 import app.eodiyeotji.ui.places.EditTarget
 import app.eodiyeotji.ui.places.PlaceEditHost
@@ -109,6 +110,7 @@ import app.eodiyeotji.core.DayEntry
 import app.eodiyeotji.core.DaySummary
 import app.eodiyeotji.core.PlaceSource
 import app.eodiyeotji.core.StaySummary
+import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.core.TripSummary
 import app.eodiyeotji.ui.home.CoreStatusLine
 import app.eodiyeotji.ui.map.DayMap
@@ -1109,15 +1111,17 @@ private fun StayRow(
         badge = if (offers.isNotEmpty()) ({ PlaceCouponBadge(offers) }) else null,
         trailing = place?.let { p ->
             {
-                // 정차한 곳 대표 사진 (구글 지도 사진): 앨범에 붙인 사진처럼 흰 테두리 + 살짝 기울임(행마다 번갈아). 누르면 크게 넘겨 본다.
-                var viewer by rememberSaveable { mutableStateOf(false) }
+                // 정차한 곳 대표 사진 (구글 지도 사진): 앨범에 붙인 사진처럼 흰 테두리 + 살짝 기울임(행마다 번갈아).
+                // 누르면 장소 상세 창 (큰 사진 · 별점 · 리뷰 · 안내)
+                val openPlace = LocalOpenPlace.current
                 AlbumPhoto(
-                    Modifier.size(StayThumb).clickable(onClickLabel = stringResource(R.string.place_photos_open)) { viewer = true },
+                    Modifier.size(StayThumb).clickable(onClickLabel = placeDetailOpenLabel()) {
+                        openPlace(StopFact(p.name, p.category, p.address, stay.arriveMs, stay.leaveMs, stay.center.lat, stay.center.lon, false))
+                    },
                     tilt = if ((stay.arriveMs / 60_000) % 2 == 0L) -2.5f else 2.5f,
                 ) {
                     PlaceThumbnail(p.name, p.address, stay.center.lat, stay.center.lon, modifier = Modifier.fillMaxSize())
                 }
-                if (viewer) PlacePhotoViewer(p.name, p.address, stay.center.lat, stay.center.lon) { viewer = false }
             }
         },
     )

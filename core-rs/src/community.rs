@@ -917,11 +917,11 @@ impl EodiStore {
 
 // ---- 읽기 · 쓰기 ----
 
-fn stop_point(s: &StopFact) -> Point {
+pub(crate) fn stop_point(s: &StopFact) -> Point {
     Point { lat: s.lat, lon: s.lon }
 }
 
-fn valid_point(lat: f64, lon: f64) -> bool {
+pub(crate) fn valid_point(lat: f64, lon: f64) -> bool {
     lat.is_finite() && lon.is_finite() && lat.abs() <= 90.0 && lon.abs() <= 180.0 && !(lat == 0.0 && lon == 0.0)
 }
 
@@ -945,7 +945,7 @@ fn clamp_limit(limit: u32) -> usize {
 }
 
 /// 인기순 = 하트 많은 순 → 최신 → id, 최신순 = 올린 시각 → id. [key] = (하트, 올린 시각, id).
-fn sort_by_hearts<T>(items: &mut [T], sort: CommunitySort, key: impl Fn(&T) -> (u32, i64, &str)) {
+pub(crate) fn sort_by_hearts<T>(items: &mut [T], sort: CommunitySort, key: impl Fn(&T) -> (u32, i64, &str)) {
     items.sort_by(|a, b| {
         let (ha, ca, ia) = key(a);
         let (hb, cb, ib) = key(b);
@@ -1008,7 +1008,7 @@ fn course_from_row(r: &Row) -> rusqlite::Result<CoursePost> {
 }
 
 /// 코스 전부(또는 [id] 하나). 기기 안 코스는 수십~수백 개라 다 읽어 Rust에서 거르고 정렬한다.
-fn load_courses(conn: &Connection, id: Option<&str>) -> Result<Vec<CoursePost>, CoreError> {
+pub(crate) fn load_courses(conn: &Connection, id: Option<&str>) -> Result<Vec<CoursePost>, CoreError> {
     load_rows(conn, "community_course", COURSE_COLS, id, course_from_row)
 }
 
@@ -1043,7 +1043,7 @@ fn review_from_row(r: &Row) -> rusqlite::Result<PlaceReview> {
     })
 }
 
-fn load_reviews(conn: &Connection, id: Option<&str>) -> Result<Vec<PlaceReview>, CoreError> {
+pub(crate) fn load_reviews(conn: &Connection, id: Option<&str>) -> Result<Vec<PlaceReview>, CoreError> {
     load_rows(conn, "place_review", REVIEW_COLS, id, review_from_row)
 }
 

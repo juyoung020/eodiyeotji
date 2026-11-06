@@ -101,6 +101,7 @@ import app.eodiyeotji.ui.community.OverlayCard
 import app.eodiyeotji.ui.community.StopPhoto
 import app.eodiyeotji.ui.community.TogglePill
 import app.eodiyeotji.ui.theme.EodiIcons
+import app.eodiyeotji.ui.place.LocalOpenPlace
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.theme.SparkleBadge
 import java.time.LocalDate
@@ -319,7 +320,17 @@ fun SearchResults(
         viewModel.remember()
         viewModel.hide()
     }
-    val open: (SearchRow) -> Unit = { r ->
+    val openPlace = LocalOpenPlace.current
+    val open: (SearchRow) -> Unit = open@{ r ->
+        val place = r.place
+        if (r.kind == SearchRowKind.PLACE && place != null) {
+            // 장소 줄: 결과 위에 장소 상세 창 (별점 · 리뷰 · 내 방문). 닫으면 검색 결과로 돌아온다. 그날 기록은 [지도] 버튼.
+            keyboard?.hide()
+            focus.clearFocus()
+            viewModel.remember()
+            openPlace(place)
+            return@open
+        }
         leave()
         when (r.kind) {
             SearchRowKind.PLACE, SearchRowKind.DAY -> r.day?.let { actions.openDay(it, null) }
