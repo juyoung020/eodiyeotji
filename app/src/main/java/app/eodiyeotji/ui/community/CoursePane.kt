@@ -308,7 +308,7 @@ private fun CourseHero(stops: List<StopFact>, onOpenPlace: (StopFact) -> Unit, o
         val slots = ((maxWidth - 32.dp + StripGap) / (StripThumb + StripGap)).toInt().coerceIn(1, MaxStripThumbs + 1)
         val shown = if (rest.size <= slots) rest else rest.take(slots - 1)
         val hidden = rest.size - shown.size
-        AlbumPhoto(Modifier.fillMaxWidth().aspectRatio(16f / 9f), radius = 18.dp) {
+        AlbumPhoto(Modifier.fillMaxWidth().aspectRatio(2.1f), radius = 18.dp) {
             if (first != null) {
                 StopPhotoBox(
                     first.name, first.address, first.lat, first.lon, order = 1,
