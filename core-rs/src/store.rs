@@ -56,7 +56,7 @@ use crate::places::{self, PlaceLabel, REF_END, REF_START, REF_STAY};
 use crate::trip::{self, DriveMark, MarkKind, Segmenter, Stay, TripConfig};
 
 /// DB 구조 버전 (`PRAGMA user_version`). 구조를 바꾸면 올리고 `migrate`에 단계를 추가한다.
-pub(crate) const SCHEMA_VERSION: i32 = 8;
+pub(crate) const SCHEMA_VERSION: i32 = 9;
 /// 이보다 정확도가 나쁜(m) 점은 버린다.
 pub const MAX_ACCURACY_M: f32 = 100.0;
 /// 지도에 넘길 경로의 단순화 허용 오차(m).
@@ -393,7 +393,11 @@ fn migrate(conn: &mut Connection) -> Result<(), CoreError> {
         // 받은 제휴 쿠폰 (쿠폰함)
         tx.execute_batch(crate::offers::SCHEMA_V8)?;
     }
-    // 다음 버전은 여기에: if version < 9 { ... }
+    if version < 9 {
+        // 자세한 리뷰(키워드 · 누구와 · 때 · 머문 시간 · 몇 번째 방문). 기존 줄은 기본값으로 읽힌다.
+        crate::community::migrate_v9(&tx)?;
+    }
+    // 다음 버전은 여기에: if version < 10 { ... }
     tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     tx.commit()?;
     Ok(())

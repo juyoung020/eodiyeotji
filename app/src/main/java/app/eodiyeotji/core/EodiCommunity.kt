@@ -12,6 +12,8 @@ import app.eodiyeotji.core.rust.PlaceReview as RPlaceReview
 import app.eodiyeotji.core.rust.SharePreview as RSharePreview
 import app.eodiyeotji.core.rust.StopFact as RStopFact
 import app.eodiyeotji.core.rust.parseOpenMeteoWeather
+import app.eodiyeotji.core.rust.reviewKeywordLimit as rustReviewKeywordLimit
+import app.eodiyeotji.core.rust.reviewKeywordOptions as rustReviewKeywordOptions
 import app.eodiyeotji.place.PlatformHttp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -121,10 +123,29 @@ suspend fun EodiCore.visitWeather(place: StopFact): String? {
     return fetchWeather(req.url, req.day)
 }
 
-suspend fun EodiCore.addPlaceReviewWith(place: StopFact, rating: Int, text: String, weather: String?): TravelReview =
-    withContext(Dispatchers.IO) {
-        rust.addPlaceReviewWith(place.toR(), rating.coerceIn(1, 5).toUByte(), text, weather, System.currentTimeMillis()).toTravel()
-    }
+/**
+ * 리뷰 쓰기. [keywords]는 고른 키워드 (정해진 것만 · 5개까지 Rust가 거른다), [withWhom]은 누구와 (안 고르면 null).
+ * 다녀온 때 · 머문 시간 · 몇 번째 방문은 Rust가 [place](내 기록의 실제 방문)에서 채운다.
+ */
+suspend fun EodiCore.writePlaceReview(
+    place: StopFact,
+    rating: Int,
+    text: String,
+    keywords: List<String>,
+    withWhom: WithWhom?,
+    weather: String?,
+): TravelReview = withContext(Dispatchers.IO) {
+    rust.writePlaceReview(
+        place.toR(), rating.coerceIn(1, 5).toUByte(), text, keywords, withWhom?.toR(), weather, System.currentTimeMillis(),
+    ).toTravel()
+}
+
+/** 리뷰 쓰기에서 고를 수 있는 키워드(정해진 순서)와 한 리뷰에 고를 수 있는 수. */
+data class ReviewKeywordOptions(val keywords: List<String>, val limit: Int)
+
+suspend fun EodiCore.reviewKeywordOptions(): ReviewKeywordOptions = withContext(Dispatchers.Default) {
+    ReviewKeywordOptions(rustReviewKeywordOptions(), rustReviewKeywordLimit().toInt())
+}
 
 // ---- 게시판 ----
 
@@ -190,10 +211,7 @@ internal fun List<TravelReview>.withOffers(): List<TravelReview> {
 
 internal fun RCoursePost.toDrive() = DriveCourse(toModel(), Visit(visitedDay, season, weather))
 
-internal fun RPlaceReview.toTravel() = TravelReview(
-    PlaceReview(id, place.toModel(), author, mine, rating.toInt(), text, createdMs, hearts.toInt(), heartedByMe),
-    Visit(visitedDay, season, weather),
-)
+internal fun RPlaceReview.toTravel() = TravelReview(toModel(), Visit(visitedDay, season, weather))
 
 private fun REpisodeKind.toKind() = when (this) {
     REpisodeKind.COMMUTE_TO_WORK -> EpisodeKind.COMMUTE_TO_WORK

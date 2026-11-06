@@ -10,13 +10,16 @@ import app.eodiyeotji.core.LatLon
 import app.eodiyeotji.core.PopularPlace
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.core.TravelReview
-import app.eodiyeotji.core.addPlaceReviewWith
+import app.eodiyeotji.core.ReviewKeywordOptions
+import app.eodiyeotji.core.WithWhom
+import app.eodiyeotji.core.reviewKeywordOptions
 import app.eodiyeotji.core.lastKnownPosition
 import app.eodiyeotji.core.popularPlaces
 import app.eodiyeotji.core.reviewCandidates
 import app.eodiyeotji.core.toggleReviewHeart
 import app.eodiyeotji.core.travelReviews
 import app.eodiyeotji.core.visitWeather
+import app.eodiyeotji.core.writePlaceReview
 import app.eodiyeotji.ui.community.Load
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -35,16 +38,35 @@ enum class ReviewMode { PLACES, FEED }
 @Immutable
 data class PlaceReviews(val place: PopularPlace)
 
-/** 리뷰 쓰기: 들른 곳 고르기 → 별점 + 한 줄. */
+/**
+ * 리뷰 쓰기: 들른 곳 고르기 → 별점 + 키워드(여러 개, [keywordLimit]개까지) + 누구와 + 후기.
+ * [keywordOptions]는 Rust가 정한 키워드 목록 (`review_keyword_options`). 다녀온 때 · 머문 시간 · 몇 번째 방문은 Rust가 기록에서 채운다.
+ */
 @Immutable
 data class ReviewDraft(
     val candidates: Load<StopFact> = Load.Loading,
     val place: StopFact? = null,
     val rating: Int = 5,
     val text: String = "",
+    val keywordOptions: List<String> = emptyList(),
+    val keywordLimit: Int = 5,
+    val keywords: List<String> = emptyList(),
+    val withWhom: WithWhom? = null,
     val submitting: Boolean = false,
     val error: String? = null,
-)
+) {
+    /** 키워드 누르기: 고른 것이면 빼고, 아니면 [keywordLimit]개까지 더한다. */
+    fun toggleKeyword(k: String): ReviewDraft = when {
+        k in keywords -> copy(keywords = keywords - k)
+        keywords.size >= keywordLimit -> this
+        else -> copy(keywords = keywords + k)
+    }
+
+    /** 누구와: 같은 것을 다시 누르면 고르지 않은 상태로. */
+    fun pickWith(w: WithWhom): ReviewDraft = copy(withWhom = if (withWhom == w) null else w)
+
+    fun withOptions(o: ReviewKeywordOptions): ReviewDraft = copy(keywordOptions = o.keywords, keywordLimit = o.limit)
+}
 
 @Immutable
 data class ReviewUiState(
@@ -131,6 +153,7 @@ class ReviewViewModel @Inject constructor(
     fun startDraft() {
         _state.update { it.copy(draft = ReviewDraft()) }
         viewModelScope.launch {
+            val options = runCatching { core.reviewKeywordOptions() }.getOrNull()
             val r = try {
                 Load.Loaded(core.reviewCandidates())
             } catch (e: CancellationException) {
@@ -138,7 +161,7 @@ class ReviewViewModel @Inject constructor(
             } catch (e: Exception) {
                 Load.Failed(e.message ?: e.javaClass.simpleName)
             }
-            _state.update { s -> s.copy(draft = s.draft?.copy(candidates = r)) }
+            _state.update { s -> s.copy(draft = s.draft?.copy(candidates = r)?.let { d -> options?.let(d::withOptions) ?: d }) }
         }
     }
 
@@ -146,6 +169,8 @@ class ReviewViewModel @Inject constructor(
     fun pickPlace(p: StopFact?) = _state.update { s -> s.copy(draft = s.draft?.copy(place = p, error = null)) }
     fun setRating(r: Int) = _state.update { s -> s.copy(draft = s.draft?.copy(rating = r.coerceIn(1, 5))) }
     fun setText(t: String) = _state.update { s -> s.copy(draft = s.draft?.copy(text = t.take(500))) }
+    fun toggleKeyword(k: String) = _state.update { s -> s.copy(draft = s.draft?.toggleKeyword(k)) }
+    fun pickWith(w: WithWhom) = _state.update { s -> s.copy(draft = s.draft?.pickWith(w)) }
 
     fun submitDraft() {
         val d = _state.value.draft ?: return
@@ -155,7 +180,7 @@ class ReviewViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val weather = core.visitWeather(place)
-                core.addPlaceReviewWith(place, d.rating, d.text, weather)
+                core.writePlaceReview(place, d.rating, d.text, d.keywords, d.withWhom, weather)
                 _state.update { it.copy(draft = null, mode = ReviewMode.FEED, sort = CommunitySort.RECENT, justPosted = true) }
                 reload()
             } catch (e: CancellationException) {

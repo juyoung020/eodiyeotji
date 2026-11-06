@@ -68,7 +68,8 @@ import app.eodiyeotji.ui.community.RoundIconButton
 import app.eodiyeotji.ui.community.SecondaryPill
 import app.eodiyeotji.ui.community.dateText
 import app.eodiyeotji.ui.offers.PlaceCouponBadge
-import app.eodiyeotji.ui.review.ReviewCard
+import app.eodiyeotji.ui.review.LikedKeywords
+import app.eodiyeotji.ui.review.RichReviewCard
 import app.eodiyeotji.ui.review.WriteReviewSheet
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
@@ -76,7 +77,8 @@ import java.time.LocalDate
 import java.util.Locale
 
 /*
- * 장소 상세 창 (네이버 지도 장소 창처럼): 큰 사진 → 이름 · 분류 · 주소 · 별점 요약 → [안내 · 저장 · 리뷰 쓰기] → 내 방문 → 리뷰.
+ * 장소 상세 창 (네이버 지도 장소 창처럼): 큰 사진 → 이름 · 분류 · 주소 · 별점 요약 → [안내 · 저장 · 리뷰 쓰기] → 내 방문 →
+ * "이런 점이 좋았어요"(키워드 막대) → 자세한 리뷰 카드.
  * 앱 어디서든 장소를 누르면 [LocalOpenPlace]로 연다. 계산(같은 곳 고르기 · 리뷰 정렬 · 별점 · 내 방문)은 Rust `place_detail`.
  * - 차: 화면 오른쪽 큰 창 (폭 약 64%), 바깥을 누르거나 뒤로 가기로 닫는다.
  * - 폰: 아래 시트 ([LocalOverlayPresenter]).
@@ -115,6 +117,8 @@ fun PlaceDetailHost() {
             onPick = vm::pickPlace,
             onRating = vm::setRating,
             onText = vm::setText,
+            onKeyword = vm::toggleKeyword,
+            onWith = vm::pickWith,
             onSubmit = vm::submitDraft,
             onClose = vm::closeDraft,
         )
@@ -217,6 +221,11 @@ private fun PlaceDetailContent(opened: StopFact, s: PlaceDetailUiState, vm: Plac
                     Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = c.accent) }
                 }
                 else -> {
+                    if (d.keywords.isNotEmpty()) {
+                        item(key = "liked", contentType = "liked") {
+                            LikedKeywords(d.keywords, d.keywordVoters, Modifier.padding(start = pad, end = pad, bottom = 32.dp))
+                        }
+                    }
                     item(key = "reviews-h", contentType = "header") {
                         Row(Modifier.padding(start = pad, end = pad, bottom = 16.dp), verticalAlignment = Alignment.Bottom) {
                             Text(
@@ -242,7 +251,7 @@ private fun PlaceDetailContent(opened: StopFact, s: PlaceDetailUiState, vm: Plac
                     } else {
                         items(d.reviews, key = { "r-${it.review.id}" }, contentType = { "review" }) { r ->
                             Box(Modifier.padding(start = pad, end = pad, bottom = 12.dp)) {
-                                ReviewCard(r, onHeart = { vm.toggleHeart(r.review.id) }, showPlace = false)
+                                RichReviewCard(r, onHeart = { vm.toggleHeart(r.review.id) }, showPlace = false)
                             }
                         }
                     }

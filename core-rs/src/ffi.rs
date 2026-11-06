@@ -39,6 +39,18 @@ pub fn core_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+/// 리뷰 쓰기 화면에서 고를 수 있는 키워드 (정해진 순서, `community::REVIEW_KEYWORDS`).
+#[uniffi::export]
+pub fn review_keyword_options() -> Vec<String> {
+    crate::community::REVIEW_KEYWORDS.iter().map(|k| k.to_string()).collect()
+}
+
+/// 리뷰 하나에 고를 수 있는 키워드 수.
+#[uniffi::export]
+pub fn review_keyword_limit() -> u32 {
+    crate::community::MAX_REVIEW_KEYWORDS as u32
+}
+
 /// 경로 단순화. 남길 점의 인덱스를 오름차순으로 돌려준다.
 #[uniffi::export]
 pub fn simplify_route(points: Vec<GeoPoint>, tolerance_m: f64) -> Vec<u32> {

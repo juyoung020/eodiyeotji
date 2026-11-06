@@ -9,6 +9,8 @@ import app.eodiyeotji.core.rust.parseGooglePlacePhotos
 import app.eodiyeotji.core.rust.placePhotoKey
 import app.eodiyeotji.core.rust.placePhotoQuery
 import app.eodiyeotji.core.rust.PlacePhotos as RPlacePhotos
+import app.eodiyeotji.core.rust.TimeOfDay as RTimeOfDay
+import app.eodiyeotji.core.rust.WithWhom as RWithWhom
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.util.TimeZone
@@ -233,7 +235,7 @@ suspend fun EodiCore.placeReviews(sort: CommunitySort, near: LatLon? = null, rad
 suspend fun EodiCore.popularPlaces(near: LatLon? = null, radiusKm: Double = 30.0, limit: Int = 30): List<PopularPlace> =
     withContext(Dispatchers.IO) {
         rust.popularPlaces(near?.let { RNearFilter(RGeoPoint(it.lat, it.lon), radiusKm) }, limit.toUInt())
-            .map { PopularPlace(it.place.toModel(), it.hearts.toInt(), it.reviewCount.toInt(), it.avgRating) }
+            .map { PopularPlace(it.place.toModel(), it.hearts.toInt(), it.reviewCount.toInt(), it.avgRating, it.topKeyword) }
     }
 
 /** 하트 누르기/취소 → 바뀐 하트 수. */
@@ -266,12 +268,28 @@ data class CoursePost(
     val visitedDay: String = "", val season: String = "", val weather: String? = null,
 )
 
+/**
+ * 여행 리뷰 하나. [keywords] = 고른 키워드 ("뷰가 좋아요"), [withWhom] · [timeOfDay] = 누구와 · 다녀온 때 (모르면 null),
+ * [stayMin] = 머문 분 (모르면 0), [visitNth] = 글쓴이의 몇 번째 방문 (모르면 0). 내 기록에서 채우는 값은 Rust가 정한다.
+ */
 data class PlaceReview(
     val id: String, val place: StopFact, val author: String, val mine: Boolean, val rating: Int, val text: String,
     val createdMs: Long, val hearts: Int, val heartedByMe: Boolean,
+    val keywords: List<String> = emptyList(),
+    val withWhom: WithWhom? = null,
+    val timeOfDay: TimeOfDay? = null,
+    val stayMin: Int = 0,
+    val visitNth: Int = 0,
 )
 
-data class PopularPlace(val place: StopFact, val hearts: Int, val reviewCount: Int, val avgRating: Float)
+/** 누구와 갔는지 (리뷰 쓸 때 고른다). */
+enum class WithWhom { ALONE, PARTNER, FAMILY, KIDS, FRIENDS, PET }
+
+/** 다녀온 때 (도착 시각으로 Rust가 정한다). */
+enum class TimeOfDay { MORNING, DAY, EVENING, NIGHT }
+
+/** 인기 장소. [topKeyword] = 리뷰에서 가장 많이 고른 키워드 (없으면 null). */
+data class PopularPlace(val place: StopFact, val hearts: Int, val reviewCount: Int, val avgRating: Float, val topKeyword: String? = null)
 
 private fun CommunitySort.toRust() = when (this) {
     CommunitySort.POPULAR -> RCommunitySort.POPULAR
@@ -283,8 +301,39 @@ internal fun RCoursePost.toModel() = CoursePost(
     visitedDay, season, weather,
 )
 
-private fun RPlaceReview.toModel() =
-    PlaceReview(id, place.toModel(), author, mine, rating.toInt(), text, createdMs, hearts.toInt(), heartedByMe)
+internal fun RPlaceReview.toModel() = PlaceReview(
+    id, place.toModel(), author, mine, rating.toInt(), text, createdMs, hearts.toInt(), heartedByMe,
+    keywords = keywords,
+    withWhom = withWhom?.toModel(),
+    timeOfDay = timeOfDay?.toModel(),
+    stayMin = stayMin.toInt(),
+    visitNth = visitNth.toInt(),
+)
+
+private fun RWithWhom.toModel() = when (this) {
+    RWithWhom.ALONE -> WithWhom.ALONE
+    RWithWhom.PARTNER -> WithWhom.PARTNER
+    RWithWhom.FAMILY -> WithWhom.FAMILY
+    RWithWhom.KIDS -> WithWhom.KIDS
+    RWithWhom.FRIENDS -> WithWhom.FRIENDS
+    RWithWhom.PET -> WithWhom.PET
+}
+
+internal fun WithWhom.toR() = when (this) {
+    WithWhom.ALONE -> RWithWhom.ALONE
+    WithWhom.PARTNER -> RWithWhom.PARTNER
+    WithWhom.FAMILY -> RWithWhom.FAMILY
+    WithWhom.KIDS -> RWithWhom.KIDS
+    WithWhom.FRIENDS -> RWithWhom.FRIENDS
+    WithWhom.PET -> RWithWhom.PET
+}
+
+private fun RTimeOfDay.toModel() = when (this) {
+    RTimeOfDay.MORNING -> TimeOfDay.MORNING
+    RTimeOfDay.DAY -> TimeOfDay.DAY
+    RTimeOfDay.EVENING -> TimeOfDay.EVENING
+    RTimeOfDay.NIGHT -> TimeOfDay.NIGHT
+}
 
 private fun RPlacePhotos.toModel() =
     PlacePhotos(found, photos.map { PlacePhoto(it.name, it.widthPx.toInt(), it.heightPx.toInt(), it.author) })

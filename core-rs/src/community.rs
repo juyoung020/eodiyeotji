@@ -16,6 +16,8 @@
 //! - `community_course`: 코스 한 줄. 들른 곳은 JSON 배열. 하트 = `others_hearts`(다른 사람들, 서버가 셀 값) +
 //!   `my_heart`(0/1, 내가 누름). 내가 올린 코스는 `id = "me-<에피소드 id>"`, `mine = 1`, `episode_id`가 있다.
 //! - `place_review`: 리뷰 한 줄 (장소 이름·분류·주소·좌표를 그대로 담는다). 하트는 코스와 같은 방식.
+//!   버전 9부터 키워드([REVIEW_KEYWORDS] 중 5개까지)·누구와·다녀온 때·머문 분·몇 번째 방문도 담는다 (내가 쓸 때는 기록에서 채움,
+//!   [EodiStore::write_place_review]). 장소별 키워드 요약(많은 순)도 여기서 센다 ([keyword_summary]).
 //! - `board_post`·`board_comment`: 게시판 글·댓글.
 //! - 코스·리뷰는 다녀온 날(`visited_day`)과 그날 날씨(`weather`, 올리는 순간 받은 것)를 같이 둔다. 계절은 날짜로
 //!   그때그때 계산한다 (`weather` 모듈).
@@ -114,6 +116,36 @@ CREATE TABLE board_comment (
 CREATE INDEX board_comment_post ON board_comment (post_id, created_ms);
 ";
 
+/// DB 구조 버전 9에서 더하는 칸 (표, 칸, 정의). 기존 줄은 기본값(빈 키워드·모름·0)으로 그대로 읽힌다.
+/// 리뷰: 키워드(U+001F로 이음), 누구와(`WithWhom` 키), 때(`TimeOfDay` 키), 머문 분, 몇 번째 방문.
+const V9_COLUMNS: &[(&str, &str, &str)] = &[
+    ("place_review", "keywords", "TEXT NOT NULL DEFAULT ''"),
+    ("place_review", "with_whom", "TEXT"),
+    ("place_review", "time_of_day", "TEXT"),
+    ("place_review", "stay_min", "INTEGER NOT NULL DEFAULT 0"),
+    ("place_review", "visit_nth", "INTEGER NOT NULL DEFAULT 0"),
+];
+
+/// 버전 9 칸 더하기. 이미 있는 칸은 건너뛴다 (테스트가 버전 숫자만 되돌려도 다시 올릴 수 있게).
+pub(crate) fn migrate_v9(conn: &Connection) -> rusqlite::Result<()> {
+    for (table, col, def) in V9_COLUMNS {
+        let has: i64 =
+            conn.query_row(&format!("SELECT count(*) FROM pragma_table_info('{table}') WHERE name = ?1"), [col], |r| r.get(0))?;
+        if has == 0 {
+            conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {col} {def};"))?;
+        }
+    }
+    Ok(())
+}
+
+/// 예전 버전 DB를 흉내 내는 테스트용 (v9 칸 지우기).
+#[cfg(test)]
+pub(crate) fn drop_v9(conn: &Connection) {
+    for (table, col, _) in V9_COLUMNS {
+        conn.execute_batch(&format!("ALTER TABLE {table} DROP COLUMN {col};")).unwrap();
+    }
+}
+
 /// 예전 버전 DB를 흉내 내는 테스트용 (v5 표 지우기).
 #[cfg(test)]
 pub(crate) const DROP_V5: &str =
@@ -132,6 +164,103 @@ const DEFAULT_LIMIT: usize = 50;
 const MAX_LIMIT: usize = 500;
 /// 리뷰 글 최대 길이(글자).
 pub const MAX_REVIEW_CHARS: usize = 500;
+/// 리뷰 키워드 (네이버 지도 "이런 점이 좋았어요"처럼 정해진 것 중에서 고른다). 요약에서 수가 같으면 이 순서.
+pub const REVIEW_KEYWORDS: &[&str] = &[
+    "뷰가 좋아요",
+    "음식이 맛있어요",
+    "커피가 맛있어요",
+    "사진 찍기 좋아요",
+    "산책하기 좋아요",
+    "드라이브하기 좋아요",
+    "야경이 멋져요",
+    "아이와 가기 좋아요",
+    "반려동물과 가기 좋아요",
+    "주차하기 편해요",
+    "충전하기 편해요",
+    "화장실이 깨끗해요",
+    "조용해요",
+    "친절해요",
+    "가성비 좋아요",
+];
+/// 리뷰 하나에 고를 수 있는 키워드 수.
+pub const MAX_REVIEW_KEYWORDS: usize = 5;
+/// 장소 창 "이런 점이 좋았어요"에 보여 줄 키워드 수.
+pub const KEYWORD_SUMMARY_TOP: usize = 5;
+
+/// 누구와 갔는지 (리뷰 쓸 때 고른다).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum WithWhom {
+    Alone,
+    /// 연인 · 배우자
+    Partner,
+    Family,
+    /// 아이와
+    Kids,
+    Friends,
+    Pet,
+}
+
+impl WithWhom {
+    const ALL: [WithWhom; 6] = [WithWhom::Alone, WithWhom::Partner, WithWhom::Family, WithWhom::Kids, WithWhom::Friends, WithWhom::Pet];
+
+    pub(crate) fn key(self) -> &'static str {
+        match self {
+            WithWhom::Alone => "alone",
+            WithWhom::Partner => "partner",
+            WithWhom::Family => "family",
+            WithWhom::Kids => "kids",
+            WithWhom::Friends => "friends",
+            WithWhom::Pet => "pet",
+        }
+    }
+
+    fn from_key(k: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|w| w.key() == k)
+    }
+}
+
+/// 다녀온 때 (도착 시각의 현지 시간으로 정한다: 아침 5~11시, 낮 11~17시, 저녁 17~21시, 밤 21~5시).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum TimeOfDay {
+    Morning,
+    Day,
+    Evening,
+    Night,
+}
+
+impl TimeOfDay {
+    const ALL: [TimeOfDay; 4] = [TimeOfDay::Morning, TimeOfDay::Day, TimeOfDay::Evening, TimeOfDay::Night];
+
+    pub(crate) fn from_hour(h: i64) -> Self {
+        match h.rem_euclid(24) {
+            5..=10 => TimeOfDay::Morning,
+            11..=16 => TimeOfDay::Day,
+            17..=20 => TimeOfDay::Evening,
+            _ => TimeOfDay::Night,
+        }
+    }
+
+    pub(crate) fn key(self) -> &'static str {
+        match self {
+            TimeOfDay::Morning => "morning",
+            TimeOfDay::Day => "day",
+            TimeOfDay::Evening => "evening",
+            TimeOfDay::Night => "night",
+        }
+    }
+
+    fn from_key(k: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|t| t.key() == k)
+    }
+}
+
+/// 키워드 하나의 수 ("이런 점이 좋았어요" 막대 한 줄). [ratio] = 수 / 맨 위 키워드 수 (막대 길이, 0~1).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct KeywordCount {
+    pub keyword: String,
+    pub count: u32,
+    pub ratio: f32,
+}
 
 /// 정렬 기준.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
@@ -196,6 +325,16 @@ pub struct PlaceReview {
     pub visited_day: String,
     pub season: String,
     pub weather: Option<String>,
+    /// 고른 키워드 ([REVIEW_KEYWORDS] 중, 최대 5개)
+    pub keywords: Vec<String>,
+    /// 누구와 (모르면 None)
+    pub with_whom: Option<WithWhom>,
+    /// 다녀온 때 (모르면 None)
+    pub time_of_day: Option<TimeOfDay>,
+    /// 머문 분 (모르면 0)
+    pub stay_min: u32,
+    /// 글쓴이의 몇 번째 방문인지 (모르면 0)
+    pub visit_nth: u32,
 }
 
 /// 인기 장소 (리뷰·하트를 장소별로 모은 것).
@@ -207,6 +346,8 @@ pub struct PopularPlace {
     pub review_count: u32,
     /// 리뷰 평균 별점 (리뷰 없으면 0)
     pub avg_rating: f32,
+    /// 리뷰에서 가장 많이 고른 키워드 (없으면 None)
+    pub top_keyword: Option<String>,
 }
 
 /// 추천 코스 (에이전트 도구 결과). [score]가 클수록 위, [distance_km]는 지금 위치~코스 첫 곳.
@@ -533,6 +674,7 @@ impl EodiStore {
                 hearts: g.hearts.min(u32::MAX as u64) as u32,
                 review_count: g.reviews,
                 avg_rating: g.avg_rating().unwrap_or(0.0) as f32,
+                top_keyword: rank_keywords(&g.keywords, 1).pop().map(|k| k.keyword),
                 place: g.place,
             })
             .collect();
@@ -592,14 +734,37 @@ impl EodiStore {
         self.add_place_review_with(place, rating, text, None, now_ms)
     }
 
-    /// 들른 곳 리뷰 쓰기. 별점 1~5, 글은 앞뒤 공백을 지우고 500자까지. 들른 날 = `place.arrive_ms`의 현지 날짜
-    /// (0 이하면 [now_ms]). [weather]는 그날 날씨 글 (Kotlin이 [EodiStore::visit_weather_url]로 받아 바꾼 것).
-    /// 이름이 비었거나 좌표·별점이 틀리면 `InvalidInput`.
+    /// 들른 곳 리뷰 쓰기 ([EodiStore::write_place_review]에서 키워드 · 누구와 없이).
     pub fn add_place_review_with(
         &self,
         place: StopFact,
         rating: u8,
         text: String,
+        weather: Option<String>,
+        now_ms: i64,
+    ) -> Result<PlaceReview, CoreError> {
+        self.write_place_review(place, rating, text, vec![], None, weather, now_ms)
+    }
+
+    /// 들른 곳 리뷰 쓰기. 별점 1~5, 글은 앞뒤 공백을 지우고 500자까지. [keywords]는 [REVIEW_KEYWORDS]에 있는 것만
+    /// 겹치지 않게 앞에서부터 5개까지 남긴다. [weather]는 그날 날씨 글 (Kotlin이 [EodiStore::visit_weather_request]로 받아 바꾼 것).
+    ///
+    /// 내 기록에서 채우는 것 (`place`가 리뷰 쓸 곳 목록에서 온 실제 방문일 때):
+    /// - 들른 날 = `place.arrive_ms`의 현지 날짜 (0 이하면 [now_ms]의 날짜)
+    /// - 때 = 도착 시각의 현지 시간 ([TimeOfDay::from_hour]). 도착 시각을 모르면 None
+    /// - 머문 분 = 떠난 시각 − 도착 시각 (모르면 0)
+    /// - 몇 번째 방문 = 내 기록에서 이곳에 머문 날 중 들른 날보다 앞선 날 수 + 1 (장소 창 "내 방문"과 같은 곳 고르기).
+    ///   도착 시각을 모르면 0
+    ///
+    /// 이름이 비었거나 좌표 · 별점이 틀리면 `InvalidInput`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn write_place_review(
+        &self,
+        place: StopFact,
+        rating: u8,
+        text: String,
+        keywords: Vec<String>,
+        with_whom: Option<WithWhom>,
         weather: Option<String>,
         now_ms: i64,
     ) -> Result<PlaceReview, CoreError> {
@@ -610,13 +775,28 @@ impl EodiStore {
             return Err(CoreError::InvalidInput(format!("장소 {:?} ({}, {})", place.name, place.lat, place.lon)));
         }
         let text: String = text.trim().chars().take(MAX_REVIEW_CHARS).collect();
-        let visit = if place.arrive_ms > 0 { place.arrive_ms } else { now_ms };
-        let conn = self.lock()?;
+        let keywords = clean_keywords(&keywords);
+        let known = place.arrive_ms > 0;
+        let visit = if known { place.arrive_ms } else { now_ms };
+        let day = self.local_day(visit);
+        let tz_ms = i64::from(self.tz_minutes()) * 60_000;
+        let time_of_day = known.then(|| TimeOfDay::from_hour((visit + tz_ms).rem_euclid(crate::store::DAY_MS) / 3_600_000));
+        let stay_min =
+            if known && place.leave_ms > place.arrive_ms { ((place.leave_ms - place.arrive_ms + 30_000) / 60_000) as u32 } else { 0 };
+        let mut conn = self.lock()?;
+        let visit_nth = if known {
+            self.flush_all(&mut conn)?;
+            let (_, days) = crate::place_detail::my_visits(&conn, &crate::offers::norm(&place.name), stop_point(&place))?;
+            days.iter().filter(|&&d| d < day).count() as u32 + 1
+        } else {
+            0
+        };
         let id = free_id(&conn, "place_review", &format!("me-r{now_ms}"))?;
         conn.execute(
             "INSERT INTO place_review (id, name, category, address, visit_ms, lat, lon, author, mine, rating, text, created_ms,
-                                       visited_day, weather, others_hearts, my_heart)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1, ?9, ?10, ?11, ?12, ?13, 0, 0)",
+                                       visited_day, weather, others_hearts, my_heart, keywords, with_whom, time_of_day, stay_min,
+                                       visit_nth)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1, ?9, ?10, ?11, ?12, ?13, 0, 0, ?14, ?15, ?16, ?17, ?18)",
             params![
                 id,
                 place.name.trim(),
@@ -629,8 +809,13 @@ impl EodiStore {
                 rating,
                 text,
                 now_ms,
-                format_day(self.local_day(visit)),
-                weather::clean_weather(weather)
+                format_day(day),
+                weather::clean_weather(weather),
+                join_names(&keywords),
+                with_whom.map(WithWhom::key),
+                time_of_day.map(TimeOfDay::key),
+                stay_min,
+                visit_nth
             ],
         )?;
         load_reviews(&conn, Some(&id))?.pop().ok_or_else(|| CoreError::Db("쓴 리뷰를 다시 못 읽음".into()))
@@ -759,12 +944,69 @@ pub(crate) struct PlaceAgg {
     pub hearts: u64,
     pub reviews: u32,
     rating_sum: u32,
+    /// [REVIEW_KEYWORDS] 순서대로 고른 수
+    keywords: Vec<u32>,
 }
 
 impl PlaceAgg {
     fn avg_rating(&self) -> Option<f64> {
         (self.reviews > 0).then(|| self.rating_sum as f64 / self.reviews as f64)
     }
+}
+
+/// 키워드 이름 → [REVIEW_KEYWORDS] 번호 (정해진 키워드가 아니면 None).
+fn keyword_index(k: &str) -> Option<usize> {
+    let k = k.trim();
+    REVIEW_KEYWORDS.iter().position(|x| *x == k)
+}
+
+/// 고른 키워드 정리: 정해진 키워드만, 겹치면 한 번, 앞에서부터 [MAX_REVIEW_KEYWORDS]개.
+pub(crate) fn clean_keywords(keywords: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for i in keywords.iter().filter_map(|k| keyword_index(k)) {
+        let k = REVIEW_KEYWORDS[i].to_string();
+        if !out.contains(&k) {
+            out.push(k);
+        }
+        if out.len() == MAX_REVIEW_KEYWORDS {
+            break;
+        }
+    }
+    out
+}
+
+/// 키워드별 수 (리뷰 하나에서 같은 키워드는 한 번).
+fn keyword_tally<'a>(reviews: impl IntoIterator<Item = &'a PlaceReview>) -> (Vec<u32>, u32) {
+    let mut counts = vec![0u32; REVIEW_KEYWORDS.len()];
+    let mut voters = 0;
+    for r in reviews {
+        let mut seen = vec![false; REVIEW_KEYWORDS.len()];
+        for i in r.keywords.iter().filter_map(|k| keyword_index(k)) {
+            if !seen[i] {
+                seen[i] = true;
+                counts[i] += 1;
+            }
+        }
+        if seen.iter().any(|&b| b) {
+            voters += 1;
+        }
+    }
+    (counts, voters)
+}
+
+/// 수 → 많은 순 상위 [top]개 (같으면 [REVIEW_KEYWORDS] 순서, 0개는 뺀다). ratio = 수 / 맨 위 수.
+fn rank_keywords(counts: &[u32], top: usize) -> Vec<KeywordCount> {
+    let mut idx: Vec<usize> = (0..counts.len()).filter(|&i| counts[i] > 0).collect();
+    idx.sort_by(|&a, &b| counts[b].cmp(&counts[a]).then(a.cmp(&b)));
+    idx.truncate(top);
+    let max = idx.first().map_or(1, |&i| counts[i]).max(1) as f32;
+    idx.into_iter().map(|i| KeywordCount { keyword: REVIEW_KEYWORDS[i].to_string(), count: counts[i], ratio: counts[i] as f32 / max }).collect()
+}
+
+/// 장소 리뷰들의 "이런 점이 좋았어요": 많이 고른 키워드 상위 [KEYWORD_SUMMARY_TOP]개와 키워드를 고른 리뷰 수.
+pub(crate) fn keyword_summary<'a>(reviews: impl IntoIterator<Item = &'a PlaceReview>) -> (Vec<KeywordCount>, u32) {
+    let (counts, voters) = keyword_tally(reviews);
+    (rank_keywords(&counts, KEYWORD_SUMMARY_TOP), voters)
 }
 
 /// 리뷰·코스 들른 곳을 같은 장소끼리 묶은 것 (모듈 설명 "같은 장소 묶기").
@@ -782,6 +1024,9 @@ impl PlaceGroups {
             a.hearts += r.hearts as u64;
             a.reviews += 1;
             a.rating_sum += r.rating as u32;
+            for (k, n) in a.keywords.iter_mut().zip(keyword_tally([r]).0) {
+                *k += n;
+            }
         }
         for c in courses {
             // 한 코스가 같은 곳을 두 번 들러도 하트는 한 번만
@@ -805,7 +1050,7 @@ impl PlaceGroups {
             return i;
         }
         let place = StopFact { arrive_ms: 0, leave_ms: 0, first_visit: false, ..s.clone() };
-        self.groups.push(PlaceAgg { place, hearts: 0, reviews: 0, rating_sum: 0 });
+        self.groups.push(PlaceAgg { place, hearts: 0, reviews: 0, rating_sum: 0, keywords: vec![0; REVIEW_KEYWORDS.len()] });
         self.groups.len() - 1
     }
 }
@@ -1013,7 +1258,7 @@ pub(crate) fn load_courses(conn: &Connection, id: Option<&str>) -> Result<Vec<Co
 }
 
 const REVIEW_COLS: &str = "id, name, category, address, visit_ms, lat, lon, author, mine, rating, text, created_ms,
-     others_hearts + my_heart, my_heart, visited_day, weather";
+     others_hearts + my_heart, my_heart, visited_day, weather, keywords, with_whom, time_of_day, stay_min, visit_nth";
 
 fn review_from_row(r: &Row) -> rusqlite::Result<PlaceReview> {
     let visit: i64 = r.get(4)?;
@@ -1040,6 +1285,11 @@ fn review_from_row(r: &Row) -> rusqlite::Result<PlaceReview> {
         season: season_label(visited_day.clone()),
         visited_day,
         weather: r.get(15)?,
+        keywords: split_names(&r.get::<_, String>(16)?),
+        with_whom: r.get::<_, Option<String>>(17)?.as_deref().and_then(WithWhom::from_key),
+        time_of_day: r.get::<_, Option<String>>(18)?.as_deref().and_then(TimeOfDay::from_key),
+        stay_min: r.get::<_, i64>(19)?.clamp(0, u32::MAX as i64) as u32,
+        visit_nth: r.get::<_, i64>(20)?.clamp(0, u32::MAX as i64) as u32,
     })
 }
 

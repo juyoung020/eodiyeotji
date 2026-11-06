@@ -14,6 +14,8 @@ import kotlinx.coroutines.withContext
  * [ratingHalves] = 평균 별점을 반 별 단위로 반올림한 값 × 2 (0~10, 별 그리기용).
  * [placeId] = 저장(♥)에 쓸 내 장소 번호 (내 기록에 없는 곳이면 null → 저장할 수 없다).
  * [lastVisit] = 리뷰 쓰기에 넘길 내 마지막 방문 (다녀온 적이 없으면 null).
+ * [keywords] = "이런 점이 좋았어요" 상위 키워드 (많은 순, 막대 길이 [KeywordCount.ratio]까지 Rust가 계산),
+ * [keywordVoters] = 키워드를 고른 리뷰 수.
  */
 data class PlaceDetail(
     val place: StopFact,
@@ -22,6 +24,8 @@ data class PlaceDetail(
     val reviewCount: Int,
     val hearts: Int,
     val reviews: List<TravelReview>,
+    val keywords: List<KeywordCount>,
+    val keywordVoters: Int,
     val visitDays: Int,
     val lastVisitDay: String?,
     val lastVisit: StopFact?,
@@ -29,6 +33,9 @@ data class PlaceDetail(
     val saved: Boolean,
     val offers: List<PartnerOffer>,
 )
+
+/** 키워드 하나의 수. [ratio] = 수 / 맨 위 키워드 수 (막대 길이 0~1). */
+data class KeywordCount(val keyword: String, val count: Int, val ratio: Float)
 
 suspend fun EodiCore.placeDetail(place: StopFact): PlaceDetail = withContext(Dispatchers.IO) {
     val d = rust.placeDetail(RStopFact(place.name, place.category, place.address, place.arriveMs, place.leaveMs, place.lat, place.lon, place.firstVisit))
@@ -39,6 +46,8 @@ suspend fun EodiCore.placeDetail(place: StopFact): PlaceDetail = withContext(Dis
         reviewCount = d.reviewCount.toInt(),
         hearts = d.hearts.toInt(),
         reviews = d.reviews.map { it.toTravel() },
+        keywords = d.keywords.map { KeywordCount(it.keyword, it.count.toInt(), it.ratio) },
+        keywordVoters = d.keywordVoters.toInt(),
         visitDays = d.visitDays.toInt(),
         lastVisitDay = d.lastVisitDay,
         lastVisit = d.lastVisit?.toModel(),

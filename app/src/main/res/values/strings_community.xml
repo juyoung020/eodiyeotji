@@ -89,9 +89,38 @@
     <string name="review_pick_place">어디를 다녀왔나요?</string>
     <string name="review_pick_empty">최근에 들른 곳이 아직 없어요</string>
     <string name="review_rating_description">별 %1$d개</string>
-    <string name="review_text_hint">한 줄 후기 (안 써도 돼요)</string>
+    <string name="review_text_hint">후기 (안 써도 돼요) · 먹은 것, 주차, 붐비는 때, 팁</string>
     <string name="review_submit">등록</string>
     <string name="review_count">리뷰 %1$d</string>
     <string name="review_empty">리뷰가 없어요</string>
     <string name="review_posted">리뷰를 올렸어요</string>
+    <!-- 자세한 리뷰 카드 -->
+    <string name="review_more">더보기</string>
+    <string name="review_less">접기</string>
+    <string name="review_visit_nth">%1$d번째 방문</string>
+    <string name="review_stay">%1$s 머묾</string>
+    <string name="review_time_morning">아침</string>
+    <string name="review_time_day">낮</string>
+    <string name="review_time_evening">저녁</string>
+    <string name="review_time_night">밤</string>
+    <string name="review_with_alone">혼자</string>
+    <string name="review_with_partner">연인·배우자</string>
+    <string name="review_with_family">가족</string>
+    <string name="review_with_kids">아이와</string>
+    <string name="review_with_friends">친구</string>
+    <string name="review_with_pet">반려동물</string>
+    <string name="review_with_alone_phrase">혼자</string>
+    <string name="review_with_partner_phrase">연인·배우자와</string>
+    <string name="review_with_family_phrase">가족과</string>
+    <string name="review_with_kids_phrase">아이와</string>
+    <string name="review_with_friends_phrase">친구와</string>
+    <string name="review_with_pet_phrase">반려동물과</string>
+    <!-- 리뷰 쓰기: 키워드 · 누구와 -->
+    <string name="review_keywords_title">어떤 점이 좋았나요? (%1$d개까지)</string>
+    <string name="review_keywords_picked">%1$d / %2$d</string>
+    <string name="review_with_title">누구와 갔나요?</string>
+    <!-- 장소 창: 이런 점이 좋았어요 -->
+    <string name="review_liked_title">이런 점이 좋았어요</string>
+    <string name="review_liked_voters">%1$d명 참여</string>
+    <string name="review_liked_row_description">%1$s, %2$d명</string>
 </resources>

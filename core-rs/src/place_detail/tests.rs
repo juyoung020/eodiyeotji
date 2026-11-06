@@ -1,7 +1,7 @@
 //! 장소 상세 창 테스트: 같은 곳 고르기, 리뷰 정렬 · 별점 · 하트, 내 방문 · 저장, 쿠폰, 잘못된 좌표.
 
 use super::*;
-use crate::community::encode_stops;
+use crate::community::{encode_stops, TimeOfDay, WithWhom};
 use crate::edits::tests::{small_week, TempDb, CAFE, EMART, TOFU};
 
 fn stop(name: &str, lat: f64, lon: f64) -> StopFact {
@@ -107,6 +107,33 @@ fn my_visits_saved_place_and_last_visit_for_review() {
     let d = store.place_detail(stop("대림창고", CAFE.3, CAFE.4)).unwrap();
     assert_eq!(d.visit_days, 1);
     assert!(!d.saved);
+}
+
+#[test]
+fn review_from_my_record_fills_time_stay_and_nth_visit() {
+    let db = TempDb::new("detail-review-nth");
+    let store = db.open();
+    small_week(&store);
+    // 이마트는 월(10-05) · 목(10-08) 저녁 두 번 들렀다 → 목요일 방문으로 쓴다
+    let stay = store
+        .day_detail("2026-10-08".into())
+        .unwrap()
+        .stays
+        .into_iter()
+        .find(|s| s.place.as_ref().is_some_and(|p| p.name == "이마트 성수점"))
+        .expect("목요일 이마트");
+    let visit = StopFact { arrive_ms: stay.arrive_ms, leave_ms: stay.leave_ms, ..stop("이마트 성수점", EMART.3, EMART.4) };
+    let r = store
+        .write_place_review(visit.clone(), 4, "장 보기 편해요".into(), vec!["주차하기 편해요".into()], Some(WithWhom::Alone), None, 1)
+        .unwrap();
+    assert_eq!(r.visit_nth, 2, "두 번째 방문");
+    assert_eq!(r.time_of_day, Some(TimeOfDay::Evening));
+    assert_eq!(r.stay_min as i64, (visit.leave_ms - visit.arrive_ms + 30_000) / 60_000);
+    assert!(r.stay_min >= 30, "40분쯤 머묾: {}", r.stay_min);
+    let d = store.place_detail(stop("이마트 성수점", EMART.3, EMART.4)).unwrap();
+    assert_eq!(d.keyword_voters, 1);
+    assert_eq!(d.keywords.len(), 1);
+    assert_eq!((d.keywords[0].keyword.as_str(), d.keywords[0].count, d.keywords[0].ratio), ("주차하기 편해요", 1, 1.0));
 }
 
 #[test]

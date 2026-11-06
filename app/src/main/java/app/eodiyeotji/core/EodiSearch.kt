@@ -156,6 +156,6 @@ private fun RSearchRow.toModel() = SearchRow(
     firstVisit = firstVisit,
     episodeId = episodeId,
     course = course?.toDrive(),
-    reviewPlace = reviewPlace?.let { PopularPlace(it.place.toModel(), it.hearts.toInt(), it.reviewCount.toInt(), it.avgRating) },
+    reviewPlace = reviewPlace?.let { PopularPlace(it.place.toModel(), it.hearts.toInt(), it.reviewCount.toInt(), it.avgRating, it.topKeyword) },
     post = post?.toModel(),
 )
