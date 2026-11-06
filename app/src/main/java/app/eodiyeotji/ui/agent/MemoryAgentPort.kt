@@ -34,7 +34,7 @@ class MemoryAgentPort @Inject constructor(
                 is BridgeEvent.CourseRecommendations -> emit(AgentEvent.CourseRecommendations(e.courses, e.focus))
                 is BridgeEvent.ActionProposal -> {
                     proposals[e.proposal.id] = e.proposal
-                    emit(AgentEvent.ActionProposal(e.proposal.id, buttonTitle(e.proposal.action), e.proposal.summary))
+                    emit(AgentEvent.ActionProposal(e.proposal.id, buttonTitle(e.proposal.action), buttonDetail(e.proposal)))
                 }
                 // 운전자가 말로 "응"이라고 해 이미 안내를 보냈다 → 답 글에 한 줄 덧붙인다
                 is BridgeEvent.ActionStarted ->
@@ -54,6 +54,13 @@ class MemoryAgentPort @Inject constructor(
         is AgentNavAction.SharedCourse -> text(R.string.agent_proposal_shared, action.title)
         is AgentNavAction.Place -> text(R.string.agent_proposal_place, action.stop.name)
         is AgentNavAction.Search -> text(R.string.agent_proposal_search)
+    }
+
+    /** 버튼 아래 작은 글: 제목을 되풀이하지 않고 들르는 순서(코스)·주소(장소)만. 에이전트 대화 기록에는 summary 전체가 남는다. */
+    private fun buttonDetail(p: AgentProposal) = when (val a = p.action) {
+        is AgentNavAction.Course, is AgentNavAction.SharedCourse -> p.summary.substringAfter(": ", p.summary)
+        is AgentNavAction.Place -> a.stop.address
+        is AgentNavAction.Search -> p.summary
     }
 
     private fun text(id: Int, vararg args: Any): String = this.context.getString(id, *args)

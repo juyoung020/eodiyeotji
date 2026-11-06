@@ -19,7 +19,7 @@
     <string name="agent_start_failed_line">\n지도 앱을 열지 못했어요.</string>
     <string name="agent_send_failed">지도 앱을 열지 못했어요.</string>
     <string name="agent_proposal_course">이 코스, 지도 앱으로 안내</string>
-    <string name="agent_proposal_shared">\'%1$s\' 코스, 지도 앱으로 안내</string>
+    <string name="agent_proposal_shared">‘%1$s’ 코스, 지도 앱으로 안내</string>
     <string name="agent_proposal_place">%1$s, 지도 앱으로 안내</string>
     <string name="agent_proposal_search">지도 앱에서 찾기</string>
 

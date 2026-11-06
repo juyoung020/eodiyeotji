@@ -71,7 +71,7 @@
     <string name="agent_start_failed_line">\n내비에 안내를 보내지 못했어요.</string>
     <string name="agent_send_failed">내비에 안내를 보내지 못했어요.</string>
     <string name="agent_proposal_course">이 코스로 안내</string>
-    <string name="agent_proposal_shared">\'%1$s\' 코스로 안내</string>
+    <string name="agent_proposal_shared">‘%1$s’ 코스로 안내</string>
     <string name="agent_proposal_place">%1$s로 안내</string>
     <string name="agent_proposal_search">내비에서 찾기</string>
 

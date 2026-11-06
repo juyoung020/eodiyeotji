@@ -309,7 +309,7 @@ pub fn shared_proposal(seq: &mut u64, r: &CourseRecommendation, from: Option<Geo
     let split = if route.legs.len() > 1 { format!(" ({}구간으로 나눠 안내)", route.legs.len()) } else { String::new() };
     Some(NavProposal {
         id: tools::next_id(seq),
-        summary: format!("'{}' 코스 안내: {names}{split}", r.post.title),
+        summary: format!("‘{}’ 코스 안내: {names}{split}", r.post.title),
         action: NavAction::SharedCourse { post_id: r.post.id.clone(), title: r.post.title.clone(), legs: route.legs },
     })
 }
@@ -318,7 +318,7 @@ pub fn shared_proposal(seq: &mut u64, r: &CourseRecommendation, from: Option<Geo
 
 /// 받침이 있나 (한글 마지막 글자, 숫자는 읽는 소리로)
 fn batchim(w: &str) -> Option<u32> {
-    let c = w.trim_end_matches(['\'', '"', ')', ' ']).chars().last()?;
+    let c = w.trim_end_matches(['\'', '’', '"', ')', ' ']).chars().last()?;
     if ('가'..='힣').contains(&c) {
         return Some((c as u32 - '가' as u32) % 28);
     }
@@ -355,13 +355,7 @@ fn duration_text(ms: i64) -> String {
 }
 
 fn quoted(r: &CourseRecommendation) -> String {
-    format!("'{}'", r.post.title)
-}
-
-/// "1번 '양평 두물머리 한 바퀴'(♥ 312, 여기서 18km)"
-fn list_item(i: usize, r: &CourseRecommendation) -> String {
-    let d = if r.distance_km >= 0.0 { format!(", {}{}", if i == 0 { "여기서 " } else { "" }, km_text(r.distance_km)) } else { String::new() };
-    format!("{}번 {}(♥ {}{d})", i + 1, quoted(r), r.post.hearts)
+    format!("‘{}’", r.post.title)
 }
 
 fn stop_names(r: &CourseRecommendation, n: usize) -> String {
@@ -378,7 +372,7 @@ fn list_answer(f: &Fetched, lead: &str, q: &[String], radius_km: f64, driving: b
     let pre = if f.no_location {
         "지금 위치를 몰라서 ".to_string()
     } else if f.theme_missed {
-        format!("'{}' 코스는 아직 없어서 대신 ", q.join("·"))
+        format!("‘{}’ 코스는 아직 없어서 대신 ", q.join("·"))
     } else if f.widened {
         format!("근처 {}km 안에는 없어서 ", radius_km.round() as i64)
     } else {
@@ -386,14 +380,17 @@ fn list_answer(f: &Fetched, lead: &str, q: &[String], radius_km: f64, driving: b
     };
     let top = &f.list[0];
     let can_go = !top.post.stops.is_empty();
+    let ask = if can_go { " 안내할까요?" } else { "" };
     if driving {
-        let d = if top.distance_km >= 0.0 { format!(" 여기서 {}, ♥ {}.", km_text(top.distance_km), top.post.hearts) } else { format!(" ♥ {}.", top.post.hearts) };
-        let ask = if can_go { " 안내할까요?" } else { "" };
+        let d = if top.distance_km >= 0.0 { format!(" 여기서 {}, 하트 {}개예요.", km_text(top.distance_km), top.post.hearts) } else { format!(" 하트 {}개예요.", top.post.hearts) };
         return format!("{pre}{lead} 1위는 {}{}.{d}{ask}", quoted(top), eyo(&top.post.title));
     }
-    let items = f.list.iter().enumerate().map(|(i, r)| list_item(i, r)).collect::<Vec<_>>().join(", ");
-    let ask = if can_go { " 1번으로 안내할까요?" } else { "" };
-    format!("{pre}{lead} {}개예요. {items}.{ask}", f.list.len())
+    // 목록은 화면 카드가 보여 준다 → 말은 가장 인기 있는 코스 하나만 짧게 (번호·괄호를 늘어놓지 않는다).
+    let d = if top.distance_km >= 0.0 { format!(" 여기서 {} 거리예요.", km_text(top.distance_km)) } else { String::new() };
+    if f.list.len() == 1 {
+        return format!("{pre}{lead}는 {} 하나예요.{d}{ask}", quoted(top));
+    }
+    format!("{pre}{lead} {}개를 찾았어요. 하트가 가장 많은 코스는 {}{}.{d}{ask}", f.list.len(), quoted(top), eyo(&top.post.title))
 }
 
 /// 한 코스 이야기 (번호로 골랐을 때).
@@ -450,7 +447,7 @@ impl MemoryAgent {
                     t.say(if q.is_empty() { "아직 공유된 드라이브 코스가 없어요." } else { "그쪽으로 공유된 드라이브 코스가 아직 없어요." });
                     return;
                 }
-                let what = if q.is_empty() || f.theme_missed { "인기 코스".to_string() } else { format!("'{}' 인기 코스", q.join("·")) };
+                let what = if q.is_empty() || f.theme_missed { "인기 코스".to_string() } else { format!("‘{}’ 인기 코스", q.join("·")) };
                 let lead = format!("{}{what}", scope(&f));
                 let text = list_answer(&f, &lead, &q, DEFAULT_RADIUS_KM, driving);
                 self.show_courses(s, t, CourseState { list: f.list, focus: 0, q, radius_km: DEFAULT_RADIUS_KM });
@@ -502,10 +499,10 @@ impl MemoryAgent {
                 let exclude: Vec<String> = s.courses.list.get(s.courses.focus).map(|r| vec![r.post.id.clone()]).unwrap_or_default();
                 let f = fetch(self.backend.as_ref(), loc, &q, s.courses.radius_km.max(DEFAULT_RADIUS_KM), SHOW_K, &exclude);
                 if f.list.is_empty() || f.theme_missed {
-                    t.say(&format!("'{}' 쪽 추천 코스는 아직 없어요. 지금 목록에서 골라 주세요.", q.join("·")));
+                    t.say(&format!("‘{}’ 쪽 추천 코스는 아직 없어요. 지금 목록에서 골라 주세요.", q.join("·")));
                     return;
                 }
-                let lead = format!("{}'{}' 코스", scope(&f), q.join("·"));
+                let lead = format!("{}‘{}’ 코스", scope(&f), q.join("·"));
                 let text = list_answer(&f, &lead, &q, DEFAULT_RADIUS_KM, driving);
                 self.show_courses(s, t, CourseState { list: f.list, focus: 0, q, radius_km: DEFAULT_RADIUS_KM });
                 t.say(&text);
@@ -518,7 +515,7 @@ impl MemoryAgent {
                     let st = s.courses.clone();
                     self.show_courses(s, t, st);
                     let d = if r.distance_km >= 0.0 { format!(", 여기서 {}", km_text(r.distance_km)) } else { String::new() };
-                    t.say(&format!("그럼 {}번 {}{} 어떠세요? ♥ {}{d}예요. 안내할까요?", next + 1, quoted(&r), eun(&r.post.title), r.post.hearts));
+                    t.say(&format!("그럼 {}번 {}{} 어떠세요? 하트 {}개{d}예요. 안내할까요?", next + 1, quoted(&r), eun(&r.post.title), r.post.hearts));
                     self.propose_focus(s, t, loc);
                     return;
                 }

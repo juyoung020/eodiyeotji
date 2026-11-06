@@ -113,8 +113,8 @@ fn nearby_courses_fast_path_lists_top3_and_only_proposes() {
     let ev = r.events();
     assert!(matches!(&ev[0], Ev::Courses(ids, 0) if ids == &["c-bukak", "c-yp", "c-eul"]), "목록이 답보다 먼저: {ev:?}");
     let a = r.answer();
-    assert!(a.starts_with("근처 인기 코스 3개예요. 1번 '북악스카이웨이 야경 코스'(♥ 198, 여기서 1"), "{a}");
-    assert!(a.contains("2번 '양평 두물머리 한 바퀴'(♥ 312, ") && a.ends_with("1번으로 안내할까요?"), "{a}");
+    assert!(a.starts_with("근처 인기 코스 3개를 찾았어요. 하트가 가장 많은 코스는 ‘북악스카이웨이 야경 코스’예요. 여기서 1"), "{a}");
+    assert!(a.ends_with("거리예요. 안내할까요?") && !a.contains('♥') && !a.contains("2번"), "목록은 화면 카드에, 말은 1위만: {a}");
     let p = r.proposals().pop().expect("1번 안내 제안");
     let (id, legs) = shared(&p);
     assert_eq!(id, "c-bukak");
@@ -137,7 +137,7 @@ fn follow_ups_pick_describe_closer_theme_other_then_confirm() {
     // "2번으로 가자" → 2번 제안만 (1번 제안을 실행하지 않는다)
     let r = ask(&agent, "2번으로 가자", parked());
     assert_eq!(course_lists(&r), vec![(vec!["c-bukak".into(), "c-yp".into(), "c-eul".into()], 1)]);
-    assert_eq!(r.answer(), "2번 '양평 두물머리 한 바퀴'로 안내할까요?");
+    assert_eq!(r.answer(), "2번 ‘양평 두물머리 한 바퀴’로 안내할까요?");
     assert!(r.events().iter().all(|e| !matches!(e, Ev::Confirmed(..))));
     assert_eq!(shared(&r.proposals()[0]).0, "c-yp");
     assert_eq!(r.done().source, AnswerSource::FastPath);
@@ -145,26 +145,26 @@ fn follow_ups_pick_describe_closer_theme_other_then_confirm() {
     // "3번은 어디 들러?" → 들른 곳·거리·시간 + 3번 제안
     let r = ask(&agent, "3번은 어디 들러?", parked());
     let a = r.answer();
-    assert!(a.starts_with("3번 '을왕리 노을 해안 드라이브'는 을왕리해수욕장, 선녀바위해변, 마시안해변에 들러요.") && a.contains("전체 88km, 6시간쯤"), "{a}");
+    assert!(a.starts_with("3번 ‘을왕리 노을 해안 드라이브’는 을왕리해수욕장, 선녀바위해변, 마시안해변에 들러요.") && a.contains("전체 88km, 6시간쯤"), "{a}");
     assert_eq!(shared(&r.proposals()[0]).0, "c-eul");
 
     // "더 가까운 데" (지금 3번 을왕리, 약 44km) → 그보다 가까운 코스를 가까운 순으로
     let r = ask(&agent, "더 가까운 데", parked());
     let lists = course_lists(&r);
     assert_eq!(lists[0].0, vec!["c-bukak", "c-nhss", "c-sihwa"], "{lists:?}");
-    assert!(r.answer().starts_with("더 가까운 코스 3개예요. 1번 '북악스카이웨이 야경 코스'"), "{}", r.answer());
+    assert!(r.answer().starts_with("더 가까운 코스 3개를 찾았어요. 하트가 가장 많은 코스는 ‘북악스카이웨이 야경 코스’예요."), "{}", r.answer());
     // 가장 가까운 것에서 다시 "더 가까운 데" → 없다고
     let r = ask(&agent, "더 가까운 데", parked());
-    assert!(r.answer().starts_with("근처에서는 '북악스카이웨이 야경 코스'가 가장 가까운 추천 코스예요."), "{}", r.answer());
+    assert!(r.answer().starts_with("근처에서는 ‘북악스카이웨이 야경 코스’가 가장 가까운 추천 코스예요."), "{}", r.answer());
 
     // "그거 말고 바다 쪽" → 바다 코스만 (지금 것 빼고)
     let r = ask(&agent, "그거 말고 바다 쪽", parked());
     assert_eq!(course_lists(&r)[0].0, vec!["c-eul", "c-sihwa"]);
-    assert!(r.answer().starts_with("근처 '바다' 코스 2개예요. 1번 '을왕리 노을 해안 드라이브'"), "{}", r.answer());
+    assert!(r.answer().starts_with("근처 ‘바다’ 코스 2개를 찾았어요. 하트가 가장 많은 코스는 ‘을왕리 노을 해안 드라이브’예요."), "{}", r.answer());
 
     // "다른 거" → 다음 번호
     let r = ask(&agent, "다른 거 없어?", parked());
-    assert!(r.answer().starts_with("그럼 2번 '시화방조제 바닷길'은 어떠세요? ♥ 90, 여기서 "), "{}", r.answer());
+    assert!(r.answer().starts_with("그럼 2번 ‘시화방조제 바닷길’은 어떠세요? 하트 90개, 여기서 "), "{}", r.answer());
     let p = r.proposals()[0].clone();
 
     // 목록 밖 번호
@@ -190,7 +190,7 @@ fn driving_answer_is_one_short_sentence_about_the_top_course() {
     let agent = no_llm(FakeBackend::new());
     let r = ask(&agent, "근처 드라이브 코스 추천해줘", ctx(true));
     let a = r.answer();
-    assert!(a.starts_with("근처 인기 코스 1위는 '북악스카이웨이 야경 코스'예요. 여기서 1") && a.ends_with("♥ 198. 안내할까요?"), "{a}");
+    assert!(a.starts_with("근처 인기 코스 1위는 ‘북악스카이웨이 야경 코스’예요. 여기서 1") && a.ends_with("하트 198개예요. 안내할까요?"), "{a}");
     assert!(a.chars().count() < 70, "{a}");
     assert_eq!(course_lists(&r)[0].0.len(), 3, "화면 목록은 그대로 (운전 중 화면이 1위만 크게 보인다)");
 }
@@ -200,18 +200,18 @@ fn no_location_far_theme_and_empty_cases() {
     // 위치를 모르면 전국 하트순, 거리 없이
     let agent = no_llm(FakeBackend::new());
     let r = ask(&agent, "인기 코스 알려줘", AgentContext { current_location: None, ..parked() });
-    assert!(r.answer().starts_with("지금 위치를 몰라서 전국 인기 코스 3개예요. 1번 '강릉 바다 순두부 당일치기'(♥ 520), 2번 '속초 설악 단풍 드라이브'(♥ 410)"), "{}", r.answer());
+    assert!(r.answer().starts_with("지금 위치를 몰라서 전국 인기 코스 3개를 찾았어요. 하트가 가장 많은 코스는 ‘강릉 바다 순두부 당일치기’예요. 안내할까요?"), "{}", r.answer());
 
     // 근처에 없는 지역 → 전국에서 찾고 거리는 지금 위치에서 잰다
     let agent = no_llm(FakeBackend::new());
     let r = ask(&agent, "강릉 쪽 드라이브 코스 추천해줘", parked());
-    assert!(r.answer().starts_with("근처 50km 안에는 없어서 전국 '강릉' 인기 코스 1개예요. 1번 '강릉 바다 순두부 당일치기'(♥ 520, 여기서 1"), "{}", r.answer());
+    assert!(r.answer().starts_with("근처 50km 안에는 없어서 전국 ‘강릉’ 인기 코스는 ‘강릉 바다 순두부 당일치기’ 하나예요. 여기서 1"), "{}", r.answer());
     assert_eq!(course_lists(&r)[0].0, vec!["c-gn"]);
 
     // 없는 지역 → 근처 인기 코스로 대신
     let agent = no_llm(FakeBackend::new());
     let r = ask(&agent, "제주 쪽 드라이브 코스 추천해줘", parked());
-    assert!(r.answer().starts_with("'제주' 코스는 아직 없어서 대신 근처 인기 코스 3개예요."), "{}", r.answer());
+    assert!(r.answer().starts_with("‘제주’ 코스는 아직 없어서 대신 근처 인기 코스 3개를 찾았어요."), "{}", r.answer());
 
     // 공유된 코스가 하나도 없으면 짧게, 제안 없음
     let backend = Arc::new(FakeBackend { posts: vec![], ..Default::default() });
