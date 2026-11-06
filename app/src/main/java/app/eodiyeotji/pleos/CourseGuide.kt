@@ -6,6 +6,9 @@ import app.eodiyeotji.BuildConfig
 import app.eodiyeotji.agent.AgentBridge
 import app.eodiyeotji.core.CourseLeg
 import app.eodiyeotji.core.StopFact
+import app.eodiyeotji.platform.NaviEvent
+import app.eodiyeotji.platform.Navigator
+import app.eodiyeotji.platform.RouteStop
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -55,11 +58,12 @@ data class CourseProgress(
  * - 에이전트 코스: 첫 구간은 AgentBridge가 이미 보냈다. 남은 구간([AgentBridge.pendingLegs])이 생기면 여기서
  *   이어받고, 도착할 때마다 [AgentBridge.continueCourse]를 부른다.
  * - 도착 이벤트가 안 오는 경우(내비에서 안내를 끈 경우 등)를 위해 [skipToNextLeg]로 손으로 넘길 수도 있다.
+ *   폰은 지도 앱이 도착을 알려 주지 않으므로([Navigator.eventsAvailable] false) 늘 이렇게 넘긴다.
  * 계산은 없다: 구간은 Rust `course::split_legs`가 나눈 그대로 쓴다.
  */
 @Singleton
 class CourseGuide @Inject constructor(
-    private val navi: PleosNavi,
+    private val navi: Navigator,
     private val agent: AgentBridge,
 ) {
     private val scope = CoroutineScope(

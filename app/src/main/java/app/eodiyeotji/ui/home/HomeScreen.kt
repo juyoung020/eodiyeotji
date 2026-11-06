@@ -68,7 +68,7 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
     var agentOpen by rememberSaveable { mutableStateOf(false) }
     var tab by rememberSaveable { mutableStateOf(HomeTab.TIMELINE) }
     Box(Modifier.fillMaxSize()) {
-        if (agentState.isDriving) {
+        if (agentState.isDriving && agentViewModel.drivingLocksScreen) {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).fillMaxWidth()) { AgentPanel(onClose = null, viewModel = agentViewModel) }
                 // 주행 중에는 버튼 없이 진행 상황 한 줄만 (몇 번째 구간 · 다음 들를 곳)

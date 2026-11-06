@@ -10,14 +10,19 @@ import android.content.Context
 import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
+import app.eodiyeotji.platform.DriveEdge
+import app.eodiyeotji.platform.DriveSignalSource
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.transformLatest
 
 /** 차에서 받은 원시 신호. 값은 AAOS 상수(VehicleGear / VehicleIgnitionState) 그대로. */
 sealed interface VehicleSignal {
@@ -34,11 +39,15 @@ sealed interface VehicleSignal {
  * - 시동: IGNITION_STATE는 차마다 없을 수 있다(에뮬레이터에 없음) → 없으면 기어만으로 판단한다.
  * - 이벤트는 값이 바뀔 때만 오고(ON_CHANGE), 등록 직후 현재 값이 한 번 온다. 주차 중에는 아무 일도 하지 않는다.
  * - 콜백은 전용 HandlerThread에서 받는다 → UI 스레드를 쓰지 않는다.
+ * - 주행 시작·끝([edges])은 [DriveRule]로 판단하고 [debounced]로 깜빡임을 거른다.
+ *   다시 뜬 프로세스의 이어 기록 여부도 등록 직후 오는 현재 기어 값으로 정해지므로 resumeDriving은 쓰지 않는다.
  */
 @Singleton
 class VehicleDriveSignals @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+) : DriveSignalSource {
+    override fun edges(resumeDriving: Boolean, lastFixMs: Long): Flow<DriveEdge> = signals().toDriveEdges().debounced()
+
     // status·unregisterCallback은 Car API 35에서 deprecated지만, 기기(Pleos 2.1)는 API 34라서 대체 API가 없다.
     @Suppress("DEPRECATION")
     fun signals(): Flow<VehicleSignal> = callbackFlow {
@@ -143,12 +152,22 @@ internal class DriveRule {
     }
 }
 
-/** 판단이 바뀐 순간과 그 시각. tMs는 신호가 들어온 시각(디바운스가 끝난 시각이 아니다). */
-data class DriveEdge(val active: Boolean, val tMs: Long)
-
 /** 신호 흐름 → 판단이 바뀔 때만 [DriveEdge] (디바운스 전). */
 internal fun Flow<VehicleSignal>.toDriveEdges(): Flow<DriveEdge> {
     val rule = DriveRule()
     return mapNotNull { s -> rule.onSignal(s)?.let { DriveEdge(it, s.atMs) } }
         .distinctUntilChanged { a, b -> a.active == b.active }
+}
+
+/** 기어가 P에서 빠져 이만큼 유지돼야 시작 (P→R→D 조작 중 깜빡임 무시). */
+internal const val START_DEBOUNCE_MS = 2_000L
+
+/** P로 돌아와 이만큼 유지돼야 끝 (잠깐 P에 넣었다 빼는 경우 기록을 쪼개지 않음). */
+internal const val END_DEBOUNCE_MS = 5_000L
+
+/** 판단이 바뀐 뒤 일정 시간 그대로일 때만 내보낸다. 내보내는 시각(tMs)은 처음 바뀐 순간 그대로다. */
+@OptIn(ExperimentalCoroutinesApi::class)
+internal fun Flow<DriveEdge>.debounced(): Flow<DriveEdge> = transformLatest { edge ->
+    delay(if (edge.active) START_DEBOUNCE_MS else END_DEBOUNCE_MS)
+    emit(edge)
 }

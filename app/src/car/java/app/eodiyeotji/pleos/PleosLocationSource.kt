@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.util.Log
 import androidx.core.content.ContextCompat
 import app.eodiyeotji.core.LocationFix
+import app.eodiyeotji.platform.LocationSource
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -25,14 +26,14 @@ import kotlinx.coroutines.flow.callbackFlow
 @Singleton
 class PleosLocationSource @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+) : LocationSource {
     /** 이 차(에뮬레이터)에 Pleos 위치 서비스가 있는지. 패키지 조회라서 백그라운드 스레드에서 부른다. */
-    fun isSupported(): Boolean =
+    override fun isSupported(): Boolean =
         runCatching { FusedLocation(context).isSupported() }
             .onFailure { Log.w(TAG, "isSupported 확인 실패", it) }
             .getOrDefault(false)
 
-    fun hasPermission(): Boolean = hasPermission(context)
+    override fun hasPermission(): Boolean = hasPermission(context)
 
     /**
      * 위치 업데이트 흐름. 모으는 동안만 SDK가 켜져 있고, 취소하면 콜백 해제 → release 한다.
@@ -41,7 +42,7 @@ class PleosLocationSource @Inject constructor(
      * - `onError`는 기록만 하고 흐름은 유지한다. SDK가 서비스에 다시 연결되면 위치가 다시 들어온다.
      * - 권한이 없으면 SDK가 SecurityException을 던진다 → 흐름을 그 예외로 닫는다.
      */
-    fun updates(): Flow<LocationFix> = callbackFlow {
+    override fun updates(): Flow<LocationFix> = callbackFlow {
         val fused = FusedLocation(context)
         val listener = object : FusedLocationListener {
             override fun onChanged(location: LocationData?) {

@@ -13,6 +13,7 @@ import android.os.Handler
 import android.os.Looper
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import app.eodiyeotji.platform.SpeechOutput
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Locale
 import javax.inject.Inject
@@ -32,7 +33,7 @@ import android.speech.tts.TextToSpeech as AndroidTts
  * - 모드는 `ON_DEVICE`(앱 등록 없이, 오프라인에서도). Pleos 음성 서비스가 없으면 Android 표준 TTS로 대신 읽는다.
  */
 @Singleton
-class PleosTts @Inject constructor(@ApplicationContext private val context: Context) {
+class PleosTts @Inject constructor(@ApplicationContext private val context: Context) : SpeechOutput {
 
     private val main = Handler(Looper.getMainLooper())
     private val audio = context.getSystemService(AudioManager::class.java)
@@ -43,7 +44,7 @@ class PleosTts @Inject constructor(@ApplicationContext private val context: Cont
 
     private val _speaking = MutableStateFlow(false)
     /** 지금 읽는 중 (포커스를 기다리는 동안 포함). */
-    val speaking: StateFlow<Boolean> = _speaking.asStateFlow()
+    override val speaking: StateFlow<Boolean> = _speaking.asStateFlow()
 
     @Volatile private var pleosReady = false
     @Volatile private var pleosBroken = false
@@ -120,7 +121,7 @@ class PleosTts @Inject constructor(@ApplicationContext private val context: Cont
     }
 
     /** [text]를 읽는다 (읽던 것은 멈춘다). 다 읽거나 멈추면 [then]을 한 번 부른다. */
-    fun speak(text: String, then: (() -> Unit)? = null) {
+    override fun speak(text: String, then: (() -> Unit)?) {
         val clean = text.replace('\n', ' ').trim()
         if (clean.isEmpty()) return
         main.post {
@@ -150,7 +151,7 @@ class PleosTts @Inject constructor(@ApplicationContext private val context: Cont
     }
 
     /** 읽기를 멈춘다 (새 질문·마이크·화면 닫기). [speak]의 then은 부르지 않는다. */
-    fun stop() {
+    override fun stop() {
         main.post { onDone = null; stopNow(); _speaking.value = false }
     }
 

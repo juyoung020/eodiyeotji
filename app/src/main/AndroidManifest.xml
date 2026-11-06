@@ -1,40 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 차(car)·폰(phone) 판에 같이 들어가는 것. 판마다 다른 것(차량 기능·Pleos 권한·위치 권한·기록 서비스 종류)은
+     src/car/AndroidManifest.xml, src/phone/AndroidManifest.xml 에 있다. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- 차량 앱 표시 (Android Automotive) -->
-    <uses-feature android:name="android.hardware.type.automotive" android:required="true" />
-
     <!-- ===== 권한 (앱마켓 심사: 쓰는 것만, 이유와 함께) ===== -->
-    <!-- 차량 위치(Pleos FusedLocation): 이동 경로 자동 기록의 원천 데이터. dangerous → 첫 실행에 한 번만 묻는다 -->
-    <uses-permission android:name="pleos.car.permission.FUSED_LOCATION" />
-    <!-- 내비 목적지·경유지 조회(NaviHelper get*Info)·도착 이벤트: 들른 곳을 좌표 대신 실제 장소 이름으로 보여 주기 위해. normal -->
-    <uses-permission android:name="pleos.car.permission.NAVI_ROUTE" />
-    <!-- 내비 경로 요청(NaviHelper requestRoute): 기록한 장소를 골라 "그곳으로 안내"하기 위해. normal -->
-    <uses-permission android:name="pleos.car.permission.NAVI_ROUTE_SEARCH" />
-    <!-- 내비 화면 열기(NaviHelper requestNavigationScreen): 장소 이름을 내비 검색 화면으로 넘겨 공식 장소를 고르게 하기 위해. normal -->
-    <uses-permission android:name="pleos.car.permission.NAVI_CUSTOM_MAP" />
-    <!-- 기어(GEAR_SELECTION·CURRENT_GEAR)·시동(IGNITION_STATE) 읽기: 주행 시작·끝을 자동으로 알기 위해. normal → 묻지 않는다 -->
-    <uses-permission android:name="android.car.permission.CAR_POWERTRAIN" />
     <!-- 앱 화면이 없어도 주행 기록을 이어가는 포그라운드 서비스. normal -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <!-- 포그라운드 서비스 종류 specialUse (이유는 record/RecordingService.kt KDoc). normal.
-         location 종류는 쓰지도 않는 Android 위치 권한을 추가로 요구해서 고르지 않았다 -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-    <!-- 차량을 켜면(부팅) 앱을 열지 않아도 기록 대기를 시작하기 위해. normal -->
+    <!-- 차를 켜면(부팅)·폰을 켜면 앱을 열지 않아도 기록 대기를 시작하기 위해. normal -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- 머문 곳·출발/도착 지점을 실제 장소 이름으로 보여 주려고 지도 API(카카오 로컬·OSM)에 좌표를 묻고,
          기억 검색 에이전트·하루 라벨링을 위해 LLM 서버(개발: 개발 PC의 llama-server, res/xml/network_security_config.xml)를 부른다. normal -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- 운전 중 말로 묻기(Pleos SpeechToText): 차량 마이크로 "작년 여름 바다 어디였지?"를 듣고 글로 바꾸기 위해 -->
-    <uses-permission android:name="pleos.car.permission.STT_SERVICE" />
-    <!-- 운전 중 답 읽어 주기(Pleos TextToSpeech): 화면을 보지 않아도 짧은 답을 듣게 하기 위해 -->
-    <uses-permission android:name="pleos.car.permission.TTS_SERVICE" />
-    <!-- Pleos 음성 서비스가 없는 기기에서만 Android 표준 음성 인식으로 대신 듣기 위해. dangerous → 그때 처음 한 번만 묻는다 -->
+    <!-- Android 표준 음성 인식으로 말로 묻기 (폰은 늘, 차는 Pleos 음성 서비스가 없을 때만). dangerous → 그때 처음 한 번만 묻는다 -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- 오프라인이면 장소 이름 요청을 멈추고, 다시 연결되면 이어서 묻기 위해 연결 상태를 본다. normal -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- Pleos 음성 서비스가 없을 때 대신 쓰는 Android 표준 음성 인식·음성 합성 엔진을 찾기 위해 (Android 11+ 패키지 공개 범위) -->
+    <!-- Android 표준 음성 인식·음성 합성 엔진을 찾기 위해 (Android 11+ 패키지 공개 범위) -->
     <queries>
         <intent>
             <action android:name="android.speech.RecognitionService" />
@@ -60,25 +42,11 @@
             android:exported="true"
             android:resizeableActivity="true"
             android:windowSoftInputMode="adjustResize">
-            <!-- 주행 중에도 쓰는 화면: 주행 중에는 기억 에이전트 주행 화면(음성 + 큰 카드 1장)만 보인다 (ui/home/HomeScreen.kt) -->
-            <meta-data
-                android:name="distractionOptimized"
-                android:value="true" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <!-- 자동 기록: 주행(기어 P 해제·시동)을 감지해 위치를 모아 Rust 코어에 저장 -->
-        <service
-            android:name=".record.RecordingService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Automatic trip logging: while the vehicle is in gear, records the car's position from the Pleos FusedLocation SDK so the driver can review past trips. Idle (vehicle signal listener only) while parked." />
-        </service>
 
         <!-- 부팅·앱 업데이트 직후 기록 서비스 켜기 (시스템 브로드캐스트만 받는다) -->
         <receiver

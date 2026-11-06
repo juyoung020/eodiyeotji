@@ -11,9 +11,9 @@ import app.eodiyeotji.core.MemoryHit
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.agent.RecommendedCourse
 import app.eodiyeotji.core.lastKnownLocation
-import app.eodiyeotji.pleos.PleosSpeech
-import app.eodiyeotji.pleos.PleosTts
-import app.eodiyeotji.pleos.SpeechResult
+import app.eodiyeotji.platform.SpeechInput
+import app.eodiyeotji.platform.SpeechOutput
+import app.eodiyeotji.platform.SpeechResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
@@ -109,7 +109,7 @@ sealed interface ActionState {
  * 기억 에이전트 대화 상태.
  * - 에이전트 Flow는 Dispatchers.Default에서 모은다 (UI 스레드는 상태만 받아 그린다).
  * - 새 질문을 하면 이전 질문 수집·행동을 취소한다. 늦게 온 이전 질문 이벤트는 [AgentTurn.id]로 걸러 버린다.
- * - 말로 묻기: 마이크 → [PleosSpeech]가 듣고 알아들은 말을 [ask]에 넘긴다. 운전 중에는 답을 [PleosTts]로 읽고,
+ * - 말로 묻기: 마이크 → [SpeechInput]이 듣고 알아들은 말을 [ask]에 넘긴다. 운전 중에는 답을 [SpeechOutput]으로 읽고,
  *   안내 제안·추천 코스가 있으면 이어서 한 번 더 듣는다 ("응" 한마디로 안내 시작, "2번으로 가자").
  *   새 질문·마이크·닫기를 하면 읽던 답을 멈춘다.
  */
@@ -118,8 +118,8 @@ class AgentViewModel @Inject constructor(
     private val agent: AgentPort,
     private val driving: DrivingStatePort,
     private val core: EodiCore,
-    private val speech: PleosSpeech,
-    private val tts: PleosTts,
+    private val speech: SpeechInput,
+    private val tts: SpeechOutput,
 ) : ViewModel() {
 
     private val turn = MutableStateFlow<AgentTurn?>(null)
@@ -133,6 +133,9 @@ class AgentViewModel @Inject constructor(
 
     val state: StateFlow<AgentUiState> = combine(turn, driving.isDriving, voice) { t, d, v -> AgentUiState(isDriving = d, turn = t, voice = v) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AgentUiState(isDriving = driving.isDriving.value))
+
+    /** 주행 중에 주행 화면만 보일지 (차 true, 폰 false). */
+    val drivingLocksScreen: Boolean get() = driving.locksScreen
 
     private var askJob: Job? = null
     private var actionJob: Job? = null

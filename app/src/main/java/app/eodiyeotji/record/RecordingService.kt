@@ -5,7 +5,6 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
-import android.content.pm.ServiceInfo
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -17,13 +16,14 @@ import app.eodiyeotji.R
 import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.LocationFix
 import app.eodiyeotji.core.NaviHint
-import app.eodiyeotji.pleos.PleosLocationSource
-import app.eodiyeotji.pleos.PleosNavi
+import app.eodiyeotji.platform.DriveSignalSource
+import app.eodiyeotji.platform.LocationSource
+import app.eodiyeotji.platform.Navigator
+import app.eodiyeotji.platform.RecordingPlatform
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
@@ -33,22 +33,24 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
-import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
  * 자동 기록 서비스. 앱 화면이 없어도(다른 앱을 보거나 앱을 닫아도) 주행을 기록한다.
  *
- * 흐름: 기어·시동 신호([VehicleDriveSignals]) → 판단([DriveRule]) → 디바운스 →
- *   주행 시작: markDriveStart → Pleos 위치를 모아 10초 또는 30개마다 묶어서 [EodiCore.ingest]
+ * 흐름: 주행 신호([DriveSignalSource]) →
+ *   주행 시작: markDriveStart → (폰: 감지 전에 받은 점 먼저 저장) → 위치([LocationSource])를 모아 10초 또는 30개마다 묶어서 [EodiCore.ingest]
  *   주행 끝: 위치 수신 중지 → 남은 묶음 저장 → markDriveEnd
- * 주행 중에는 차량 내비([PleosNavi])도 듣는다: 목적지·경유지 도착 이벤트와, 주행이 끝날 때 남아 있는 목적지·경유지를
- *   [EodiCore.addNaviHint]로 넘긴다 → Rust가 가까운 도착 지점·머문 곳의 이름으로 쓴다 ([NaviSession]). 내비가 없으면 건너뛴다.
- * 주차 중에는 위치 SDK를 켜지 않는다. 차량 신호 콜백 하나만 걸어 두고 기다린다 (CPU 0에 가깝다).
+ * 주행 신호는 판마다 다르다 (`platform/PlatformModule`):
+ * - 차: 기어·시동 신호(`VehicleDriveSignals`) → 판단(`DriveRule`) → 디바운스. 주차 중에는 위치 SDK를 켜지 않고 차량 신호 콜백 하나만 걸어 둔다.
+ * - 폰: 위치로 판단(`PhoneDriveSignals` + Rust `drivedetect`). 서 있을 때는 저전력 위치만 드물게 받는다.
+ * 주행 중에는 차량 내비([Navigator])도 듣는다: 목적지·경유지 도착 이벤트와, 주행이 끝날 때 남아 있는 목적지·경유지를
+ *   [EodiCore.addNaviHint]로 넘긴다 → Rust가 가까운 도착 지점·머문 곳의 이름으로 쓴다 ([NaviSession]). 내비 이벤트가 없으면(폰) 건너뛴다.
  * 모든 작업은 Dispatchers.Default/IO에서 한다.
  *
- * ## 포그라운드 서비스 종류: `specialUse`
+ * ## 포그라운드 서비스 종류 ([RecordingPlatform.foregroundServiceType], 매니페스트는 판마다)
+ * 폰은 `location`(Android 위치 권한을 쓰므로 그대로 맞다). 차는 아래 이유로 `specialUse`:
  * targetSdk 34+에서는 포그라운드 서비스마다 종류를 선언하고, 종류마다 요구 권한이 있다.
  * - `location`: 실행 시점에 Android ACCESS_COARSE/FINE_LOCATION이 허용돼 있어야 한다.
  *   우리는 Android 위치(LocationManager)를 쓰지 않고 Pleos FusedLocation(별도 권한)만 쓰므로,
@@ -58,16 +60,18 @@ import kotlinx.coroutines.withContext
  * - `connectedDevice` 등: 요구 권한(블루투스 등)이 실제 용도와 맞지 않는다.
  * - `specialUse`: FOREGROUND_SERVICE_SPECIAL_USE(normal, 묻지 않음)만 필요하고 부팅 직후 시작도 된다.
  *   용도는 매니페스트 `PROPERTY_SPECIAL_USE_FGS_SUBTYPE`에 적는다.
- * 알림 권한(POST_NOTIFICATIONS)은 요청하지 않는다. 없어도 서비스는 돌고, 알림만 알림 목록에 안 보인다.
+ * 알림 권한(POST_NOTIFICATIONS)은 차에서는 묻지 않는다. 없어도 서비스는 돌고, 알림만 알림 목록에 안 보인다.
+ * 폰은 기록 중임을 알림으로 보여 줘야 하므로 첫 실행에 같이 묻는다 (`PhoneRecordingPlatform`).
  */
 @AndroidEntryPoint
 class RecordingService : LifecycleService() {
 
     @Inject lateinit var core: EodiCore
-    @Inject lateinit var location: PleosLocationSource
-    @Inject lateinit var vehicle: VehicleDriveSignals
+    @Inject lateinit var location: LocationSource
+    @Inject lateinit var drive: DriveSignalSource
     @Inject lateinit var journal: SessionJournal
-    @Inject lateinit var navi: PleosNavi
+    @Inject lateinit var navi: Navigator
+    @Inject lateinit var platform: RecordingPlatform
 
     private var running = false
     private var foregroundOk = false
@@ -80,7 +84,7 @@ class RecordingService : LifecycleService() {
         foregroundOk = runCatching {
             ServiceCompat.startForeground(
                 this, NOTIFICATION_ID, buildNotification(),
-                if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0,
+                if (Build.VERSION.SDK_INT >= 34) platform.foregroundServiceType else 0,
             )
         }.onFailure { Log.e(TAG, "포그라운드 시작 실패", it) }.isSuccess
         if (!foregroundOk) stopSelf()
@@ -98,19 +102,19 @@ class RecordingService : LifecycleService() {
 
     private suspend fun runRecorder() {
         if (!location.hasPermission() || !location.isSupported()) {
-            Log.w(TAG, "위치 권한 없음 또는 Pleos 위치 미지원 → 기록 서비스 중지")
+            Log.w(TAG, "위치 권한 없음 또는 위치 미지원 → 기록 서비스 중지")
             withContext(Dispatchers.Main) { stopSelf() }
             return
         }
-        Log.i(TAG, "기록 대기 시작 (주차 중에는 차량 신호만 듣는다)")
+        Log.i(TAG, "기록 대기 시작")
 
         var recovered = journal.read()
         var session: Job? = null
         var naviSession: NaviSession? = null
-        val naviAvailable = navi.isAvailable()
-        Log.i(TAG, "차량 내비 연동: ${if (naviAvailable) "사용" else "내비 서비스 없음 → 건너뜀"}")
+        val naviAvailable = navi.eventsAvailable()
+        Log.i(TAG, "내비 이벤트 연동: ${if (naviAvailable) "사용" else "내비 이벤트 없음 → 건너뜀"}")
 
-        vehicle.signals().toDriveEdges().debounced().collect { edge ->
+        drive.edges(resumeDriving = recovered != null, lastFixMs = recovered?.lastFixMs ?: 0L).collect { edge ->
             // 직전 프로세스가 기록 중에 죽었으면: 아직 주행 중이면 이어서, 이미 주차면 끝 표시만 한다.
             recovered?.let { open ->
                 recovered = null
@@ -128,9 +132,10 @@ class RecordingService : LifecycleService() {
 
             val current = session
             if (edge.active && current == null) {
-                Log.i(TAG, "주행 시작 t=${edge.tMs}")
+                Log.i(TAG, "주행 시작 t=${edge.tMs} (감지 전 점 ${edge.backlog.size}개)")
                 safely("markDriveStart") { core.markDriveStart(edge.tMs) }
                 journal.open(edge.tMs)
+                if (edge.backlog.isNotEmpty()) flush(edge.backlog.toMutableList(), "감지 전")
                 session = lifecycleScope.startCollecting()
                 if (naviAvailable) naviSession = lifecycleScope.startNavi()
             } else if (!edge.active && current != null) {
@@ -241,18 +246,5 @@ class RecordingService : LifecycleService() {
         private const val NOTIFICATION_ID = 1001
         private const val BATCH_SIZE = 30
         private const val FLUSH_INTERVAL_MS = 10_000L
-
-        /** 기어가 P에서 빠져 이만큼 유지돼야 시작 (P→R→D 조작 중 깜빡임 무시). */
-        internal const val START_DEBOUNCE_MS = 2_000L
-
-        /** P로 돌아와 이만큼 유지돼야 끝 (잠깐 P에 넣었다 빼는 경우 기록을 쪼개지 않음). */
-        internal const val END_DEBOUNCE_MS = 5_000L
     }
-}
-
-/** 판단이 바뀐 뒤 일정 시간 그대로일 때만 내보낸다. 내보내는 시각(tMs)은 처음 바뀐 순간 그대로다. */
-@OptIn(ExperimentalCoroutinesApi::class)
-internal fun Flow<DriveEdge>.debounced(): Flow<DriveEdge> = transformLatest { edge ->
-    delay(if (edge.active) RecordingService.START_DEBOUNCE_MS else RecordingService.END_DEBOUNCE_MS)
-    emit(edge)
 }

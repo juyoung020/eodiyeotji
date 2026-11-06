@@ -36,7 +36,8 @@ plugins {
 android {
     namespace = "app.eodiyeotji"
     compileSdk = 35
-    // AAOS 표준 Car API(CarPropertyManager: 기어·시동). 기기에서는 시스템이 제공하므로 APK에 넣지 않는다.
+    // AAOS 표준 Car API(CarPropertyManager: 기어·시동). 기기에서는 시스템이 제공하므로 APK에 넣지 않는다 (컴파일에만 쓴다).
+    // 판마다 나눌 수 없는 설정이라 두 판 모두 컴파일 경로에 있지만, 부르는 코드는 src/car 에만 있다.
     useLibrary("android.car")
     ndkVersion = "27.3.13750724"
 
@@ -46,13 +47,28 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
-        // Pleos 에뮬레이터(x86_64)와 실차(arm64)만 만든다
+        // 에뮬레이터(x86_64)와 실기기(차·폰 arm64)만 만든다
         ndk { abiFilters += listOf("x86_64", "arm64-v8a") }
         buildConfigField("String", "KAKAO_REST_API_KEY", "\"$kakaoRestApiKey\"")
         buildConfigField("String", "GOOGLE_PLACES_API_KEY", "\"$googlePlacesApiKey\"")
         buildConfigField("String", "LLM_BASE_URL", "\"$llmBaseUrl\"")
         buildConfigField("String", "LLM_MODEL", "\"$llmModel\"")
         buildConfigField("String", "LLM_API_KEY", "\"$llmApiKey\"")
+    }
+
+    // 두 판: car = Pleos Connect 차량 앱(Pleos SDK·AAOS Car API), phone = 어느 차에서나 혼자 쓰는 폰 앱(Android 위치·지도 앱 연동).
+    // 공통 코드는 src/main, 판마다 다른 연결은 src/car·src/phone 의 platform/PlatformModule.kt 가 고른다.
+    flavorDimensions += "platform"
+    productFlavors {
+        create("car") {
+            dimension = "platform"
+            applicationId = "app.eodiyeotji"
+        }
+        create("phone") {
+            dimension = "platform"
+            // 같은 기기에 차 판과 같이 설치할 수 있게 다른 ID
+            applicationId = "app.eodiyeotji.phone"
+        }
     }
 
     buildTypes {
@@ -95,10 +111,11 @@ dependencies {
     implementation(libs.androidx.hilt.navigation.compose)
 
     implementation(libs.androidx.lifecycle.service)
-    implementation(libs.pleos.fusedlocation)
-    implementation(libs.pleos.navihelper)
-    implementation(libs.pleos.stt)
-    implementation(libs.pleos.tts)
+    // Pleos Connect SDK는 차 판에만
+    "carImplementation"(libs.pleos.fusedlocation)
+    "carImplementation"(libs.pleos.navihelper)
+    "carImplementation"(libs.pleos.stt)
+    "carImplementation"(libs.pleos.tts)
     implementation(libs.maplibre.android)
     implementation(libs.coil.compose)
 

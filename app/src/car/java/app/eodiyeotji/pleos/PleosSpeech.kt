@@ -20,6 +20,9 @@ import android.speech.SpeechRecognizer
 import android.util.Log
 import androidx.core.content.ContextCompat
 import app.eodiyeotji.BuildConfig
+import app.eodiyeotji.platform.ListenState
+import app.eodiyeotji.platform.SpeechInput
+import app.eodiyeotji.platform.SpeechResult
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Locale
 import javax.inject.Inject
@@ -30,18 +33,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-
-/** 듣는 중인지와 지금까지 알아들은 말 ([level]: 목소리 크기 0~1, 화면의 출렁임용). */
-data class ListenState(val listening: Boolean = false, val partial: String = "", val level: Float = 0f)
-
-/** 한 번 듣기의 끝. */
-sealed interface SpeechResult {
-    data class Final(val text: String) : SpeechResult
-    /** 말소리가 없었다 (조용히 끝낸다). */
-    data object NoSpeech : SpeechResult
-    /** 들을 수 없었다 (화면·TTS에 그대로 보일 수 있는 한국어). */
-    data class Failed(val message: String) : SpeechResult
-}
 
 /**
  * 말로 묻기 — Pleos **SpeechToText SDK**(차량 마이크·차량 음성 인식 엔진)로 듣는다. 계산 없음: 알아들은 글을 넘기기만 한다.
@@ -55,13 +46,13 @@ sealed interface SpeechResult {
  * 콜백은 SDK 스레드에서 오므로 상태는 StateFlow/SharedFlow로만 내보낸다. Android 인식기는 메인 스레드에서만 다룬다.
  */
 @Singleton
-class PleosSpeech @Inject constructor(@ApplicationContext private val context: Context) {
+class PleosSpeech @Inject constructor(@ApplicationContext private val context: Context) : SpeechInput {
 
     private val main = Handler(Looper.getMainLooper())
     private val _state = MutableStateFlow(ListenState())
-    val state: StateFlow<ListenState> = _state.asStateFlow()
+    override val state: StateFlow<ListenState> = _state.asStateFlow()
     private val _results = MutableSharedFlow<SpeechResult>(extraBufferCapacity = 4)
-    val results: SharedFlow<SpeechResult> = _results.asSharedFlow()
+    override val results: SharedFlow<SpeechResult> = _results.asSharedFlow()
 
     @Volatile private var pleosReady = false
     /** Pleos 인식을 쓸 수 없다고 판단함 → Android 인식기로 */
@@ -127,11 +118,11 @@ class PleosSpeech @Inject constructor(@ApplicationContext private val context: C
     }
 
     /** Android 인식기로 대신 들어야 하는데 마이크 권한이 아직 없으면 true (화면이 권한을 물은 뒤 [start]). */
-    fun needsMicPermission(): Boolean =
+    override fun needsMicPermission(): Boolean =
         !usePleos() && ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED
 
     /** 듣기 시작 (이미 듣는 중이면 무시). 결과는 [results]로 한 번 온다. */
-    fun start(maxMs: Long = MAX_LISTEN_MS) {
+    override fun start(maxMs: Long) {
         main.post {
             if (!finished) return@post
             finished = false
@@ -150,7 +141,7 @@ class PleosSpeech @Inject constructor(@ApplicationContext private val context: C
     }
 
     /** 말을 다 했다 (마이크를 다시 누름): 지금까지 들은 것으로 끝낸다. */
-    fun stop() {
+    override fun stop() {
         main.post {
             if (finished) return@post
             runCatching { stt?.stop() }
@@ -163,7 +154,7 @@ class PleosSpeech @Inject constructor(@ApplicationContext private val context: C
     }
 
     /** 듣기를 버린다 (새 질문을 글로 했거나 화면을 닫음). 결과를 내보내지 않는다. */
-    fun cancel() {
+    override fun cancel() {
         main.post {
             if (finished) return@post
             finished = true
@@ -261,9 +252,7 @@ class PleosSpeech @Inject constructor(@ApplicationContext private val context: C
 
     private companion object {
         const val TAG = "EodiSpeech"
-        const val DEBUG_ACTION = "app.eodiyeotji.DEBUG_VOICE"
-        /** 말이 끝나지 않아도 이만큼 들으면 끝낸다 */
-        const val MAX_LISTEN_MS = 12_000L
+        const val DEBUG_ACTION = SpeechInput.DEBUG_ACTION
         const val MSG_FAILED = "말씀을 알아듣지 못했어요. 다시 말씀해 주세요."
         const val MSG_UNAVAILABLE = "이 차에서는 음성 인식을 쓸 수 없어요."
         const val MSG_NO_PERMISSION = "마이크 권한이 있어야 말로 물을 수 있어요."

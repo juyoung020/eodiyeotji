@@ -76,9 +76,14 @@ cargo test                                  # 기기 없이 로직 테스트
 cargo clippy --all-targets -- -D warnings   # 경고 0 유지
 
 # 앱 (저장소 루트에서). Rust .so 빌드와 UniFFI Kotlin 바인딩 생성은 Gradle이 자동으로 한다.
-./gradlew assembleDebug            # → app/build/outputs/apk/debug/app-debug.apk
-./gradlew assembleRelease          # R8 + Rust --release(LTO)
+# 두 판: car = Pleos 차량 앱(app.eodiyeotji), phone = 혼자 쓰는 폰 앱(app.eodiyeotji.phone)
+./gradlew installCarDebug          # Pleos 에뮬레이터에 설치 → app/build/outputs/apk/car/debug/app-car-debug.apk
+./gradlew assemblePhoneDebug       # 폰 판 → app/build/outputs/apk/phone/debug/app-phone-debug.apk
+./gradlew assembleCarRelease       # R8 + Rust --release(LTO). 폰은 assemblePhoneRelease
 ```
+- 공통 코드는 `app/src/main`, 판마다 다른 연결(위치·주행 신호·내비·음성·주행 상태)은 `app/src/car`·`app/src/phone`이 맡는다.
+  공통 코드는 `app.eodiyeotji.platform`의 인터페이스만 보고, 어느 구현을 쓸지는 각 판의 `platform/PlatformModule.kt`(Hilt)가 정한다.
+  Pleos SDK·`android.car`를 부르는 코드는 `src/car`에만 둔다.
 - Kotlin에 공개할 Rust 함수는 `core-rs/src/ffi.rs`에만 `#[uniffi::export]`로 둔다. Kotlin에서는 `app.eodiyeotji.core.EodiCore`를 거쳐 부른다.
 - Rust 결과물(`.so`)과 바인딩은 `app/build/` 아래에 생기고 git에 올리지 않는다.
 - 에뮬레이터 실행 · 차량 상태 조작 · 시연 경로 재생은 `scripts/emu.ps1`, `scripts/vc.ps1`, `scripts/replay.ps1` (`docs/50_개발환경_세팅.md` 7-3).
