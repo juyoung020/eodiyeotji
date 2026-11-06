@@ -98,6 +98,9 @@ import app.eodiyeotji.core.StaySummary
 import app.eodiyeotji.core.TripSummary
 import app.eodiyeotji.ui.home.CoreStatusLine
 import app.eodiyeotji.ui.map.DayMap
+import app.eodiyeotji.ui.recap.RecapListTop
+import app.eodiyeotji.ui.recap.RecapOverlay
+import app.eodiyeotji.ui.recap.RecapViewModel
 import app.eodiyeotji.ui.theme.AlbumPhoto
 import app.eodiyeotji.ui.theme.DottedRoute
 import app.eodiyeotji.ui.theme.EodiIcons
@@ -130,6 +133,9 @@ fun TimelineRoute(
     search: SearchSlot? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // 날짜 목록 맨 위: "N년 전 오늘" 카드 · 이번 달 요약 입구 (ui/recap)
+    val recap: RecapViewModel = hiltViewModel()
+    val openDay: (String) -> Unit = { viewModel.openDay(it, null) }
     var shareEpisode by rememberSaveable { mutableStateOf<Long?>(null) }
     var shared by remember { mutableStateOf(false) }
     TimelineScreen(
@@ -146,7 +152,9 @@ fun TimelineRoute(
         compact = compact,
         headerBanner = headerBanner,
         search = search,
+        listTop = { RecapListTop(recap, onOpenDay = openDay) },
     )
+    RecapOverlay(recap, onOpenDay = openDay)
     // 하루 상세에서 바로 커뮤니티에 코스로 올리기 (커뮤니티 탭까지 가지 않는다)
     shareEpisode?.let { id ->
         BackHandler { shareEpisode = null }
@@ -189,11 +197,12 @@ fun TimelineScreen(
     compact: Boolean = false,
     headerBanner: (@Composable () -> Unit)? = null,
     search: SearchSlot? = null,
+    listTop: (@Composable () -> Unit)? = null,
 ) {
     val c = EodiTheme.colors
     val space = EodiTheme.space
     if (compact) {
-        CompactTimeline(state, onSelectDay, onBack, onRetry, onWideChange, onEntryClick, onMapSelect, status, headerAction, onShare, headerBanner, search)
+        CompactTimeline(state, onSelectDay, onBack, onRetry, onWideChange, onEntryClick, onMapSelect, status, headerAction, onShare, headerBanner, search, listTop)
         return
     }
     Surface(modifier = Modifier.fillMaxSize(), color = c.background, contentColor = c.textPrimary) {
@@ -222,7 +231,7 @@ fun TimelineScreen(
                             LaunchedEffect(selected) {
                                 val i = days.days.indexOfFirst { it.day == selected }
                                 if (selected != null && i >= 0 && listState.layoutInfo.visibleItemsInfo.none { it.key == selected }) {
-                                    listState.animateScrollToItem(i + 1)
+                                    listState.animateScrollToItem(i + if (listTop != null) 2 else 1)
                                 }
                             }
                             DayList(
@@ -233,6 +242,7 @@ fun TimelineScreen(
                                 onSelect = onSelectDay,
                                 listState = listState,
                                 footer = status,
+                                top = listTop,
                                 modifier = Modifier.weight(ListWeight).fillMaxHeight(),
                             )
                             Spacer(Modifier.width(space.l))
@@ -279,6 +289,7 @@ fun TimelineScreen(
                                     onSelect = onSelectDay,
                                     listState = listState,
                                     footer = status,
+                                    top = listTop,
                                     modifier = Modifier.fillMaxSize().padding(horizontal = space.page),
                                 )
                             }
@@ -311,6 +322,7 @@ private fun CompactTimeline(
     onShare: (Long) -> Unit,
     headerBanner: (@Composable () -> Unit)?,
     search: SearchSlot?,
+    listTop: (@Composable () -> Unit)?,
 ) {
     val c = EodiTheme.colors
     val space = EodiTheme.space
@@ -370,6 +382,7 @@ private fun CompactTimeline(
                                     onSelect = onSelectDay,
                                     listState = listState,
                                     footer = status,
+                                    top = listTop,
                                     modifier = Modifier.fillMaxSize().padding(horizontal = space.page),
                                 )
                             }
@@ -543,6 +556,7 @@ private fun DayList(
     listState: LazyListState,
     modifier: Modifier = Modifier,
     footer: (@Composable () -> Unit)? = null,
+    top: (@Composable () -> Unit)? = null,
 ) {
     LazyColumn(
         modifier = modifier,
@@ -550,6 +564,9 @@ private fun DayList(
         contentPadding = PaddingValues(bottom = EodiTheme.space.page),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        if (top != null) {
+            item(key = "top", contentType = "top") { top() }
+        }
         item(key = "title", contentType = "title") {
             // 머리말 + 점선 길 (앨범의 목차 줄)
             Row(Modifier.padding(start = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
