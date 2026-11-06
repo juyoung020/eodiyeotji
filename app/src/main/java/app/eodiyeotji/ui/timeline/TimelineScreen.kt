@@ -45,6 +45,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
@@ -595,8 +599,12 @@ private fun DayList(
     footer: (@Composable () -> Unit)? = null,
     top: (@Composable () -> Unit)? = null,
 ) {
+    // 1년 전 날을 열고 나면 목록이 그날까지 내려가 있다 → 멀리 내려가 있으면 "오늘로" 버튼으로 한 번에 맨 위(요약·오늘)로
+    val farFromTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 3 } }
+    val scope = rememberCoroutineScope()
+    Box(modifier) {
     LazyColumn(
-        modifier = modifier,
+        modifier = Modifier.fillMaxSize(),
         state = listState,
         contentPadding = PaddingValues(bottom = EodiTheme.space.page),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -625,6 +633,28 @@ private fun DayList(
                 Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) { footer() }
             }
         }
+    }
+    AnimatedVisibility(
+        visible = farFromTop,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp),
+    ) {
+        Surface(
+            onClick = { scope.launch { listState.scrollToItem(0) } },
+            shape = CircleShape,
+            color = EodiTheme.colors.ink,
+            contentColor = EodiTheme.colors.onInk,
+            shadowElevation = 6.dp,
+            modifier = Modifier.heightIn(min = 64.dp),
+        ) {
+            Text(
+                stringResource(R.string.timeline_back_to_today),
+                style = EodiTheme.type.label,
+                modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp),
+            )
+        }
+    }
     }
 }
 
