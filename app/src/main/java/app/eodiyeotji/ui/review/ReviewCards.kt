@@ -60,6 +60,7 @@ import app.eodiyeotji.core.WithWhom
 import app.eodiyeotji.ui.community.CommunityIcons
 import app.eodiyeotji.ui.community.HeartButton
 import app.eodiyeotji.ui.community.MineBadge
+import app.eodiyeotji.ui.community.OrderDot
 import app.eodiyeotji.ui.community.PostHeader
 import app.eodiyeotji.ui.community.RatingStars
 import app.eodiyeotji.ui.community.VisitLine
@@ -157,7 +158,7 @@ internal fun RichReviewCard(t: TravelReview, onHeart: () -> Unit, modifier: Modi
 }
 
 /**
- * 여행 코스 후기 카드: 장소 리뷰 카드와 같은 모양 (큰 사진 · 제목 → 글쓴이 → 들른 곳 칩 → 글 → 다녀온 줄 → 쿠폰 · 하트).
+ * 여행 코스 후기 카드: 장소 리뷰 카드와 같은 모양 (큰 사진 · 제목 → 글쓴이 → 들른 곳 사진 줄 → 글 → 다녀온 줄 → 쿠폰 · 하트).
  * 큰 사진은 첫 번째 들른 곳, 왼쪽 위에 "여행 코스 · N곳". 카드를 누르면 코스 상세 (지도 · 들른 곳 · 이 코스로 안내).
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -185,11 +186,7 @@ internal fun TripReviewCard(t: DriveCourse, onOpen: () -> Unit, onHeart: () -> U
                 )
             }
             PostHeader(p.author, agoText(p.createdMs), mine = false)
-            if (p.stops.isNotEmpty()) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    p.stops.forEachIndexed { i, s -> StopChip(i + 1, s.name) }
-                }
-            }
+            if (p.stops.isNotEmpty()) StopStrip(p.stops, onMore = onOpen)
             if (p.body.isNotBlank()) {
                 Text(p.body, style = EodiTheme.type.body, color = c.textPrimary, maxLines = CollapsedLines, overflow = TextOverflow.Ellipsis)
             }
@@ -203,19 +200,61 @@ internal fun TripReviewCard(t: DriveCourse, onOpen: () -> Unit, onHeart: () -> U
     }
 }
 
-/** 들른 곳 칩 "1  경포해변" (코랄 번호 = 지도 핀 번호와 같은 색). 보여 주기만 한다. */
+/** 들른 곳 사진 줄 칸 수: 곳이 적어도 이만큼 칸을 나눠 사진이 너무 커지지 않게, 많으면 마지막 칸은 "+N". */
+private const val StripMinSlots = 4
+private const val StripMaxSlots = 5
+
+/**
+ * 들른 곳 사진 줄: 곳마다 정사각 사진 + 코랄 번호(지도 핀과 같은 색) + 아래 이름. 사진을 누르면 그곳 장소 창,
+ * 다 못 보여 준 곳은 "+N" (누르면 [onMore] = 코스 상세).
+ */
 @Composable
-private fun StopChip(order: Int, name: String) {
+private fun StopStrip(stops: List<StopFact>, onMore: () -> Unit) {
     val c = EodiTheme.colors
-    Row(
-        Modifier.background(c.surfaceHigh, CircleShape).padding(start = 6.dp, end = 14.dp, top = 5.dp, bottom = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(26.dp).background(c.stay, CircleShape), contentAlignment = Alignment.Center) {
-            Text(order.toString(), style = EodiTheme.type.caption, color = c.onMarker, fontWeight = FontWeight.Bold)
+    val openPlace = LocalOpenPlace.current
+    val slots = stops.size.coerceIn(StripMinSlots, StripMaxSlots)
+    val shown = if (stops.size <= slots) stops else stops.take(slots - 1)
+    val hidden = stops.size - shown.size
+    val shape = RoundedCornerShape(14.dp)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        shown.forEachIndexed { i, s ->
+            Column(Modifier.weight(1f)) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .clip(shape)
+                        .clickable(onClickLabel = placeDetailOpenLabel(), role = Role.Button) { openPlace(s) },
+                ) {
+                    StopPhotoBox(s.name, s.address, s.lat, s.lon, order = i + 1, modifier = Modifier.fillMaxSize(), radius = 14.dp, iconSize = 36.dp)
+                    OrderDot(i + 1, Modifier.align(Alignment.TopStart).padding(6.dp))
+                }
+                Text(
+                    s.name,
+                    style = EodiTheme.type.caption,
+                    color = c.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 6.dp, start = 2.dp),
+                )
+            }
         }
-        Spacer(Modifier.width(8.dp))
-        Text(name, style = EodiTheme.type.caption, color = c.textPrimary, maxLines = 1)
+        if (hidden > 0) {
+            val desc = stringResource(R.string.course_more_stops_description, hidden)
+            Box(
+                Modifier
+                    .weight(1f)
+                    .aspectRatio(1f)
+                    .clip(shape)
+                    .background(c.surfaceHigh)
+                    .clickable(onClickLabel = desc, role = Role.Button, onClick = onMore),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(stringResource(R.string.course_more_stops, hidden), style = EodiTheme.type.bodyStrong, fontWeight = FontWeight.Bold, color = c.textSecondary)
+            }
+        }
+        // 곳이 적으면 빈 칸으로 채워 사진 크기를 맞춘다
+        repeat(slots - shown.size - (if (hidden > 0) 1 else 0)) { Spacer(Modifier.weight(1f)) }
     }
 }
 
