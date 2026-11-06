@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.review
 
+import app.eodiyeotji.ui.offers.PlaceCouponBadge
 import androidx.compose.foundation.horizontalScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -283,6 +284,10 @@ private fun ReviewCard(t: TravelReview, onHeart: () -> Unit, showPlace: Boolean 
                         maxLines = 1,
                         modifier = Modifier.weight(1f),
                     )
+                    if (showPlace) {
+                        PlaceCouponBadge(t.offers)
+                        Spacer(Modifier.width(12.dp))
+                    }
                     HeartButton(r.hearts, r.heartedByMe, onHeart, compact = true)
                 }
             }

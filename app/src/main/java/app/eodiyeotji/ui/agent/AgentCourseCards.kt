@@ -33,6 +33,7 @@ import app.eodiyeotji.R
 import app.eodiyeotji.agent.RecommendedCourse
 import app.eodiyeotji.core.CoursePost
 import app.eodiyeotji.core.StopFact
+import app.eodiyeotji.ui.offers.CourseCouponBadge
 import app.eodiyeotji.ui.place.PlaceThumbnail
 
 // 근처 추천 코스 카드 ("여기 근처 드라이브 추천코스"). 순위·거리·하트는 Rust가 끝내고 오고, 여기는 받은 순서대로 그리기만 한다.
@@ -102,6 +103,7 @@ private fun CourseRecommendationCard(c: RecommendedCourse, focused: Boolean, onC
                 )
                 Spacer(Modifier.height4())
                 CourseNumbers(c)
+                CourseCouponBadge(c.offers)
                 courseWhenLine(post)?.let {
                     Text(it, style = AgentSubStyle, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }

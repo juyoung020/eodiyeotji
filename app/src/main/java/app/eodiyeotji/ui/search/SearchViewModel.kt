@@ -1,5 +1,10 @@
 package app.eodiyeotji.ui.search
 
+import app.eodiyeotji.core.CourseOffers
+import app.eodiyeotji.core.OfferPlace
+import app.eodiyeotji.core.PartnerOffer
+import app.eodiyeotji.core.courseOffers
+import app.eodiyeotji.core.offersForPlaces
 import android.util.Log
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
@@ -53,6 +58,10 @@ data class SearchUiState(
     val navi: Boolean? = null,
     /** 장소 줄([SearchRowKind.PLACE])의 저장(♥) 여부 (줄 키 → 저장됨). 없는 키는 아직 모름. */
     val saved: Map<String, Boolean> = emptyMap(),
+    /** 장소 · 리뷰 줄의 제휴 쿠폰 (줄 키 → 쿠폰, 쿠폰 없는 줄은 빠짐) */
+    val offers: Map<String, List<PartnerOffer>> = emptyMap(),
+    /** 코스 줄의 제휴 쿠폰 (줄 키 → 코스 쿠폰) */
+    val courseOffers: Map<String, CourseOffers> = emptyMap(),
 ) {
     /** 말도 칩도 없으면 처음 화면 */
     val idle: Boolean get() = query.isBlank() && !filter.isSet
@@ -202,6 +211,22 @@ class SearchViewModel @Inject constructor(
         // 그사이 말 · 범위 · 칩이 바뀌었으면 버린다 (다음 검색이 곧 온다)
         _state.update { cur -> if (cur.query == s.query && cur.scope == s.scope && cur.filter == s.filter) cur.copy(answer = answer) else cur }
         loadSaved(answer)
+        loadOffers(answer)
+    }
+
+    /** 장소 · 리뷰 · 코스 줄의 제휴 쿠폰을 한 번에 묻는다 (이름 · 좌표 맞추기는 Rust). */
+    private suspend fun loadOffers(answer: SearchAnswer) {
+        val rows = answer.groups.flatMap { it.rows }
+        val placeRows = rows.mapNotNull { r ->
+            val p = r.place ?: r.reviewPlace?.place
+            if (p != null && p.name.isNotBlank() && (r.kind == SearchRowKind.PLACE || r.kind == SearchRowKind.REVIEW)) r to OfferPlace(p.name, p.lat, p.lon) else null
+        }
+        val courseRows = rows.mapNotNull { r -> r.course?.let { r to it.post.stops } }
+        val places = runCatching { core.offersForPlaces(placeRows.map { it.second }) }.getOrNull().orEmpty()
+        val courses = runCatching { core.courseOffers(courseRows.map { it.second }) }.getOrNull().orEmpty()
+        val offers = placeRows.map { it.first.key }.zip(places).filter { it.second.isNotEmpty() }.toMap()
+        val courseOffers = courseRows.map { it.first.key }.zip(courses).filter { it.second.placeCount > 0 }.toMap()
+        _state.update { it.copy(offers = it.offers + offers, courseOffers = it.courseOffers + courseOffers) }
     }
 
     /** 장소 줄의 ♥ 상태를 한 번에 묻는다 (좌표 → 그 자리 장소가 저장됐는지, Rust). */

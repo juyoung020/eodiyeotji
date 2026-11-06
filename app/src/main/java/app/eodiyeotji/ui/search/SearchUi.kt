@@ -1,5 +1,9 @@
 package app.eodiyeotji.ui.search
 
+import app.eodiyeotji.core.CourseOffers
+import app.eodiyeotji.core.PartnerOffer
+import app.eodiyeotji.ui.offers.CourseCouponBadge
+import app.eodiyeotji.ui.offers.PlaceCouponBadge
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -382,7 +386,7 @@ fun SearchResults(
                     if (answer.groups.isEmpty()) {
                         full("empty") { NoResults() }
                     }
-                    answer.groups.forEach { g -> group(g, columns, open, map, navigate, state.saved, viewModel::toggleSaved) }
+                    answer.groups.forEach { g -> group(g, columns, open, map, navigate, state.saved, viewModel::toggleSaved, state.offers, state.courseOffers) }
                     if (ai != null && !ai.primary) full("ai-bottom") { AskAiCard(ai, primary = false, onAsk = ask) }
                     full("bottom-space") { Spacer(Modifier.height(24.dp)) }
                 }
@@ -421,6 +425,8 @@ private fun LazyGridScope.group(
     onNavigate: (SearchRow) -> Unit,
     saved: Map<String, Boolean> = emptyMap(),
     onHeart: (SearchRow) -> Unit = {},
+    offers: Map<String, List<PartnerOffer>> = emptyMap(),
+    courseOffers: Map<String, CourseOffers> = emptyMap(),
 ) {
     full("h-${g.kind}") { GroupHeader(g.title, g.rows.size + g.more) }
     itemsIndexed(g.rows, key = { _, r -> "${g.kind}-${r.key}" }, contentType = { _, _ -> "row" }) { index, r ->
@@ -429,6 +435,8 @@ private fun LazyGridScope.group(
             r, showPhoto = index < PhotoRows * columns, onOpen = onOpen, onMap = onMap, onNavigate = onNavigate,
             saved = if (r.kind == SearchRowKind.PLACE && r.place != null) saved[r.key] ?: false else null,
             onHeart = onHeart,
+            offers = offers[r.key].orEmpty(),
+            courseOffers = courseOffers[r.key],
         )
     }
     if (g.more > 0) full("more-${g.kind}") { MoreLine(g.more) }
@@ -495,6 +503,8 @@ private fun ResultRow(
     onNavigate: (SearchRow) -> Unit,
     saved: Boolean? = null,
     onHeart: (SearchRow) -> Unit = {},
+    offers: List<PartnerOffer> = emptyList(),
+    courseOffers: CourseOffers? = null,
 ) {
     val c = EodiTheme.colors
     val openLabel = stringResource(R.string.search_open)
@@ -537,6 +547,9 @@ private fun ResultRow(
                 if (r.dateLine.isNotBlank()) {
                     Text(r.dateLine, style = EodiTheme.type.meta, color = c.textTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+                // 제휴 쿠폰 (장소 · 리뷰 줄은 혜택, 코스 줄은 "쿠폰 2곳")
+                PlaceCouponBadge(offers)
+                if (courseOffers != null) CourseCouponBadge(courseOffers)
             }
             val canMap = r.day != null && r.place != null && (r.kind == SearchRowKind.PLACE || r.kind == SearchRowKind.DAY)
             val canNavi = r.place != null && (r.kind == SearchRowKind.PLACE || r.kind == SearchRowKind.DAY || r.kind == SearchRowKind.REVIEW)

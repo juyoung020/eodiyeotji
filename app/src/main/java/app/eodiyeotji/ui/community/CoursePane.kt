@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.community
 
+import app.eodiyeotji.ui.offers.CourseCouponBadge
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.activity.compose.BackHandler
@@ -241,6 +242,8 @@ private fun CourseCard(c: DriveCourse, onOpen: () -> Unit, onHeart: () -> Unit) 
                     maxLines = 1,
                     modifier = Modifier.weight(1f),
                 )
+                CourseCouponBadge(c.offers)
+                Spacer(Modifier.width(12.dp))
                 HeartButton(p.hearts, p.heartedByMe, onHeart)
             }
         }
@@ -319,6 +322,7 @@ private fun CourseDetailScreen(d: CourseDetail, progress: CourseProgress?, onBac
                                     color = colors.textTertiary,
                                 )
                                 VisitLine(d.course.visit)
+                                CourseCouponBadge(d.course.offers)
                                 if (p.body.isNotBlank()) Text(p.body, style = EodiTheme.type.body, color = colors.textSecondary)
                                 if (p.tags.isNotEmpty()) {
                                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

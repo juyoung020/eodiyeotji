@@ -354,6 +354,14 @@ fn duration_text(ms: i64) -> String {
     }
 }
 
+/// 제휴 쿠폰 한마디 (정차 중 답에만): " 이 코스엔 제휴 쿠폰이 2곳 있어요." 쿠폰이 없으면 빈 글.
+fn coupon_phrase(r: &CourseRecommendation) -> String {
+    match crate::offers::course_offers_of(&r.post.stops).place_count {
+        0 => String::new(),
+        n => format!(" 이 코스엔 제휴 쿠폰이 {n}곳 있어요."),
+    }
+}
+
 fn quoted(r: &CourseRecommendation) -> String {
     format!("‘{}’", r.post.title)
 }
@@ -387,10 +395,11 @@ fn list_answer(f: &Fetched, lead: &str, q: &[String], radius_km: f64, driving: b
     }
     // 목록은 화면 카드가 보여 준다 → 말은 가장 인기 있는 코스 하나만 짧게 (번호·괄호를 늘어놓지 않는다).
     let d = if top.distance_km >= 0.0 { format!(" 여기서 {} 거리예요.", km_text(top.distance_km)) } else { String::new() };
+    let c = coupon_phrase(top);
     if f.list.len() == 1 {
-        return format!("{pre}{lead}는 {} 하나예요.{d}{ask}", quoted(top));
+        return format!("{pre}{lead}는 {} 하나예요.{d}{c}{ask}", quoted(top));
     }
-    format!("{pre}{lead} {}개를 찾았어요. 하트가 가장 많은 코스는 {}{}.{d}{ask}", f.list.len(), quoted(top), eyo(&top.post.title))
+    format!("{pre}{lead} {}개를 찾았어요. 하트가 가장 많은 코스는 {}{}.{d}{c}{ask}", f.list.len(), quoted(top), eyo(&top.post.title))
 }
 
 /// 한 코스 이야기 (번호로 골랐을 때).
@@ -409,8 +418,8 @@ fn one_answer(i: usize, r: &CourseRecommendation, go: bool, driving: bool) -> St
     let d = if r.distance_km >= 0.0 { format!(" 여기서 {}, ", km_text(r.distance_km)) } else { " ".into() };
     let when = when_phrase(&r.post).map(|w| format!(" {w}")).unwrap_or_default();
     format!(
-        "{}번 {t}{} {}에 들러요.{when}{d}전체 {}, {}쯤 걸려요. 안내할까요?",
-        i + 1, eun(&r.post.title), stop_names(r, 4), km_text(r.post.distance_m / 1000.0), duration_text(r.post.duration_ms)
+        "{}번 {t}{} {}에 들러요.{when}{d}전체 {}, {}쯤 걸려요.{} 안내할까요?",
+        i + 1, eun(&r.post.title), stop_names(r, 4), km_text(r.post.distance_m / 1000.0), duration_text(r.post.duration_ms), coupon_phrase(r)
     )
 }
 
@@ -515,7 +524,8 @@ impl MemoryAgent {
                     let st = s.courses.clone();
                     self.show_courses(s, t, st);
                     let d = if r.distance_km >= 0.0 { format!(", 여기서 {}", km_text(r.distance_km)) } else { String::new() };
-                    t.say(&format!("그럼 {}번 {}{} 어떠세요? 하트 {}개{d}예요. 안내할까요?", next + 1, quoted(&r), eun(&r.post.title), r.post.hearts));
+                    let c = if driving { String::new() } else { coupon_phrase(&r) };
+                    t.say(&format!("그럼 {}번 {}{} 어떠세요? 하트 {}개{d}예요.{c} 안내할까요?", next + 1, quoted(&r), eun(&r.post.title), r.post.hearts));
                     self.propose_focus(s, t, loc);
                     return;
                 }
@@ -593,6 +603,7 @@ pub fn course_json(i: usize, r: &CourseRecommendation) -> Value {
         "region": r.post.region,
         "stops": r.post.stops.iter().take(5).map(|s| s.name.clone()).collect::<Vec<_>>(),
         "course_km": km(r.post.distance_m),
+        "partner_coupon_places": crate::offers::course_offers_of(&r.post.stops).place_count,
     })
 }
 

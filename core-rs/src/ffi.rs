@@ -8,6 +8,8 @@ use std::time::Instant;
 
 use crate::drivedetect::{Detector, DriveDetectOut, DriveEdgeOut, MotionFix};
 use crate::geo::{self, Point};
+use crate::memory::StopFact;
+use crate::offers::{self, CourseOffers, OfferPlace, PartnerOffer};
 
 /// Kotlin과 주고받는 좌표.
 #[derive(Debug, Clone, Copy, PartialEq, uniffi::Record)]
@@ -100,6 +102,24 @@ impl DriveDetector {
     fn lock(&self) -> MutexGuard<'_, Detector> {
         self.inner.lock().unwrap_or_else(|e| e.into_inner())
     }
+}
+
+/// 장소마다 붙는 제휴 쿠폰 (넘긴 순서대로, 없으면 빈 목록). 화면 한 장의 장소를 한 번에 넘긴다 (`offers` 모듈).
+#[uniffi::export]
+pub fn offers_for_places(places: Vec<OfferPlace>) -> Vec<Vec<PartnerOffer>> {
+    offers::offers_for(&places)
+}
+
+/// 제휴 쿠폰 하나 (없는 번호면 None).
+#[uniffi::export]
+pub fn offer_by_id(id: String) -> Option<PartnerOffer> {
+    offers::find_offer(&id)
+}
+
+/// 코스마다 들른 곳의 제휴 쿠폰 (넘긴 순서대로). 커뮤니티 코스 목록 · 추천 코스 카드가 한 번에 넘긴다.
+#[uniffi::export]
+pub fn course_offers(courses: Vec<Vec<StopFact>>) -> Vec<CourseOffers> {
+    courses.iter().map(|s| offers::course_offers_of(s)).collect()
 }
 
 /// 서울에서 동쪽으로 가다 북쪽으로 꺾는 경로에 GPS 흔들림(약 ±1m)을 섞은 점 n개.

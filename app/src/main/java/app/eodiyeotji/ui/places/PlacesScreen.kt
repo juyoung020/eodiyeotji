@@ -1,5 +1,9 @@
 package app.eodiyeotji.ui.places
 
+import app.eodiyeotji.core.PartnerOffer
+import app.eodiyeotji.ui.offers.CouponWallet
+import app.eodiyeotji.ui.offers.LocalCoupons
+import app.eodiyeotji.ui.offers.PlaceCouponBadge
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -80,8 +84,12 @@ fun PlacesRoute(
     val c = EodiTheme.colors
     val space = EodiTheme.space
     if (onBack != null) BackHandler(onBack = onBack)
-    // 화면에 들어올 때마다 다시 읽는다 (다른 화면에서 저장 · 숨기기를 했을 수 있다)
-    LaunchedEffect(Unit) { viewModel.reload() }
+    // 화면에 들어올 때마다 다시 읽는다 (다른 화면에서 저장 · 숨기기 · 쿠폰 받기를 했을 수 있다)
+    val coupons = LocalCoupons.current
+    LaunchedEffect(Unit) {
+        viewModel.reload()
+        coupons?.refresh()
+    }
     Surface(Modifier.fillMaxSize(), color = c.background, contentColor = c.textPrimary) {
         Box(Modifier.fillMaxSize().safeDrawingPadding()) {
             Column(Modifier.fillMaxSize()) {
@@ -91,6 +99,7 @@ fun PlacesRoute(
                         options = listOf(
                             PlacesTab.SAVED to stringResource(R.string.places_tab_saved),
                             PlacesTab.FREQUENT to stringResource(R.string.places_tab_frequent),
+                            PlacesTab.COUPONS to stringResource(R.string.places_tab_coupons),
                             PlacesTab.SETTINGS to stringResource(R.string.places_tab_settings),
                         ),
                         selected = s.tab,
@@ -102,8 +111,9 @@ fun PlacesRoute(
                 val body = Modifier.fillMaxSize().padding(horizontal = space.page)
                 when {
                     !s.loaded -> LoadingBox(body)
-                    s.tab == PlacesTab.SAVED -> CardGrid(s.saved, compact, R.string.places_saved_empty, viewModel, onOpenRecords, body)
-                    s.tab == PlacesTab.FREQUENT -> CardGrid(s.frequent, compact, R.string.places_frequent_empty, viewModel, onOpenRecords, body)
+                    s.tab == PlacesTab.SAVED -> CardGrid(s.saved, s.offers, compact, R.string.places_saved_empty, viewModel, onOpenRecords, body)
+                    s.tab == PlacesTab.FREQUENT -> CardGrid(s.frequent, s.offers, compact, R.string.places_frequent_empty, viewModel, onOpenRecords, body)
+                    s.tab == PlacesTab.COUPONS -> CouponWallet(compact, body)
                     else -> SettingsPane(s, viewModel, compact, body)
                 }
             }
@@ -142,6 +152,7 @@ private fun Header(onBack: (() -> Unit)?, compact: Boolean) {
 @Composable
 private fun CardGrid(
     cards: List<PlaceCard>,
+    offers: Map<Long, List<PartnerOffer>>,
     compact: Boolean,
     empty: Int,
     vm: PlacesViewModel,
@@ -162,6 +173,7 @@ private fun CardGrid(
         items(cards, key = { it.id }) { card ->
             PlaceCardView(
                 card,
+                offers = offers[card.id].orEmpty(),
                 onHeart = { vm.toggleSaved(card) },
                 onNavigate = { vm.navigate(card) },
                 onRecords = card.label?.name?.let { n -> { onOpenRecords(n) } },
@@ -172,7 +184,7 @@ private fun CardGrid(
 
 /** 장소 카드: [사진] 이름 / 분류 · 주소 / 다녀온 날 · [♥] + [여기로 안내] [기록 보기]. */
 @Composable
-private fun PlaceCardView(card: PlaceCard, onHeart: () -> Unit, onNavigate: () -> Unit, onRecords: (() -> Unit)?) {
+private fun PlaceCardView(card: PlaceCard, offers: List<PartnerOffer>, onHeart: () -> Unit, onNavigate: () -> Unit, onRecords: (() -> Unit)?) {
     val c = EodiTheme.colors
     val type = EodiTheme.type
     val label = card.label
@@ -197,6 +209,7 @@ private fun PlaceCardView(card: PlaceCard, onHeart: () -> Unit, onNavigate: () -
                     val sub = listOfNotNull(label?.category, label?.address).filter { it.isNotBlank() }.joinToString(" · ")
                     if (sub.isNotEmpty()) Text(sub, style = type.meta, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     visitLine(card)?.let { Text(it, style = type.meta, color = c.textTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    PlaceCouponBadge(offers)
                 }
                 Spacer(Modifier.width(12.dp))
                 val desc = stringResource(if (card.saved) R.string.places_unsave else R.string.places_save)

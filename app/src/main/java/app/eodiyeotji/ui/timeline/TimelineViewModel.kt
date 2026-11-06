@@ -1,5 +1,8 @@
 package app.eodiyeotji.ui.timeline
 
+import app.eodiyeotji.core.OfferPlace
+import app.eodiyeotji.core.PartnerOffer
+import app.eodiyeotji.core.offersForPlaces
 import android.util.Log
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
@@ -60,6 +63,8 @@ sealed interface DetailState {
         val entries: List<DayEntry>,
         val map: DayMapData? = null,
         val shareEpisode: Long? = null,
+        /** 머문 곳 줄의 제휴 쿠폰 (항목 키 → 쿠폰, 쿠폰 없는 곳은 빠짐) */
+        val offers: Map<String, List<PartnerOffer>> = emptyMap(),
     ) : DetailState
     data class Failed(val summary: DaySummary, val message: String) : DetailState
 }
@@ -211,7 +216,7 @@ class TimelineViewModel @Inject constructor(
     private suspend fun loadDetail(s: DaySummary): DetailState = try {
         // 주행·머문 곳은 Rust가 시간순으로 섞어서 준다 (Kotlin에서 정렬하지 않는다).
         val d = core.dayDetail(s.day)
-        DetailState.Loaded(d.summary, d.entries, loadMap(s.day), loadShareEpisode(s.day))
+        DetailState.Loaded(d.summary, d.entries, loadMap(s.day), loadShareEpisode(s.day), loadOffers(d.entries))
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
@@ -226,6 +231,18 @@ class TimelineViewModel @Inject constructor(
     } catch (e: Exception) {
         Log.w(TAG, "지도 데이터 불러오기 실패 ($day)", e)
         null
+    }
+
+    /** 이름 있는 머문 곳의 제휴 쿠폰 (한 번에 Rust로, 못 읽으면 빈 것 → 배지만 안 보인다). */
+    private suspend fun loadOffers(entries: List<DayEntry>): Map<String, List<PartnerOffer>> = try {
+        val stays = entries.filterIsInstance<DayEntry.Stay>().filter { it.stay.place?.name?.isNotBlank() == true }
+        val found = core.offersForPlaces(stays.map { OfferPlace(it.stay.place!!.name, it.stay.center.lat, it.stay.center.lon) })
+        stays.zip(found).filter { it.second.isNotEmpty() }.associate { (e, o) -> e.key to o }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w(TAG, "제휴 쿠폰 찾기 실패", e)
+        emptyMap()
     }
 
     /** 그날 올릴 수 있는 기록 (없거나 못 읽으면 null → 버튼을 숨긴다). */

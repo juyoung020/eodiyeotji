@@ -26,11 +26,11 @@ import kotlinx.coroutines.withTimeoutOrNull
 /** 다녀온 날 · 계절 · 그날 날씨 ("2025-11-06", "가을 · 단풍철", "맑음 · 14°C"). */
 data class Visit(val day: String, val season: String, val weather: String?)
 
-/** 드라이브 코스 + 다녀온 날 정보. */
-data class DriveCourse(val post: CoursePost, val visit: Visit)
+/** 드라이브 코스 + 다녀온 날 정보 + 들른 곳의 제휴 쿠폰. */
+data class DriveCourse(val post: CoursePost, val visit: Visit, val offers: CourseOffers = CourseOffers.NONE)
 
-/** 여행 리뷰 + 들른 날 정보. */
-data class TravelReview(val review: PlaceReview, val visit: Visit)
+/** 여행 리뷰 + 들른 날 정보 + 그 장소의 제휴 쿠폰. */
+data class TravelReview(val review: PlaceReview, val visit: Visit, val offers: List<PartnerOffer> = emptyList())
 
 /** 내 기록(나들이·여행)을 코스로 올리기 전 미리보기. [hiddenCount] = 집·회사 근처라 자동으로 가린 곳 수. */
 data class SharePreview(
@@ -61,7 +61,7 @@ data class BoardComment(
 // ---- 드라이브 코스 ----
 
 suspend fun EodiCore.driveCourses(sort: CommunitySort, near: LatLon? = null, radiusKm: Double = 30.0, limit: Int = 100): List<DriveCourse> =
-    withContext(Dispatchers.IO) { rust.communityCourses(sort.toR(), near.toNear(radiusKm), limit.toUInt()).map { it.toDrive() } }
+    withContext(Dispatchers.IO) { rust.communityCourses(sort.toR(), near.toNear(radiusKm), limit.toUInt()).map { it.toDrive() }.withOffers() }
 
 /** 코스 지도 (들른 곳 핀, 하루 지도와 같은 GeoJSON 모양). */
 suspend fun EodiCore.courseMap(postId: String): DayMapData = withContext(Dispatchers.IO) {
@@ -105,10 +105,10 @@ suspend fun EodiCore.weatherFor(preview: SharePreview): String? = fetchWeather(p
 // ---- 여행 리뷰 ----
 
 suspend fun EodiCore.travelReviews(sort: CommunitySort, near: LatLon? = null, radiusKm: Double = 30.0, limit: Int = 100): List<TravelReview> =
-    withContext(Dispatchers.IO) { rust.placeReviews(sort.toR(), near.toNear(radiusKm), limit.toUInt()).map { it.toTravel() } }
+    withContext(Dispatchers.IO) { rust.placeReviews(sort.toR(), near.toNear(radiusKm), limit.toUInt()).map { it.toTravel() }.withOffers() }
 
 suspend fun EodiCore.reviewsOfPlace(place: StopFact, sort: CommunitySort, limit: Int = 50): List<TravelReview> =
-    withContext(Dispatchers.IO) { rust.reviewsOfPlace(place.toR(), sort.toR(), limit.toUInt()).map { it.toTravel() } }
+    withContext(Dispatchers.IO) { rust.reviewsOfPlace(place.toR(), sort.toR(), limit.toUInt()).map { it.toTravel() }.withOffers() }
 
 /** 리뷰 쓸 수 있는 곳: 최근 실제로 머문 곳 (이름 있는 곳, 최신순). */
 suspend fun EodiCore.reviewCandidates(limit: Int = 30): List<StopFact> =
@@ -171,6 +171,22 @@ private fun CommunitySort.toR() = when (this) {
 private fun LatLon?.toNear(radiusKm: Double) = this?.let { RNearFilter(RGeoPoint(it.lat, it.lon), radiusKm) }
 
 private fun StopFact.toR() = RStopFact(name, category, address, arriveMs, leaveMs, lat, lon, firstVisit)
+
+/** 코스 목록에 제휴 쿠폰을 붙인다 (목록 전체를 Rust에 한 번에, offers.rs). */
+@JvmName("courseWithOffers")
+internal fun List<DriveCourse>.withOffers(): List<DriveCourse> {
+    if (isEmpty()) return this
+    val offers = runCatching { courseOffersNow(map { it.post.stops }) }.getOrNull() ?: return this
+    return mapIndexed { i, c -> c.copy(offers = offers.getOrNull(i) ?: CourseOffers.NONE) }
+}
+
+/** 리뷰 목록에 그 장소의 제휴 쿠폰을 붙인다 (목록 전체를 한 번에). */
+@JvmName("reviewWithOffers")
+internal fun List<TravelReview>.withOffers(): List<TravelReview> {
+    if (isEmpty()) return this
+    val offers = runCatching { offersForPlacesNow(map { OfferPlace(it.review.place.name, it.review.place.lat, it.review.place.lon) }) }.getOrNull() ?: return this
+    return mapIndexed { i, r -> r.copy(offers = offers.getOrNull(i).orEmpty()) }
+}
 
 internal fun RCoursePost.toDrive() = DriveCourse(toModel(), Visit(visitedDay, season, weather))
 
