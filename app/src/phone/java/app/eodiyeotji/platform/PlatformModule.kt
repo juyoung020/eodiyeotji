@@ -21,10 +21,13 @@ import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /**
  * 폰 판의 플랫폼 연결: 위치는 Android LocationManager, 주행 신호는 위치로 판단(Rust drivedetect),
@@ -45,16 +48,38 @@ abstract class PlatformModule {
 /**
  * 폰 주행 상태 = 위치로 판단한 주행 중 ([PhoneDriveSignals.driving]) 또는 디버그 화면의 수동 값.
  * 화면은 잠그지 않는다 ([locksScreen] false): 기억 에이전트가 음성 + 큰 카드로 짧게 답할 뿐이다.
+ *
+ * 폰은 동승자가 들고 있을 수도 있다 → 화면의 "동승자예요"를 누르면 이번 주행 동안은 정차 화면(글로 묻기·목록)을 그대로 쓴다
+ * ([setPassenger]). 주행이 끝나면 저절로 풀린다.
  */
 @Singleton
 class PhoneDrivingStatePort @Inject constructor(
     signals: PhoneDriveSignals,
     manual: ManualDrivingStatePort,
 ) : DrivingStatePort {
-    override val isDriving: StateFlow<Boolean> = combine(signals.driving, manual.isDriving) { s, m -> s || m }
-        .stateIn(CoroutineScope(SupervisorJob() + Dispatchers.Default), SharingStarted.Eagerly, false)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val passengerFlag = MutableStateFlow(false)
+
+    /** 차가 달리는 중인지 (동승자 여부와 상관없이). 화면 위 "운전 중" 띠가 본다. */
+    val moving: StateFlow<Boolean> = combine(signals.driving, manual.isDriving) { s, m -> s || m }
+        .stateIn(scope, SharingStarted.Eagerly, false)
+
+    /** 이번 주행은 동승자가 쓰는 중. */
+    val passenger: StateFlow<Boolean> = passengerFlag.asStateFlow()
+
+    override val isDriving: StateFlow<Boolean> = combine(moving, passengerFlag) { d, p -> d && !p }
+        .stateIn(scope, SharingStarted.Eagerly, false)
 
     override val locksScreen: Boolean = false
+
+    init {
+        // 주행이 끝나면 동승자 표시를 푼다 (다음 주행은 다시 운전 중 화면부터)
+        scope.launch { moving.collect { if (!it) passengerFlag.value = false } }
+    }
+
+    fun setPassenger(value: Boolean) {
+        passengerFlag.value = value && moving.value
+    }
 }
 
 /**

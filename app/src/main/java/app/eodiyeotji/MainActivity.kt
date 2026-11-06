@@ -4,8 +4,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import app.eodiyeotji.record.RecordingPermissionGate
-import app.eodiyeotji.ui.home.HomeRoute
 import app.eodiyeotji.ui.theme.EodiTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -16,10 +14,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             EodiTheme {
-                // 첫 실행에만 위치 권한을 묻고, 허용되면 자동 기록 서비스를 켠다. 화면은 항상 타임라인.
-                RecordingPermissionGate {
-                    HomeRoute()
-                }
+                // 화면 뼈대는 판마다 다르다: 차 = 왼쪽 레일 + 넓은 화면(src/car/…/AppRoot.kt), 폰 = 아래 탭 + 세로 화면(src/phone/…/AppRoot.kt)
+                AppRoot()
             }
         }
     }

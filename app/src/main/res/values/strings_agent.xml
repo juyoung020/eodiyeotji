@@ -66,6 +66,14 @@
     <string name="agent_action_running">내비에 경로를 보내는 중…</string>
     <string name="agent_action_done">내비 안내를 시작했어요</string>
     <string name="agent_action_failed">안내를 시작하지 못했어요: %1$s</string>
+    <!-- 운전 중 말로 "응" 해서 안내를 보낸 뒤 답 끝에 붙는 줄, 제안 버튼 이름 (ui/agent/MemoryAgentPort) -->
+    <string name="agent_started_line">\n내비 안내를 시작했어요.</string>
+    <string name="agent_start_failed_line">\n내비에 안내를 보내지 못했어요.</string>
+    <string name="agent_send_failed">내비에 안내를 보내지 못했어요.</string>
+    <string name="agent_proposal_course">이 코스로 안내</string>
+    <string name="agent_proposal_shared">\'%1$s\' 코스로 안내</string>
+    <string name="agent_proposal_place">%1$s로 안내</string>
+    <string name="agent_proposal_search">내비에서 찾기</string>
 
     <!-- 버튼을 누르면 에이전트에 이어서 묻는 말 -->
     <string name="agent_followup_only_here">%1$s만 안내해줘</string>
