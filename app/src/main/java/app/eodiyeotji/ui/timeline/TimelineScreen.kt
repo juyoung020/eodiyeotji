@@ -89,6 +89,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.BuildConfig
 import app.eodiyeotji.R
 import app.eodiyeotji.ui.place.PlaceThumbnail
+import app.eodiyeotji.ui.search.SearchSlot
 import app.eodiyeotji.ui.map.MapPhotoPin
 import app.eodiyeotji.core.DayEntry
 import app.eodiyeotji.core.DaySummary
@@ -126,6 +127,7 @@ fun TimelineRoute(
     viewModel: TimelineViewModel = hiltViewModel(),
     compact: Boolean = false,
     headerBanner: (@Composable () -> Unit)? = null,
+    search: SearchSlot? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var shareEpisode by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -143,6 +145,7 @@ fun TimelineRoute(
         headerAction = headerAction,
         compact = compact,
         headerBanner = headerBanner,
+        search = search,
     )
     // 하루 상세에서 바로 커뮤니티에 코스로 올리기 (커뮤니티 탭까지 가지 않는다)
     shareEpisode?.let { id ->
@@ -185,11 +188,12 @@ fun TimelineScreen(
     onShare: (Long) -> Unit = {},
     compact: Boolean = false,
     headerBanner: (@Composable () -> Unit)? = null,
+    search: SearchSlot? = null,
 ) {
     val c = EodiTheme.colors
     val space = EodiTheme.space
     if (compact) {
-        CompactTimeline(state, onSelectDay, onBack, onRetry, onWideChange, onEntryClick, onMapSelect, status, headerAction, onShare, headerBanner)
+        CompactTimeline(state, onSelectDay, onBack, onRetry, onWideChange, onEntryClick, onMapSelect, status, headerAction, onShare, headerBanner, search)
         return
     }
     Surface(modifier = Modifier.fillMaxSize(), color = c.background, contentColor = c.textPrimary) {
@@ -203,13 +207,24 @@ fun TimelineScreen(
             val bodyPadding = Modifier.padding(start = space.page, end = space.page, bottom = space.page)
 
             Column(Modifier.fillMaxSize()) {
-                TimelineHeader(wide, headerAction)
-                when (val days = state.days) {
+                TimelineHeader(wide, headerAction, search = search)
+                // 검색 중이면 목록 · 상세 자리에 검색 결과
+                if (search?.active == true) {
+                    search.results(Modifier.fillMaxSize().padding(start = space.page, end = space.page))
+                } else when (val days = state.days) {
                     DaysState.Loading -> LoadingPane(Modifier.fillMaxSize())
                     is DaysState.Failed -> FailedPane(days.message, onRetry, Modifier.fillMaxSize())
                     is DaysState.Loaded -> when {
                         days.days.isEmpty() -> EmptyPane(Modifier.fillMaxSize())
                         wide -> Row(Modifier.fillMaxSize().then(bodyPadding)) {
+                            // 검색 결과처럼 목록 밖에서 날을 고르면, 그날이 안 보일 때 목록을 그날까지 굴린다 (0번 줄은 머리말)
+                            val selected = state.selectedDay
+                            LaunchedEffect(selected) {
+                                val i = days.days.indexOfFirst { it.day == selected }
+                                if (selected != null && i >= 0 && listState.layoutInfo.visibleItemsInfo.none { it.key == selected }) {
+                                    listState.animateScrollToItem(i + 1)
+                                }
+                            }
                             DayList(
                                 days = days.days,
                                 today = days.today,
@@ -295,6 +310,7 @@ private fun CompactTimeline(
     headerAction: (@Composable () -> Unit)?,
     onShare: (Long) -> Unit,
     headerBanner: (@Composable () -> Unit)?,
+    search: SearchSlot?,
 ) {
     val c = EodiTheme.colors
     val space = EodiTheme.space
@@ -326,11 +342,20 @@ private fun CompactTimeline(
                 )
             } else {
                 Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-                    TimelineHeader(wide = false, action = headerAction, height = 80.dp)
-                    if (headerBanner != null) {
+                    val searching = search?.active == true
+                    // 검색 중에는 검색 칸이 맨 위, 결과가 화면 전체
+                    if (!searching) TimelineHeader(wide = false, action = headerAction, height = 80.dp)
+                    if (search != null) {
+                        search.bar(
+                            Modifier.fillMaxWidth().padding(start = space.page, end = space.page, top = if (searching) space.m else 0.dp, bottom = space.m),
+                        )
+                    }
+                    if (headerBanner != null && !searching) {
                         Box(Modifier.padding(start = space.page, end = space.page, bottom = space.m)) { headerBanner() }
                     }
-                    when (val days = state.days) {
+                    if (searching) {
+                        search!!.results(Modifier.fillMaxSize().padding(horizontal = space.page))
+                    } else when (val days = state.days) {
                         DaysState.Loading -> LoadingPane(Modifier.fillMaxSize())
                         is DaysState.Failed -> FailedPane(days.message, onRetry, Modifier.fillMaxSize())
                         is DaysState.Loaded ->
@@ -460,12 +485,13 @@ private fun CompactDayDetail(
 private const val CompactMapFraction = 0.44f
 
 /**
- * 앱 이름 (앱 표시 그림은 왼쪽 레일 맨 위에 있다). 넓은 창에서는 한 줄 소개를 옆에 붙인다.
+ * 앱 이름 (앱 표시 그림은 왼쪽 레일 맨 위에 있다). 검색 칸([search])이 있으면 이름 옆을 검색 칸이 채우고,
+ * 없으면 넓은 창에서 한 줄 소개를 옆에 붙인다.
  * 오른쪽 끝 [action] 자리는 화면의 대표 동작 하나(ui/agent의 "어디였지? 물어보세요" 버튼)가 들어가고, 글자가 잘리지 않게
  * 먼저 자리를 받는다. 소개 글은 남는 폭에서만 보인다. 개발용 코어 상태 줄은 머리가 아니라 날짜 목록 맨 아래에 둔다.
  */
 @Composable
-private fun TimelineHeader(wide: Boolean, action: (@Composable () -> Unit)?, height: Dp = 104.dp) {
+private fun TimelineHeader(wide: Boolean, action: (@Composable () -> Unit)?, height: Dp = 104.dp, search: SearchSlot? = null) {
     val c = EodiTheme.colors
     val space = EodiTheme.space
     Row(
@@ -481,7 +507,11 @@ private fun TimelineHeader(wide: Boolean, action: (@Composable () -> Unit)?, hei
             modifier = Modifier.semantics { heading() },
         )
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-            if (wide) {
+            if (search != null) {
+                // 검색 칸이 소개 글 자리를 쓴다 (앱 이름 옆 ~ 물어보기 버튼 앞)
+                Spacer(Modifier.width(24.dp))
+                search.bar(Modifier.weight(1f))
+            } else if (wide) {
                 Spacer(Modifier.width(20.dp))
                 Box(Modifier.size(width = 2.dp, height = 28.dp).background(c.outline))
                 Spacer(Modifier.width(20.dp))

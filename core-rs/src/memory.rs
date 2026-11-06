@@ -63,7 +63,8 @@ mod demo;
 mod episode;
 mod search;
 
-pub(crate) use episode::{day_title, flush_memory, SCHEMA_V3};
+pub(crate) use episode::{day_title, episode_from_row, flush_memory, kind_code, EP_COLS, SCHEMA_V3};
+pub(crate) use search::{concepts, expand_terms, match_expr, search as search_hits, squash, SINGLE_OK};
 
 /// 테스트용: 버전 3에서 더한 표를 지운다 (버전 2 DB 흉내).
 #[cfg(test)]

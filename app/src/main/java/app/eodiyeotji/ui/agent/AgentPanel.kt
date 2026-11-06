@@ -102,9 +102,10 @@ private val EntryFullWidth = 480.dp
  * "어디였지? 물어보세요" 입구. 큰 알약 버튼 (높이 88dp, 글자 길이만큼만 넓어지고 마이크는 오른쪽 끝). 누르면 [AgentPanel]을 띄운다.
  * 글자는 줄이지 않고 다 보이게 한다 (좁은 창에서는 머리 쪽이 다른 것을 줄인다).
  * [driving]이면 문구가 "말로 물어보세요"로 바뀐다 (운전 중에는 음성으로만 묻는다).
+ * [mic] false면 오른쪽 마이크를 뺀다 (옆 검색 칸에 말로 찾기 마이크가 있을 때 — 마이크가 둘로 보이지 않게).
  */
 @Composable
-fun AgentEntryButton(onClick: () -> Unit, modifier: Modifier = Modifier, driving: Boolean = false) = BoxWithConstraints(modifier) {
+fun AgentEntryButton(onClick: () -> Unit, modifier: Modifier = Modifier, driving: Boolean = false, mic: Boolean = true) = BoxWithConstraints(modifier) {
     // 받은 폭이 좁으면(좁은 창의 머리) 짧은 이름 "물어보기"로 → 글자가 잘리지 않는다
     val label = when {
         driving -> R.string.agent_entry_driving
@@ -121,7 +122,7 @@ fun AgentEntryButton(onClick: () -> Unit, modifier: Modifier = Modifier, driving
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+            modifier = Modifier.padding(start = 24.dp, end = if (mic) 12.dp else 28.dp, top = 12.dp, bottom = 12.dp),
         ) {
             // 반짝임은 기억 금색 (AI가 기억을 찾아 준다는 표시)
             Icon(AgentIcons.Sparkle, contentDescription = null, tint = EodiTheme.colors.memoryInk, modifier = Modifier.size(32.dp))
@@ -134,12 +135,14 @@ fun AgentEntryButton(onClick: () -> Unit, modifier: Modifier = Modifier, driving
                 softWrap = false,
                 modifier = Modifier.weight(1f, fill = false),
             )
-            Spacer(Modifier.width(24.dp))
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.size(64.dp).background(MaterialTheme.colorScheme.primary, CircleShape),
-            ) {
-                Icon(AgentIcons.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(32.dp))
+            if (mic) {
+                Spacer(Modifier.width(24.dp))
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.size(64.dp).background(MaterialTheme.colorScheme.primary, CircleShape),
+                ) {
+                    Icon(AgentIcons.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(32.dp))
+                }
             }
         }
     }

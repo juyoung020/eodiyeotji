@@ -124,6 +124,9 @@ class TimelineViewModel @Inject constructor(
     /** 마지막으로 상세를 보여 준 날. 같은 날을 다시 읽을 때는 로딩 표시 없이 내용만 바꾼다(깜빡임 방지). */
     private var shownDay: String? = null
 
+    /** 검색 결과 "지도"로 연 날: 그날 상세가 뜨면 고를 항목 (날, 항목 키). */
+    @Volatile private var pendingEntry: Pair<String, String>? = null
+
     private val detail: StateFlow<DetailState> = target
         .transformLatest { s ->
             if (s == null) {
@@ -138,6 +141,10 @@ class TimelineViewModel @Inject constructor(
             }
             shownDay = s.day
             emit(loadDetail(s))
+            pendingEntry?.takeIf { it.first == s.day }?.let {
+                selectedEntry.value = it.second
+                pendingEntry = null
+            }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), DetailState.None)
 
@@ -145,6 +152,17 @@ class TimelineViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), TimelineUiState())
 
     fun select(day: String) {
+        selectedDay.value = day
+    }
+
+    /** 검색 결과에서 그날 열기. [entryKey]가 있으면 그날 목록 · 지도에서 그 항목을 고른다 ([DayEntry.key]). */
+    fun openDay(day: String, entryKey: String?) {
+        if (shownDay == day) {
+            pendingEntry = null
+            selectedEntry.value = entryKey
+        } else {
+            pendingEntry = entryKey?.let { day to it }
+        }
         selectedDay.value = day
     }
 
