@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 제휴 혜택 · 할인 쿠폰 (ui/offers). 쿠폰 내용은 Rust offers.rs의 시연용 예시 -->
+
+    <!-- 배지 -->
+    <string name="coupon_places">쿠폰 %1$d곳</string>
+    <string name="coupon_more">%1$s 외 %2$d</string>
+    <string name="coupon_open">제휴 쿠폰 보기</string>
+
+    <!-- 쿠폰 창 -->
+    <string name="coupon_sheet_title">제휴 혜택</string>
+    <string name="coupon_sheet_course">이 코스의 제휴 혜택 %1$d곳</string>
+    <string name="coupon_claim">쿠폰 받기</string>
+    <string name="coupon_claimed">받았어요</string>
+    <string name="coupon_code_label">쿠폰 번호</string>
+    <string name="coupon_show_at_store">매장에서 쿠폰 번호를 보여 주세요</string>
+    <string name="coupon_partner_note">제휴 매장이 주는 혜택이에요. 추천 순위는 제휴와 상관없이 실제 방문과 하트로 정해요.</string>
+    <string name="coupon_close">닫기</string>
+
+    <!-- 내 장소 › 쿠폰함 -->
+    <string name="places_tab_coupons">쿠폰함</string>
+    <string name="coupon_wallet_empty">아직 받은 쿠폰이 없어요.\n장소 · 코스에 붙은 쿠폰 배지를 눌러 받아 보세요.</string>
+    <string name="coupon_claimed_on">%1$s 받음</string>
+</resources>

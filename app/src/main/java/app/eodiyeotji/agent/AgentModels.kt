@@ -1,6 +1,8 @@
 package app.eodiyeotji.agent
 
 import app.eodiyeotji.core.CourseLeg
+import app.eodiyeotji.core.CourseOffers
+import app.eodiyeotji.core.courseOffersNow
 import app.eodiyeotji.core.CoursePost
 import app.eodiyeotji.core.CourseRoute
 import app.eodiyeotji.core.Episode
@@ -56,8 +58,14 @@ enum class AnswerSource { FAST_PATH, LLM, FALLBACK, CONFIRM }
 /** 지연 (ms, 질문 시작부터). */
 data class Timing(val toRecommendationMs: Long?, val firstTextMs: Long?, val totalMs: Long, val llmCalls: Int, val llmMs: Long)
 
-/** 추천 코스 하나. [rank]는 1부터, [distanceKm]은 지금 위치~코스 첫 곳 (위치를 모르면 null). */
-data class RecommendedCourse(val rank: Int, val post: CoursePost, val distanceKm: Double?, val score: Double)
+/** 추천 코스 하나. [rank]는 1부터, [distanceKm]은 지금 위치~코스 첫 곳 (위치를 모르면 null), [offers]는 들른 곳의 제휴 쿠폰. */
+data class RecommendedCourse(
+    val rank: Int,
+    val post: CoursePost,
+    val distanceKm: Double?,
+    val score: Double,
+    val offers: CourseOffers = CourseOffers.NONE,
+)
 
 /** 운전자 확인을 기다리는 안내 제안. */
 data class AgentProposal(val id: String, val summary: String, val action: AgentNavAction)
@@ -105,8 +113,13 @@ internal fun RNavAction.toModel(): AgentNavAction = when (this) {
     is RNavAction.Search -> AgentNavAction.Search(keyword)
 }
 
-internal fun List<RCourseRecommendation>.toModel() = mapIndexed { i, r ->
-    RecommendedCourse(i + 1, r.post.toCoreModel(), r.distanceKm.takeIf { it >= 0.0 }, r.score)
+/** 에이전트 콜백 스레드(UI 밖)에서 부른다. 코스 쿠폰은 목록 전체를 한 번에 (Rust offers.rs). */
+internal fun List<RCourseRecommendation>.toModel(): List<RecommendedCourse> {
+    val posts = map { it.post.toCoreModel() }
+    val offers = runCatching { courseOffersNow(posts.map { it.stops }) }.getOrNull()
+    return mapIndexed { i, r ->
+        RecommendedCourse(i + 1, posts[i], r.distanceKm.takeIf { it >= 0.0 }, r.score, offers?.getOrNull(i) ?: CourseOffers.NONE)
+    }
 }
 
 internal fun RNavProposal.toModel() = AgentProposal(id, summary, action.toModel())

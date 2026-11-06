@@ -1,5 +1,8 @@
 package app.eodiyeotji.ui.places
 
+import app.eodiyeotji.core.OfferPlace
+import app.eodiyeotji.core.PartnerOffer
+import app.eodiyeotji.core.offersForPlaces
 import android.util.Log
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Immutable
@@ -32,7 +35,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class PlacesTab { SAVED, FREQUENT, SETTINGS }
+enum class PlacesTab { SAVED, FREQUENT, COUPONS, SETTINGS }
 
 @Immutable
 data class PlacesUiState(
@@ -42,6 +45,8 @@ data class PlacesUiState(
     val frequent: List<PlaceCard> = emptyList(),
     val homeOffice: HomeOffice = HomeOffice(null, null),
     val hidden: List<HiddenRecord> = emptyList(),
+    /** 장소 카드의 제휴 쿠폰 (장소 번호 → 쿠폰, 쿠폰 없는 곳은 빠짐) */
+    val offers: Map<Long, List<PartnerOffer>> = emptyMap(),
     @StringRes val notice: Int? = null,
 )
 
@@ -100,13 +105,21 @@ class PlacesViewModel @Inject constructor(
             val frequent = core.frequentPlaces()
             val ho = core.homeOffice()
             val hidden = core.hiddenRecords()
-            _state.update { it.copy(loaded = true, saved = saved, frequent = frequent, homeOffice = ho, hidden = hidden) }
+            val offers = loadOffers(saved + frequent)
+            _state.update { it.copy(loaded = true, saved = saved, frequent = frequent, homeOffice = ho, hidden = hidden, offers = offers) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.w(TAG, "내 장소 읽기 실패", e)
             _state.update { it.copy(loaded = true) }
         }
+    }
+
+    /** 이름 있는 장소 카드의 제휴 쿠폰 (한 번에 Rust로). 못 읽으면 빈 것 → 배지만 안 보인다. */
+    private suspend fun loadOffers(cards: List<PlaceCard>): Map<Long, List<PartnerOffer>> {
+        val named = cards.distinctBy { it.id }.filter { it.label?.name?.isNotBlank() == true }
+        val found = runCatching { core.offersForPlaces(named.map { OfferPlace(it.label!!.name, it.lat, it.lon) }) }.getOrNull() ?: return emptyMap()
+        return named.zip(found).filter { it.second.isNotEmpty() }.associate { (c, o) -> c.id to o }
     }
 
     private fun act(@StringRes done: Int, block: suspend () -> Unit) {

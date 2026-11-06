@@ -1,5 +1,7 @@
 package app.eodiyeotji.ui.timeline
 
+import app.eodiyeotji.core.PartnerOffer
+import app.eodiyeotji.ui.offers.PlaceCouponBadge
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
@@ -497,6 +499,7 @@ private fun CompactDayDetail(
                         is DetailState.Failed -> CenteredText(stringResource(R.string.timeline_failed, detail.message))
                         is DetailState.Loaded -> EntryList(
                             entries = detail.entries,
+                            offers = detail.offers,
                             selectedKey = selectedEntry,
                             onClick = onEntryClick,
                             headerCount = 1,
@@ -798,7 +801,7 @@ private fun DayDetailCard(
                         if (detail.entries.isEmpty()) {
                             CenteredText(stringResource(R.string.timeline_detail_empty))
                         } else {
-                            EntryList(detail.entries, selectedEntry, onEntryClick)
+                            EntryList(detail.entries, selectedEntry, onEntryClick, offers = detail.offers)
                         }
                 }
             }
@@ -960,6 +963,7 @@ private fun EntryList(
     header: (LazyListScope.() -> Unit)? = null,
     headerCount: Int = 0,
     contentPadding: PaddingValues = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = EodiTheme.space.page),
+    offers: Map<String, List<PartnerOffer>> = emptyMap(),
 ) {
     val listState = rememberLazyListState()
     LaunchedEffect(selectedKey, entries) {
@@ -993,7 +997,7 @@ private fun EntryList(
             val onMore = edits?.let { ed -> { ed.onEntry(e) } }
             when (e) {
                 is DayEntry.Trip -> TripRow(e.trip, rail, selected, onClick = { onClick(key) }, onMore = onMore)
-                is DayEntry.Stay -> StayRow(e.stay, rail, selected, onClick = { onClick(key) }, onMore = onMore)
+                is DayEntry.Stay -> StayRow(e.stay, rail, selected, onClick = { onClick(key) }, onMore = onMore, offers = offers[key].orEmpty())
             }
         }
     }
@@ -1030,7 +1034,14 @@ private fun TripRow(trip: TripSummary, rail: Rail, selected: Boolean, onClick: (
 
 /** 머문 곳: 제목은 장소 이름, 둘째 줄은 분류 · 머문 시간. 아직 머무는 곳은 초록 "지금 여기" 표시. */
 @Composable
-private fun StayRow(stay: StaySummary, rail: Rail, selected: Boolean, onClick: () -> Unit, onMore: (() -> Unit)? = null) {
+private fun StayRow(
+    stay: StaySummary,
+    rail: Rail,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onMore: (() -> Unit)? = null,
+    offers: List<PartnerOffer> = emptyList(),
+) {
     val c = EodiTheme.colors
     val place = stay.place?.takeIf { it.name.isNotBlank() }
     val main: String
@@ -1063,6 +1074,7 @@ private fun StayRow(stay: StaySummary, rail: Rail, selected: Boolean, onClick: (
         selected = selected,
         onClick = onClick,
         onMore = onMore,
+        badge = if (offers.isNotEmpty()) ({ PlaceCouponBadge(offers) }) else null,
         trailing = place?.let { p ->
             {
                 // 정차한 곳 대표 사진 (구글 지도 사진): 앨범에 붙인 사진처럼 흰 테두리 + 살짝 기울임(행마다 번갈아)
@@ -1106,6 +1118,7 @@ private fun EntryRow(
     onClick: () -> Unit,
     trailing: (@Composable () -> Unit)? = null,
     onMore: (() -> Unit)? = null,
+    badge: (@Composable () -> Unit)? = null,
 ) {
     val c = EodiTheme.colors
     val type = EodiTheme.type
@@ -1166,6 +1179,7 @@ private fun EntryRow(
                         NaviTag()
                     }
                 }
+                badge?.invoke()
             }
             if (trailing != null) {
                 Box(Modifier.padding(top = 12.dp, bottom = 12.dp, end = 16.dp)) { trailing() }

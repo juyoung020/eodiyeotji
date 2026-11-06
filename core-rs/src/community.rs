@@ -41,7 +41,7 @@ use crate::mapdata::{map_safe_name, DayMap, EntryBounds, MapBounds};
 use crate::memory::{CourseLeg, Episode, EpisodeKind, MemoryQuery, StopFact};
 use crate::store::{format_day, join_names, parse_day, split_names, CoreError, EodiStore};
 
-mod demo;
+pub(crate) mod demo;
 pub mod weather;
 
 pub use weather::{open_meteo_url, parse_open_meteo_weather, season_label};

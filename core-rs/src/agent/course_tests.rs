@@ -200,7 +200,7 @@ fn no_location_far_theme_and_empty_cases() {
     // 위치를 모르면 전국 하트순, 거리 없이
     let agent = no_llm(FakeBackend::new());
     let r = ask(&agent, "인기 코스 알려줘", AgentContext { current_location: None, ..parked() });
-    assert!(r.answer().starts_with("지금 위치를 몰라서 전국 인기 코스 3개를 찾았어요. 하트가 가장 많은 코스는 ‘강릉 바다 순두부 당일치기’예요. 안내할까요?"), "{}", r.answer());
+    assert!(r.answer().starts_with("지금 위치를 몰라서 전국 인기 코스 3개를 찾았어요. 하트가 가장 많은 코스는 ‘강릉 바다 순두부 당일치기’예요. 이 코스엔 제휴 쿠폰이 2곳 있어요. 안내할까요?"), "{}", r.answer());
 
     // 근처에 없는 지역 → 전국에서 찾고 거리는 지금 위치에서 잰다
     let agent = no_llm(FakeBackend::new());
@@ -219,6 +219,37 @@ fn no_location_far_theme_and_empty_cases() {
     let r = ask(&agent, "여기 근처 드라이브 추천코스", parked());
     assert_eq!(r.answer(), "아직 공유된 드라이브 코스가 없어요.");
     assert!(r.proposals().is_empty() && course_lists(&r).is_empty());
+}
+
+#[test]
+fn partner_coupons_get_one_short_sentence_only_when_parked() {
+    // c-gn: 초당순두부마을(가까운 초당 순두부집 쿠폰) · 안목해변 카페거리 → 쿠폰 2곳
+    let near_gn = AgentContext { current_location: Some(GeoPoint { lat: 37.75, lon: 128.88 }), ..parked() };
+    let agent = no_llm(FakeBackend::new());
+    let r = ask(&agent, "강릉 쪽 드라이브 코스 추천해줘", near_gn.clone());
+    let a = r.answer();
+    assert!(a.ends_with("거리예요. 이 코스엔 제휴 쿠폰이 2곳 있어요. 안내할까요?"), "{a}");
+    assert_eq!(a.matches("쿠폰").count(), 1, "{a}");
+    // 번호로 고른 설명에도
+    let r = ask(&agent, "1번은 어디 들러?", near_gn.clone());
+    assert!(r.answer().ends_with("쯤 걸려요. 이 코스엔 제휴 쿠폰이 2곳 있어요. 안내할까요?"), "{}", r.answer());
+    // 안내하자는 답은 짧게 그대로
+    let r = ask(&agent, "1번으로 가자", near_gn.clone());
+    assert_eq!(r.answer(), "1번 ‘강릉 바다 순두부 당일치기’로 안내할까요?");
+
+    // 운전 중에는 쿠폰 말을 붙이지 않는다
+    let agent = no_llm(FakeBackend::new());
+    let r = ask(&agent, "강릉 쪽 드라이브 코스 추천해줘", AgentContext { is_driving: true, ..near_gn });
+    assert!(!r.answer().contains("쿠폰") && r.answer().ends_with("안내할까요?"), "{}", r.answer());
+
+    // 쿠폰 없는 코스는 그대로 (북악: 쿠폰 없음)
+    let agent = no_llm(FakeBackend::new());
+    assert!(!ask(&agent, "여기 근처 드라이브 추천코스 안내해줘", parked()).answer().contains("쿠폰"));
+    // LLM 도구 결과에도 쿠폰 곳 수
+    let st = courses::CourseState { list: FakeBackend::new().recommend_drive_courses(None, 0.0, 20).unwrap(), ..Default::default() };
+    let j = courses::list_json(&st);
+    let gn = j.as_array().unwrap().iter().find(|c| c["title"] == "강릉 바다 순두부 당일치기").unwrap();
+    assert_eq!(gn["partner_coupon_places"], 2);
 }
 
 #[test]

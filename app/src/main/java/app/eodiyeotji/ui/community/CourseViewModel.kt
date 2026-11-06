@@ -12,6 +12,7 @@ import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.LatLon
 import app.eodiyeotji.core.courseLegs
 import app.eodiyeotji.core.courseMap
+import app.eodiyeotji.core.courseOffers
 import app.eodiyeotji.core.driveCourses
 import app.eodiyeotji.core.lastKnownPosition
 import app.eodiyeotji.core.toggleCourseHeart
@@ -111,7 +112,15 @@ class CourseViewModel @Inject constructor(
         viewModelScope.launch {
             val map = runCatching { core.courseMap(id) }.onFailure { Log.w(TAG, "코스 지도 실패 $id", it) }.getOrNull()
             val legs = runCatching { core.courseLegs(id) }.getOrDefault(emptyList())
-            _state.update { s -> if (s.detail?.course?.post?.id == id) s.copy(detail = s.detail.copy(map = map, legs = legs)) else s }
+            // 검색 결과에서 열면 쿠폰이 아직 안 붙어 있다 → 이 코스만 Rust에 묻는다
+            val offers = if (course.offers.placeCount > 0) course.offers else runCatching { core.courseOffers(listOf(course.post.stops)) }.getOrNull()?.firstOrNull()
+            _state.update { s ->
+                if (s.detail?.course?.post?.id == id) {
+                    s.copy(detail = s.detail.copy(map = map, legs = legs, course = s.detail.course.copy(offers = offers ?: s.detail.course.offers)))
+                } else {
+                    s
+                }
+            }
         }
     }
 

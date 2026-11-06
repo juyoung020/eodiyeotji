@@ -15,6 +15,7 @@ pub mod geo;
 pub mod lastfix;
 pub mod mapdata;
 pub mod memory;
+pub mod offers;
 pub mod photos;
 pub mod places;
 pub mod recap;

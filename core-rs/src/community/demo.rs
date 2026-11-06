@@ -23,9 +23,9 @@ use crate::store::{format_day, join_names, CoreError, EodiStore, DAY_MS};
 const HOUR: i64 = 3_600_000;
 
 /// 장소 (이름, 분류, 지번 주소, 위도, 경도).
-pub(super) type Poi = (&'static str, &'static str, &'static str, f64, f64);
+pub(crate) type Poi = (&'static str, &'static str, &'static str, f64, f64);
 
-pub(super) const PLACES: &[Poi] = &[
+pub(crate) const PLACES: &[Poi] = &[
     // 서울
     ("경복궁", "고궁", "서울 종로구 세종로 1-1", 37.5796, 126.9770),
     ("북촌한옥마을", "관광명소", "서울 종로구 계동 105", 37.5826, 126.9831),
@@ -131,10 +131,10 @@ pub(super) const PLACES: &[Poi] = &[
 ];
 
 /// 드라이브 코스 (id, 제목, 소개, 작성자, 지역, 태그, 들른 곳 이름들, 며칠 전, 다른 사람 하트, 내가 누름, 코스 시간(시)).
-pub(super) type Course =
+pub(crate) type Course =
     (&'static str, &'static str, &'static str, &'static str, &'static str, &'static [&'static str], &'static [&'static str], i64, u32, bool, i64);
 
-pub(super) const COURSES: &[Course] = &[
+pub(crate) const COURSES: &[Course] = &[
     ("d01", "7번 국도 동해안 드라이브", "경포에서 양양까지 바다를 오른쪽에 두고 달리는 길. 주문진 지나 하조대 정자에서 한 번 쉬고 낙산사에서 마무리해요.",
      "바다좋아", "강원 강릉시", &["해안도로", "7번국도", "바다"], &["경포해변", "주문진수산시장", "하조대", "낙산사"], 4, 512, true, 4),
     ("d02", "헌화로 바닷가 드라이브", "차가 바다에 닿을 듯 붙어 달리는 길. 정동진에서 출발해 심곡항에 잠깐 세우고 금진항까지 천천히.",
