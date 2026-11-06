@@ -118,6 +118,29 @@ pub fn drop_spikes(fixes: &[Fix], max_speed_mps: f64) -> Vec<Fix> {
     out
 }
 
+/// 점 [p]에서 꺾은선 [line]까지 가장 가까운 거리(미터). 선이 비었으면 무한대, 점 하나면 그 점까지.
+pub fn nearest_distance_m(p: Point, line: &[Point]) -> f64 {
+    match line {
+        [] => f64::INFINITY,
+        [a] => haversine_m(p, *a),
+        _ => line.windows(2).map(|w| segment_distance_m(p, w[0], w[1])).fold(f64::INFINITY, f64::min),
+    }
+}
+
+/// 꺾은선 길이(미터).
+pub fn line_length_m(line: &[Point]) -> f64 {
+    line.windows(2).map(|w| haversine_m(w[0], w[1])).sum()
+}
+
+/// a에서 b를 보는 방위(도, 북 0 · 동 90, 0 이상 360 미만).
+pub fn bearing_deg(a: Point, b: Point) -> f64 {
+    let (la1, la2) = (a.lat.to_radians(), b.lat.to_radians());
+    let dlon = (b.lon - a.lon).to_radians();
+    let y = dlon.sin() * la2.cos();
+    let x = la1.cos() * la2.sin() - la1.sin() * la2.cos() * dlon.cos();
+    y.atan2(x).to_degrees().rem_euclid(360.0)
+}
+
 /// 시간순 점들의 이동 거리 합(미터).
 pub fn path_length_m(fixes: &[Fix]) -> f64 {
     fixes.windows(2).map(|w| haversine_m(w[0].point(), w[1].point())).sum()
@@ -194,6 +217,26 @@ mod tests {
         let d = path_length_m(&drive(11));
         assert!((d - haversine_m(p(37.0, 127.0), p(37.001, 127.0))).abs() < 0.01, "{d}");
         assert_eq!(path_length_m(&[]), 0.0);
+    }
+
+    #[test]
+    fn nearest_distance_is_to_the_closest_segment_not_vertex() {
+        let line = [p(37.0, 127.0), p(37.0, 127.1)];
+        // 선분 가운데 바로 북쪽 0.001도(약 111m)
+        let d = nearest_distance_m(p(37.001, 127.05), &line);
+        assert!((d - 111.2).abs() < 1.0, "{d}");
+        assert!(nearest_distance_m(p(37.0, 127.0), &[]).is_infinite());
+        assert_eq!(nearest_distance_m(p(37.0, 127.0), &line[..1]), 0.0);
+    }
+
+    #[test]
+    fn bearing_points_north_east_south_west() {
+        let o = p(37.0, 127.0);
+        for (q, want) in [(p(37.1, 127.0), 0.0), (p(37.0, 127.1), 90.0), (p(36.9, 127.0), 180.0), (p(37.0, 126.9), 270.0)] {
+            let b = bearing_deg(o, q);
+            assert!((b - want).abs() < 0.1, "{b} vs {want}");
+        }
+        assert!((line_length_m(&[o, p(37.1, 127.0)]) - haversine_m(o, p(37.1, 127.0))).abs() < 1e-6);
     }
 
     #[test]

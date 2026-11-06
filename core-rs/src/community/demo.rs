@@ -3,13 +3,14 @@
 //! # 내용
 //! - 장소 [PLACES]: 실제로 있는 이름난 곳 (이름·분류·지번 주소·좌표). 사진은 앱이 이름·좌표로 구글에서 받으므로
 //!   이름이 실제 이름이어야 한다. 드라이브 길의 쉼터·전망대·휴게소·항구와, 리뷰용 식당·카페·관광지.
-//! - 드라이브 코스 [COURSES] 24개: 해안도로(7번 국도·헌화로·을왕리·남해·제주·부산·삼척), 강변길(북한강·남한강·의암호),
+//! - 여행 코스 후기 [COURSES] 24개 (들른 곳을 차례로 잇는 코스, 여행 리뷰 탭): 해안도로(7번 국도·헌화로·을왕리·남해·제주·부산·삼척), 강변길(북한강·남한강·의암호),
 //!   고갯길(미시령 옛길·한계령·대관령·북악스카이웨이). 가상의 작성자·지역·태그·하트(강릉·양평 코스가 가장 많다),
 //!   올린 날(3~35일 전), 다녀온 날 = 올린 날 하루 전, 그날 계절·날씨(그럴듯하게 만든 값). 그중 3개는 내가 하트를 눌러 둔
 //!   상태다. 내가 올린 코스(`mine`)는 없다 — 그건 앱에서 올린 것만.
 //! - 여행 리뷰 [REVIEWS] 93개: 장소별 별점·자세한 글(먹은 것·주차·붐비는 때·팁, 2~4문장)·키워드·누구와·다녀온 때·
 //!   머문 시간·그 사람의 몇 번째 방문·하트·작성자·다녀온 날·날씨. 다녀온 시각은 다녀온 때에 맞춘다(아침 8시·낮 1시·저녁 6시·밤 9시).
 //! - 게시판 [BOARD] 20개 글, 글마다 댓글 2~5개 (질문과 답).
+//! - 드라이브 코스(경치 길) 10개: `drive_demo` 모듈 (들르는 곳 없는 길 하나, 실제 도로 선).
 //! - 코스 거리 = 들른 곳 사이 직선거리 × 1.3, 들른 곳 도착·떠난 시각은 다녀온 날 09시부터 코스 시간에 고르게 나눈다.
 //!
 //! # 한 번만
@@ -662,7 +663,8 @@ pub(super) fn seed(store: &EodiStore, now_ms: i64) -> Result<u32, CoreError> {
     let seeded: Option<i64> = conn.query_row("SELECT value FROM meta WHERE key = 'community_seeded'", [], |r| r.get(0)).optional()?;
     if seeded.is_some() {
         refresh_review_details(&conn)?;
-        return Ok(0);
+        // 버전 10 전에 시연을 넣은 기기: 드라이브 코스(경치 길)만 더 넣는다
+        return super::drive_demo::seed(store, &conn, now_ms);
     }
     let tx = conn.transaction()?;
     let mut n = 0u32;
@@ -762,6 +764,7 @@ pub(super) fn seed(store: &EodiStore, now_ms: i64) -> Result<u32, CoreError> {
     }
     tx.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('community_seeded', ?1)", [now_ms])?;
     tx.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('community_reviews_v9', 1)", [])?;
+    n += super::drive_demo::seed(store, &tx, now_ms)?;
     tx.commit()?;
     Ok(n)
 }

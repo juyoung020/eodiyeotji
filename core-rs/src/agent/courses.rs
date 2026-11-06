@@ -1,10 +1,12 @@
-//! 근처 드라이브 추천 코스 — "여기 근처 드라이브 추천코스 알려줘" → 인기 코스 상위 k개 → "2번으로 가자" (LLM 없이, 수 ms).
+//! 근처 드라이브 추천 — "여기 근처 드라이브 추천코스 알려줘" → 인기 드라이브 길 상위 k개 → "2번으로 가자" (LLM 없이, 수 ms).
 //!
-//! - 추천 목록은 커뮤니티에 공유된 코스를 Rust `recommend_drive_courses`(인기 + 거리)로 받고, 여기서는 테마 거르기·말 만들기만 한다.
+//! - 드라이브 코스는 들를 곳 없는 경치 길 하나다 (강변북로 한강 야경, 인천대교 …, `community::drive`).
+//!   추천 목록은 Rust `recommend_drive_routes`(인기 + 지금 위치에서 길 위 가장 가까운 점까지 거리)로 받고,
+//!   여기서는 테마 거르기·말 만들기만 한다.
 //! - 목록은 세션에 남는다 → 번호("2번", "두 번째 거"), "어디 들러?", "더 가까운 데", "그거 말고 바다 쪽", "다른 거" 같은 후속 말을
 //!   규칙으로 바로 푼다. 규칙에 안 맞는 말은 LLM이 [상황]의 목록을 보고 `courses`·`nav mode=pick` 도구로 이어 간다.
 //! - 안내는 언제나 제안만 한다 (운전자 "응"/확인 버튼 뒤에만 `NavAction::SharedCourse`가 나간다).
-//! - 코스 순서는 작성자가 짠 순서를 지키고, 지금 위치에서 가까운 쪽 끝부터 달리게 필요하면 뒤집는다. 내비 경유지는 구간마다 2개까지.
+//! - 안내는 경유지 없는 두 구간: 길 시작점까지 → 도착하면 끝점까지 (`community::drive::route_legs`).
 
 use serde_json::{json, Value};
 
@@ -12,11 +14,8 @@ use super::runner::Turn;
 use super::tools::{self, km};
 use super::words;
 use super::{AgentContext, MemoryAgent, MemoryBackend, NavAction, NavProposal, Session};
-use crate::community::CourseRecommendation;
-use crate::course;
+use crate::community::drive::{route_legs, BestTime, DriveRoutePost, DriveRouteRecommendation};
 use crate::ffi::GeoPoint;
-use crate::geo::{haversine_m, Point};
-use crate::memory::{CourseLeg, CourseRoute, StopFact};
 
 /// 근처 반경 기본값 (km)
 pub const DEFAULT_RADIUS_KM: f64 = 50.0;
@@ -29,7 +28,7 @@ const FETCH_K: u32 = 20;
 #[derive(Debug, Clone, Default)]
 pub struct CourseState {
     /// 지금 보여 준 목록 (순서 = 순위)
-    pub list: Vec<CourseRecommendation>,
+    pub list: Vec<DriveRouteRecommendation>,
     /// 지금 이야기하는(안내를 제안한) 코스 자리
     pub focus: usize,
     /// 찾은 조건: 테마·지역 낱말, 반경
@@ -69,14 +68,16 @@ const PAST_WORDS: &[&str] = &["갔던", "갔었", "다녀온", "다녀왔", "였
 const GO_WORDS: &[&str] = &["가자", "가줘", "안내", "갈래", "출발", "로가", "으로가", "그걸로", "데려다", "가고싶", "가볼래", "갈게", "고를게", "할게", "로할래", "으로할래"];
 /// 설명을 바라는 말
 const DESCRIBE_WORDS: &[&str] = &[
-    "들러", "들르", "들려", "어디어디", "뭐있", "뭐가있", "어때", "자세히", "설명", "어떤곳", "얼마나걸", "몇시간", "몇키로", "멀어", "거리", "코스는",
+    "들러", "들르", "들려", "어디어디", "뭐있", "뭐가있", "어때", "자세히", "설명", "어떤곳", "어떤길", "얼마나걸", "몇시간", "몇키로", "멀어", "거리", "코스는",
+    "뭐보여", "뭐가보여", "보여줘",
 ];
 const CLOSER_WORDS: &[&str] = &["가까운", "가까이", "덜먼", "안먼"];
 const OTHER_WORDS: &[&str] = &["다른거", "다른코스", "다른데", "딴거", "딴데", "말고", "다음거", "다른곳", "또없", "더없", "다른건"];
 
 /// 테마 동의어 묶음 (장소 사전이 아니라 일반 낱말). 첫 낱말이 대표.
 const THEMES: &[&[&str]] = &[
-    &["바다", "해변", "해수욕장", "바닷가", "해안", "항구", "섬", "노을"],
+    &["바다", "해변", "해수욕장", "바닷가", "바닷길", "해안", "항구", "섬", "방조제"],
+    &["노을", "석양", "일몰", "해질녘"],
     &["산", "등산", "산성", "고개", "계곡", "숲", "단풍"],
     &["카페", "커피"],
     &["맛집", "식당", "밥", "먹방"],
@@ -199,20 +200,16 @@ fn theme_of(w: &str) -> Option<&'static [&'static str]> {
     THEMES.iter().copied().find(|g| g.contains(&w))
 }
 
-/// 코스가 낱말 중 하나에 맞나 (동의어 포함). 한 글자 낱말(산·강·밤)은 태그·분류·제목 낱말과 똑같을 때만.
-pub fn matches(p: &crate::community::CoursePost, q: &[String]) -> bool {
+/// 길이 낱말 중 하나에 맞나 (동의어 포함). 한 글자 낱말(산·강·밤)은 언제·제목 낱말과 똑같을 때만.
+pub fn matches(p: &DriveRoutePost, q: &[String]) -> bool {
     if q.is_empty() {
         return true;
     }
-    let long_fields: Vec<&str> = [p.title.as_str(), p.body.as_str(), p.region.as_str()]
+    let long_fields: Vec<&str> = [p.title.as_str(), p.body.as_str(), p.region.as_str(), p.start_name.as_str(), p.end_name.as_str(), p.best_time.label()]
         .into_iter()
-        .chain(p.tags.iter().map(String::as_str))
-        .chain(p.stops.iter().flat_map(|s| [s.name.as_str(), s.category.as_str()]))
+        .chain(p.highlights.iter().map(|h| h.name.as_str()))
         .collect();
-    let exact: Vec<&str> = p.tags.iter().map(String::as_str)
-        .chain(p.stops.iter().map(|s| s.category.as_str()))
-        .chain(p.title.split_whitespace())
-        .collect();
+    let exact: Vec<&str> = std::iter::once(p.best_time.label()).chain(p.title.split_whitespace()).collect();
     q.iter().any(|w| {
         let group: Vec<&str> = theme_of(w).map(|g| g.to_vec()).unwrap_or_else(|| vec![w.as_str()]);
         group.iter().any(|g| if g.chars().count() < 2 { exact.contains(g) } else { long_fields.iter().any(|f| f.contains(g)) })
@@ -224,34 +221,26 @@ pub fn matches(p: &crate::community::CoursePost, q: &[String]) -> bool {
 /// 찾은 결과와 어떻게 찾았는지.
 #[derive(Debug, Clone, Default)]
 pub struct Fetched {
-    pub list: Vec<CourseRecommendation>,
+    pub list: Vec<DriveRouteRecommendation>,
     /// 지금 위치를 몰라 전국에서 골랐다
     pub no_location: bool,
     /// 근처에 없어 전국으로 넓혔다
     pub widened: bool,
-    /// 낱말에 맞는 코스가 없어 낱말 없이 골랐다
+    /// 낱말에 맞는 길이 없어 낱말 없이 골랐다
     pub theme_missed: bool,
 }
 
-/// 추천 코스 찾기: 근처(인기+거리)에서 낱말 거르기 → 없으면 전국에서 → 그래도 없으면 낱말 없이. [exclude]의 코스는 뺀다. 최대 [k]개.
+/// 추천 길 찾기: 근처(인기+거리)에서 낱말 거르기 → 없으면 전국 인기순에서 → 그래도 없으면 낱말 없이. [exclude]의 길은 뺀다. 최대 [k]개.
 pub fn fetch(b: &dyn MemoryBackend, loc: Option<GeoPoint>, q: &[String], radius_km: f64, k: usize, exclude: &[String]) -> Fetched {
-    let keep = |v: &[CourseRecommendation], q: &[String]| -> Vec<CourseRecommendation> {
-        v.iter().filter(|r| !exclude.contains(&r.post.id) && matches(&r.post, q)).cloned().collect()
+    let keep = |v: &[DriveRouteRecommendation], q: &[String]| -> Vec<DriveRouteRecommendation> {
+        v.iter().filter(|r| !exclude.contains(&r.route.id) && matches(&r.route, q)).cloned().collect()
     };
-    let near = loc.map(|p| b.recommend_drive_courses(Some(p), radius_km, FETCH_K).unwrap_or_default()).unwrap_or_default();
-    // 전국 인기순은 필요할 때만 받는다. 거리는 여기서 잰다 (지금 위치~코스 첫 곳).
-    let nationwide = || {
-        let mut all = b.recommend_drive_courses(None, 0.0, FETCH_K * 3).unwrap_or_default();
-        if let Some(p) = loc {
-            for r in &mut all {
-                r.distance_km = distance_km(p, &r.post.stops);
-            }
-        }
-        all
-    };
+    let near = loc.map(|p| b.recommend_drive_routes(p, radius_km, FETCH_K).unwrap_or_default()).unwrap_or_default();
+    // 전국 인기순은 필요할 때만 받는다 (위치를 알면 거리도 같이 온다: 길 위 가장 가까운 점까지)
+    let nationwide = || b.popular_drive_routes(loc, FETCH_K * 3).unwrap_or_default();
     let mut f = Fetched { no_location: loc.is_none(), ..Default::default() };
     let mut list = keep(&near, q);
-    let mut all: Option<Vec<CourseRecommendation>> = None;
+    let mut all: Option<Vec<DriveRouteRecommendation>> = None;
     if list.is_empty() {
         let a = nationwide();
         list = keep(&a, q);
@@ -271,47 +260,16 @@ pub fn fetch(b: &dyn MemoryBackend, loc: Option<GeoPoint>, q: &[String], radius_
     f
 }
 
-fn distance_km(from: GeoPoint, stops: &[StopFact]) -> f64 {
-    stops.first().map(|s| haversine_m(Point::from(from), Point { lat: s.lat, lon: s.lon }) / 1000.0).unwrap_or(-1.0)
-}
+// ---------------------------------------------------------------- 안내 제안
 
-// ---------------------------------------------------------------- 내비 경로
-
-/// 공유 코스의 내비 경로: 작성자 순서를 지키되, 지금 위치에서 가까운 쪽 끝부터 (뒤집은 쪽이 더 짧으면 뒤집는다).
-/// 경유지는 구간마다 2개까지 (`course::split_legs`).
-pub fn shared_route(stops: &[StopFact], from: Option<GeoPoint>) -> CourseRoute {
-    let pts: Vec<Point> = stops.iter().map(|s| Point { lat: s.lat, lon: s.lon }).collect();
-    let origin = from.map(Point::from);
-    let fwd: Vec<usize> = (0..pts.len()).collect();
-    let rev: Vec<usize> = fwd.iter().rev().copied().collect();
-    let order = if origin.is_some() && course::path_length_m(origin, &pts, &rev) + 1.0 < course::path_length_m(origin, &pts, &fwd) { rev } else { fwd };
-    let distance_m = course::path_length_m(origin, &pts, &order);
-    let ordered: Vec<StopFact> = order.iter().map(|&i| stops[i].clone()).collect();
-    let ordered_pts: Vec<Point> = order.iter().map(|&i| pts[i]).collect();
-    let mut it = ordered.iter().cloned();
-    let legs = course::split_legs(&ordered_pts)
-        .into_iter()
-        .map(|l| {
-            let waypoints: Vec<StopFact> = it.by_ref().take(l.waypoints.len()).collect();
-            CourseLeg { waypoints, destination: it.next().expect("split_legs keeps every stop") }
-        })
-        .collect();
-    CourseRoute { stops: ordered, legs, distance_m }
-}
-
-/// 공유 코스 안내 제안. 들른 곳이 없으면 None.
-pub fn shared_proposal(seq: &mut u64, r: &CourseRecommendation, from: Option<GeoPoint>) -> Option<NavProposal> {
-    if r.post.stops.is_empty() {
-        return None;
-    }
-    let route = shared_route(&r.post.stops, from);
-    let names = route.stops.iter().map(|s| s.name.as_str()).collect::<Vec<_>>().join(" → ");
-    let split = if route.legs.len() > 1 { format!(" ({}구간으로 나눠 안내)", route.legs.len()) } else { String::new() };
-    Some(NavProposal {
+/// 드라이브 길 안내 제안: 시작점까지 → 도착하면 끝점까지 (경유지 없는 두 구간).
+pub fn shared_proposal(seq: &mut u64, r: &DriveRouteRecommendation) -> NavProposal {
+    let p = &r.route;
+    NavProposal {
         id: tools::next_id(seq),
-        summary: format!("‘{}’ 코스 안내: {names}{split}", r.post.title),
-        action: NavAction::SharedCourse { post_id: r.post.id.clone(), title: r.post.title.clone(), legs: route.legs },
-    })
+        summary: format!("‘{}’ 안내: {} → {} (시작점에 닿으면 끝까지 이어서 안내)", p.title, p.start_name, p.end_name),
+        action: NavAction::SharedCourse { post_id: p.id.clone(), title: p.title.clone(), legs: route_legs(p) },
+    }
 }
 
 // ---------------------------------------------------------------- 말 만들기
@@ -340,13 +298,18 @@ fn eun(w: &str) -> &'static str {
     if batchim(w).is_some_and(|b| b != 0) { "은" } else { "는" }
 }
 
+/// 이/가
+fn iga(w: &str) -> &'static str {
+    if batchim(w).is_some_and(|b| b != 0) { "이" } else { "가" }
+}
+
 /// 18km / 3.2km
 pub fn km_text(d: f64) -> String {
     if d < 10.0 { format!("{:.1}km", d.max(0.1)) } else { format!("{}km", d.round() as i64) }
 }
 
 fn duration_text(ms: i64) -> String {
-    let min = (ms / 60_000).max(1);
+    let min = ((ms + 30_000) / 60_000).max(1);
     match (min / 60, min % 60) {
         (0, m) => format!("{m}분"),
         (h, 0) => format!("{h}시간"),
@@ -354,20 +317,29 @@ fn duration_text(ms: i64) -> String {
     }
 }
 
-/// 제휴 쿠폰 한마디 (정차 중 답에만): " 이 코스엔 제휴 쿠폰이 2곳 있어요." 쿠폰이 없으면 빈 글.
-fn coupon_phrase(r: &CourseRecommendation) -> String {
-    match crate::offers::course_offers_of(&r.post.stops).place_count {
-        0 => String::new(),
-        n => format!(" 이 코스엔 제휴 쿠폰이 {n}곳 있어요."),
+fn quoted(r: &DriveRouteRecommendation) -> String {
+    format!("‘{}’", r.route.title)
+}
+
+/// "22km·25분"
+fn stats(r: &DriveRouteRecommendation) -> String {
+    format!("{}·{}", km_text(r.route.distance_m / 1000.0), duration_text(r.route.duration_ms))
+}
+
+/// 언제 가면 좋은지 한마디 ("밤에", "해 질 녘에").
+fn when_word(b: BestTime) -> &'static str {
+    match b {
+        BestTime::Night => "밤에",
+        BestTime::Sunset => "해 질 녘에",
+        BestTime::Morning => "아침에",
+        BestTime::Day => "낮에",
+        BestTime::Foliage => "단풍철에",
+        BestTime::Blossom => "벚꽃철에",
     }
 }
 
-fn quoted(r: &CourseRecommendation) -> String {
-    format!("‘{}’", r.post.title)
-}
-
-fn stop_names(r: &CourseRecommendation, n: usize) -> String {
-    r.post.stops.iter().take(n).map(|s| s.name.as_str()).filter(|s| !s.is_empty()).collect::<Vec<_>>().join(", ")
+fn sights(r: &DriveRouteRecommendation, n: usize) -> String {
+    r.route.highlights.iter().take(n).map(|h| h.name.as_str()).filter(|s| !s.is_empty()).collect::<Vec<_>>().join(", ")
 }
 
 /// 앞말 범위: "근처 " / "전국 "
@@ -375,68 +347,57 @@ fn scope(f: &Fetched) -> &'static str {
     if f.no_location || f.widened { "전국 " } else { "근처 " }
 }
 
-/// 목록 답. [lead]: 앞말 (예: "근처 인기 코스", "더 가까운 코스").
+/// 목록 답. [lead]: 앞말 (예: "근처 인기 드라이브 길", "더 가까운 드라이브 길").
 fn list_answer(f: &Fetched, lead: &str, q: &[String], radius_km: f64, driving: bool) -> String {
     let pre = if f.no_location {
         "지금 위치를 몰라서 ".to_string()
     } else if f.theme_missed {
-        format!("‘{}’ 코스는 아직 없어서 대신 ", q.join("·"))
+        format!("‘{}’ 길은 아직 없어서 대신 ", q.join("·"))
     } else if f.widened {
         format!("근처 {}km 안에는 없어서 ", radius_km.round() as i64)
     } else {
         String::new()
     };
     let top = &f.list[0];
-    let can_go = !top.post.stops.is_empty();
-    let ask = if can_go { " 안내할까요?" } else { "" };
     if driving {
-        let d = if top.distance_km >= 0.0 { format!(" 여기서 {}, 하트 {}개예요.", km_text(top.distance_km), top.post.hearts) } else { format!(" 하트 {}개예요.", top.post.hearts) };
-        return format!("{pre}{lead} 1위는 {}{}.{d}{ask}", quoted(top), eyo(&top.post.title));
+        let d = if top.distance_km >= 0.0 { format!(" 여기서 {}, 하트 {}개예요.", km_text(top.distance_km), top.route.hearts) } else { format!(" 하트 {}개예요.", top.route.hearts) };
+        return format!("{pre}{lead} 1위는 {}{}.{d} 안내할까요?", quoted(top), eyo(&top.route.title));
     }
-    // 목록은 화면 카드가 보여 준다 → 말은 가장 인기 있는 코스 하나만 짧게 (번호·괄호를 늘어놓지 않는다).
-    let d = if top.distance_km >= 0.0 { format!(" 여기서 {} 거리예요.", km_text(top.distance_km)) } else { String::new() };
-    let c = coupon_phrase(top);
+    // 목록은 화면 카드가 보여 준다 → 말은 가장 인기 있는 길 하나만 짧게 (번호·괄호를 늘어놓지 않는다).
+    let d = if top.distance_km >= 0.0 { format!(" 여기서 {}, {} 코스예요.", km_text(top.distance_km), stats(top)) } else { format!(" {} 코스예요.", stats(top)) };
     if f.list.len() == 1 {
-        return format!("{pre}{lead}는 {} 하나예요.{d}{c}{ask}", quoted(top));
+        return format!("{pre}{lead}{} {} 하나예요.{d} 안내할까요?", eun(lead), quoted(top));
     }
-    format!("{pre}{lead} {}개를 찾았어요. 하트가 가장 많은 코스는 {}{}.{d}{c}{ask}", f.list.len(), quoted(top), eyo(&top.post.title))
+    format!("{pre}{lead} {}개를 찾았어요. 하트가 가장 많은 길은 {}{}.{d} 안내할까요?", f.list.len(), quoted(top), eyo(&top.route.title))
 }
 
-/// 한 코스 이야기 (번호로 골랐을 때).
-fn one_answer(i: usize, r: &CourseRecommendation, go: bool, driving: bool) -> String {
+/// 한 길 이야기 (번호로 골랐을 때).
+fn one_answer(i: usize, r: &DriveRouteRecommendation, go: bool, driving: bool) -> String {
     let t = quoted(r);
-    let can_go = !r.post.stops.is_empty();
-    if !can_go {
-        return format!("{}번 {t}{} 들른 곳 정보가 없어 안내할 수 없어요.", i + 1, eun(&r.post.title));
-    }
+    let p = &r.route;
     if go {
-        return format!("{}번 {t}{} 안내할까요?", i + 1, ro(&r.post.title));
+        return format!("{}번 {t}{} 안내할까요?", i + 1, ro(&p.title));
     }
     if driving {
-        return format!("{}번은 {}에 들러요. 안내할까요?", i + 1, stop_names(r, 2));
+        return format!("{}번은 {}에서 {}까지 {} 길이에요. 안내할까요?", i + 1, p.start_name, p.end_name, km_text(p.distance_m / 1000.0));
     }
-    let d = if r.distance_km >= 0.0 { format!(" 여기서 {}, ", km_text(r.distance_km)) } else { " ".into() };
-    let when = when_phrase(&r.post).map(|w| format!(" {w}")).unwrap_or_default();
+    let seen = sights(r, 3);
+    let seen = if seen.is_empty() { String::new() } else { format!(" 가는 길에 {seen}{} 보여요.", iga(&seen)) };
+    let here = if r.distance_km >= 0.0 { format!("고, 여기서 {}예요.", km_text(r.distance_km)) } else { "아요.".to_string() };
     format!(
-        "{}번 {t}{} {}에 들러요.{when}{d}전체 {}, {}쯤 걸려요.{} 안내할까요?",
-        i + 1, eun(&r.post.title), stop_names(r, 4), km_text(r.post.distance_m / 1000.0), duration_text(r.post.duration_ms), coupon_phrase(r)
+        "{}번 {t}{} {}에서 {}까지 {}, {}쯤 걸리는 길이에요.{seen} {} 가장 좋{here} 안내할까요?",
+        i + 1,
+        eun(&p.title),
+        p.start_name,
+        p.end_name,
+        km_text(p.distance_m / 1000.0),
+        duration_text(p.duration_ms),
+        when_word(p.best_time)
     )
 }
 
-/// 언제 다녀온 코스인지 한마디 (예: "작년 가을 단풍철에 다녀온 코스예요."). 값이 없으면 None.
-fn when_phrase(p: &crate::community::CoursePost) -> Option<String> {
-    if p.season.trim().is_empty() {
-        return None;
-    }
-    let season = p.season.replace(" · ", " ");
-    Some(match p.weather.as_deref().filter(|w| !w.trim().is_empty()) {
-        Some(w) => format!("{season}, {}에 다녀온 코스예요.", w.split(" · ").next().unwrap_or(w)),
-        None => format!("{season}에 다녀온 코스예요."),
-    })
-}
-
 impl MemoryAgent {
-    /// 추천 코스 말 처리 (LLM 없이). 처리했으면 true. 답마다 목록을 화면에 다시 보낸다 (새 질문 카드가 목록을 잃지 않게).
+    /// 추천 길 말 처리 (LLM 없이). 처리했으면 true. 답마다 목록을 화면에 다시 보낸다 (새 질문 카드가 목록을 잃지 않게).
     pub(crate) fn course_fast_path(&self, s: &mut Session, t: &mut Turn, intent: CourseIntent, ctx: &AgentContext) -> bool {
         self.course_reply(s, t, intent, ctx);
         if !t.course_shown && !s.courses.list.is_empty() {
@@ -453,15 +414,15 @@ impl MemoryAgent {
                 let f = fetch(self.backend.as_ref(), loc, &q, DEFAULT_RADIUS_KM, SHOW_K, &[]);
                 if f.list.is_empty() {
                     s.courses = CourseState::default();
-                    t.say(if q.is_empty() { "아직 공유된 드라이브 코스가 없어요." } else { "그쪽으로 공유된 드라이브 코스가 아직 없어요." });
+                    t.say(if q.is_empty() { "아직 공유된 드라이브 길이 없어요." } else { "그쪽으로 공유된 드라이브 길이 아직 없어요." });
                     return;
                 }
-                let what = if q.is_empty() || f.theme_missed { "인기 코스".to_string() } else { format!("‘{}’ 인기 코스", q.join("·")) };
+                let what = if q.is_empty() || f.theme_missed { "인기 드라이브 길".to_string() } else { format!("‘{}’ 인기 드라이브 길", q.join("·")) };
                 let lead = format!("{}{what}", scope(&f));
                 let text = list_answer(&f, &lead, &q, DEFAULT_RADIUS_KM, driving);
                 self.show_courses(s, t, CourseState { list: f.list, focus: 0, q, radius_km: DEFAULT_RADIUS_KM });
                 t.say(&text);
-                self.propose_focus(s, t, loc);
+                self.propose_focus(s, t);
             }
             CourseIntent::Pick { index, go } => {
                 let index = index.unwrap_or(s.courses.focus);
@@ -473,13 +434,13 @@ impl MemoryAgent {
                 let st = s.courses.clone();
                 self.show_courses(s, t, st);
                 t.say(&one_answer(index, &r, go, driving));
-                self.propose_focus(s, t, loc);
+                self.propose_focus(s, t);
             }
             CourseIntent::Describe => {
-                let i = s.courses.focus;
-                let r = s.courses.list[i.min(s.courses.list.len() - 1)].clone();
+                let i = s.courses.focus.min(s.courses.list.len() - 1);
+                let r = s.courses.list[i].clone();
                 t.say(&one_answer(i, &r, false, driving));
-                self.propose_focus(s, t, loc);
+                self.propose_focus(s, t);
             }
             CourseIntent::Closer => {
                 let cur = s.courses.list[s.courses.focus.min(s.courses.list.len() - 1)].clone();
@@ -492,30 +453,30 @@ impl MemoryAgent {
                 f.list.sort_by(|a, b| a.distance_km.total_cmp(&b.distance_km));
                 f.list.truncate(SHOW_K);
                 if f.list.is_empty() {
-                    t.say(&format!("근처에서는 {}{} 가장 가까운 추천 코스예요. 안내할까요?", quoted(&cur), if batchim(&cur.post.title).is_some_and(|b| b != 0) { "이" } else { "가" }));
-                    self.propose_focus(s, t, loc);
+                    t.say(&format!("근처에서는 {}{} 가장 가까운 드라이브 길이에요. 안내할까요?", quoted(&cur), iga(&cur.route.title)));
+                    self.propose_focus(s, t);
                     return;
                 }
                 let f = Fetched { widened: false, theme_missed: false, ..f };
-                let text = list_answer(&f, "더 가까운 코스", &[], s.courses.radius_km, driving);
+                let text = list_answer(&f, "더 가까운 드라이브 길", &[], s.courses.radius_km, driving);
                 let q = s.courses.q.clone();
                 let radius = s.courses.radius_km;
                 self.show_courses(s, t, CourseState { list: f.list, focus: 0, q, radius_km: radius });
                 t.say(&text);
-                self.propose_focus(s, t, loc);
+                self.propose_focus(s, t);
             }
             CourseIntent::Theme { q } => {
-                let exclude: Vec<String> = s.courses.list.get(s.courses.focus).map(|r| vec![r.post.id.clone()]).unwrap_or_default();
+                let exclude: Vec<String> = s.courses.list.get(s.courses.focus).map(|r| vec![r.route.id.clone()]).unwrap_or_default();
                 let f = fetch(self.backend.as_ref(), loc, &q, s.courses.radius_km.max(DEFAULT_RADIUS_KM), SHOW_K, &exclude);
                 if f.list.is_empty() || f.theme_missed {
-                    t.say(&format!("‘{}’ 쪽 추천 코스는 아직 없어요. 지금 목록에서 골라 주세요.", q.join("·")));
+                    t.say(&format!("‘{}’ 쪽 드라이브 길은 아직 없어요. 지금 목록에서 골라 주세요.", q.join("·")));
                     return;
                 }
-                let lead = format!("{}‘{}’ 코스", scope(&f), q.join("·"));
+                let lead = format!("{}‘{}’ 드라이브 길", scope(&f), q.join("·"));
                 let text = list_answer(&f, &lead, &q, DEFAULT_RADIUS_KM, driving);
                 self.show_courses(s, t, CourseState { list: f.list, focus: 0, q, radius_km: DEFAULT_RADIUS_KM });
                 t.say(&text);
-                self.propose_focus(s, t, loc);
+                self.propose_focus(s, t);
             }
             CourseIntent::Other => {
                 let next = s.courses.focus + 1;
@@ -524,23 +485,22 @@ impl MemoryAgent {
                     let st = s.courses.clone();
                     self.show_courses(s, t, st);
                     let d = if r.distance_km >= 0.0 { format!(", 여기서 {}", km_text(r.distance_km)) } else { String::new() };
-                    let c = if driving { String::new() } else { coupon_phrase(&r) };
-                    t.say(&format!("그럼 {}번 {}{} 어떠세요? 하트 {}개{d}예요.{c} 안내할까요?", next + 1, quoted(&r), eun(&r.post.title), r.post.hearts));
-                    self.propose_focus(s, t, loc);
+                    t.say(&format!("그럼 {}번 {}{} 어떠세요? 하트 {}개{d}예요. 안내할까요?", next + 1, quoted(&r), eun(&r.route.title), r.route.hearts));
+                    self.propose_focus(s, t);
                     return;
                 }
-                let shown: Vec<String> = s.courses.list.iter().map(|r| r.post.id.clone()).collect();
+                let shown: Vec<String> = s.courses.list.iter().map(|r| r.route.id.clone()).collect();
                 let f = fetch(self.backend.as_ref(), loc, &s.courses.q, s.courses.radius_km, SHOW_K, &shown);
                 if f.list.is_empty() || f.theme_missed {
-                    t.say("추천할 코스는 이게 다예요. 바다·산·카페처럼 테마를 말씀해 주시면 다시 찾아 볼게요.");
+                    t.say("추천할 길은 이게 다예요. 바다·강·야경처럼 테마를 말씀해 주시면 다시 찾아 볼게요.");
                     return;
                 }
-                let text = list_answer(&f, "다른 인기 코스", &[], s.courses.radius_km, driving);
+                let text = list_answer(&f, "다른 인기 드라이브 길", &[], s.courses.radius_km, driving);
                 let q = s.courses.q.clone();
                 let radius = s.courses.radius_km;
                 self.show_courses(s, t, CourseState { list: f.list, focus: 0, q, radius_km: radius });
                 t.say(&text);
-                self.propose_focus(s, t, loc);
+                self.propose_focus(s, t);
             }
         }
     }
@@ -551,12 +511,12 @@ impl MemoryAgent {
         t.courses(&s.courses);
     }
 
-    /// 추천 코스 이야기 중 LLM이 답한 뒤의 안전망 (LLM이 스스로 nav를 불렀으면 아무것도 하지 않는다):
-    /// - 목록의 코스 하나를 말하며 "안내…"를 물었는데 nav를 부르지 않았으면 그 코스로 제안을 만든다 (작은 모델에서 자주 나온다).
-    /// - 그 밖에는 대기 중인 코스 제안을 다시 보낸다 (새 질문 화면에도 확인 버튼이 있게).
+    /// 추천 길 이야기 중 LLM이 답한 뒤의 안전망 (LLM이 스스로 nav를 불렀으면 아무것도 하지 않는다):
+    /// - 목록의 길 하나를 말하며 "안내…"를 물었는데 nav를 부르지 않았으면 그 길로 제안을 만든다 (작은 모델에서 자주 나온다).
+    /// - 그 밖에는 대기 중인 길 제안을 다시 보낸다 (새 질문 화면에도 확인 버튼이 있게).
     ///
     /// 어느 쪽이든 제안일 뿐이고 실행은 여전히 운전자 확인 뒤다.
-    pub(crate) fn course_proposal_from_answer(&self, s: &mut Session, t: &mut Turn, ctx: &AgentContext, pending_before: Option<String>) {
+    pub(crate) fn course_proposal_from_answer(&self, s: &mut Session, t: &mut Turn, pending_before: Option<String>) {
         if s.courses.list.is_empty() {
             return;
         }
@@ -571,12 +531,13 @@ impl MemoryAgent {
             Some(NavAction::SharedCourse { post_id, .. }) => Some(post_id.clone()),
             _ => None,
         };
-        let named: Vec<usize> = s.courses.list.iter().enumerate().filter(|(_, r)| t.answer_text().contains(r.post.title.as_str())).map(|(i, _)| i).collect();
+        let named: Vec<usize> =
+            s.courses.list.iter().enumerate().filter(|(_, r)| t.answer_text().contains(r.route.title.as_str())).map(|(i, _)| i).collect();
         if let ([i], true) = (named.as_slice(), t.answer_text().contains("안내")) {
             s.courses.focus = *i;
             t.courses(&s.courses);
-            if pending_post.as_deref() != Some(s.courses.list[*i].post.id.as_str()) {
-                return self.propose_focus(s, t, ctx.current_location);
+            if pending_post.as_deref() != Some(s.courses.list[*i].route.id.as_str()) {
+                return self.propose_focus(s, t);
             }
         }
         if let (Some(p), Some(_)) = (pending_now, pending_post) {
@@ -584,26 +545,28 @@ impl MemoryAgent {
         }
     }
 
-    /// 지금 고른 코스로 안내 제안 (대기 제안을 바꾼다).
-    fn propose_focus(&self, s: &mut Session, t: &mut Turn, loc: Option<GeoPoint>) {
+    /// 지금 고른 길로 안내 제안 (대기 제안을 바꾼다).
+    fn propose_focus(&self, s: &mut Session, t: &mut Turn) {
         let Some(r) = s.courses.list.get(s.courses.focus) else { return };
-        if let Some(p) = shared_proposal(&mut s.proposal_seq, r, loc) {
-            *self.pending.lock().unwrap_or_else(|e| e.into_inner()) = Some(p.clone());
-            t.l.on_action_proposal(p);
-        }
+        let p = shared_proposal(&mut s.proposal_seq, r);
+        *self.pending.lock().unwrap_or_else(|e| e.into_inner()) = Some(p.clone());
+        t.l.on_action_proposal(p);
     }
 }
 
 // ---------------------------------------------------------------- LLM 도구 결과 (작게)
 
-pub fn course_json(i: usize, r: &CourseRecommendation) -> Value {
+pub fn course_json(i: usize, r: &DriveRouteRecommendation) -> Value {
+    let p = &r.route;
     json!({
-        "n": i + 1, "title": r.post.title, "by": r.post.author, "hearts": r.post.hearts,
+        "n": i + 1, "title": p.title, "by": p.author, "hearts": p.hearts,
         "km_from_here": (r.distance_km >= 0.0).then(|| (r.distance_km * 10.0).round() / 10.0),
-        "region": r.post.region,
-        "stops": r.post.stops.iter().take(5).map(|s| s.name.clone()).collect::<Vec<_>>(),
-        "course_km": km(r.post.distance_m),
-        "partner_coupon_places": crate::offers::course_offers_of(&r.post.stops).place_count,
+        "region": p.region,
+        "from": p.start_name, "to": p.end_name,
+        "route_km": km(p.distance_m),
+        "minutes": (p.duration_ms + 30_000) / 60_000,
+        "best": p.best_time.label(),
+        "sights": p.highlights.iter().take(4).map(|h| h.name.clone()).collect::<Vec<_>>(),
     })
 }
 
