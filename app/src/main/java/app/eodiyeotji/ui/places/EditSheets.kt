@@ -61,6 +61,7 @@ import app.eodiyeotji.ui.place.PlaceThumbnail
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.timeline.clockText
+import app.eodiyeotji.ui.timeline.dayTitle
 import app.eodiyeotji.ui.timeline.tripPlacesText
 import java.time.LocalDate
 
@@ -164,11 +165,10 @@ private fun MenuHeader(target: EditTarget, card: PlaceCard?, onClose: () -> Unit
                 tripPlacesText(target.trip) ?: stringResource(R.string.edit_menu_trip),
                 "${clockText(target.trip.startMs)} – ${clockText(target.trip.endMs)}",
             )
-            is EditTarget.Day -> Triple(
-                stringResource(R.string.edit_menu_day),
-                target.summary.title?.takeIf { it.isNotBlank() } ?: target.summary.day,
-                target.summary.day,
-            )
+            is EditTarget.Day -> {
+                val date = dayTitle(target.summary.day, LocalDate.now())
+                Triple(stringResource(R.string.edit_menu_day), target.summary.title?.takeIf { it.isNotBlank() } ?: date, date)
+            }
         }
         if (target is EditTarget.Stay) {
             val p = target.stay.place

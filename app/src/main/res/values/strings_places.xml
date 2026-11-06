@@ -50,7 +50,7 @@
     <string name="delete_body">위치 기록을 기기에서 완전히 지워요. 되돌릴 수 없어요.</string>
     <string name="delete_body_trip">위치 기록을 기기에서 완전히 지워요. 되돌릴 수 없어요. 이 주행 앞뒤 머문 곳이 같이 사라질 수 있어요.</string>
     <string name="delete_confirm">지우기</string>
-    <string name="delete_instead_hide">숨기기만 하기</string>
+    <string name="delete_instead_hide">숨기기만</string>
     <string name="edit_cancel">취소</string>
     <string name="edit_close">닫기</string>
 

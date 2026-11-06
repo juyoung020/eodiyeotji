@@ -44,11 +44,11 @@ use crate::geo::Point;
 use crate::places::{self, PlaceLabel, PlaceSource};
 use crate::store::{format_day, mark_dirty, parse_day, CoreError, EodiStore, StaySummary, TripSummary};
 
-/// DB 구조 버전 7에서 더하는 표.
+/// DB 구조 버전 7에서 더하는 표 (다른 작업과 버전 번호를 합칠 때 다시 실행돼도 되게 IF NOT EXISTS).
 pub(crate) const SCHEMA_V7: &str = "
 -- 숨긴 기록. kind 0 = 주행(출발 시각이 [from_ms, to_ms] 안), 1 = 머문 곳(도착 시각), 2 = 하루(둘 다).
 -- permanent = 1이면 지운 기록의 흔적이라 '숨긴 기록' 목록에 나오지 않고 되살릴 수 없다.
-CREATE TABLE hidden (
+CREATE TABLE IF NOT EXISTS hidden (
     id INTEGER PRIMARY KEY,
     kind INTEGER NOT NULL,
     from_ms INTEGER NOT NULL,
@@ -58,7 +58,7 @@ CREATE TABLE hidden (
     permanent INTEGER NOT NULL DEFAULT 0
 );
 -- 저장한 곳 (♥, saved 모듈).
-CREATE TABLE saved_place (place_id INTEGER PRIMARY KEY, saved_ms INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS saved_place (place_id INTEGER PRIMARY KEY, saved_ms INTEGER NOT NULL);
 ";
 
 /// 예전 버전 DB를 흉내 내는 테스트용 (v7 표 지우기).
