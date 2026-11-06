@@ -48,6 +48,9 @@
     <string name="course_share_from_record">내 기록에서 올리기</string>
     <string name="course_share_short">올리기</string>
     <string name="course_shared_done">코스를 올렸어요</string>
+    <string name="course_view">코스 보기</string>
+    <string name="course_more_stops">+%1$d</string>
+    <string name="course_more_stops_description">들르는 곳 %1$d곳 더 보기</string>
 
     <!-- 내 기록에서 올리기 (ShareCourseSheet) -->
     <string name="share_pick_title">어떤 기록을 올릴까요?</string>
