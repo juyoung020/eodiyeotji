@@ -210,6 +210,10 @@ private class Drawer(private val p: MapPalette, private val d: Float) {
         if (photo != null) {
             c.photo(photo, pr, pRadius)
             s.order?.let { c.badge(it, pr.left + BADGE_DP * d + 3 * d, pr.top + BADGE_DP * d + 3 * d, s.open, BADGE_DP) }
+        } else if (s.tag != null && !s.open) {
+            // 그날 출발·도착한 곳(대개 집)인데 사진이 없으면: 진한 타일에 흰 집 모양 (숫자 타일은 "사진이 빠진 칸"처럼 보인다)
+            c.drawRoundRect(pr, pRadius, pRadius, fill(p.label))
+            c.drawPath(homePath(pr), fill(p.casing))
         } else {
             // 사진이 없으면 핀 색 타일에 순서 숫자 크게
             c.drawRoundRect(pr, pRadius, pRadius, fill(accent(s.open)))
@@ -232,6 +236,25 @@ private class Drawer(private val p: MapPalette, private val d: Float) {
         }
         c.drawText(s.dwell, x, rowBase, dwellPaint)
         return out
+    }
+
+    /** 타일 가운데 집 모양 (지붕 삼각형 + 몸체, 문은 비운다). */
+    private fun homePath(r: RectF): Path {
+        val u = r.width() * 0.13f
+        val cx = r.centerX()
+        val cy = r.centerY() + u * 0.3f
+        return Path().apply {
+            fillType = Path.FillType.EVEN_ODD
+            moveTo(cx, cy - u * 2.6f)
+            lineTo(cx + u * 2.5f, cy - u * 0.4f)
+            lineTo(cx + u * 1.8f, cy - u * 0.4f)
+            lineTo(cx + u * 1.8f, cy + u * 2.0f)
+            lineTo(cx - u * 1.8f, cy + u * 2.0f)
+            lineTo(cx - u * 1.8f, cy - u * 0.4f)
+            lineTo(cx - u * 2.5f, cy - u * 0.4f)
+            close()
+            addRect(cx - u * 0.55f, cy + u * 0.6f, cx + u * 0.55f, cy + u * 2.0f, Path.Direction.CW)
+        }
     }
 
     /** 카드가 다른 카드와 겹쳐 빠졌을 때 대신 보이는 작은 사진 말풍선 (같은 자리, 더 작게). */
