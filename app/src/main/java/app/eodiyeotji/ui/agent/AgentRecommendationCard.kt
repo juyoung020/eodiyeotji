@@ -47,6 +47,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.eodiyeotji.R
+import app.eodiyeotji.ui.theme.EodiTheme
+import app.eodiyeotji.ui.theme.MemoryStamp
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.ui.map.DayMap
 import app.eodiyeotji.ui.map.MapPhotoPin
@@ -118,27 +120,31 @@ internal fun RecommendationCard(
                         "${selectedStop + 1}  ${photoStop.name}",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color.White,
+                        color = EodiTheme.colors.onInk,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.align(Alignment.TopStart).padding(14.dp)
-                            .background(Color(0x99000000), RoundedCornerShape(12.dp))
+                            .background(EodiTheme.colors.scrim, RoundedCornerShape(12.dp))
                             .padding(horizontal = 14.dp, vertical = 8.dp),
                     )
                 }
             }
             Column(Modifier.padding(start = 28.dp, end = 28.dp, top = 24.dp, bottom = 28.dp)) {
+                // 기억 도장("1년 전") + 날짜 + 종류: 언제의 기억인지가 가장 먼저 보인다
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    KindBadge(kindText(facts.kind))
-                    Spacer(Modifier.width(14.dp))
+                    MemoryStamp(agoText(LocalDate.parse(facts.day), today))
+                    Spacer(Modifier.width(12.dp))
                     Text(
-                        memoryDateLine(facts.day, today),
+                        memoryDateText(facts.day),
                         style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
+                    Spacer(Modifier.width(12.dp))
+                    KindBadge(kindText(facts.kind))
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
@@ -179,7 +185,7 @@ internal fun RecommendationCard(
 @Composable
 private fun MediaToggle(photos: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     Row(
-        modifier.background(Color(0xF2FFFFFF), CircleShape).padding(6.dp),
+        modifier.background(EodiTheme.colors.surface.copy(alpha = 0.95f), CircleShape).padding(6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         listOf(false to stringResource(R.string.agent_media_map), true to stringResource(R.string.agent_media_photo)).forEach { (value, label) ->
@@ -188,11 +194,11 @@ private fun MediaToggle(photos: Boolean, onChange: (Boolean) -> Unit, modifier: 
                 onClick = { onChange(value) },
                 shape = CircleShape,
                 color = if (on) MaterialTheme.colorScheme.primary else Color.Transparent,
-                contentColor = if (on) MaterialTheme.colorScheme.onPrimary else Color(0xFF333333),
+                contentColor = if (on) MaterialTheme.colorScheme.onPrimary else EodiTheme.colors.textPrimary,
                 modifier = Modifier.heightIn(min = AgentTouchMin - 12.dp),
             ) {
                 Box(Modifier.padding(horizontal = 28.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
-                    Text(label, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text(label, style = EodiTheme.type.label, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -214,8 +220,9 @@ private fun StopChip(number: Int, stop: StopFact, selected: Boolean, onClick: ()
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(start = 8.dp, end = 24.dp, top = 6.dp, bottom = 6.dp),
         ) {
-            val dotColor = if (selected) colors.onPrimary else colors.primary
-            val numColor = if (selected) colors.primary else colors.onPrimary
+            // 순서 번호는 지도 핀과 같은 코랄 (고른 칩은 파랑 위 흰 배지)
+            val dotColor = if (selected) colors.onPrimary else EodiTheme.colors.stay
+            val numColor = if (selected) colors.primary else EodiTheme.colors.onMarker
             // 정차한 곳 대표 사진(동그라미) + 순서 번호 배지. 사진이 없으면 번호 동그라미만.
             Box(Modifier.size(56.dp)) {
                 PlaceThumbnail(
@@ -374,6 +381,39 @@ internal fun OtherDayRow(rec: RecommendationUi, today: LocalDate, onAsk: (String
                 )
             }
             Icon(AgentIcons.Send, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+        }
+    }
+}
+
+/**
+ * 주행 중 기억 답 카드: 그날 첫 들른 곳 사진 한 장 + "1년 전" 도장 + 하루 제목. 버튼 · 목록 없이 한눈에 읽는 한 장.
+ */
+@Composable
+internal fun DrivingMemoryCard(rec: RecommendationUi, modifier: Modifier = Modifier) {
+    val c = EodiTheme.colors
+    val facts = rec.hit.episode.facts
+    val today = remember { LocalDate.now() }
+    val first = rec.stops.firstOrNull()
+    Surface(shape = RoundedCornerShape(28.dp), color = c.surfaceHigh, modifier = modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(20.dp)) {
+            val photoShape = RoundedCornerShape(22.dp)
+            Box(Modifier.size(128.dp).clip(photoShape).background(c.staySoft, photoShape)) {
+                if (first != null) {
+                    PlaceThumbnail(first.name, first.address, first.lat, first.lon, modifier = Modifier.fillMaxSize())
+                }
+            }
+            Spacer(Modifier.width(28.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                MemoryStamp(agoText(LocalDate.parse(facts.day), today), large = true)
+                Text(
+                    rec.hit.episode.title ?: rec.hit.dayTitle ?: facts.ruleLabel,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = c.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

@@ -26,7 +26,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -94,9 +93,10 @@ private fun BannerCard(p: CourseProgress, interactive: Boolean, onNext: () -> Un
             p.nextLeg?.let { stringResource(R.string.guide_next_leg, it) } ?: stringResource(R.string.guide_last_leg),
         ).joinToString("  ·  ")
     }
+    // 테마와 상관없이 진한 남색 판 (라이트에서도 다크에서도 "지금 안내 중"이 화면 위에 떠 보인다)
     Surface(
-        color = c.textPrimary,
-        contentColor = c.surface,
+        color = c.ink,
+        contentColor = c.onInk,
         shape = RoundedCornerShape(EodiTheme.space.radiusL),
         shadowElevation = 8.dp,
         modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
@@ -109,7 +109,7 @@ private fun BannerCard(p: CourseProgress, interactive: Boolean, onNext: () -> Un
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(title, style = EodiTheme.type.bodyStrong, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (!detail.isNullOrBlank()) {
-                    Text(detail, style = EodiTheme.type.body, color = c.surface.copy(alpha = 0.8f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(detail, style = EodiTheme.type.body, color = c.onInkMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
             if (!interactive) return@Row
@@ -135,8 +135,8 @@ private fun BannerButton(text: String, icon: ImageVector?, primary: Boolean, onC
     Surface(
         onClick = onClick,
         shape = CircleShape,
-        color = if (primary) c.accent else Color.White.copy(alpha = 0.14f),
-        contentColor = if (primary) c.onAccent else c.surface,
+        color = if (primary) c.accent else c.onInk.copy(alpha = 0.14f),
+        contentColor = if (primary) c.onAccent else c.onInk,
         modifier = Modifier.heightIn(min = 76.dp),
     ) {
         Row(Modifier.padding(horizontal = 26.dp), verticalAlignment = Alignment.CenterVertically) {

@@ -48,6 +48,8 @@ data class EodiType(
     val label: TextStyle = style(24, 28, FontWeight.SemiBold),
     /** 작은 표시 (내비 · 오늘 배지, 통계 이름). Pleos 최소 크기 20 */
     val caption: TextStyle = style(20, 24, FontWeight.Medium, tabular = true),
+    /** 제목 위 작은 머리말 ("날짜별 기록", "1년 전" 도장). 굵고 자간을 살짝 넓혀 제목과 구별된다 */
+    val eyebrow: TextStyle = style(20, 24, FontWeight.Bold, 0.03.em, tabular = true),
 )
 
 internal val LocalEodiType = staticCompositionLocalOf { EodiType() }

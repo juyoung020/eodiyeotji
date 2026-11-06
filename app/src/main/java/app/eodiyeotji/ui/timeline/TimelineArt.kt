@@ -13,9 +13,10 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import app.eodiyeotji.ui.theme.EodiTheme
+import app.eodiyeotji.ui.theme.drawSparkle
 
 /**
- * 기록이 없을 때의 그림: 지도 조각 위에 굽은 길, 출발점(파랑)에서 머문 곳 핀(주황)까지.
+ * 기록이 없을 때의 그림: 지도 조각 위에 굽은 점선 길, 출발점(파랑)에서 머문 곳 핀(코랄)까지, 핀 옆에 금색 반짝임.
  * 테마 색으로 그려서 라이트 · 다크에 같이 맞는다. 정적인 그림이라 다시 그릴 일이 없다.
  */
 @Composable
@@ -62,10 +63,8 @@ internal fun EmptyRoadArt(modifier: Modifier = Modifier) {
         }
         drawPath(pin, c.stay)
         drawCircle(c.onMarker, 9 * u, Offset(pinX, pinBottom - 48 * u))
-        // 오른쪽 위 반짝임 (기억)
-        val spark = c.accent.copy(alpha = 0.55f)
-        drawCircle(spark, 4 * u, Offset(290 * u, 36 * u))
-        drawCircle(spark, 3 * u, Offset(272 * u, 22 * u))
-        drawCircle(spark, 2.5f * u, Offset(300 * u, 58 * u))
+        // 오른쪽 위 금색 반짝임 (기억)
+        drawSparkle(Offset(290 * u, 34 * u), 13 * u, c.memoryInk)
+        drawSparkle(Offset(268 * u, 18 * u), 6 * u, c.memoryInk.copy(alpha = 0.7f))
     }
 }

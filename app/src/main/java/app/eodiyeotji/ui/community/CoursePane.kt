@@ -277,7 +277,12 @@ fun StopChips(stops: List<StopFact>, modifier: Modifier = Modifier) {
 @Composable
 fun OrderDot(order: Int, modifier: Modifier = Modifier) {
     val c = EodiTheme.colors
-    Box(modifier.size(36.dp).background(c.stay, androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
+    // 사진 위에 붙인 코랄 스티커: 흰 테두리로 어떤 사진 위에서도 또렷하다 (지도 핀 번호와 같은 색)
+    val shape = androidx.compose.foundation.shape.CircleShape
+    Box(
+        modifier.size(38.dp).background(c.onMarker, shape).padding(2.5.dp).background(c.stay, shape),
+        contentAlignment = Alignment.Center,
+    ) {
         Text(order.toString(), style = EodiTheme.type.caption, color = c.onMarker, fontWeight = FontWeight.Bold)
     }
 }

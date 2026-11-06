@@ -15,7 +15,9 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import app.eodiyeotji.R
+import app.eodiyeotji.ui.theme.EodiTheme
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -40,11 +42,12 @@ fun PlacePhotoGallery(stop: StopFact, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val repo = remember { EntryPointAccessors.fromApplication(context.applicationContext, PhotoEntryPoint::class.java).photos() }
     val photos by produceState<List<PlacePhoto>?>(null, stop.name, stop.lat, stop.lon) { value = repo.photos(stop) }
-    Box(modifier.background(Color(0xFF1B1D21)), contentAlignment = Alignment.Center) {
+    val c = EodiTheme.colors
+    Box(modifier.background(c.ink), contentAlignment = Alignment.Center) {
         val list = photos
         when {
-            list == null -> CircularProgressIndicator(color = Color.White)
-            list.isEmpty() -> Text("이곳은 사진이 없어요", color = Color(0xFFBBBBBB), fontSize = 18.sp)
+            list == null -> CircularProgressIndicator(color = c.onInk)
+            list.isEmpty() -> Text(stringResource(R.string.place_no_photos), style = EodiTheme.type.label, color = c.onInkMuted)
             else -> {
                 val pager = rememberPagerState { list.size }
                 HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { i ->
@@ -58,20 +61,20 @@ fun PlacePhotoGallery(stop: StopFact, modifier: Modifier = Modifier) {
                 val author = list[pager.currentPage].author
                 Text(
                     if (author.isBlank()) "Google" else "사진: $author · Google",
-                    color = Color.White,
+                    color = c.onInk,
                     fontSize = 16.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.align(Alignment.BottomStart).padding(12.dp)
-                        .background(Color(0x80000000), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
+                        .background(c.scrim, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
                 )
                 Text(
                     "${pager.currentPage + 1} / ${list.size}",
-                    color = Color.White,
+                    color = c.onInk,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp)
-                        .background(Color(0x80000000), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
+                        .background(c.scrim, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
                 )
             }
         }

@@ -88,8 +88,11 @@ import app.eodiyeotji.core.StaySummary
 import app.eodiyeotji.core.TripSummary
 import app.eodiyeotji.ui.home.CoreStatusLine
 import app.eodiyeotji.ui.map.DayMap
+import app.eodiyeotji.ui.theme.AlbumPhoto
+import app.eodiyeotji.ui.theme.DottedRoute
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
+import java.time.DayOfWeek
 import java.time.LocalDate
 
 /** 이 폭 이상이면 목록과 상세를 나란히 둔다 (Pleos 넓은 창 1682dp, 나눈 창 약 841dp). */
@@ -254,7 +257,7 @@ fun TimelineScreen(
 }
 
 /**
- * 앱 표시(파란 핀 타일 + 이름). 넓은 창에서는 한 줄 소개를 옆에 붙인다.
+ * 앱 이름 (앱 표시 그림은 왼쪽 레일 맨 위에 있다). 넓은 창에서는 한 줄 소개를 옆에 붙인다.
  * 오른쪽 끝 [action] 자리는 화면의 대표 동작 하나(ui/agent의 "어디였지? 물어보세요" 버튼)가 들어가고, 글자가 잘리지 않게
  * 먼저 자리를 받는다. 소개 글은 남는 폭에서만 보인다. 개발용 코어 상태 줄은 머리가 아니라 날짜 목록 맨 아래에 둔다.
  */
@@ -266,13 +269,6 @@ private fun TimelineHeader(wide: Boolean, action: (@Composable () -> Unit)?) {
         modifier = Modifier.fillMaxWidth().height(104.dp).padding(horizontal = space.page),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier.size(52.dp).background(c.accent, RoundedCornerShape(16.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(EodiIcons.Pin, contentDescription = null, tint = c.onAccent, modifier = Modifier.size(32.dp))
-        }
-        Spacer(Modifier.width(space.m))
         Text(
             stringResource(R.string.app_name),
             style = EodiTheme.type.titleSmall,
@@ -322,12 +318,17 @@ private fun DayList(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item(key = "title", contentType = "title") {
-            Text(
-                stringResource(R.string.timeline_list_title),
-                style = EodiTheme.type.label,
-                color = EodiTheme.colors.textTertiary,
-                modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 4.dp).semantics { heading() },
-            )
+            // 머리말 + 점선 길 (앨범의 목차 줄)
+            Row(Modifier.padding(start = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.timeline_list_title),
+                    style = EodiTheme.type.eyebrow,
+                    color = EodiTheme.colors.textTertiary,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Spacer(Modifier.width(16.dp))
+                DottedRoute(Modifier.weight(1f), pin = EodiTheme.colors.stay.copy(alpha = 0.8f))
+            }
         }
         items(days, key = { it.day }, contentType = { "day" }) { s ->
             DayRow(s, today, selected = s.day == highlightedDay, showChevron = showChevron, onSelect = onSelect, modifier = Modifier.animateItem())
@@ -443,7 +444,15 @@ private fun DateTile(day: String, isToday: Boolean, selected: Boolean) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(dayOfMonthText(day), style = EodiTheme.type.titleSmall, color = fg, maxLines = 1)
-        Text(weekdayShort(day), style = EodiTheme.type.caption, color = if (isToday) fg.copy(alpha = 0.85f) else c.textTertiary, maxLines = 1)
+        // 달력처럼 토요일은 파랑, 일요일은 코랄
+        val dow = runCatching { LocalDate.parse(day).dayOfWeek }.getOrNull()
+        val weekdayColor = when {
+            isToday -> fg.copy(alpha = 0.85f)
+            dow == DayOfWeek.SATURDAY -> c.accent
+            dow == DayOfWeek.SUNDAY -> c.stay
+            else -> c.textTertiary
+        }
+        Text(weekdayShort(day), style = EodiTheme.type.caption, fontWeight = FontWeight.Bold, color = weekdayColor, maxLines = 1)
     }
 }
 
@@ -530,7 +539,7 @@ private fun DetailHeader(summary: DaySummary?, today: LocalDate, onBack: (() -> 
                     if (title != null) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (relative != null) {
-                                Text(relative, style = EodiTheme.type.label, color = c.accent)
+                                Text(relative, style = EodiTheme.type.eyebrow, color = c.accent)
                                 Spacer(Modifier.width(10.dp))
                             }
                             Text(dayTitle(summary.day, today), style = EodiTheme.type.label, color = c.textTertiary, maxLines = 1)
@@ -752,17 +761,16 @@ private fun StayRow(stay: StaySummary, rail: Rail, selected: Boolean, onClick: (
         onClick = onClick,
         trailing = place?.let { p ->
             {
-                // 정차한 곳 대표 사진 (구글 지도 사진). 없으면 칸 없이.
-                PlaceThumbnail(
-                    p.name, p.address, stay.center.lat, stay.center.lon,
-                    modifier = Modifier.size(StayThumb).clip(RoundedCornerShape(EodiTheme.space.radiusM)),
-                )
+                // 정차한 곳 대표 사진 (구글 지도 사진): 앨범에 붙인 사진처럼 흰 테두리 + 살짝 기울임(행마다 번갈아)
+                AlbumPhoto(Modifier.size(StayThumb), tilt = if ((stay.arriveMs / 60_000) % 2 == 0L) -2.5f else 2.5f) {
+                    PlaceThumbnail(p.name, p.address, stay.center.lat, stay.center.lon, modifier = Modifier.fillMaxSize())
+                }
             }
         },
     )
 }
 
-private val StayThumb = 88.dp
+private val StayThumb = 96.dp
 
 private enum class EntryKind { Trip, Stay, Here }
 

@@ -37,7 +37,6 @@ import app.eodiyeotji.ui.place.PlaceThumbnail
 
 // 근처 추천 코스 카드 ("여기 근처 드라이브 추천코스"). 순위·거리·하트는 Rust가 끝내고 오고, 여기는 받은 순서대로 그리기만 한다.
 
-private val HeartRed = Color(0xFFE5484D)
 private const val MAX_STOP_CHIPS = 4
 
 /**
@@ -132,7 +131,7 @@ private fun CourseNumbers(c: RecommendedCourse, large: Boolean = false) {
     val colors = MaterialTheme.colorScheme
     val style = if (large) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-        Text(stringResource(R.string.agent_course_hearts, c.post.hearts), style = style, fontWeight = FontWeight.Bold, color = HeartRed)
+        Text(stringResource(R.string.agent_course_hearts, c.post.hearts), style = style, fontWeight = FontWeight.Bold, color = app.eodiyeotji.ui.theme.EodiTheme.colors.heart)
         c.distanceKm?.let {
             Text(stringResource(R.string.agent_course_from_here, kmText(it * 1000.0)), style = style, fontWeight = FontWeight.SemiBold, color = colors.primary)
         }
@@ -177,9 +176,9 @@ private fun CourseStopChip(number: Int, stop: StopFact) {
                 )
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.align(Alignment.BottomEnd).size(22.dp).background(colors.primary, CircleShape),
+                    modifier = Modifier.align(Alignment.BottomEnd).size(22.dp).background(app.eodiyeotji.ui.theme.EodiTheme.colors.stay, CircleShape),
                 ) {
-                    Text(number.toString(), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = colors.onPrimary)
+                    Text(number.toString(), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = app.eodiyeotji.ui.theme.EodiTheme.colors.onMarker)
                 }
             }
             Spacer(Modifier.width(10.dp))

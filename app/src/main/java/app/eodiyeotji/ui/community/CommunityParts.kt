@@ -181,8 +181,8 @@ fun HeartButton(hearts: Int, hearted: Boolean, onToggle: () -> Unit, modifier: M
     Surface(
         onClick = onToggle,
         shape = CircleShape,
-        color = if (hearted) HeartSoft(c.isDark) else c.surfaceHigh,
-        contentColor = if (hearted) HeartRed else c.textSecondary,
+        color = if (hearted) c.heartSoft else c.surfaceHigh,
+        contentColor = if (hearted) c.heart else c.textSecondary,
         modifier = modifier.heightIn(min = if (compact) 64.dp else 76.dp).semantics { contentDescription = desc },
     ) {
         Row(
@@ -197,9 +197,6 @@ fun HeartButton(hearts: Int, hearted: Boolean, onToggle: () -> Unit, modifier: M
     }
 }
 
-internal val HeartRed = Color(0xFFF0384E)
-private fun HeartSoft(dark: Boolean) = if (dark) Color(0xFF3D1A20) else Color(0xFFFFE8EB)
-internal val StarGold = Color(0xFFFFB400)
 
 /**
  * 고르는 칩 줄 (분절 버튼). 정렬(인기순/최신순), 하위 탭 등에 쓴다. 항목 하나 높이 64dp 이상.
@@ -324,7 +321,7 @@ fun RatingStars(rating: Int, modifier: Modifier = Modifier, size: Dp = 24.dp) {
     val desc = stringResource(R.string.review_rating_description, rating)
     Row(modifier.semantics { contentDescription = desc }, verticalAlignment = Alignment.CenterVertically) {
         repeat(5) { i ->
-            Icon(if (i < rating) CommunityIcons.Star else CommunityIcons.StarOutline, null, Modifier.size(size), tint = if (i < rating) StarGold else c.textTertiary)
+            Icon(if (i < rating) CommunityIcons.Star else CommunityIcons.StarOutline, null, Modifier.size(size), tint = if (i < rating) c.star else c.textTertiary)
         }
     }
 }

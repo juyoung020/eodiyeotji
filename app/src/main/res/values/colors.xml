@@ -2,5 +2,5 @@
 <resources>
     <!-- 앱 아이콘 · 시작 창 색. Compose 색 토큰은 ui/theme/Color.kt (같은 값) -->
     <color name="brand_blue">#0064FF</color>
-    <color name="window_background">#F2F3F6</color>
+    <color name="window_background">#F5F2EC</color>
 </resources>
