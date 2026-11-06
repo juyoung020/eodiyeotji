@@ -20,4 +20,7 @@
     <string name="guide_retry">다시 보내기</string>
     <string name="guide_stop">끝내기</string>
     <string name="guide_close">닫기</string>
+    <!-- 폰 세로 화면 알림 카드만 쓴다 (지도 앱은 도착을 알려 주지 않는다) -->
+    <string name="guide_manual_hint">도착하면 \'다음 구간\'을 눌러 이어 가요</string>
+    <string name="guide_reopen">다시 열기</string>
 </resources>

@@ -61,7 +61,12 @@ class CourseGuideViewModel @Inject constructor(private val guide: CourseGuide) :
  * 다음 구간은 도착하면 알아서 이어지므로 버튼은 건너뛰기·끝내기만 둔다.
  */
 @Composable
-fun CourseGuideBanner(modifier: Modifier = Modifier, viewModel: CourseGuideViewModel = hiltViewModel(), interactive: Boolean = true) {
+fun CourseGuideBanner(
+    modifier: Modifier = Modifier,
+    viewModel: CourseGuideViewModel = hiltViewModel(),
+    interactive: Boolean = true,
+    compact: Boolean = false,
+) {
     val progress by viewModel.progress.collectAsStateWithLifecycle()
     // 사라지는 동안에도 마지막 내용을 그린다
     val last = remember { arrayOfNulls<CourseProgress>(1) }
@@ -73,7 +78,13 @@ fun CourseGuideBanner(modifier: Modifier = Modifier, viewModel: CourseGuideViewM
         modifier = modifier,
     ) {
         Box(contentAlignment = Alignment.Center) {
-            last[0]?.let { BannerCard(it, interactive, onNext = viewModel::next, onRetry = viewModel::retry, onStop = viewModel::stop) }
+            last[0]?.let {
+                if (compact) {
+                    CompactBannerCard(it, onNext = viewModel::next, onRetry = viewModel::retry, onStop = viewModel::stop)
+                } else {
+                    BannerCard(it, interactive, onNext = viewModel::next, onRetry = viewModel::retry, onStop = viewModel::stop)
+                }
+            }
         }
     }
 }
@@ -123,6 +134,62 @@ private fun BannerCard(p: CourseProgress, interactive: Boolean, onNext: () -> Un
                         BannerButton(stringResource(R.string.guide_skip), null, primary = true, onNext)
                     }
                     BannerButton(stringResource(R.string.guide_stop), null, primary = false, onStop)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 폰 세로 화면: 글은 위, 버튼은 아래 줄. 지도 앱은 도착을 알려 주지 않으므로 "다음 구간"을 손으로 누른다는 안내를 붙인다.
+ * 마지막 구간에서 "다음 구간"을 누르면 그 구간을 지도 앱에 다시 보낸다 ([CourseGuide.skipToNextLeg]).
+ */
+@Composable
+private fun CompactBannerCard(p: CourseProgress, onNext: () -> Unit, onRetry: () -> Unit, onStop: () -> Unit) {
+    val c = EodiTheme.colors
+    val title = if (p.finished) stringResource(R.string.guide_finished) else stringResource(R.string.guide_title, p.leg, p.total)
+    val detail = when {
+        p.finished -> p.title
+        p.failed -> stringResource(R.string.guide_failed)
+        else -> listOfNotNull(
+            p.upcoming.firstOrNull()?.let { stringResource(R.string.guide_next_stop, it) },
+            p.nextLeg?.let { stringResource(R.string.guide_next_leg, it) } ?: stringResource(R.string.guide_last_leg),
+        ).joinToString("  ·  ")
+    }
+    Surface(
+        color = c.ink,
+        contentColor = c.onInk,
+        shape = RoundedCornerShape(EodiTheme.space.radiusL),
+        shadowElevation = 8.dp,
+        modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(56.dp).background(if (p.failed) c.error else c.accent, CircleShape), contentAlignment = Alignment.Center) {
+                    Icon(if (p.finished) CommunityIcons.Check else EodiIcons.Navi, null, tint = c.onAccent, modifier = Modifier.size(30.dp))
+                }
+                Spacer(Modifier.width(18.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(title, style = EodiTheme.type.bodyStrong, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (!detail.isNullOrBlank()) {
+                        Text(detail, style = EodiTheme.type.body, color = c.onInkMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                    if (!p.finished && !p.failed && p.hasNextLeg) {
+                        Text(stringResource(R.string.guide_manual_hint), style = EodiTheme.type.caption, color = c.onInkMuted, maxLines = 2)
+                    }
+                }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)) {
+                when {
+                    p.finished -> BannerButton(stringResource(R.string.guide_close), null, primary = false, onStop)
+                    else -> {
+                        BannerButton(stringResource(R.string.guide_stop), null, primary = false, onStop)
+                        when {
+                            p.failed -> BannerButton(stringResource(R.string.guide_retry), EodiIcons.Refresh, primary = true, onRetry)
+                            p.hasNextLeg -> BannerButton(stringResource(R.string.guide_skip), null, primary = true, onNext)
+                            else -> BannerButton(stringResource(R.string.guide_reopen), EodiIcons.Navi, primary = true, onNext)
+                        }
+                    }
                 }
             }
         }

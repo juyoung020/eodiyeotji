@@ -159,6 +159,7 @@ fun AgentPanel(
     modifier: Modifier = Modifier,
     onVoiceRequest: (() -> Unit)? = null,
     viewModel: AgentViewModel = hiltViewModel(),
+    compact: Boolean = false,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     // Pleos 음성 인식이 없는 기기에서 Android 인식기로 대신 들을 때만 마이크 권한을 묻는다
@@ -178,6 +179,7 @@ fun AgentPanel(
             onClear = viewModel::clear,
             onClose = onClose,
             onVoiceRequest = voice,
+            compact = compact,
         )
         AgentVoiceLayer(
             voice = state.voice,
@@ -202,11 +204,14 @@ fun AgentPanelContent(
     onClose: (() -> Unit)?,
     onVoiceRequest: () -> Unit,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Crossfade(targetState = state.isDriving, label = "agentMode") { driving ->
             if (driving) {
                 DrivingAgent(state.turn, onConfirm, onClear, onClose, onVoiceRequest, onRetry)
+            } else if (compact) {
+                CompactParkedAgent(state.turn, onAsk, onConfirm, onSelectStop, onRetry, onVoiceRequest)
             } else {
                 ParkedAgent(state.turn, onAsk, onConfirm, onSelectStop, onRetry, onClose, onVoiceRequest)
             }
@@ -280,6 +285,106 @@ private fun ParkedAgent(
                     }
                     OtherDays(turn, today, onAsk)
                 }
+            }
+        }
+    }
+}
+
+/**
+ * 폰 세로 화면 (대화처럼): 위는 굴러가는 답 · 추천 카드(세로로 쌓음) · 행동 버튼, 맨 아래 엄지가 닿는 곳에 질문 칸과 큰 마이크.
+ * 질문 칸은 키보드가 올라오면 같이 올라온다 (safeDrawing에 키보드가 들어 있다).
+ */
+@Composable
+private fun CompactParkedAgent(
+    turn: AgentTurn?,
+    onAsk: (String) -> Unit,
+    onConfirm: (AgentEvent.ActionProposal) -> Unit,
+    onSelectStop: (Int) -> Unit,
+    onRetry: () -> Unit,
+    onVoiceRequest: () -> Unit,
+) {
+    val today = remember { LocalDate.now() }
+    Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+        if (turn == null) {
+            EmptyState(onAsk, Modifier.weight(1f).fillMaxWidth())
+        } else {
+            // 새 질문이면 맨 위(내 질문)부터 보인다
+            val scroll = remember(turn.id) { androidx.compose.foundation.ScrollState(0) }
+            Column(
+                verticalArrangement = Arrangement.spacedBy(28.dp),
+                modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll)
+                    .padding(horizontal = PagePadding, vertical = 24.dp),
+            ) {
+                AnswerBlock(turn, onRetry)
+                if (turn.courses.isNotEmpty()) {
+                    ActionBlock(turn, onConfirm, onAsk)
+                    CourseRecommendationList(turn, onAsk)
+                } else {
+                    RecommendationsBlock(turn, today, onSelectStop, onAsk, mapHeight = 300.dp, onlyFirst = true)
+                    ActionBlock(turn, onConfirm, onAsk)
+                }
+                OtherDays(turn, today, onAsk)
+            }
+        }
+        CompactAskBar(
+            question = turn?.question,
+            onAsk = onAsk,
+            onVoiceRequest = onVoiceRequest,
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 20.dp),
+        )
+    }
+}
+
+/** 폰 질문 줄: [✦ 입력칸 … ➜] + 오른쪽 큰 마이크 (말로 묻기가 먼저 눈에 띄게). */
+@Composable
+private fun CompactAskBar(question: String?, onAsk: (String) -> Unit, onVoiceRequest: () -> Unit, modifier: Modifier = Modifier) {
+    var text by rememberSaveable(question) { mutableStateOf(question.orEmpty()) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val submit = {
+        keyboard?.hide()
+        if (text.isNotBlank()) onAsk(text)
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = modifier) {
+        TextField(
+            value = text,
+            onValueChange = { text = it },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.titleLarge,
+            placeholder = {
+                Text(stringResource(R.string.agent_field_hint), style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            },
+            leadingIcon = {
+                Icon(AgentIcons.Sparkle, contentDescription = null, tint = EodiTheme.colors.memoryInk, modifier = Modifier.padding(start = 8.dp).size(30.dp))
+            },
+            trailingIcon = if (text.isNotBlank()) {
+                { RoundIconButton(AgentIcons.Send, stringResource(R.string.agent_send), onClick = submit, filled = false) }
+            } else {
+                null
+            },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { submit() }),
+            shape = CircleShape,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+            ),
+            modifier = Modifier.weight(1f).heightIn(min = 96.dp),
+        )
+        Surface(
+            onClick = onVoiceRequest,
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            shadowElevation = 4.dp,
+            modifier = Modifier.size(112.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(AgentIcons.Mic, contentDescription = stringResource(R.string.agent_mic), modifier = Modifier.size(52.dp))
             }
         }
     }

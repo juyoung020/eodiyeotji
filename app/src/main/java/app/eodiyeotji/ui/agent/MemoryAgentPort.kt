@@ -1,8 +1,11 @@
 package app.eodiyeotji.ui.agent
 
+import android.content.Context
+import app.eodiyeotji.R
 import app.eodiyeotji.agent.AgentBridge
 import app.eodiyeotji.agent.AgentNavAction
 import app.eodiyeotji.agent.AgentProposal
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -13,9 +16,13 @@ import app.eodiyeotji.agent.AgentEvent as BridgeEvent
 /**
  * 화면([AgentPort])과 실제 기억 에이전트(Rust `MemoryAgent`, [AgentBridge])를 잇는다.
  * 사건을 화면 모양으로 옮겨 담고, 버튼 글자를 붙이고, 확인 대기 중인 제안을 id로 기억해 [confirm]에 넘기기만 한다.
+ * 버튼·안내 글은 문자열 자원에서 읽는다 (폰 판은 "내비" 대신 "지도 앱"으로 바꿔 쓴다, src/phone/res).
  */
 @Singleton
-class MemoryAgentPort @Inject constructor(private val bridge: AgentBridge) : AgentPort {
+class MemoryAgentPort @Inject constructor(
+    private val bridge: AgentBridge,
+    @ApplicationContext private val context: Context,
+) : AgentPort {
 
     private val proposals = ConcurrentHashMap<String, AgentProposal>()
 
@@ -31,7 +38,7 @@ class MemoryAgentPort @Inject constructor(private val bridge: AgentBridge) : Age
                 }
                 // 운전자가 말로 "응"이라고 해 이미 안내를 보냈다 → 답 글에 한 줄 덧붙인다
                 is BridgeEvent.ActionStarted ->
-                    emit(AgentEvent.AnswerDelta(if (e.ok) "\n내비 안내를 시작했어요." else "\n내비에 안내를 보내지 못했어요."))
+                    emit(AgentEvent.AnswerDelta(text(if (e.ok) R.string.agent_started_line else R.string.agent_start_failed_line)))
                 is BridgeEvent.Done -> emit(AgentEvent.Done)
                 is BridgeEvent.Error -> emit(AgentEvent.Error(e.message))
             }
@@ -39,13 +46,15 @@ class MemoryAgentPort @Inject constructor(private val bridge: AgentBridge) : Age
 
     override suspend fun confirm(proposal: AgentEvent.ActionProposal) {
         val p = proposals.remove(proposal.id) ?: error("이미 끝난 제안이에요.")
-        check(bridge.confirm(p)) { "내비에 안내를 보내지 못했어요." }
+        check(bridge.confirm(p)) { text(R.string.agent_send_failed) }
     }
 
     private fun buttonTitle(action: AgentNavAction) = when (action) {
-        is AgentNavAction.Course -> "이 코스로 안내"
-        is AgentNavAction.SharedCourse -> "'${action.title}' 코스로 안내"
-        is AgentNavAction.Place -> "${action.stop.name}로 안내"
-        is AgentNavAction.Search -> "내비에서 찾기"
+        is AgentNavAction.Course -> text(R.string.agent_proposal_course)
+        is AgentNavAction.SharedCourse -> text(R.string.agent_proposal_shared, action.title)
+        is AgentNavAction.Place -> text(R.string.agent_proposal_place, action.stop.name)
+        is AgentNavAction.Search -> text(R.string.agent_proposal_search)
     }
+
+    private fun text(id: Int, vararg args: Any): String = this.context.getString(id, *args)
 }

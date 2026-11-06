@@ -75,6 +75,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.ui.unit.Dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.BuildConfig
@@ -115,6 +124,8 @@ private const val PageMs = 220
 fun TimelineRoute(
     headerAction: (@Composable () -> Unit)? = null,
     viewModel: TimelineViewModel = hiltViewModel(),
+    compact: Boolean = false,
+    headerBanner: (@Composable () -> Unit)? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var shareEpisode by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -130,6 +141,8 @@ fun TimelineRoute(
         onMapSelect = viewModel::selectEntry,
         status = if (BuildConfig.DEBUG) DebugStatus else null,
         headerAction = headerAction,
+        compact = compact,
+        headerBanner = headerBanner,
     )
     // 하루 상세에서 바로 커뮤니티에 코스로 올리기 (커뮤니티 탭까지 가지 않는다)
     shareEpisode?.let { id ->
@@ -170,9 +183,15 @@ fun TimelineScreen(
     status: (@Composable () -> Unit)?,
     headerAction: (@Composable () -> Unit)? = null,
     onShare: (Long) -> Unit = {},
+    compact: Boolean = false,
+    headerBanner: (@Composable () -> Unit)? = null,
 ) {
     val c = EodiTheme.colors
     val space = EodiTheme.space
+    if (compact) {
+        CompactTimeline(state, onSelectDay, onBack, onRetry, onWideChange, onEntryClick, onMapSelect, status, headerAction, onShare, headerBanner)
+        return
+    }
     Surface(modifier = Modifier.fillMaxSize(), color = c.background, contentColor = c.textPrimary) {
         BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
             val wide = maxWidth >= WideBreakpoint
@@ -256,17 +275,201 @@ fun TimelineScreen(
     }
 }
 
+// ---------------------------------------------------------------- 폰 세로 화면 (compact)
+
+/**
+ * 폰 판 세로 화면 (폭 약 360~430dp). 목록 → 날을 누르면 상세가 화면 전체를 쓴다 (머리·아래 탭 없이).
+ * 상세는 위 약 40%가 지도(머문 곳 말풍선), 그 아래 통계 · 커뮤니티에 올리기 · 시간순 항목이 한 목록으로 굴러간다.
+ * 차 화면은 이 함수를 쓰지 않는다 ([TimelineScreen]의 compact = false).
+ */
+@Composable
+private fun CompactTimeline(
+    state: TimelineUiState,
+    onSelectDay: (String) -> Unit,
+    onBack: () -> Unit,
+    onRetry: () -> Unit,
+    onWideChange: (Boolean) -> Unit,
+    onEntryClick: (String) -> Unit,
+    onMapSelect: (String?) -> Unit,
+    status: (@Composable () -> Unit)?,
+    headerAction: (@Composable () -> Unit)?,
+    onShare: (Long) -> Unit,
+    headerBanner: (@Composable () -> Unit)?,
+) {
+    val c = EodiTheme.colors
+    val space = EodiTheme.space
+    val reportWide by rememberUpdatedState(onWideChange)
+    LaunchedEffect(Unit) { reportWide(false) }
+    val listState = rememberLazyListState()
+    Surface(modifier = Modifier.fillMaxSize(), color = c.background, contentColor = c.textPrimary) {
+        val loaded = state.days as? DaysState.Loaded
+        AnimatedContent(
+            targetState = loaded != null && state.selectedDay != null,
+            transitionSpec = {
+                val dir = if (targetState) 1 else -1
+                (slideInHorizontally(tween(PageMs)) { dir * it / 8 } + fadeIn(tween(PageMs))) togetherWith
+                    (slideOutHorizontally(tween(PageMs)) { -dir * it / 8 } + fadeOut(tween(PageMs / 2)))
+            },
+            label = "compact-list-detail",
+            modifier = Modifier.fillMaxSize(),
+        ) { showDetail ->
+            if (showDetail && loaded != null) {
+                BackHandler(onBack = onBack)
+                CompactDayDetail(
+                    detail = state.detail,
+                    today = loaded.today,
+                    selectedEntry = state.selectedEntry,
+                    onEntryClick = onEntryClick,
+                    onMapSelect = onMapSelect,
+                    onShare = onShare,
+                    onBack = onBack,
+                )
+            } else {
+                Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+                    TimelineHeader(wide = false, action = headerAction, height = 80.dp)
+                    if (headerBanner != null) {
+                        Box(Modifier.padding(start = space.page, end = space.page, bottom = space.m)) { headerBanner() }
+                    }
+                    when (val days = state.days) {
+                        DaysState.Loading -> LoadingPane(Modifier.fillMaxSize())
+                        is DaysState.Failed -> FailedPane(days.message, onRetry, Modifier.fillMaxSize())
+                        is DaysState.Loaded ->
+                            if (days.days.isEmpty()) {
+                                EmptyPane(Modifier.fillMaxSize())
+                            } else {
+                                DayList(
+                                    days = days.days,
+                                    today = days.today,
+                                    highlightedDay = null,
+                                    showChevron = true,
+                                    onSelect = onSelectDay,
+                                    listState = listState,
+                                    footer = status,
+                                    modifier = Modifier.fillMaxSize().padding(horizontal = space.page),
+                                )
+                            }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 폰 하루 상세: 뒤로 · 제목 한 줄 → 지도(높이 약 40%) → 통계 · 태그 · 올리기 + 시간순 항목 (한 목록). */
+@Composable
+private fun CompactDayDetail(
+    detail: DetailState,
+    today: LocalDate,
+    selectedEntry: String?,
+    onEntryClick: (String) -> Unit,
+    onMapSelect: (String?) -> Unit,
+    onShare: (Long) -> Unit,
+    onBack: () -> Unit,
+) {
+    val c = EodiTheme.colors
+    val space = EodiTheme.space
+    val summary = detail.shownSummary
+    val loaded = detail as? DetailState.Loaded
+    val shareEpisode = loaded?.shareEpisode
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                .padding(start = 20.dp, end = space.page, top = 12.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            BackButton(onBack)
+            Spacer(Modifier.width(20.dp))
+            if (summary != null) {
+                val title = summary.title?.takeIf { it.isNotBlank() }
+                val relative = relativeDayName(summary.day, today)
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (relative != null) {
+                            Text(relative, style = EodiTheme.type.eyebrow, color = c.accent)
+                            Spacer(Modifier.width(10.dp))
+                        }
+                        if (title != null) {
+                            Text(dayTitle(summary.day, today), style = EodiTheme.type.caption, color = c.textTertiary, maxLines = 1)
+                        }
+                    }
+                    Text(
+                        title ?: dayTitle(summary.day, today),
+                        style = EodiTheme.type.title,
+                        color = c.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                }
+            }
+        }
+        val photoPins = remember(loaded?.entries) {
+            loaded?.entries.orEmpty().mapNotNull { e ->
+                val stay = (e as? DayEntry.Stay)?.stay ?: return@mapNotNull null
+                val p = stay.place?.takeIf { it.name.isNotBlank() } ?: return@mapNotNull null
+                MapPhotoPin("s${stay.arriveMs}", p.name, p.address, stay.center.lat, stay.center.lon)
+            }
+        }
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val mapHeight = maxHeight * CompactMapFraction
+            Column(Modifier.fillMaxSize()) {
+                DayMap(
+                    data = loaded?.map,
+                    selectedKey = selectedEntry,
+                    onSelectKey = onMapSelect,
+                    modifier = Modifier.fillMaxWidth().height(mapHeight),
+                    photoPins = photoPins,
+                )
+                Box(Modifier.fillMaxWidth().weight(1f)) {
+                    val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                    when (detail) {
+                        DetailState.None -> Unit
+                        is DetailState.Loading -> LoadingPane(Modifier.fillMaxSize(), compact = true)
+                        is DetailState.Failed -> CenteredText(stringResource(R.string.timeline_failed, detail.message))
+                        is DetailState.Loaded -> EntryList(
+                            entries = detail.entries,
+                            selectedKey = selectedEntry,
+                            onClick = onEntryClick,
+                            headerCount = 1,
+                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 20.dp, bottom = space.page + bottom),
+                            header = {
+                                item(key = "__day-head", contentType = "head") {
+                                    Column(Modifier.padding(start = 4.dp, end = 4.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                        StatRow(detail.summary)
+                                        if (detail.summary.tags.isNotEmpty()) TagRow(detail.summary.tags)
+                                        if (shareEpisode != null) {
+                                            SecondaryPill(stringResource(R.string.timeline_share), CommunityIcons.Upload, { onShare(shareEpisode) }, Modifier.fillMaxWidth())
+                                        }
+                                        if (detail.entries.isEmpty()) {
+                                            Text(stringResource(R.string.timeline_detail_empty), style = EodiTheme.type.body, color = c.textSecondary)
+                                        }
+                                    }
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 폰 하루 상세에서 지도가 차지하는 높이 (제목 줄 아래 남은 높이 기준). */
+private const val CompactMapFraction = 0.44f
+
 /**
  * 앱 이름 (앱 표시 그림은 왼쪽 레일 맨 위에 있다). 넓은 창에서는 한 줄 소개를 옆에 붙인다.
  * 오른쪽 끝 [action] 자리는 화면의 대표 동작 하나(ui/agent의 "어디였지? 물어보세요" 버튼)가 들어가고, 글자가 잘리지 않게
  * 먼저 자리를 받는다. 소개 글은 남는 폭에서만 보인다. 개발용 코어 상태 줄은 머리가 아니라 날짜 목록 맨 아래에 둔다.
  */
 @Composable
-private fun TimelineHeader(wide: Boolean, action: (@Composable () -> Unit)?) {
+private fun TimelineHeader(wide: Boolean, action: (@Composable () -> Unit)?, height: Dp = 104.dp) {
     val c = EodiTheme.colors
     val space = EodiTheme.space
     Row(
-        modifier = Modifier.fillMaxWidth().height(104.dp).padding(horizontal = space.page),
+        modifier = Modifier.fillMaxWidth().height(height).padding(horizontal = space.page),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -659,9 +862,19 @@ private fun StatDivider() {
     Box(Modifier.width(2.dp).fillMaxHeight().padding(vertical = 8.dp).background(EodiTheme.colors.outline))
 }
 
-/** 고른 항목이 화면 밖이면(지도에서 고른 경우) 보이게 굴린다. 이미 다 보이면 그대로 둔다. */
+/**
+ * 고른 항목이 화면 밖이면(지도에서 고른 경우) 보이게 굴린다. 이미 다 보이면 그대로 둔다.
+ * [header]: 항목 위에 같이 굴러가는 머리 줄 ([headerCount]개, 폰 하루 상세의 통계·올리기).
+ */
 @Composable
-private fun EntryList(entries: List<DayEntry>, selectedKey: String?, onClick: (String) -> Unit) {
+private fun EntryList(
+    entries: List<DayEntry>,
+    selectedKey: String?,
+    onClick: (String) -> Unit,
+    header: (LazyListScope.() -> Unit)? = null,
+    headerCount: Int = 0,
+    contentPadding: PaddingValues = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = EodiTheme.space.page),
+) {
     val listState = rememberLazyListState()
     LaunchedEffect(selectedKey, entries) {
         val key = selectedKey ?: return@LaunchedEffect
@@ -672,15 +885,16 @@ private fun EntryList(entries: List<DayEntry>, selectedKey: String?, onClick: (S
             shown.offset + shown.size <= info.viewportEndOffset - info.afterContentPadding
         if (!fullyShown) {
             val index = entries.indexOfFirst { it.key == key }
-            if (index >= 0) listState.animateScrollToItem(index)
+            if (index >= 0) listState.animateScrollToItem(index + headerCount)
         }
     }
     val last = entries.lastIndex
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         state = listState,
-        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = EodiTheme.space.page),
+        contentPadding = contentPadding,
     ) {
+        header?.invoke(this)
         itemsIndexed(
             entries,
             key = { _, e -> e.key },

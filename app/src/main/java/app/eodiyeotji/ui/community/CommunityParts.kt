@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -441,10 +442,21 @@ fun LoadingBox(modifier: Modifier = Modifier) {
 }
 
 /**
+ * [OverlayCard]를 판마다 다르게 띄우는 곳. 기본(null, 차)은 화면 가운데 카드.
+ * 폰 판은 아래에서 올라오는 시트를 넣는다 (src/phone의 PhoneSheet) — 공유 시트·리뷰 쓰기 같은 화면 코드는 그대로 둔다.
+ */
+val LocalOverlayPresenter = staticCompositionLocalOf<(@Composable (onDismiss: () -> Unit, content: @Composable BoxScope.() -> Unit) -> Unit)?> { null }
+
+/**
  * 화면 위에 뜨는 카드 (뒤는 어둡게). 바깥을 누르면 닫힌다. 차 화면에서 시트 대신 쓴다 — 넓은 창에서도 폭 [maxWidth]까지만.
+ * 폰 판은 [LocalOverlayPresenter]가 아래 시트로 띄운다.
  */
 @Composable
 fun OverlayCard(onDismiss: () -> Unit, modifier: Modifier = Modifier, maxWidth: Dp = 1080.dp, content: @Composable BoxScope.() -> Unit) {
+    LocalOverlayPresenter.current?.let { present ->
+        present(onDismiss, content)
+        return
+    }
     val c = EodiTheme.colors
     val none = remember { MutableInteractionSource() }
     Box(

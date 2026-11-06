@@ -25,6 +25,8 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
 import app.eodiyeotji.ui.review.ReviewPane
 import app.eodiyeotji.ui.theme.EodiTheme
@@ -38,10 +40,21 @@ private val OneLineHeader = 1400.dp
  * 커뮤니티 (정차 중에만 보인다 — 주행 중에는 HomeRoute가 에이전트 주행 화면만 띄운다).
  * 위쪽 하위 탭 [게시판 · 드라이브 코스 · 여행 리뷰]. 각 탭은 자기 ViewModel을 가져 탭을 오가도 목록·정렬이 남는다.
  * [headerAction] 자리는 타임라인과 같은 대표 동작 하나(에이전트 "어디였지? 물어보세요").
+ * [compact]: 폰 세로 화면 (상세를 열면 머리를 감춘다).
  */
 @Composable
-fun CommunityRoute(headerAction: (@Composable () -> Unit)? = null) {
+fun CommunityRoute(headerAction: (@Composable () -> Unit)? = null, compact: Boolean = false) {
     var tab by rememberSaveable { mutableStateOf(CommunityTab.COURSES) }
+    // 폰 세로 화면: 코스 상세 · 게시글을 열면 머리(제목 · 하위 탭)를 감춰 상세가 화면을 다 쓴다. 차 화면은 그대로.
+    val detailOpen = if (!compact) {
+        false
+    } else {
+        when (tab) {
+            CommunityTab.COURSES -> hiltViewModel<CourseViewModel>().state.collectAsStateWithLifecycle().value.detail != null
+            CommunityTab.BOARD -> hiltViewModel<BoardViewModel>().state.collectAsStateWithLifecycle().value.thread != null
+            CommunityTab.REVIEWS -> false
+        }
+    }
     val c = EodiTheme.colors
     Surface(Modifier.fillMaxSize(), color = c.background, contentColor = c.textPrimary) {
         BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -59,7 +72,7 @@ fun CommunityRoute(headerAction: (@Composable () -> Unit)? = null) {
                         big = true,
                     )
                 }
-                Row(Modifier.fillMaxWidth().height(104.dp).padding(horizontal = 32.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (!detailOpen) Row(Modifier.fillMaxWidth().height(104.dp).padding(horizontal = 32.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         stringResource(R.string.community_title),
                         style = EodiTheme.type.titleSmall,
@@ -73,7 +86,7 @@ fun CommunityRoute(headerAction: (@Composable () -> Unit)? = null) {
                     Spacer(Modifier.weight(1f))
                     if (headerAction != null) headerAction()
                 }
-                if (!oneLine) {
+                if (!oneLine && !detailOpen) {
                     Box(Modifier.padding(start = 32.dp, end = 32.dp, bottom = 8.dp)) { tabs() }
                 }
                 Box(Modifier.fillMaxSize()) {
