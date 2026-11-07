@@ -1,6 +1,5 @@
 package app.eodiyeotji.ui.agent
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,19 +28,17 @@ import androidx.compose.ui.unit.sp
 import app.eodiyeotji.R
 import app.eodiyeotji.agent.RecommendedCourse
 import app.eodiyeotji.core.DriveRoute
-import app.eodiyeotji.ui.community.BestTimeBadge
-import app.eodiyeotji.ui.community.visitText
+import app.eodiyeotji.core.DriveRouteItem
+import app.eodiyeotji.ui.community.DriveRouteCard
 import app.eodiyeotji.ui.map.RouteSnapshotImage
 
 // 근처 추천 드라이브 길 카드 ("여기 근처 드라이브 추천코스"). 순위·거리·하트는 Rust가 끝내고 오고, 여기는 받은 순서대로 그리기만 한다.
-// 드라이브 코스는 들를 곳 없는 경치 길이라 카드에는 들른 곳 대신 길의 3D 미리보기 그림(스냅숏)과 시작 → 끝을 보여 준다.
+// 정차 중 카드는 드라이브 코스 탭과 같은 글 카드(community/DriveRoutePane.kt DriveRouteCard), 주행 중에는 큰 카드 하나.
 
-/** 다녀온 날 · 계절 · 날씨 한 줄 (값이 있을 때만). 예: "10월 18일 · 가을 단풍철 · 맑음 14°C". */
-@androidx.compose.runtime.Composable
-internal fun routeWhenLine(route: DriveRoute): String? =
-    if (route.visit.day.isBlank() && route.visit.season.isBlank()) null else visitText(route.visit)
-
-/** 정차 중: 순위 카드 목록. 카드를 누르면 "N번으로 안내해줘"로 이어서 묻는다 (안내는 제안 → 확인 뒤에만). */
+/**
+ * 정차 중: 드라이브 코스 탭과 같은 글 카드 목록 (3D 대표 그림 · 순위 · 제목 · 소개 · 시작 → 끝 · 정보 칩 · 하트 수).
+ * 카드를 누르면 "N번으로 안내해줘"로 이어서 묻는다 (안내는 제안 → 확인 뒤에만).
+ */
 @Composable
 internal fun CourseRecommendationList(turn: AgentTurn, onAsk: (String) -> Unit, modifier: Modifier = Modifier) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp), modifier = modifier) {
@@ -54,81 +50,27 @@ internal fun CourseRecommendationList(turn: AgentTurn, onAsk: (String) -> Unit, 
         )
         turn.courses.forEachIndexed { i, c ->
             val question = stringResource(R.string.agent_followup_pick_course, c.rank)
-            CourseRecommendationCard(c, focused = i == turn.courseFocus, onClick = { onAsk(question) })
+            DriveRouteCard(
+                DriveRouteItem(c.route, c.distanceKm),
+                onOpen = { onAsk(question) },
+                onHeart = null,
+                rank = c.rank,
+                focused = i == turn.courseFocus,
+                action = stringResource(R.string.agent_pick_course, c.rank),
+            )
         }
     }
 }
 
+/** 주행 중 카드의 큰 숫자 줄: "♥ 486   여기서 4.1km" */
 @Composable
-private fun CourseRecommendationCard(c: RecommendedCourse, focused: Boolean, onClick: () -> Unit) {
+private fun CourseNumbers(c: RecommendedCourse) {
     val colors = MaterialTheme.colorScheme
-    val r = c.route
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(28.dp),
-        color = if (focused) colors.primaryContainer.copy(alpha = 0.55f) else colors.surfaceContainerLow,
-        border = if (focused) BorderStroke(3.dp, colors.primary) else null,
-        tonalElevation = 1.dp,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
-    ) {
-        Row(Modifier.padding(horizontal = 24.dp, vertical = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            // 길 미리보기 (3D 스냅숏) 위에 순위
-            Box(Modifier.size(width = 236.dp, height = 136.dp).clip(RoundedCornerShape(20.dp))) {
-                RouteSnapshotImage(r, stringResource(R.string.drive_preview_description, r.title), Modifier.matchParentSize())
-                Box(Modifier.align(Alignment.TopStart).padding(8.dp)) { RankBadge(c.rank, focused, size = 44) }
-            }
-            Spacer(Modifier.width(22.dp))
-            Column(Modifier.weight(1f)) {
-                if (focused) {
-                    Text(
-                        stringResource(R.string.agent_course_focus),
-                        style = AgentSubStyle,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colors.primary,
-                    )
-                }
-                Text(r.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    stringResource(R.string.drive_from_to, r.startName, r.endName),
-                    style = AgentSubStyle,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(4.dp))
-                CourseNumbers(c)
-                Text(
-                    listOfNotNull(stringResource(R.string.agent_course_by, r.author), routeWhenLine(r)).joinToString("  ·  "),
-                    style = AgentSubStyle,
-                    color = colors.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(10.dp))
-                BestTimeBadge(r.bestTime, r.theme)
-            }
-        }
-    }
-}
-
-/** "♥ 486   여기서 4.1km   22km · 25분" */
-@Composable
-private fun CourseNumbers(c: RecommendedCourse, large: Boolean = false) {
-    val colors = MaterialTheme.colorScheme
-    val style = if (large) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge
+    val style = MaterialTheme.typography.headlineSmall
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
         Text(stringResource(R.string.agent_course_hearts, c.route.hearts), style = style, fontWeight = FontWeight.Bold, color = app.eodiyeotji.ui.theme.EodiTheme.colors.heart)
         c.distanceKm?.let {
             Text(stringResource(R.string.agent_course_from_here, kmText(it * 1000.0)), style = style, fontWeight = FontWeight.SemiBold, color = colors.primary)
-        }
-        if (!large) {
-            Text(
-                listOf(kmText(c.route.distanceM), spanText(c.route.durationMs)).joinToString(" · "),
-                style = AgentSubStyle,
-                color = colors.onSurfaceVariant,
-                maxLines = 1,
-            )
         }
     }
 }
@@ -163,7 +105,7 @@ internal fun DrivingCourseCard(c: RecommendedCourse, modifier: Modifier = Modifi
             Column(Modifier.weight(1f)) {
                 Text(c.route.title, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(4.dp))
-                CourseNumbers(c, large = true)
+                CourseNumbers(c)
             }
         }
     }

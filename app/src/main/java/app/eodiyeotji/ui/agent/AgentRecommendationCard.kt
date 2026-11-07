@@ -1,17 +1,13 @@
 package app.eodiyeotji.ui.agent
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,34 +20,19 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.eodiyeotji.R
 import app.eodiyeotji.ui.theme.EodiTheme
+import app.eodiyeotji.ui.review.FeedHero
+import app.eodiyeotji.ui.review.StopStrip
+import app.eodiyeotji.ui.place.placeDetailOpenLabel
 import app.eodiyeotji.ui.theme.MemoryStamp
-import app.eodiyeotji.core.StopFact
-import app.eodiyeotji.ui.map.DayMap
-import app.eodiyeotji.ui.map.MapPhotoPin
 import app.eodiyeotji.ui.place.LocalOpenPlace
 import app.eodiyeotji.ui.place.PlaceThumbnail
 import app.eodiyeotji.ui.share.ComposableImageShare
@@ -63,255 +44,75 @@ import java.time.LocalDate
 private val CardShape = RoundedCornerShape(32.dp)
 
 /**
- * 추천 카드: 지도(그날 경로) + 종류·날짜 + 제목 + 요약 + 들른 곳 번호 칩.
- * 칩을 누르면 그곳이 "여기만 가기" 대상이 되고, 위쪽이 그곳 대표 사진(구글 지도 사진)으로 바뀐다.
+ * 추천 카드 (여행 리뷰 카드와 같은 모양): 큰 사진(고른 곳, 위에 하루 제목 · "강원 강릉시 · 4곳 · 384km · 9시간 13분",
+ * 왼쪽 위 "1년 전 · 여행") → 날짜 → 들른 곳 사진 줄(번호 · 이름).
+ * 사진 줄에서 고른 곳이 "여기만 가기" 대상이 되고 큰 사진도 그곳으로 바뀐다. 큰 사진이나 고른 곳을 누르면 장소 창.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun RecommendationCard(
     rec: RecommendationUi,
     today: LocalDate,
     selectedStop: Int,
     onSelectStop: (Int) -> Unit,
-    mapHeight: Dp,
     modifier: Modifier = Modifier,
 ) {
     val facts = rec.hit.episode.facts
     val stops = rec.stops
+    val c = EodiTheme.colors
     // 들른 곳을 누르면 그곳 장소 창(사진 · 별점 · 리뷰 · 안내 · 저장)
     val openPlace = LocalOpenPlace.current
-    // 지도 강조는 사용자가 직접 고른 뒤부터 (처음부터 한 곳만 진하고 경로가 흐리면 하루 전체가 안 읽힌다)
-    var picked by rememberSaveable(facts.id) { mutableStateOf(false) }
     Surface(
-        shape = CardShape,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        tonalElevation = 1.dp,
-        shadowElevation = 1.dp,
+        color = c.surface,
+        contentColor = c.textPrimary,
+        shape = RoundedCornerShape(EodiTheme.space.radiusL),
         modifier = modifier.fillMaxWidth(),
     ) {
-        Column {
-            // 위쪽: 그날 지도 (들른 곳 칩·핀을 누르면 지도에서 강조하고 장소 창을 연다)
-            Box(Modifier.fillMaxWidth().height(mapHeight).clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))) {
-                val map = rec.map
-                when {
-                    !rec.mapLoaded -> Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerHigh))
-                    // 지도에서도 고른 곳을 강조하고, 지도의 핀을 누르면 그곳을 고른다 (칩과 같은 동작)
-                    map?.bounds != null -> DayMap(
-                        data = map,
-                        selectedKey = stops.getOrNull(selectedStop)?.takeIf { picked }?.let { "s${it.arriveMs}" },
-                        onSelectKey = { key ->
-                            val i = stops.indexOfFirst { "s${it.arriveMs}" == key }
-                            if (i >= 0) {
-                                picked = true
-                                onSelectStop(i)
-                                openPlace(stops[i])
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                        photoPins = remember(stops) { stops.map { MapPhotoPin("s${it.arriveMs}", it.name, it.address, it.lat, it.lon) } },
-                    )
-                    else -> CourseSketch(stops, selectedStop, Modifier.fillMaxSize())
-                }
-            }
-            Column(Modifier.padding(start = 28.dp, end = 28.dp, top = 24.dp, bottom = 28.dp)) {
-                // 기억 도장("1년 전") + 날짜 + 종류: 언제의 기억인지가 가장 먼저 보인다
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    MemoryStamp(agoText(LocalDate.parse(facts.day), today))
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        memoryDateText(facts.day),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    KindBadge(kindText(facts.kind))
-                    // 이 나들이·여행을 사진 카드로 공유 (폰 판만 보인다, ui/share)
-                    if (ComposableImageShare.supported) {
-                        Spacer(Modifier.weight(1f))
-                        ShareImageButton(ShareTarget.Episode(facts.id), style = ShareButtonStyle.ICON)
-                    }
-                }
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    rec.hit.episode.title ?: rec.hit.dayTitle ?: facts.ruleLabel,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+        Column(Modifier.padding(horizontal = 22.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            val hero = stops.getOrNull(selectedStop) ?: stops.firstOrNull()
+            val title = rec.hit.episode.title ?: rec.hit.dayTitle ?: facts.ruleLabel
+            val sub = listOf(
+                facts.region,
+                stringResource(R.string.agent_stops_count, stops.size),
+                kmText(facts.distanceM),
+                spanText(facts.endMs - facts.startMs),
+            ).filter { it.isNotBlank() }.joinToString(" · ")
+            if (hero != null) {
+                FeedHero(
+                    hero,
+                    title = title,
+                    sub = sub,
+                    mine = false,
+                    onClickLabel = placeDetailOpenLabel(),
+                    label = listOf(agoText(LocalDate.parse(facts.day), today), kindText(facts.kind)).joinToString(" · "),
+                    onClick = { openPlace(hero) },
                 )
-                Spacer(Modifier.height(8.dp))
+            } else {
+                Text(title, style = EodiTheme.type.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(sub, style = EodiTheme.type.meta, color = c.textSecondary, maxLines = 1)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(AgentIcons.Calendar, null, tint = c.textTertiary, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(8.dp))
                 Text(
-                    listOf(
-                        facts.region,
-                        stringResource(R.string.agent_stops_count, stops.size),
-                        kmText(facts.distanceM),
-                        spanText(facts.endMs - facts.startMs),
-                    ).filter { it.isNotBlank() }.joinToString("  ·  "),
-                    style = AgentSubStyle,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    memoryDateText(facts.day),
+                    style = EodiTheme.type.meta,
+                    color = c.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
-                if (stops.isNotEmpty()) {
-                    Spacer(Modifier.height(20.dp))
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        stops.forEachIndexed { i, stop ->
-                            StopChip(i + 1, stop, selected = i == selectedStop, onClick = { picked = true; onSelectStop(i); openPlace(stop) })
-                        }
-                    }
-                }
+                // 이 나들이·여행을 사진 카드로 공유 (폰 판만 보인다, ui/share)
+                if (ComposableImageShare.supported) ShareImageButton(ShareTarget.Episode(facts.id), style = ShareButtonStyle.ICON)
             }
-        }
-    }
-}
-
-
-/** 들른 곳 칩: [① 경포해변]. 고른 칩은 진하게. */
-@Composable
-private fun StopChip(number: Int, stop: StopFact, selected: Boolean, onClick: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    Surface(
-        onClick = onClick,
-        shape = CircleShape,
-        color = if (selected) colors.primary else colors.surfaceContainerHighest,
-        contentColor = if (selected) colors.onPrimary else colors.onSurface,
-        modifier = Modifier.heightIn(min = AgentTouchMin),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(start = 8.dp, end = 24.dp, top = 6.dp, bottom = 6.dp),
-        ) {
-            // 순서 번호는 지도 핀과 같은 코랄 (고른 칩은 파랑 위 흰 배지)
-            val dotColor = if (selected) colors.onPrimary else EodiTheme.colors.stay
-            val numColor = if (selected) colors.primary else EodiTheme.colors.onMarker
-            // 정차한 곳 대표 사진(동그라미) + 순서 번호 배지. 사진이 없으면 번호 동그라미만.
-            Box(Modifier.size(56.dp)) {
-                PlaceThumbnail(
-                    stop.name, stop.address, stop.lat, stop.lon,
-                    modifier = Modifier.size(56.dp).clip(CircleShape),
-                    fallback = {
-                        Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) {
-                            Box(Modifier.size(44.dp).background(dotColor, CircleShape))
-                        }
-                    },
+            if (stops.isNotEmpty()) {
+                StopStrip(
+                    stops,
+                    onMore = { hero?.let(openPlace) },
+                    selected = selectedStop,
+                    onPick = { i -> if (i == selectedStop) openPlace(stops[i]) else onSelectStop(i) },
                 )
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.align(Alignment.BottomEnd).size(26.dp).background(dotColor, CircleShape),
-                ) {
-                    Text(number.toString(), fontSize = 15.sp, fontWeight = FontWeight.Bold, color = numColor)
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text(stop.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                if (stop.category.isNotBlank()) {
-                    Text(
-                        stop.category,
-                        style = AgentSubStyle,
-                        color = if (selected) colors.onPrimary.copy(alpha = 0.8f) else colors.onSurfaceVariant,
-                        maxLines = 1,
-                    )
-                }
             }
         }
-    }
-}
-
-@Composable
-private fun KindBadge(text: String, modifier: Modifier = Modifier) {
-    Surface(
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        modifier = modifier,
-    ) {
-        Text(
-            text,
-            style = AgentSubStyle,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-        )
-    }
-}
-
-/**
- * 지도 기록이 없을 때(오래된 날·지도 파일 없음) 지도 대신 그리는 코스 그림.
- * 위치는 실제 좌표가 아니라 순서만 보이도록 고르게 늘어놓는다.
- */
-@Composable
-private fun CourseSketch(stops: List<StopFact>, selected: Int, modifier: Modifier = Modifier) {
-    val colors = MaterialTheme.colorScheme
-    val measurer = rememberTextMeasurer()
-    val caption = stringResource(R.string.agent_map_none)
-    val numberStyle = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Bold)
-    val nameStyle = AgentSubStyle.copy(fontWeight = FontWeight.SemiBold, color = colors.onSurface)
-    val captionStyle = AgentSubStyle.copy(color = colors.onSurfaceVariant)
-    Canvas(modifier.background(colors.surfaceContainerHigh)) {
-        // 바탕 점 격자 (지도 느낌)
-        val step = 28.dp.toPx()
-        val dot = colors.outlineVariant.copy(alpha = 0.6f)
-        var y = step / 2
-        while (y < size.height) {
-            var x = step / 2
-            while (x < size.width) {
-                drawCircle(dot, radius = 1.5.dp.toPx(), center = Offset(x, y))
-                x += step
-            }
-            y += step
-        }
-        if (stops.isEmpty()) return@Canvas
-
-        val padX = size.width * 0.12f
-        val midY = size.height * 0.48f
-        val amp = size.height * 0.14f
-        val n = stops.size
-        val points = List(n) { i ->
-            val t = if (n == 1) 0.5f else i / (n - 1f)
-            Offset(padX + t * (size.width - 2 * padX), midY + if (i % 2 == 0) -amp else amp)
-        }
-        // 들른 곳을 잇는 부드러운 점선 경로
-        if (n > 1) {
-            val path = Path().apply {
-                moveTo(points[0].x, points[0].y)
-                for (i in 1 until n) {
-                    val a = points[i - 1]
-                    val b = points[i]
-                    val cx = (a.x + b.x) / 2
-                    cubicTo(cx, a.y, cx, b.y, b.x, b.y)
-                }
-            }
-            drawPath(path, colors.surface, style = Stroke(width = 14.dp.toPx(), cap = StrokeCap.Round))
-            drawPath(
-                path,
-                colors.primary,
-                style = Stroke(
-                    width = 6.dp.toPx(),
-                    cap = StrokeCap.Round,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(18.dp.toPx(), 12.dp.toPx())),
-                ),
-            )
-        }
-        val r = 22.dp.toPx()
-        points.forEachIndexed { i, p ->
-            val on = i == selected
-            // 고른 곳은 바깥 고리로 표시 (칩과 같은 색)
-            if (on) drawCircle(colors.primary.copy(alpha = 0.25f), radius = r + 14.dp.toPx(), center = p)
-            drawCircle(colors.surface, radius = r + 4.dp.toPx(), center = p)
-            drawCircle(colors.primary, radius = r, center = p)
-            val num = measurer.measure((i + 1).toString(), numberStyle.copy(color = colors.onPrimary))
-            drawText(num, topLeft = Offset(p.x - num.size.width / 2f, p.y - num.size.height / 2f))
-            val label = measurer.measure(stops[i].name, nameStyle, maxLines = 1)
-            val ly = if (i % 2 == 0) p.y - r - 8.dp.toPx() - label.size.height else p.y + r + 8.dp.toPx()
-            drawText(label, topLeft = Offset((p.x - label.size.width / 2f).coerceIn(8f, size.width - label.size.width - 8f), ly))
-        }
-        val cap = measurer.measure(caption, captionStyle)
-        drawText(cap, topLeft = Offset(size.width - cap.size.width - 20.dp.toPx(), size.height - cap.size.height - 16.dp.toPx()))
     }
 }
 

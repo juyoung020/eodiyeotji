@@ -73,7 +73,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -269,7 +268,7 @@ private fun ParkedAgent(
                         if (turn.courses.isNotEmpty()) {
                             CourseRecommendationList(turn, onAsk)
                         } else {
-                            RecommendationsBlock(turn, today, onSelectStop, onAsk, mapHeight = 400.dp)
+                            RecommendationsBlock(turn, today, onSelectStop, onAsk)
                         }
                     }
                 }
@@ -285,7 +284,7 @@ private fun ParkedAgent(
                         ActionBlock(turn, onConfirm, onAsk)
                         CourseRecommendationList(turn, onAsk)
                     } else {
-                        RecommendationsBlock(turn, today, onSelectStop, onAsk, mapHeight = 260.dp, onlyFirst = true)
+                        RecommendationsBlock(turn, today, onSelectStop, onAsk, onlyFirst = true)
                         ActionBlock(turn, onConfirm, onAsk)
                     }
                     OtherDays(turn, today, onAsk)
@@ -325,7 +324,7 @@ private fun CompactParkedAgent(
                     ActionBlock(turn, onConfirm, onAsk)
                     CourseRecommendationList(turn, onAsk)
                 } else {
-                    RecommendationsBlock(turn, today, onSelectStop, onAsk, mapHeight = 300.dp, onlyFirst = true)
+                    RecommendationsBlock(turn, today, onSelectStop, onAsk, onlyFirst = true)
                     ActionBlock(turn, onConfirm, onAsk)
                 }
                 OtherDays(turn, today, onAsk)
@@ -730,18 +729,17 @@ private fun ActionStatus(action: ActionState, large: Boolean = false) {
     }
 }
 
-/** 추천 카드들. 첫 카드는 지도와 들른 곳까지 크게, 나머지는 "다른 날" 줄로. */
+/** 추천 카드들. 첫 카드는 사진과 들른 곳까지 크게, 나머지는 "다른 날" 줄로. */
 @Composable
 private fun RecommendationsBlock(
     turn: AgentTurn,
     today: LocalDate,
     onSelectStop: (Int) -> Unit,
     onAsk: (String) -> Unit,
-    mapHeight: Dp,
     onlyFirst: Boolean = false,
 ) {
     val first = turn.recommendations.firstOrNull() ?: return
-    RecommendationCard(first, today, turn.selectedStop, onSelectStop, mapHeight)
+    RecommendationCard(first, today, turn.selectedStop, onSelectStop)
     if (!onlyFirst) OtherDays(turn, today, onAsk)
 }
 

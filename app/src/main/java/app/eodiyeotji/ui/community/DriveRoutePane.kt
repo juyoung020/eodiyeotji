@@ -1,5 +1,7 @@
 package app.eodiyeotji.ui.community
 
+import androidx.compose.foundation.BorderStroke
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -192,14 +194,30 @@ private fun DriveRouteGrid(items: List<DriveRouteItem>, onOpen: (DriveRouteItem)
 /**
  * 드라이브 코스 글 카드 (사람이 올린 게시글처럼): 글쓴이 머리 → 3D 대표 그림(스냅숏, "야경 추천" 띠) → 제목 → 소개 →
  * 시작 → 끝 → 조용한 정보 칩(언제·다녀온 날·날씨 / 거리·시간 / 여기서 거리) → 하트 · 길 보기.
+ * 에이전트 추천("여기 근처 드라이브 추천코스")도 같은 카드: [rank]면 그림 오른쪽 위 순위, [focused]면 파란 테두리와
+ * "안내 제안 중", [onHeart]가 없으면 하트 수만, [action]은 아래 오른쪽 글자.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DriveRouteCard(item: DriveRouteItem, onOpen: () -> Unit, onHeart: () -> Unit) {
+internal fun DriveRouteCard(
+    item: DriveRouteItem,
+    onOpen: () -> Unit,
+    onHeart: (() -> Unit)?,
+    rank: Int? = null,
+    focused: Boolean = false,
+    action: String = stringResource(R.string.drive_view),
+) {
     val colors = EodiTheme.colors
     val type = EodiTheme.type
     val r = item.route
-    Surface(onClick = onOpen, color = colors.surface, contentColor = colors.textPrimary, shape = RoundedCornerShape(EodiTheme.space.radiusL), modifier = Modifier.fillMaxWidth()) {
+    Surface(
+        onClick = onOpen,
+        color = colors.surface,
+        contentColor = colors.textPrimary,
+        shape = RoundedCornerShape(EodiTheme.space.radiusL),
+        border = if (focused) BorderStroke(3.dp, colors.accent) else null,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 22.dp, bottom = 12.dp)) {
             PostHeader(r.author, stringResource(R.string.community_byline, r.region, agoText(r.createdMs)), r.mine)
             Spacer(Modifier.height(18.dp))
@@ -207,9 +225,25 @@ private fun DriveRouteCard(item: DriveRouteItem, onOpen: () -> Unit, onHeart: ()
                 Box(Modifier.fillMaxSize().clip(RoundedCornerShape(18.dp))) {
                     RouteSnapshotImage(r, stringResource(R.string.drive_preview_description, r.title), Modifier.fillMaxSize())
                     BestTimeBadge(r.bestTime, r.theme, Modifier.align(Alignment.TopStart).padding(14.dp))
+                    if (rank != null) {
+                        Box(
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(12.dp)
+                                .size(52.dp)
+                                .background(if (focused) colors.accent else colors.surface, CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(rank.toString(), style = type.title, fontWeight = FontWeight.Bold, color = if (focused) colors.onAccent else colors.textPrimary)
+                        }
+                    }
                 }
             }
             Spacer(Modifier.height(18.dp))
+            if (focused) {
+                Text(stringResource(R.string.agent_course_focus), style = type.label, fontWeight = FontWeight.Bold, color = colors.accent)
+                Spacer(Modifier.height(4.dp))
+            }
             Text(r.title, style = type.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (r.body.isNotBlank()) {
                 Spacer(Modifier.height(8.dp))
@@ -226,9 +260,18 @@ private fun DriveRouteCard(item: DriveRouteItem, onOpen: () -> Unit, onHeart: ()
             Box(Modifier.fillMaxWidth().height(1.dp).background(colors.outline))
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                HeartButton(r.hearts, r.heartedByMe, onHeart)
+                if (onHeart != null) {
+                    HeartButton(r.hearts, r.heartedByMe, onHeart)
+                } else {
+                    // 누를 수 없는 하트 수 (에이전트 추천 카드)
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 12.dp, vertical = 20.dp)) {
+                        Icon(if (r.heartedByMe) CommunityIcons.HeartFilled else CommunityIcons.Heart, null, tint = colors.heart, modifier = Modifier.size(26.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(r.hearts.toString(), style = type.label, fontWeight = FontWeight.Bold, color = colors.textSecondary)
+                    }
+                }
                 Spacer(Modifier.weight(1f))
-                TextAction(stringResource(R.string.drive_view), onOpen)
+                TextAction(action, onOpen)
             }
         }
     }

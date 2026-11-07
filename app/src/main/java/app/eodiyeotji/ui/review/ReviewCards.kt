@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -205,11 +206,11 @@ private const val StripMinSlots = 4
 private const val StripMaxSlots = 5
 
 /**
- * 들른 곳 사진 줄: 곳마다 정사각 사진 + 코랄 번호(지도 핀과 같은 색) + 아래 이름. 사진을 누르면 그곳 장소 창,
- * 다 못 보여 준 곳은 "+N" (누르면 [onMore] = 코스 상세).
+ * 들른 곳 사진 줄: 곳마다 정사각 사진 + 코랄 번호(지도 핀과 같은 색) + 아래 이름. 사진을 누르면 그곳 장소 창
+ * ([onPick]이 있으면 그것을 부른다), 다 못 보여 준 곳은 "+N" (누르면 [onMore]). [selected] 곳은 파란 테두리.
  */
 @Composable
-private fun StopStrip(stops: List<StopFact>, onMore: () -> Unit) {
+internal fun StopStrip(stops: List<StopFact>, onMore: () -> Unit, selected: Int? = null, onPick: ((Int) -> Unit)? = null) {
     val c = EodiTheme.colors
     val openPlace = LocalOpenPlace.current
     val slots = stops.size.coerceIn(StripMinSlots, StripMaxSlots)
@@ -224,7 +225,8 @@ private fun StopStrip(stops: List<StopFact>, onMore: () -> Unit) {
                         .fillMaxWidth()
                         .aspectRatio(1f)
                         .clip(shape)
-                        .clickable(onClickLabel = placeDetailOpenLabel(), role = Role.Button) { openPlace(s) },
+                        .then(if (i == selected) Modifier.border(4.dp, c.accent, shape) else Modifier)
+                        .clickable(onClickLabel = placeDetailOpenLabel(), role = Role.Button) { if (onPick != null) onPick(i) else openPlace(s) },
                 ) {
                     StopPhotoBox(s.name, s.address, s.lat, s.lon, order = i + 1, modifier = Modifier.fillMaxSize(), radius = 14.dp, iconSize = 36.dp)
                     OrderDot(i + 1, Modifier.align(Alignment.TopStart).padding(6.dp))
@@ -232,7 +234,8 @@ private fun StopStrip(stops: List<StopFact>, onMore: () -> Unit) {
                 Text(
                     s.name,
                     style = EodiTheme.type.caption,
-                    color = c.textSecondary,
+                    fontWeight = if (i == selected) FontWeight.Bold else null,
+                    color = if (i == selected) c.accent else c.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 6.dp, start = 2.dp),
