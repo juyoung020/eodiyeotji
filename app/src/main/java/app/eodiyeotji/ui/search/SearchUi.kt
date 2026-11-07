@@ -2,6 +2,11 @@ package app.eodiyeotji.ui.search
 
 import app.eodiyeotji.core.CourseOffers
 import app.eodiyeotji.core.PartnerOffer
+import app.eodiyeotji.ui.community.SecondaryPill
+import app.eodiyeotji.ui.community.PrimaryPill
+import app.eodiyeotji.ui.review.TripReviewCard
+import app.eodiyeotji.ui.review.FeedHero
+import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.ui.offers.CourseCouponBadge
 import app.eodiyeotji.ui.offers.PlaceCouponBadge
 import androidx.activity.compose.BackHandler
@@ -98,7 +103,6 @@ import app.eodiyeotji.ui.agent.AgentIcons
 import app.eodiyeotji.ui.agent.VoiceUi
 import app.eodiyeotji.ui.community.CommunityIcons
 import app.eodiyeotji.ui.community.OverlayCard
-import app.eodiyeotji.ui.community.StopPhoto
 import app.eodiyeotji.ui.community.TogglePill
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.place.LocalOpenPlace
@@ -441,20 +445,36 @@ private fun LazyGridScope.group(
 ) {
     full("h-${g.kind}") { GroupHeader(g.title, g.rows.size + g.more) }
     itemsIndexed(g.rows, key = { _, r -> "${g.kind}-${r.key}" }, contentType = { _, _ -> "row" }) { index, r ->
-        // 사진은 묶음 위쪽 몇 줄만 (구글 사진 요청을 적게)
-        ResultRow(
-            r, showPhoto = index < PhotoRows * columns, onOpen = onOpen, onMap = onMap, onNavigate = onNavigate,
-            saved = if (r.kind == SearchRowKind.PLACE && r.place != null) saved[r.key] ?: false else null,
-            onHeart = onHeart,
-            offers = offers[r.key].orEmpty(),
-            courseOffers = courseOffers[r.key],
-        )
+        val course = r.course
+        val place = r.place
+        when {
+            // 여행 코스 후기: 여행 리뷰 피드와 같은 카드 (큰 사진 · 들른 곳 사진 줄 · 글)
+            r.kind == SearchRowKind.COURSE && course != null -> TripReviewCard(
+                courseOffers[r.key]?.let { course.copy(offers = it) } ?: course,
+                onOpen = { onOpen(r) },
+                onHeart = null,
+            )
+            // 장소 · 하루 · 리뷰: 큰 사진 카드 (사진은 묶음 위쪽 몇 칸만, 구글 사진 요청을 적게)
+            place != null && place.name.isNotBlank() && index < PhotoRows * columns -> ResultCard(
+                r, place, onOpen = onOpen, onMap = onMap, onNavigate = onNavigate,
+                saved = if (r.kind == SearchRowKind.PLACE) saved[r.key] ?: false else null,
+                onHeart = onHeart,
+                offers = offers[r.key].orEmpty(),
+            )
+            else -> ResultRow(
+                r, onOpen = onOpen, onMap = onMap, onNavigate = onNavigate,
+                saved = if (r.kind == SearchRowKind.PLACE && place != null) saved[r.key] ?: false else null,
+                onHeart = onHeart,
+                offers = offers[r.key].orEmpty(),
+                courseOffers = courseOffers[r.key],
+            )
+        }
     }
     if (g.more > 0) full("more-${g.kind}") { MoreLine(g.more) }
 }
 
-/** 묶음마다 사진을 보이는 줄 수 (한 칸 기준). */
-private const val PhotoRows = 4
+/** 묶음마다 큰 사진 카드로 보이는 줄 수 (한 칸 기준). 나머지는 사진 없는 줄. */
+private const val PhotoRows = 3
 
 @Composable
 private fun GroupHeader(title: String, count: Int) {
@@ -504,11 +524,70 @@ private fun NoResults() {
     }
 }
 
-/** 결과 한 줄: [사진] 제목 / 부제 / 날짜 줄 · [지도] [안내]. 줄을 누르면 열기. */
+/**
+ * 장소 · 하루 · 리뷰 결과 카드 (여행 리뷰 피드와 같은 모양): 큰 사진 위에 제목 · 부제(처음 간 곳이면 왼쪽 위 띠) →
+ * 날짜 줄 → 제휴 쿠폰 → [저장][지도][안내]. 카드나 사진을 누르면 열기 (장소는 장소 창, 하루는 그날 기록).
+ */
+@Composable
+private fun ResultCard(
+    r: SearchRow,
+    place: StopFact,
+    onOpen: (SearchRow) -> Unit,
+    onMap: (SearchRow) -> Unit,
+    onNavigate: (SearchRow) -> Unit,
+    saved: Boolean?,
+    onHeart: (SearchRow) -> Unit,
+    offers: List<PartnerOffer>,
+) {
+    val c = EodiTheme.colors
+    val openLabel = stringResource(R.string.search_open)
+    Surface(
+        onClick = { onOpen(r) },
+        color = c.surface,
+        contentColor = c.textPrimary,
+        shape = RoundedCornerShape(EodiTheme.space.radiusL),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(horizontal = 22.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            FeedHero(
+                place,
+                title = r.title,
+                sub = r.subtitle,
+                mine = false,
+                onClickLabel = openLabel,
+                label = if (r.firstVisit && r.kind == SearchRowKind.PLACE) stringResource(R.string.search_first_visit) else null,
+                onClick = { onOpen(r) },
+            )
+            if (r.dateLine.isNotBlank()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(AgentIcons.Calendar, null, tint = c.textTertiary, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(r.dateLine, style = EodiTheme.type.meta, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            val canMap = r.day != null && (r.kind == SearchRowKind.PLACE || r.kind == SearchRowKind.DAY)
+            val canNavi = r.kind == SearchRowKind.PLACE || r.kind == SearchRowKind.DAY || r.kind == SearchRowKind.REVIEW
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PlaceCouponBadge(offers)
+                Spacer(Modifier.weight(1f))
+                if (saved != null) {
+                    SecondaryPill(
+                        stringResource(if (saved) R.string.edit_saved else R.string.places_save),
+                        if (saved) CommunityIcons.HeartFilled else CommunityIcons.Heart,
+                        { onHeart(r) },
+                    )
+                }
+                if (canMap) SecondaryPill(stringResource(R.string.search_map), SearchIcons.Map, { onMap(r) })
+                if (canNavi) PrimaryPill(stringResource(R.string.search_navigate), AgentIcons.Navigate, { onNavigate(r) })
+            }
+        }
+    }
+}
+
+/** 결과 한 줄 (사진 카드 아래 나머지 · 게시판 글): [그림] 제목 / 부제 / 날짜 줄 · [지도] [안내]. 줄을 누르면 열기. */
 @Composable
 private fun ResultRow(
     r: SearchRow,
-    showPhoto: Boolean,
     onOpen: (SearchRow) -> Unit,
     onMap: (SearchRow) -> Unit,
     onNavigate: (SearchRow) -> Unit,
@@ -529,7 +608,7 @@ private fun ResultRow(
             .clickable(role = Role.Button, onClickLabel = openLabel) { onOpen(r) },
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            RowPicture(r, showPhoto)
+            RowPicture(r)
             Spacer(Modifier.width(20.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -586,25 +665,22 @@ private fun ResultRow(
     }
 }
 
+/** 줄 왼쪽 그림 (사진 대신 종류 아이콘: 글 · 코스 · 하루 · 장소). */
 @Composable
-private fun RowPicture(r: SearchRow, showPhoto: Boolean) {
+private fun RowPicture(r: SearchRow) {
     val c = EodiTheme.colors
-    val size = 104.dp
     val p = r.place
-    when {
-        p != null && showPhoto && p.name.isNotBlank() -> StopPhoto(p.name, p.address, p.lat, p.lon, order = null, size = size, radius = EodiTheme.space.radiusM)
-        else -> Box(
-            Modifier.size(size).clip(RoundedCornerShape(EodiTheme.space.radiusM)).background(if (p != null) c.staySoft else c.surfaceHigh),
-            contentAlignment = Alignment.Center,
-        ) {
-            val icon = when (r.kind) {
-                SearchRowKind.POST -> CommunityIcons.Chat
-                SearchRowKind.COURSE -> CommunityIcons.Road
-                SearchRowKind.DAY -> AgentIcons.Calendar
-                else -> EodiIcons.Pin
-            }
-            Icon(icon, null, tint = if (p != null) c.stay.copy(alpha = 0.7f) else c.textTertiary, modifier = Modifier.size(36.dp))
+    Box(
+        Modifier.size(104.dp).clip(RoundedCornerShape(EodiTheme.space.radiusM)).background(if (p != null) c.staySoft else c.surfaceHigh),
+        contentAlignment = Alignment.Center,
+    ) {
+        val icon = when (r.kind) {
+            SearchRowKind.POST -> CommunityIcons.Chat
+            SearchRowKind.COURSE -> CommunityIcons.Road
+            SearchRowKind.DAY -> AgentIcons.Calendar
+            else -> EodiIcons.Pin
         }
+        Icon(icon, null, tint = if (p != null) c.stay.copy(alpha = 0.7f) else c.textTertiary, modifier = Modifier.size(36.dp))
     }
 }
 

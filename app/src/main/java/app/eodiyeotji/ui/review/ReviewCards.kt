@@ -163,7 +163,7 @@ internal fun RichReviewCard(t: TravelReview, onHeart: () -> Unit, modifier: Modi
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun TripReviewCard(t: DriveCourse, onOpen: () -> Unit, onHeart: () -> Unit, modifier: Modifier = Modifier) {
+internal fun TripReviewCard(t: DriveCourse, onOpen: () -> Unit, onHeart: (() -> Unit)?, modifier: Modifier = Modifier) {
     val c = EodiTheme.colors
     val p = t.post
     Surface(
@@ -194,7 +194,7 @@ internal fun TripReviewCard(t: DriveCourse, onOpen: () -> Unit, onHeart: () -> U
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CourseCouponBadge(t.offers)
                 Spacer(Modifier.weight(1f))
-                HeartButton(p.hearts, p.heartedByMe, onHeart, compact = true)
+                if (onHeart != null) HeartButton(p.hearts, p.heartedByMe, onHeart, compact = true) else HeartCount(p.hearts, p.heartedByMe)
             }
         }
     }
@@ -258,12 +258,23 @@ private fun StopStrip(stops: List<StopFact>, onMore: () -> Unit) {
     }
 }
 
+/** 누를 수 없는 하트 수 ("♥ 149", 검색 결과 카드). */
+@Composable
+private fun HeartCount(hearts: Int, mine: Boolean) {
+    val c = EodiTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Icon(if (mine) CommunityIcons.HeartFilled else CommunityIcons.Heart, null, tint = c.heart, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(hearts.toString(), style = EodiTheme.type.label, color = c.textSecondary)
+    }
+}
+
 /**
  * 카드 맨 위 큰 사진 (게시글처럼 카드 폭 가득, 2.1:1): [photo] 곳의 대표 사진 위 아래쪽에 [title] · [sub],
  * [label]이 있으면 왼쪽 위에 작은 띠. 누르면 [onClick] (장소 리뷰 → 장소 창, 여행 코스 후기 → 코스 상세).
  */
 @Composable
-private fun FeedHero(
+internal fun FeedHero(
     photo: StopFact,
     title: String,
     sub: String,
