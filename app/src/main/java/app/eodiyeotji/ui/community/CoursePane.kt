@@ -49,6 +49,9 @@ import app.eodiyeotji.core.Visit
 import app.eodiyeotji.core.StopReviews
 import app.eodiyeotji.core.TravelReview
 import app.eodiyeotji.ui.review.KeywordChip
+import app.eodiyeotji.ui.review.FeedHero
+import app.eodiyeotji.ui.review.StopStrip
+import app.eodiyeotji.ui.place.placeDetailOpenLabel
 import kotlin.math.roundToInt
 import app.eodiyeotji.pleos.CourseProgress
 import app.eodiyeotji.ui.map.DayMap
@@ -83,19 +86,6 @@ fun SortChoice(sort: CommunitySort, onSort: (CommunitySort) -> Unit) {
 @Composable
 private fun courseStatsText(stops: Int, distanceM: Double, durationMs: Long): String =
     listOf(stringResource(R.string.community_stops_count, stops), distanceText(distanceM), durationText(durationMs)).joinToString(" · ")
-
-/** 들르는 곳 순서 한 줄: "경포해변 → 주문진수산시장 → 하조대 → 낙산사" (넘치면 …). */
-@Composable
-private fun RouteLine(stops: List<StopFact>, modifier: Modifier = Modifier) {
-    if (stops.isEmpty()) return
-    val c = EodiTheme.colors
-    val route = remember(stops) { stops.joinToString("  →  ") { it.name } }
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Icon(CommunityIcons.Road, null, tint = c.stay, modifier = Modifier.size(24.dp))
-        Spacer(Modifier.width(10.dp))
-        Text(route, style = EodiTheme.type.meta, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
 
 /** 조용한 정보 칩 (옅은 회색 바탕, 작은 글씨). */
 @Composable
@@ -196,17 +186,40 @@ internal fun CourseDetailScreen(
                 Column(m) {
                     LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
                         item(key = "head") {
-                            // 게시글 본문처럼: 글쓴이 머리 → 제목 → 글쓴이 소개(크게) → 경로 → 조용한 정보 칩 → 태그
+                            // 게시글 본문처럼: 글쓴이 머리 → 표지(첫 곳 큰 사진 위 제목) → 들른 곳 사진 줄 → 글쓴이 소개 → 조용한 정보 칩 → 태그
                             Surface(color = colors.surface, shape = RoundedCornerShape(EodiTheme.space.radiusL), modifier = Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(24.dp)) {
                                     PostHeader(p.author, stringResource(R.string.community_byline, p.region, agoText(p.createdMs)), p.mine)
-                                    Spacer(Modifier.height(20.dp))
-                                    Text(p.title, style = EodiTheme.type.title, modifier = Modifier.semantics { heading() })
+                                    Spacer(Modifier.height(18.dp))
+                                    val cover = p.stops.firstOrNull()
+                                    if (cover != null) {
+                                        Box(Modifier.semantics { heading() }) {
+                                            FeedHero(
+                                                cover,
+                                                title = p.title,
+                                                sub = p.region,
+                                                mine = false,
+                                                onClickLabel = placeDetailOpenLabel(),
+                                                label = stringResource(R.string.review_trip_badge, p.stops.size),
+                                                onClick = { onOpenPlace(cover) },
+                                            )
+                                        }
+                                        Spacer(Modifier.height(14.dp))
+                                        // 사진을 누르면 지도에서 그곳을 고르고, 고른 곳을 한 번 더 누르면 장소 창
+                                        val picked = selectedKey?.removePrefix("s")?.toIntOrNull()?.minus(1)
+                                        StopStrip(
+                                            p.stops,
+                                            onMore = {},
+                                            selected = picked,
+                                            onPick = { i -> if (i == picked) onOpenPlace(p.stops[i]) else selectedKey = "s${i + 1}" },
+                                        )
+                                    } else {
+                                        Text(p.title, style = EodiTheme.type.title, modifier = Modifier.semantics { heading() })
+                                    }
                                     if (p.body.isNotBlank()) {
                                         Spacer(Modifier.height(12.dp))
                                         Text(p.body, style = EodiTheme.type.body, color = colors.textPrimary)
                                     }
-                                    RouteLine(p.stops, Modifier.padding(top = 16.dp))
                                     Spacer(Modifier.height(16.dp))
                                     FlowRow(
                                         horizontalArrangement = Arrangement.spacedBy(10.dp),
