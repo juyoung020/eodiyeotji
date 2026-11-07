@@ -39,6 +39,27 @@ internal object AgentIcons {
         }
     }
 
+    /** 스피커 (읽는 말 자막). */
+    val Speaker: ImageVector by lazy {
+        icon("AgentSpeaker") {
+            fill {
+                moveTo(4f, 9f)
+                horizontalLineTo(8f)
+                lineTo(13f, 4.5f)
+                verticalLineTo(19.5f)
+                lineTo(8f, 15f)
+                horizontalLineTo(4f)
+                close()
+            }
+            stroke {
+                moveTo(16.5f, 8.5f)
+                curveTo(17.8f, 10.5f, 17.8f, 13.5f, 16.5f, 15.5f)
+                moveTo(19f, 6f)
+                curveTo(21.3f, 9.5f, 21.3f, 14.5f, 19f, 18f)
+            }
+        }
+    }
+
     /** 닫기 ×. */
     val Close: ImageVector by lazy {
         icon("AgentClose") {

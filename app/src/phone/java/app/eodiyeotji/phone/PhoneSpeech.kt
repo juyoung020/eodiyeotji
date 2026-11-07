@@ -197,6 +197,10 @@ class PhoneSpeechOutput @Inject constructor(@ApplicationContext private val cont
     private val _speaking = MutableStateFlow(false)
     override val speaking: StateFlow<Boolean> = _speaking.asStateFlow()
 
+    private val _spokenText = MutableStateFlow<String?>(null)
+    /** 지금 읽는 글 (읽지 않으면 null) — 화면이 자막처럼 보여 준다. */
+    override val spokenText: StateFlow<String?> = _spokenText.asStateFlow()
+
     private var tts: TextToSpeech? = null
     private var ready = false
     /** 지금 읽기 차례 (새로 읽거나 멈추면 바뀐다 → 늦게 온 콜백을 버린다). */
@@ -226,6 +230,7 @@ class PhoneSpeechOutput @Inject constructor(@ApplicationContext private val cont
             val my = ++seq
             onDone = then
             _speaking.value = true
+            _spokenText.value = clean
             val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
                 .setAudioAttributes(attributes)
                 .setAcceptsDelayedFocusGain(true)
@@ -244,7 +249,7 @@ class PhoneSpeechOutput @Inject constructor(@ApplicationContext private val cont
     }
 
     override fun stop() {
-        main.post { onDone = null; stopNow(); _speaking.value = false }
+        main.post { onDone = null; stopNow(); _speaking.value = false; _spokenText.value = null }
     }
 
     private fun play(text: String) {
@@ -283,7 +288,7 @@ class PhoneSpeechOutput @Inject constructor(@ApplicationContext private val cont
         pendingText = null
         focus?.let { audio?.abandonAudioFocusRequest(it) }
         focus = null
-        _speaking.value = false
+        _speaking.value = false; _spokenText.value = null
         val then = onDone
         onDone = null
         then?.invoke()

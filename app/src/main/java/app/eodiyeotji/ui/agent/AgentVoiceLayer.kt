@@ -42,7 +42,7 @@ import app.eodiyeotji.R
 /**
  * 말로 묻기 층 (에이전트 화면 위에 겹친다, 레이아웃은 건드리지 않는다).
  * - 듣는 중: 아래쪽 큰 카드 — 출렁이는 마이크 + 알아들은 말. 마이크를 누르면 "다 말했다", ×는 취소.
- * - 주행 중 답 화면: 오른쪽 위 마이크 (이어서 "응"·"2번으로 가자"처럼 말하기). 답을 읽는 중이면 "읽기 멈춤" 알약.
+ * - 주행 중 답 화면: 오른쪽 위 마이크 (이어서 "응"·"2번으로 가자"처럼 말하기). 읽는 말은 앱 전체 자막([SpokenCaption])이 보여 준다.
  * - 짧은 안내("말씀을 듣지 못했어요")는 아래쪽 알약으로 잠깐.
  */
 @Composable
@@ -52,7 +52,6 @@ internal fun BoxScope.AgentVoiceLayer(
     hasTurn: Boolean,
     onMic: () -> Unit,
     onCancelListening: () -> Unit,
-    onStopSpeaking: () -> Unit,
 ) {
     // 주행 중 답 화면에는 마이크가 없다 → 오른쪽 위에 하나 둔다 (처음 화면은 가운데 큰 마이크가 있다)
     if (driving && hasTurn && !voice.listening) {
@@ -66,27 +65,6 @@ internal fun BoxScope.AgentVoiceLayer(
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(AgentIcons.Mic, contentDescription = stringResource(R.string.agent_mic), modifier = Modifier.size(48.dp))
-            }
-        }
-    }
-
-    AnimatedVisibility(
-        visible = voice.speaking && !voice.listening,
-        enter = fadeIn(),
-        exit = fadeOut(),
-        modifier = Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(top = 16.dp),
-    ) {
-        Surface(
-            onClick = onStopSpeaking,
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            shadowElevation = 4.dp,
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp)) {
-                Icon(AgentIcons.Close, contentDescription = null, modifier = Modifier.size(28.dp))
-                Spacer(Modifier.width(12.dp))
-                Text(stringResource(R.string.agent_voice_stop_speaking), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             }
         }
     }

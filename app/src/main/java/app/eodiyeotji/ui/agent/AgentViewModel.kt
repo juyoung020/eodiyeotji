@@ -199,9 +199,6 @@ class AgentViewModel @Inject constructor(
         speech.cancel()
     }
 
-    /** 읽기 멈춤. */
-    fun stopSpeaking() = tts.stop()
-
     /** Android 인식기로 대신 들어야 하는데 마이크 권한이 없으면 true (화면이 권한을 물은 뒤 [voice]). */
     fun needsMicPermission(): Boolean = speech.needsMicPermission()
 

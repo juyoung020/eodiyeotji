@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -73,6 +74,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -173,8 +175,11 @@ fun AgentPanel(
     val voice = onVoiceRequest ?: {
         if (viewModel.needsMicPermission()) micPermission.launch(Manifest.permission.RECORD_AUDIO) else viewModel.voice()
     }
+    // 답을 읽는 동안은 맨 위 자막(SpokenCaption)이 질문 줄을 가리지 않게 화면을 조금 내린다
+    val captionSpace by animateDpAsState(if (state.voice.speaking && !state.voice.listening) CaptionSpace else 0.dp, label = "caption")
     Box(modifier) {
         AgentPanelContent(
+            topSpace = captionSpace,
             state = state,
             onAsk = viewModel::ask,
             onConfirm = viewModel::confirm,
@@ -191,12 +196,14 @@ fun AgentPanel(
             hasTurn = state.turn != null,
             onMic = voice,
             onCancelListening = viewModel::cancelVoice,
-            onStopSpeaking = viewModel::stopSpeaking,
         )
     }
 }
 
-/** 상태만 받아 그리는 화면 (미리보기·디버그 화면용). */
+/** 답을 읽는 동안 맨 위 자막 자리만큼 내리는 높이. */
+private val CaptionSpace = 88.dp
+
+/** 상태만 받아 그리는 화면 (미리보기·디버그 화면용). [topSpace]: 위쪽 비울 높이 (읽는 말 자막 자리). */
 @Composable
 fun AgentPanelContent(
     state: AgentUiState,
@@ -209,9 +216,10 @@ fun AgentPanelContent(
     onVoiceRequest: () -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    topSpace: Dp = 0.dp,
 ) {
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Crossfade(targetState = state.isDriving, label = "agentMode") { driving ->
+        Crossfade(targetState = state.isDriving, label = "agentMode", modifier = Modifier.padding(top = topSpace)) { driving ->
             if (driving) {
                 DrivingAgent(state.turn, onConfirm, onClear, onClose, onVoiceRequest, onRetry)
             } else if (compact) {

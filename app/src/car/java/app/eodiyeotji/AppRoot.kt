@@ -7,10 +7,11 @@ import androidx.compose.ui.Modifier
 import app.eodiyeotji.record.RecordingPermissionGate
 import app.eodiyeotji.ui.home.HomeRoute
 import app.eodiyeotji.ui.place.PlaceDetailHost
+import app.eodiyeotji.ui.agent.SpokenCaption
 
 /**
  * 차 판 화면 뼈대: 첫 실행에만 위치 권한을 묻고, 허용되면 자동 기록 서비스를 켠다. 화면은 왼쪽 레일 + 타임라인·커뮤니티.
- * 장소 상세 창(별점 · 리뷰)은 모든 화면 위에 오른쪽 큰 창으로 뜬다.
+ * 장소 상세 창(별점 · 리뷰)은 모든 화면 위에 오른쪽 큰 창으로 뜬다. 앱이 읽는 말은 맨 위 자막.
  */
 @Composable
 fun AppRoot() {
@@ -19,5 +20,7 @@ fun AppRoot() {
             HomeRoute()
         }
         PlaceDetailHost()
+        // 앱이 소리 내어 읽는 말 (답 · 회상)을 맨 위에 자막으로
+        SpokenCaption()
     }
 }

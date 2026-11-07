@@ -46,6 +46,10 @@ class PleosTts @Inject constructor(@ApplicationContext private val context: Cont
     /** 지금 읽는 중 (포커스를 기다리는 동안 포함). */
     override val speaking: StateFlow<Boolean> = _speaking.asStateFlow()
 
+    private val _spokenText = MutableStateFlow<String?>(null)
+    /** 지금 읽는 글 (읽지 않으면 null) — 화면이 자막처럼 보여 준다. */
+    override val spokenText: StateFlow<String?> = _spokenText.asStateFlow()
+
     @Volatile private var pleosReady = false
     @Volatile private var pleosBroken = false
     private var pleos: TextToSpeech? = null
@@ -129,6 +133,7 @@ class PleosTts @Inject constructor(@ApplicationContext private val context: Cont
             val my = ++seq
             onDone = then
             _speaking.value = true
+            _spokenText.value = clean
             val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
                 .setAudioAttributes(attributes)
                 .setAcceptsDelayedFocusGain(true)
@@ -152,7 +157,7 @@ class PleosTts @Inject constructor(@ApplicationContext private val context: Cont
 
     /** 읽기를 멈춘다 (새 질문·마이크·화면 닫기). [speak]의 then은 부르지 않는다. */
     override fun stop() {
-        main.post { onDone = null; stopNow(); _speaking.value = false }
+        main.post { onDone = null; stopNow(); _speaking.value = false; _spokenText.value = null }
     }
 
     private fun play(text: String) {
@@ -202,7 +207,7 @@ class PleosTts @Inject constructor(@ApplicationContext private val context: Cont
         pendingText = null
         focus?.let { audio?.abandonAudioFocusRequest(it) }
         focus = null
-        _speaking.value = false
+        _speaking.value = false; _spokenText.value = null
         val then = onDone
         onDone = null
         then?.invoke()

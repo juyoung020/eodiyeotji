@@ -52,6 +52,9 @@ interface SpeechOutput {
     /** 지금 읽는 중 (포커스를 기다리는 동안 포함). */
     val speaking: StateFlow<Boolean>
 
+    /** 지금 읽는 글 (읽지 않으면 null). 화면이 자막처럼 보여 준다 (ui/agent/SpokenCaption). */
+    val spokenText: StateFlow<String?>
+
     /** [text]를 읽는다 (읽던 것은 멈춘다). 다 읽거나 멈추면 [then]을 한 번 부른다. */
     fun speak(text: String, then: (() -> Unit)? = null)
 
