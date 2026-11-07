@@ -60,7 +60,7 @@
     <string name="share_pick_title">어떤 기록을 올릴까요?</string>
     <string name="share_pick_empty">올릴 수 있는 나들이·여행 기록이 아직 없어요</string>
     <string name="share_already">올린 적 있음</string>
-    <string name="share_sheet_title">커뮤니티에 코스 올리기</string>
+    <string name="share_sheet_title">여행 리뷰에 코스 올리기</string>
     <string name="share_title_label">제목</string>
     <string name="share_body_label">소개 (안 써도 돼요)</string>
     <string name="share_stops_hint">빼고 싶은 곳은 눌러서 체크를 풀어 주세요</string>
