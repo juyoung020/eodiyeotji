@@ -52,7 +52,7 @@ class PleosTts @Inject constructor(@ApplicationContext private val context: Cont
 
     @Volatile private var pleosReady = false
     @Volatile private var pleosBroken = false
-    private var pleos: TextToSpeech? = null
+    @Volatile private var pleos: TextToSpeech? = null
     private var fallback: AndroidTts? = null
     @Volatile private var fallbackReady = false
 
@@ -101,7 +101,16 @@ class PleosTts @Inject constructor(@ApplicationContext private val context: Cont
         }
     }
 
+    /**
+     * Pleos 음성 엔진 만들기는 기기 안 합성 엔진을 읽느라 1초 넘게 걸린다 (에뮬레이터 실측 ~1.2 s).
+     * 첫 화면을 만드는 UI 스레드에서 하면 그만큼 첫 화면이 멈추므로 전용 스레드(루퍼 있음)에서 만든다. 다 되기 전에 읽으라 하면 Android TTS로 읽는다.
+     */
     init {
+        val init = android.os.HandlerThread("EodiTtsInit").apply { start() }
+        Handler(init.looper).post(::initPleos) // SDK가 이 스레드 루퍼로 콜백을 줄 수 있어 스레드는 남겨 둔다 (쉬는 스레드 1개)
+    }
+
+    private fun initPleos() {
         runCatching {
             TextToSpeech(context, Mode.ON_DEVICE).also { t ->
                 pleos = t

@@ -24,6 +24,13 @@ class EodiApp : Application(), ImageLoaderFactory {
         if (BuildConfig.DEBUG) enableStrictMode()
         placeResolver.start()
         dayLabeler.start()
+        // 이미지 로더는 첫 사진 칸이 그려질 때 UI 스레드에서 만들어지며 디버그 빌드에서 수백 ms 멈췄다 → 미리 뒤에서 만들어 둔다
+        // 첫 String.format은 Formatter·로캘 숫자 자료를 읽느라 오래 걸린다 (타임라인 첫 행 요약 줄에서 UI 스레드가 멈췄다) → 같이 미리
+        Thread({
+            coil.Coil.imageLoader(this)
+            String.format(java.util.Locale.getDefault(), "%d %.1f %s", 1, 1.0, "")
+            getString(R.string.timeline_trips, 1)
+        }, "EodiWarmUp").start()
     }
 
     /**

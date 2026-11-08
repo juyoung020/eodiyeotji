@@ -94,6 +94,11 @@ android {
     }
 }
 
+composeCompiler {
+    // UniFFI 값 묶음을 안정적인 값으로 (app/compose-stability.conf)
+    stabilityConfigurationFile.set(rootProject.layout.projectDirectory.file("app/compose-stability.conf"))
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
