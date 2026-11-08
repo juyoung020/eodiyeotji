@@ -31,7 +31,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -66,10 +69,28 @@ class PlacesViewModel @Inject constructor(
     val state: StateFlow<PlacesUiState> = _state.asStateFlow()
     private var noticeJob: Job? = null
 
+    /** 화면이 안 보이는 동안 기록이 바뀌었는지 */
+    private var stale = false
+
     init {
         reload()
-        viewModelScope.launch { core.changes.debounce(RELOAD_DEBOUNCE_MS).collect { load() } }
+        // 이 VM은 화면(액티비티) 내내 살아 있다. 주행 중엔 10초마다 기록이 바뀌므로, 내 장소 화면이 안 보일 때는
+        // 다시 읽지 않고 "낡음"만 표시했다가 화면이 다시 보일 때 한 번 읽는다.
+        viewModelScope.launch {
+            core.changes.debounce(RELOAD_DEBOUNCE_MS).collectLatest {
+                if (_state.subscriptionCount.value > 0) load() else stale = true
+            }
+        }
+        viewModelScope.launch {
+            _state.subscriptionCount.map { it > 0 }.distinctUntilChanged().collect { visible ->
+                if (visible && stale) {
+                    stale = false
+                    load()
+                }
+            }
+        }
     }
+
 
     fun setTab(tab: PlacesTab) {
         _state.update { it.copy(tab = tab) }

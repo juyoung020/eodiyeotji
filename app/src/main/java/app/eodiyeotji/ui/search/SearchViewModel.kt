@@ -35,6 +35,8 @@ import java.time.LocalDate
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -210,12 +212,20 @@ class SearchViewModel @Inject constructor(
         if (BuildConfig.DEBUG) Log.i(TAG, "검색 \"${s.query}\" ${s.scope}: ${answer.total}건, Rust ${answer.elapsedMicros}µs")
         // 그사이 말 · 범위 · 칩이 바뀌었으면 버린다 (다음 검색이 곧 온다)
         _state.update { cur -> if (cur.query == s.query && cur.scope == s.scope && cur.filter == s.filter) cur.copy(answer = answer) else cur }
-        loadSaved(answer)
-        loadOffers(answer)
+        // ♥ · 쿠폰은 서로 기다릴 필요가 없다 → 동시에 묻고, 결과 목록은 한 번만 다시 그린다
+        val (saved, offers) = coroutineScope {
+            val saved = async { savedFlags(answer) }
+            val offers = async { offerMaps(answer) }
+            saved.await() to offers.await()
+        }
+        // 줄 키는 검색마다 다시 쓰이므로 지난 검색의 값은 버리고 이번 결과 것만 둔다 (세션 내내 쌓이지 않게)
+        _state.update { cur ->
+            if (cur.answer !== answer) cur else cur.copy(saved = saved, offers = offers.first, courseOffers = offers.second)
+        }
     }
 
     /** 장소 · 리뷰 · 코스 줄의 제휴 쿠폰을 한 번에 묻는다 (이름 · 좌표 맞추기는 Rust). */
-    private suspend fun loadOffers(answer: SearchAnswer) {
+    private suspend fun offerMaps(answer: SearchAnswer): Pair<Map<String, List<PartnerOffer>>, Map<String, CourseOffers>> {
         val rows = answer.groups.flatMap { it.rows }
         val placeRows = rows.mapNotNull { r ->
             val p = r.place ?: r.reviewPlace?.place
@@ -226,15 +236,15 @@ class SearchViewModel @Inject constructor(
         val courses = runCatching { core.courseOffers(courseRows.map { it.second }) }.getOrNull().orEmpty()
         val offers = placeRows.map { it.first.key }.zip(places).filter { it.second.isNotEmpty() }.toMap()
         val courseOffers = courseRows.map { it.first.key }.zip(courses).filter { it.second.placeCount > 0 }.toMap()
-        _state.update { it.copy(offers = it.offers + offers, courseOffers = it.courseOffers + courseOffers) }
+        return offers to courseOffers
     }
 
     /** 장소 줄의 ♥ 상태를 한 번에 묻는다 (좌표 → 그 자리 장소가 저장됐는지, Rust). */
-    private suspend fun loadSaved(answer: SearchAnswer) {
+    private suspend fun savedFlags(answer: SearchAnswer): Map<String, Boolean> {
         val rows = answer.groups.flatMap { g -> g.rows.filter { it.kind == SearchRowKind.PLACE && it.place != null } }
-        if (rows.isEmpty()) return
-        val flags = runCatching { core.placesSavedAt(rows.map { LatLon(it.place!!.lat, it.place.lon) }) }.getOrNull() ?: return
-        _state.update { it.copy(saved = it.saved + rows.map { r -> r.key }.zip(flags)) }
+        if (rows.isEmpty()) return emptyMap()
+        val flags = runCatching { core.placesSavedAt(rows.map { LatLon(it.place!!.lat, it.place.lon) }) }.getOrNull() ?: return emptyMap()
+        return rows.map { r -> r.key }.zip(flags).toMap()
     }
 
     /** 장소 줄의 ♥ 누르기: 그 자리 장소를 저장하거나 푼다. */

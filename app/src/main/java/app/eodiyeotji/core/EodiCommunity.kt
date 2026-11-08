@@ -15,7 +15,7 @@ import app.eodiyeotji.core.rust.parseOpenMeteoWeather
 import app.eodiyeotji.core.rust.reviewKeywordLimit as rustReviewKeywordLimit
 import app.eodiyeotji.core.rust.reviewKeywordOptions as rustReviewKeywordOptions
 import app.eodiyeotji.place.PlatformHttp
-import kotlinx.coroutines.withTimeoutOrNull
+import app.eodiyeotji.place.blockingWithTimeout
 
 /*
  * 커뮤니티(게시판 · 여행 리뷰 · 여행 코스 후기) 화면용 입구 (core-rs/src/community.rs). 드라이브 코스(경치 길)는 EodiDriveRoutes.kt.
@@ -184,12 +184,11 @@ private const val WEATHER_WAIT_MS = 4_000L
 /** Open-Meteo 일별 날씨 하나 받기. 주소가 비었거나, 실패하거나, [WEATHER_WAIT_MS]를 넘기면 null. */
 private suspend fun fetchWeather(url: String, day: String): String? {
     if (url.isBlank()) return null
-    return withTimeoutOrNull(WEATHER_WAIT_MS) {
-        coreCall("fetchWeather") {
-            runCatching { parseOpenMeteoWeather(PlatformHttp.get(url, emptyMap()), day) }
-                .onFailure { Log.w(WEATHER_TAG, "날씨 못 받음: ${it.message}") }
-                .getOrNull()
-        }
+    // 막는 HTTP를 떼어 놓고 기다림만 끊는다 (오프라인 DNS 대기까지 기다리지 않게)
+    return blockingWithTimeout(WEATHER_WAIT_MS) {
+        runCatching { parseOpenMeteoWeather(PlatformHttp.get(url, emptyMap()), day) }
+            .onFailure { Log.w(WEATHER_TAG, "날씨 못 받음: ${it.message}") }
+            .getOrNull()
     }
 }
 

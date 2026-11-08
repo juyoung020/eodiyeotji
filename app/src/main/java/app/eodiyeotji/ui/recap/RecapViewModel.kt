@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 enum class RecapMode { MONTH, YEAR }
@@ -81,6 +82,7 @@ class RecapViewModel @Inject constructor(
     private var loadJob: Job? = null
     private var noteJob: Job? = null
     private var mapJob: Job? = null
+    private var otdJob: Job? = null
 
     init {
         loadOnThisDay()
@@ -92,11 +94,16 @@ class RecapViewModel @Inject constructor(
     }
 
     private fun loadOnThisDay() {
-        viewModelScope.launch {
-            val otd = runCatching { core.onThisDay() }.onFailure { if (it is CancellationException) throw it; Log.w(TAG, "N년 전 오늘 실패", it) }
-                .getOrNull()
+        // 앞서 읽던 것은 버리고(연달아 바뀌어도 한 번만), 서로 상관없는 두 조회는 동시에
+        otdJob?.cancel()
+        otdJob = viewModelScope.launch {
+            val otdCall = async {
+                runCatching { core.onThisDay() }.onFailure { if (it is CancellationException) throw it; Log.w(TAG, "N년 전 오늘 실패", it) }
+                    .getOrNull()
+            }
             val intro = runCatching { core.memoryMapIntro() }.onFailure { if (it is CancellationException) throw it; Log.w(TAG, "기억 지도 소개 실패", it) }
                 .getOrDefault(false)
+            val otd = otdCall.await()
             _state.update { it.copy(today = LocalDate.now(), onThisDay = otd?.takeUnless { o -> o.dismissed }, memoryMapIntro = intro) }
         }
     }

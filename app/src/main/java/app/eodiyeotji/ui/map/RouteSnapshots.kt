@@ -61,7 +61,10 @@ class RouteSnapshots @Inject constructor(
     private val core: EodiCore,
 ) {
     private val lock = Mutex()
-    private val memory = LruCache<String, Bitmap>(24)
+    // 한 장이 약 1280×610×4 ≈ 3MB → 장 수(24장 = 75MB)가 아니라 바이트로 묶는다 (목록 한 화면 + 앞뒤 몇 장)
+    private val memory = object : LruCache<String, Bitmap>(MEMORY_BYTES) {
+        override fun sizeOf(key: String, value: Bitmap) = value.allocationByteCount
+    }
     private val dir by lazy { File(context.cacheDir, "route-snapshots").apply { mkdirs() } }
 
     /** [route]의 그림 (저장된 것 → 새로 그림). 못 그리면 null. */
@@ -137,6 +140,7 @@ class RouteSnapshots @Inject constructor(
         const val PADDING_DP = 56
         const val MAX_PIXEL_RATIO = 2f
         const val TIMEOUT_MS = 25_000L
+        const val MEMORY_BYTES = 16 * 1024 * 1024
     }
 }
 

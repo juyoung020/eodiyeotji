@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.agent
 
+import androidx.compose.runtime.derivedStateOf
 import app.eodiyeotji.ui.community.RetryButton
 import app.eodiyeotji.ui.community.SecondaryPill
 import app.eodiyeotji.ui.community.PrimaryPill
@@ -585,15 +586,17 @@ private fun AnswerText(answer: String, streaming: Boolean, large: Boolean, maxLi
 @Composable
 private fun Thinking(large: Boolean = false) {
     val transition = rememberInfiniteTransition(label = "thinking")
-    val phase by transition.animateFloat(
+    val phase = transition.animateFloat(
         initialValue = 0f,
         targetValue = 3f,
         animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Restart),
         label = "dots",
     )
+    // 점은 0 · 1 · 2 세 단계만 바뀐다 → 매 프레임이 아니라 단계가 바뀔 때만 재구성
+    val step by remember { derivedStateOf { phase.value.toInt() } }
     Row(verticalAlignment = Alignment.CenterVertically) {
         repeat(3) { i ->
-            val on = phase.toInt() == i
+            val on = step == i
             Box(
                 Modifier.padding(end = 8.dp).size(if (large) 18.dp else 12.dp)
                     .alpha(if (on) 1f else 0.3f)

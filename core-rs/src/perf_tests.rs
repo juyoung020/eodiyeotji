@@ -107,6 +107,37 @@ fn run(years: i64) {
     let from = days.last().unwrap().day.clone();
     let to = days.first().unwrap().day.clone();
     time("memory_map(전체)", || store.memory_map(from.clone(), to.clone()).unwrap());
+    // 상세 · 보조 화면과 백그라운드 경로
+    let route_id = store.drive_routes(DriveRouteSort::Popular, None, 1).unwrap()[0].route.id.clone();
+    let course_id = store.community_courses(CommunitySort::Popular, None, 1).unwrap()[0].id.clone();
+    let board_id = store.board_posts(CommunitySort::Recent, 1).unwrap()[0].id.clone();
+    time("drive_route(상세)", || store.drive_route(route_id.clone()).unwrap());
+    time("drive_route_map", || store.drive_route_map(route_id.clone()).unwrap());
+    time("drive_route_flight(600)", || store.drive_route_flight(route_id.clone(), 600).unwrap());
+    time("course_map", || store.course_map(course_id.clone()).unwrap());
+    time("course_stop_reviews", || store.course_stop_reviews(course_id.clone()).unwrap());
+    time("board_post+comments", || (store.board_post(board_id.clone()).unwrap(), store.board_comments(board_id.clone()).unwrap()));
+    time("share_card_day", || store.share_card_day(busy.clone(), 1.0).unwrap());
+    time("share_card_course", || store.share_card_course(course_id.clone(), 1.0).unwrap());
+    time("drive_share_candidates(30)", || store.drive_share_candidates(30).unwrap());
+    time("hidden_records", || store.hidden_records().unwrap());
+    time("home_office", || store.home_office().unwrap());
+    time("claimed_coupons", || store.claimed_coupons().unwrap());
+    time("last_known_position", || store.last_known_position().unwrap());
+    time("pending_places(20)", || store.pending_places(20).unwrap());
+    time("pending_day_enrichments(5)", || store.pending_day_enrichments(5).unwrap());
+    let pts: Vec<crate::ffi::GeoPoint> = (0..10).map(|i| crate::ffi::GeoPoint { lat: 37.57 + i as f64 * 1e-4, lon: 126.98 }).collect();
+    time("recall_near(10점)", || store.recall_near(pts.clone(), TODAY).unwrap());
+    {
+        let mut t = TODAY + 7_200_000;
+        time("ingest(10점 묶음, 주행 중)", || {
+            let fixes = (0..10)
+                .map(|i| GeoFix { t_ms: t + i * 1000, lat: 37.5 + (t - TODAY) as f64 * 1e-9, lon: 127.0 + (t - TODAY) as f64 * 1e-9, accuracy_m: 5.0 })
+                .collect();
+            t += 10_000;
+            store.ingest(fixes).unwrap()
+        });
+    }
 
     // 기록 중(1초마다 위치 묶음 저장)에 화면 읽기가 얼마나 기다리는지
     let stop = Arc::new(AtomicBool::new(false));
