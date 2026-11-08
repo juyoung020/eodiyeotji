@@ -35,6 +35,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +66,9 @@ import app.eodiyeotji.core.Visit
 import app.eodiyeotji.ui.place.PhotoLoadingPlaceholder
 import app.eodiyeotji.ui.place.PlaceThumbnail
 import app.eodiyeotji.ui.theme.EodiTheme
+import app.eodiyeotji.ui.common.pressScale
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -226,19 +232,35 @@ fun HeartButton(hearts: Int, hearted: Boolean, onToggle: () -> Unit, modifier: M
     val c = EodiTheme.colors
     val desc = stringResource(R.string.community_hearts_description, hearts) + ", " +
         stringResource(if (hearted) R.string.community_heart_remove else R.string.community_heart_add)
+    val press = remember { MutableInteractionSource() }
     Surface(
         onClick = onToggle,
         shape = CircleShape,
         color = if (hearted) c.heartSoft else c.surfaceHigh,
         contentColor = if (hearted) c.heart else c.textSecondary,
-        modifier = modifier.heightIn(min = if (compact) 64.dp else 76.dp).semantics { contentDescription = desc },
+        interactionSource = press,
+        modifier = modifier.pressScale(press).heightIn(min = if (compact) 64.dp else 76.dp).semantics { contentDescription = desc },
     ) {
         Row(
             Modifier.padding(horizontal = if (compact) 18.dp else 22.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
         ) {
-            Icon(if (hearted) CommunityIcons.HeartFilled else CommunityIcons.Heart, null, Modifier.size(if (compact) 26.dp else 30.dp))
+            // 하트를 켜는 순간 한 번 톡 커졌다 돌아온다 (눌렀다는 확실한 반응)
+            val pop = remember { androidx.compose.animation.core.Animatable(1f) }
+            var first by remember { androidx.compose.runtime.mutableStateOf(true) }
+            LaunchedEffect(hearted) {
+                if (first) { first = false; return@LaunchedEffect }
+                if (hearted) {
+                    pop.snapTo(1.3f)
+                    pop.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.45f, stiffness = 500f))
+                }
+            }
+            Icon(
+                if (hearted) CommunityIcons.HeartFilled else CommunityIcons.Heart,
+                null,
+                Modifier.size(if (compact) 26.dp else 30.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value },
+            )
             Spacer(Modifier.width(8.dp))
             Text(hearts.toString(), style = EodiTheme.type.label, fontWeight = FontWeight.Bold, maxLines = 1)
         }
@@ -282,10 +304,11 @@ fun <T> ChoiceRow(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> 
     ) {
         options.forEach { (value, label) ->
             val on = value == selected
+            val bg by animateColorAsState(if (on) c.surface else c.surface.copy(alpha = 0f), tween(EodiTheme.motion.medium), label = "choice")
             Box(
                 Modifier
                     .clip(CircleShape)
-                    .background(if (on) c.surface else Color.Transparent)
+                    .background(bg)
                     .clickable(role = Role.Tab) { onSelect(value) }
                     .heightIn(min = if (big) 72.dp else 64.dp)
                     .padding(horizontal = if (big) 30.dp else 24.dp)
@@ -348,13 +371,15 @@ fun TogglePill(
 @Composable
 fun PrimaryPill(text: String, icon: ImageVector?, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, large: Boolean = false) {
     val c = EodiTheme.colors
+    val press = remember { MutableInteractionSource() }
     Surface(
         onClick = onClick,
         enabled = enabled,
         shape = CircleShape,
         color = if (enabled) c.accent else c.surfaceHigh,
         contentColor = if (enabled) c.onAccent else c.textTertiary,
-        modifier = if (large) modifier.height(LargePillHeight) else modifier.heightIn(min = 76.dp),
+        interactionSource = press,
+        modifier = modifier.pressScale(press).let { m -> if (large) m.height(LargePillHeight) else m.heightIn(min = 76.dp) },
     ) {
         PillContent(text, icon, iconTint = null, large = large, bold = true, horizontal = 30.dp)
     }
@@ -364,13 +389,15 @@ fun PrimaryPill(text: String, icon: ImageVector?, onClick: () -> Unit, modifier:
 @Composable
 fun SecondaryPill(text: String, icon: ImageVector?, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, large: Boolean = false) {
     val c = EodiTheme.colors
+    val press = remember { MutableInteractionSource() }
     Surface(
         onClick = onClick,
         enabled = enabled,
         shape = CircleShape,
         color = c.surfaceHigh,
         contentColor = if (enabled) c.textPrimary else c.textTertiary,
-        modifier = if (large) modifier.height(LargePillHeight) else modifier.heightIn(min = 76.dp),
+        interactionSource = press,
+        modifier = modifier.pressScale(press).let { m -> if (large) m.height(LargePillHeight) else m.heightIn(min = 76.dp) },
     ) {
         PillContent(text, icon, iconTint = if (enabled && !large) c.accent else null, large = large, bold = true, horizontal = 28.dp, normalStyle = EodiTheme.type.label)
     }
@@ -776,13 +803,41 @@ fun rememberTopListState(firstKey: Any?): LazyListState {
     return s
 }
 
-/** 가운데 글 한 줄 (빈 목록·오류). [action]이 있으면 아래에 버튼. */
+/**
+ * 빈 목록 · 오류 안내. [icon]이 있으면 옅은 원 안의 큰 아이콘 + 굵은 [title] + 회색 설명 — 빈 화면도 "앨범의 첫 장"처럼 보이게.
+ * 없으면 가운데 글 한 줄. [action]이 있으면 아래에 버튼.
+ */
 @Composable
-fun CenterMessage(text: String, modifier: Modifier = Modifier, action: (@Composable () -> Unit)? = null) {
+fun CenterMessage(
+    text: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    title: String? = null,
+    tint: Color? = null,
+    action: (@Composable () -> Unit)? = null,
+) {
+    val c = EodiTheme.colors
     Column(modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text, style = EodiTheme.type.body, color = EodiTheme.colors.textSecondary, textAlign = TextAlign.Center)
+        if (icon != null) {
+            val ink = tint ?: c.accent
+            Box(Modifier.size(144.dp).background(ink.copy(alpha = if (c.isDark) 0.16f else 0.10f), CircleShape), contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, tint = ink, modifier = Modifier.size(64.dp))
+            }
+            Spacer(Modifier.size(32.dp))
+        }
+        if (title != null) {
+            Text(title, style = EodiTheme.type.title, color = c.textPrimary, textAlign = TextAlign.Center)
+            Spacer(Modifier.size(12.dp))
+        }
+        Text(
+            text,
+            style = EodiTheme.type.body,
+            color = c.textSecondary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(max = 760.dp),
+        )
         if (action != null) {
-            Spacer(Modifier.size(20.dp))
+            Spacer(Modifier.size(if (icon != null) 36.dp else 20.dp))
             action()
         }
     }

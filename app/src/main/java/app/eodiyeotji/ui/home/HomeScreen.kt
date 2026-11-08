@@ -66,6 +66,9 @@ import app.eodiyeotji.ui.search.searchScope
 import app.eodiyeotji.ui.timeline.TimelineViewModel
 import androidx.compose.foundation.layout.widthIn
 import app.eodiyeotji.ui.theme.BrandMark
+import app.eodiyeotji.ui.common.enterRise
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.timeline.TimelineRoute
 import java.util.Locale
@@ -160,7 +163,8 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
             Row(Modifier.fillMaxSize().background(EodiTheme.colors.background)) {
                 NavRail(tab, onSelect = { tab = it })
                 Column(Modifier.weight(1f).fillMaxHeight()) {
-                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                    // 탭을 바꾸면 새 화면이 살짝 떠오르며 들어온다 (한 번만 · 그리기 단계만 바뀜, 지도 두 장을 겹쳐 그리지 않는다)
+                    Box(Modifier.weight(1f).fillMaxWidth().enterRise(tab)) {
                         when (tab) {
                             HomeTab.TIMELINE -> TimelineRoute(headerAction = entry, search = recordsSearch)
                             HomeTab.COMMUNITY -> CommunityRoute(
@@ -214,12 +218,15 @@ private fun NavRail(selected: HomeTab, onSelect: (HomeTab) -> Unit) {
 private fun RailItem(icon: ImageVector, label: String, selected: Boolean, badge: Int = 0, onClick: () -> Unit) {
     val c = EodiTheme.colors
     val badgeText = if (badge > 0) stringResource(R.string.coupon_rail_badge, badge) else null
+    val motion = EodiTheme.motion
+    val bg by animateColorAsState(if (selected) c.accentSoft else c.accentSoft.copy(alpha = 0f), tween(motion.medium), label = "rail-bg")
+    val ink by animateColorAsState(if (selected) c.accent else c.textSecondary, tween(motion.medium), label = "rail-ink")
     Column(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 112.dp)
             .clip(RoundedCornerShape(EodiTheme.space.radiusM))
-            .background(if (selected) c.accentSoft else Color.Transparent)
+            .background(bg)
             .selectable(selected = selected, role = Role.Tab, onClick = onClick)
             .then(if (badgeText != null) Modifier.semantics { stateDescription = badgeText } else Modifier)
             .padding(vertical = 14.dp),
@@ -227,7 +234,7 @@ private fun RailItem(icon: ImageVector, label: String, selected: Boolean, badge:
         verticalArrangement = Arrangement.Center,
     ) {
         Box {
-            Icon(icon, contentDescription = null, tint = if (selected) c.accent else c.textSecondary, modifier = Modifier.size(40.dp))
+            Icon(icon, contentDescription = null, tint = ink, modifier = Modifier.size(40.dp))
             if (badge > 0) {
                 Text(
                     if (badge > 9) "9+" else badge.toString(),
@@ -250,7 +257,7 @@ private fun RailItem(icon: ImageVector, label: String, selected: Boolean, badge:
             label,
             style = EodiTheme.type.caption,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = if (selected) c.accent else c.textSecondary,
+            color = ink,
             textAlign = TextAlign.Center,
             maxLines = 1,
             overflow = TextOverflow.Clip,

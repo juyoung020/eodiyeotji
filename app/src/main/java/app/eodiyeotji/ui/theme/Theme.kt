@@ -36,6 +36,34 @@ data class EodiSpace(
 
 internal val LocalEodiSpace = staticCompositionLocalOf { EodiSpace() }
 
+/**
+ * 움직임 길이 (ms). Pleos 가이드 Animation: 짧고 부드럽게, 운전자 시선을 붙잡지 않는다.
+ * - quick: 누름 반응 · 색 바뀜  - medium: 화면 안 요소 등장 · 탭 전환  - slow: 큰 판(시트 · 결산 숫자) 등장
+ * 무한 반복 움직임은 "기록 중" 점 · 3D 기억 지도처럼 의미가 있는 곳에만 쓴다.
+ */
+@Immutable
+data class EodiMotion(
+    val quick: Int = 120,
+    val medium: Int = 240,
+    val slow: Int = 420,
+    /** 누르는 동안 줄어드는 비율 (버튼 · 카드) */
+    val pressScale: Float = 0.96f,
+    /** 화면이 들어올 때 아래에서 올라오는 거리 */
+    val enterOffset: Dp = 24.dp,
+)
+
+/** 그림자 높이: 바탕 위 카드는 0(테두리 · 색 차이로 구분), 떠 있는 판(안내 띠 · 사진 위 버튼)만 그림자. */
+@Immutable
+data class EodiElevation(
+    val flat: Dp = 0.dp,
+    val raised: Dp = 2.dp,
+    val floating: Dp = 8.dp,
+    val overlay: Dp = 16.dp,
+)
+
+internal val LocalEodiMotion = staticCompositionLocalOf { EodiMotion() }
+internal val LocalEodiElevation = staticCompositionLocalOf { EodiElevation() }
+
 /** 화면 코드에서 토큰을 꺼내는 곳: `EodiTheme.colors.accent`, `EodiTheme.type.title`, `EodiTheme.space.page`. */
 object EodiTheme {
     val colors: EodiColors
@@ -44,6 +72,10 @@ object EodiTheme {
         @Composable @ReadOnlyComposable get() = LocalEodiType.current
     val space: EodiSpace
         @Composable @ReadOnlyComposable get() = LocalEodiSpace.current
+    val motion: EodiMotion
+        @Composable @ReadOnlyComposable get() = LocalEodiMotion.current
+    val elevation: EodiElevation
+        @Composable @ReadOnlyComposable get() = LocalEodiElevation.current
 }
 
 /**
