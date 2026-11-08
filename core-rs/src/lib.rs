@@ -14,6 +14,7 @@ pub mod ffi;
 pub mod geo;
 pub mod lastfix;
 pub mod mapdata;
+pub mod memmap;
 pub mod memory;
 pub mod offers;
 pub mod photos;

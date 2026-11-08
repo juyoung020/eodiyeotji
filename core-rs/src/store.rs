@@ -487,7 +487,7 @@ fn encode_points(pts: &[Point]) -> Vec<u8> {
     b
 }
 
-fn decode_points(b: &[u8]) -> Vec<Point> {
+pub(crate) fn decode_points(b: &[u8]) -> Vec<Point> {
     b.as_chunks::<16>().0.iter().map(|c| Point { lat: f64_at(c, 0), lon: f64_at(c, 8) }).collect()
 }
 

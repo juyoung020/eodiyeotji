@@ -92,6 +92,9 @@ fun RecapListTop(viewModel: RecapViewModel, onOpenDay: (String) -> Unit, modifie
             EntryPill(stringResource(R.string.recap_year_entry), gold = false, Modifier.weight(1f)) {
                 viewModel.openRecap(RecapMode.YEAR)
             }
+            if (!state.driving) {
+                EntryPill(stringResource(R.string.memory_map_entry), gold = true, Modifier.weight(1f)) { viewModel.openMemoryMap() }
+            }
         }
         val otd = state.onThisDay
         if (otd != null && !state.driving) {
@@ -107,7 +110,7 @@ fun RecapListTop(viewModel: RecapViewModel, onOpenDay: (String) -> Unit, modifie
 }
 
 @Composable
-private fun EntryPill(text: String, gold: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun EntryPill(text: String, gold: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = EodiTheme.colors
     Row(
         modifier
