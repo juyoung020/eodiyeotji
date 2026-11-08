@@ -31,6 +31,7 @@ use rusqlite::params;
 use crate::agent::dates::civil_from_days;
 use crate::geo::{self, Point};
 use crate::mapdata::MapBounds;
+use crate::store::Domain;
 use crate::store::{decode_points, parse_day, CoreError, EodiStore};
 
 /// 다시 줄일 때 처음 허용 오차 (m). 나라 전체를 보는 축척이라 크게 줄여도 모양이 같다.
@@ -82,6 +83,12 @@ pub struct MemoryMap {
 impl EodiStore {
     /// 기억 지도 (`from_day` ~ `to_day`, "YYYY-MM-DD", 양 끝 포함). 날짜가 틀리거나 순서가 거꾸로면 `InvalidInput`.
     pub fn memory_map(&self, from_day: String, to_day: String) -> Result<MemoryMap, CoreError> {
+        // 몇 년치 모든 길을 줄이고 묶는 계산(3년치 수 ms, 차에서는 그 몇 배) → 기록이 바뀌기 전까지는 다시 쓴다
+        let key = format!("memory_map {from_day} {to_day}");
+        self.cached(Domain::Records, key, || self.compute_memory_map(from_day, to_day))
+    }
+
+    fn compute_memory_map(&self, from_day: String, to_day: String) -> Result<MemoryMap, CoreError> {
         let (Some(from), Some(to)) = (parse_day(&from_day), parse_day(&to_day)) else {
             return Err(CoreError::InvalidInput("day".into()));
         };
@@ -375,5 +382,20 @@ mod tests {
         assert!(store.memory_map("2026-13-01".into(), "2026-11-06".into()).is_err());
         assert!(store.memory_map("2026-11-06".into(), "2026-01-01".into()).is_err());
         assert_eq!(store.memory_map("2010-01-01".into(), "2010-12-31".into()).unwrap().drive_count, 0);
+    }
+
+    #[test]
+    fn cached_until_records_change() {
+        let db = temp("cache");
+        let store = EodiStore::open(db.0.to_string_lossy().into_owned(), KST).unwrap();
+        store.seed_demo_data(today()).unwrap();
+        let (from, to) = ("2025-11-07".to_string(), "2026-11-06".to_string());
+        let a = store.memory_map(from.clone(), to.clone()).unwrap();
+        assert_eq!(store.memory_map(from.clone(), to.clone()).unwrap(), a, "같은 기록이면 같은 결과");
+        // 주행이 있던 날 하나를 지우면 다시 계산된다
+        let day = store.day_summaries(400).unwrap().into_iter().find(|d| d.trip_count > 0).unwrap().day;
+        store.delete_day(day, today()).unwrap();
+        let b = store.memory_map(from, to).unwrap();
+        assert!(b.drive_count < a.drive_count, "{} → {}", a.drive_count, b.drive_count);
     }
 }
