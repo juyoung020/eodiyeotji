@@ -91,8 +91,17 @@ private const val EMPTY = """{"type":"FeatureCollection","features":[]}"""
  * [orbit]이면 천천히 돈다 (끝 화면). 지나온 길([done])과 지금 구간([leg])을 그린다.
  */
 @Composable
-fun ReplayMap(bounds: MapBoundsLatLon?, done: String, leg: String?, modifier: Modifier = Modifier, orbit: Boolean = false, sky: SkyPhase = SkyPhase.GOLDEN) {
-    val ready = rememberReplayMap(sky) ?: run {
+fun ReplayMap(
+    bounds: MapBoundsLatLon?,
+    done: String,
+    leg: String?,
+    modifier: Modifier = Modifier,
+    orbit: Boolean = false,
+    sky: SkyPhase = SkyPhase.GOLDEN,
+    /** false면 화면에 안 보이는 중 (작은 지도가 비행 동안 숨어 있을 때): 숨쉬기를 멈춰 비행 지도와 GPU를 나눠 쓰지 않는다. */
+    visible: Boolean = true,
+) {
+    val ready = rememberReplayMap(sky, if (orbit) "replay-end" else "replay-mini", bounds, visible) ?: run {
         Box(modifier.background(ReplaySunsetLand))
         return
     }
@@ -135,7 +144,7 @@ fun ReplayFlightMap(
     modifier: Modifier = Modifier,
     sky: SkyPhase = SkyPhase.GOLDEN,
 ) {
-    val ready = rememberReplayMap(sky) ?: run {
+    val ready = rememberReplayMap(sky, "replay-flight", bounds) ?: run {
         Box(modifier.background(ReplaySunsetLand))
         return
     }
@@ -248,18 +257,19 @@ private fun arrival(lat: Double, lon: Double, bearing: Double, zoom: Double): Ca
 
 /** 지도 하나 + 노을 3D 스타일 + 금빛 길 레이어. 지도 엔진 준비 전(미리보기 포함)에는 null. */
 @Composable
-private fun rememberReplayMap(sky: SkyPhase): Pair<MapView, ReplayMapController>? {
+private fun rememberReplayMap(sky: SkyPhase, label: String, bounds: MapBoundsLatLon?, pulsing: Boolean = true): Pair<MapView, ReplayMapController>? {
     val inPreview = LocalInspectionMode.current
     val context = LocalContext.current
     val options by produceState<MapLibreMapOptions?>(initialValue = null) {
         if (!inPreview) value = MapLibreNative.prepare(context.applicationContext)
     }
     val opts = options ?: return null
-    val mapView = rememberMapViewWithLifecycle(context, opts, ReplaySunsetLand.toArgb(), label = "replay")
+    val mapView = rememberMapViewWithLifecycle(context, opts, ReplaySunsetLand.toArgb(), initialCamera = remember { bounds?.let(::roughCamera) }, label = label)
     val controller = remember(mapView) { ReplayMapController(mapView) }
     LaunchedEffect(controller, sky) { controller.setStyle(replayStyle(context.applicationContext, sky)) }
     // 지금 곳 · 차 빛이 숨 쉬듯 커졌다 작아진다 (12fps, 레이어 2개 값만 바꾼다)
-    LaunchedEffect(controller) {
+    LaunchedEffect(controller, pulsing) {
+        if (!pulsing) return@LaunchedEffect
         val start = System.nanoTime()
         while (true) {
             val sec = (System.nanoTime() - start) / 1e9
@@ -272,6 +282,13 @@ private fun rememberReplayMap(sky: SkyPhase): Pair<MapView, ReplayMapController>
 
 private suspend fun replayStyle(context: Context, sky: SkyPhase): String =
     runCatching { ScenicMapStyle.build(context, sky, EMPTY) }.getOrElse { MapStyleSource.fallbackJson(ReplaySunsetLand.toArgb()) }
+
+/**
+ * 그날 범위의 대략적인 처음 카메라. 없으면 지도가 서울(기본 위치)에서 시작해 그 타일을 헛받은 뒤 옮겨 간다 →
+ * 작은 지도 · 끝 화면 지도가 그날 타일을 바로 받아 첫 장면이 빨리 뜬다. 정확한 맞춤은 레이아웃 뒤에 한다.
+ */
+private fun roughCamera(b: MapBoundsLatLon): CameraPosition =
+    CameraPosition.Builder(roughFlatCamera(b)).bearing(OVERVIEW_BEARING).tilt(OVERVIEW_PITCH).build()
 
 /** 레이아웃이 끝난 뒤 [block]의 값 (카메라 맞추기는 지도 크기가 있어야 한다). */
 private suspend fun <T> awaitLayout(view: MapView, block: () -> T): T? {

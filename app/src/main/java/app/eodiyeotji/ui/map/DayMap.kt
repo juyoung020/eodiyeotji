@@ -43,6 +43,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.eodiyeotji.R
 import app.eodiyeotji.core.DayMapData
+import app.eodiyeotji.core.MapBoundsLatLon
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.theme.MapInk
 import kotlinx.coroutines.Dispatchers
@@ -74,6 +75,13 @@ internal object MapLibreNative {
 /** 기록이 아직 없을 때 처음 보이는 곳 (서울 시청 근처). */
 private val InitialCenter = LatLng(37.5665, 126.9780)
 private const val INITIAL_ZOOM = 11.0
+
+/** 범위 가운데 · 범위가 대략 들어오는 줌 (처음 카메라용, 기울기 없음). */
+internal fun roughFlatCamera(b: MapBoundsLatLon): CameraPosition {
+    val span = maxOf(b.maxLat - b.minLat, (b.maxLon - b.minLon) * 0.8, 0.002)
+    val zoom = (kotlin.math.ln(180.0 / span) / kotlin.math.ln(2.0)).coerceIn(4.0, 15.0)
+    return CameraPosition.Builder().target(LatLng((b.minLat + b.maxLat) / 2, (b.minLon + b.maxLon) / 2)).zoom(zoom).build()
+}
 
 /** 한글 지명은 지도 파일의 글꼴 대신 기기 글꼴로 그린다 (Hangul Syllables · CJK 범위). */
 internal const val LOCAL_IDEOGRAPH_FONT = "sans-serif"
@@ -147,7 +155,14 @@ private fun DayMapContent(
     val currentOnSelect by rememberUpdatedState(onSelectKey)
     var style by remember { mutableStateOf<MapStyleSpec?>(null) }
 
-    val mapView = rememberMapViewWithLifecycle(context, baseOptions, palette.background, label = "day")
+    val mapView = rememberMapViewWithLifecycle(
+        context,
+        baseOptions,
+        palette.background,
+        // 그날 범위를 이미 알면 거기서 시작한다 (서울 기본 위치 타일을 헛받지 않는다, 정확한 맞춤은 데이터가 들어갈 때)
+        initialCamera = remember { data?.bounds?.let(::roughFlatCamera) },
+        label = "day",
+    )
     val controller = remember(mapView) {
         DayMapController(
             mapView = mapView,
