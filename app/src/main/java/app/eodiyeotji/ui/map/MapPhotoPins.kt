@@ -29,6 +29,8 @@ internal suspend fun loadStayPhotos(
     repo: PlacePhotoRepository,
     pins: List<MapPhotoPin>,
     density: Float,
+    /** 한 장 받을 때마다 바로 알린다 (화면이 오는 대로 채우게). */
+    onPhoto: (key: String, bitmap: Bitmap) -> Unit = { _, _ -> },
 ): Map<String, Bitmap> = coroutineScope {
     val px = (PHOTO_DECODE_DP * density).roundToInt()
     pins.map { pin ->
@@ -44,6 +46,7 @@ internal suspend fun loadStayPhotos(
                 android.util.Log.w("EodiMapPhoto", "지도 사진 못 그림: ${pin.name} ${(result as? coil.request.ErrorResult)?.throwable} ${(result as? SuccessResult)?.drawable?.javaClass}")
                 return@async null
             }
+            onPhoto(pin.key, bmp)
             pin.key to bmp
         }
     }.awaitAll().filterNotNull().toMap()

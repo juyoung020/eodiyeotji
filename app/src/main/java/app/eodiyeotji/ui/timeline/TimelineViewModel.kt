@@ -4,6 +4,9 @@ import app.eodiyeotji.core.OfferPlace
 import app.eodiyeotji.core.PartnerOffer
 import app.eodiyeotji.core.offersForPlaces
 import android.util.Log
+import app.eodiyeotji.BuildConfig
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -215,8 +218,17 @@ class TimelineViewModel @Inject constructor(
 
     private suspend fun loadDetail(s: DaySummary): DetailState = try {
         // 주행·머문 곳은 Rust가 시간순으로 섞어서 준다 (Kotlin에서 정렬하지 않는다).
-        val d = core.dayDetail(s.day)
-        DetailState.Loaded(d.summary, d.entries, loadMap(s.day), loadShareEpisode(s.day), loadOffers(d.entries))
+        // 목록·지도·올릴 기록은 서로 기다릴 필요가 없다 → 동시에 읽는다 (차례로 읽으면 세 번 기다린 합이 첫 화면 시간이 된다)
+        val t0 = System.nanoTime()
+        coroutineScope {
+            val map = async { loadMap(s.day) }
+            val share = async { loadShareEpisode(s.day) }
+            val d = core.dayDetail(s.day)
+            val offers = async { loadOffers(d.entries) }
+            DetailState.Loaded(d.summary, d.entries, map.await(), share.await(), offers.await()).also {
+                if (BuildConfig.DEBUG) Log.d(TAG, "하루 상세 ${s.day}: ${(System.nanoTime() - t0) / 1_000_000}ms")
+            }
+        }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {

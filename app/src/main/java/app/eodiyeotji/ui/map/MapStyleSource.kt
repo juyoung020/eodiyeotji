@@ -2,6 +2,7 @@ package app.eodiyeotji.ui.map
 
 import android.content.Context
 import android.util.Log
+import app.eodiyeotji.BuildConfig
 import androidx.compose.runtime.Immutable
 import java.io.File
 import java.io.IOException
@@ -50,24 +51,38 @@ internal object MapStyleSource {
     private const val ONLINE_SOURCE = "ofm"
     private const val LAND = "#e2dfda"
 
+    /** 마지막으로 만든 스타일과 그때의 지도 파일 상태. 지도를 열 때마다 asset 읽기·JSON 합치기(수십 ms)를 다시 하지 않는다. */
+    @Volatile private var cached: Pair<String, MapStyleSpec>? = null
+
+    /** 지도 파일이 그대로면(경로·크기·수정 시각) 만들어 둔 스타일을 바로 돌려준다. 파일을 새로 넣으면 다시 만든다. */
     suspend fun resolve(context: Context): MapStyleSpec = withContext(Dispatchers.IO) {
-        val underlay = readAsset(context, UNDERLAY_ASSET)?.let { runCatching { JSONObject(it) }.getOrNull() }
         val file = mapFile(context)
+        val stamp = file?.let { "${it.absolutePath}:${it.length()}:${it.lastModified()}" } ?: "none"
+        cached?.takeIf { it.first == stamp }?.let { return@withContext it.second }
+        val t0 = System.nanoTime()
+        build(context, file).also {
+            cached = stamp to it
+            if (BuildConfig.DEBUG) Log.d(TAG, "스타일 만들기 ${(System.nanoTime() - t0) / 1_000_000}ms")
+        }
+    }
+
+    private fun build(context: Context, file: File?): MapStyleSpec {
+        val underlay = readAsset(context, UNDERLAY_ASSET)?.let { runCatching { JSONObject(it) }.getOrNull() }
         if (file == null) {
             Log.i(TAG, "오프라인 지도 파일 없음 → 온라인 밑그림")
-            return@withContext underlay?.let { MapStyleSpec.Online(onlineOnly(it)) } ?: MapStyleSpec.Fallback
+            return underlay?.let { MapStyleSpec.Online(onlineOnly(it)) } ?: MapStyleSpec.Fallback
         }
         val template = readAsset(context, STYLE_ASSET)
         if (template == null || !template.contains(PLACEHOLDER)) {
             Log.w(TAG, "스타일 asset이 없거나 $PLACEHOLDER 자리가 없음 → 온라인 밑그림")
-            return@withContext underlay?.let { MapStyleSpec.Online(onlineOnly(it)) } ?: MapStyleSpec.Fallback
+            return underlay?.let { MapStyleSpec.Online(onlineOnly(it)) } ?: MapStyleSpec.Fallback
         }
         Log.i(TAG, "오프라인 지도: ${file.absolutePath} (${file.length() / 1_048_576}MB)")
         val offline = template.replace(PLACEHOLDER, "pmtiles://file://${file.absolutePath}")
         val hybrid = underlay?.let { u ->
             runCatching { withUnderlay(offline, u) }.onFailure { Log.w(TAG, "밑그림 끼우기 실패", it) }.getOrNull()
         }
-        if (hybrid != null) MapStyleSpec.Offline(hybrid, offlineOnly = offline) else MapStyleSpec.Offline(offline)
+        return if (hybrid != null) MapStyleSpec.Offline(hybrid, offlineOnly = offline) else MapStyleSpec.Offline(offline)
     }
 
     private fun readAsset(context: Context, path: String): String? = try {

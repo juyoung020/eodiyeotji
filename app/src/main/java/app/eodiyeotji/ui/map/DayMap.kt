@@ -47,6 +47,7 @@ import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.theme.MapInk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.maplibre.android.LibraryLoader
 import org.maplibre.android.MapLibre
@@ -98,7 +99,11 @@ fun DayMap(
     val appContext = LocalContext.current.applicationContext
     // 지도 엔진 준비는 IO 스레드에서. 그동안(처음 한 번 0.1~0.2초)은 바탕색 자리만 보인다.
     val baseOptions by produceState<MapLibreMapOptions?>(initialValue = null) {
-        if (!inPreview) value = MapLibreNative.prepare(appContext)
+        if (inPreview) return@produceState
+        // 스타일 만들기(asset 읽기·JSON 합치기)를 엔진 준비와 동시에 시작한다 → 지도 칸이 생길 때는 캐시에서 바로 나온다
+        val styleWarm = launch { MapStyleSource.resolve(appContext) }
+        value = MapLibreNative.prepare(appContext)
+        styleWarm.join()
     }
     val options = baseOptions
     if (options == null) {
@@ -183,13 +188,32 @@ private fun DayMapContent(
             return@produceState
         }
         val repo = EntryPointAccessors.fromApplication(context.applicationContext, MapPhotoEntryPoint::class.java).photos()
-        value = withContext(Dispatchers.Default) { loadStayPhotos(context.applicationContext, repo, photoPins, density) }
-        // 앱을 막 켠 때처럼 사진 몇 장이 잠깐 안 받아지면 숫자 칸으로 남는다 → 빠진 게 있으면 잠시 뒤 한 번 더 (받은 건 캐시라 바로)
-        if (value.size < photoPins.size) {
-            delay(PHOTO_RETRY_MS)
-            val again = withContext(Dispatchers.Default) { loadStayPhotos(context.applicationContext, repo, photoPins, density) }
-            if (again.size > value.size) value = again
+        // 사진은 오는 대로 하나씩 채운다 (모두 기다리면 가장 느린 한 장 때문에 카드 사진이 늦게 뜬다).
+        // 연달아 오면 카드 그림을 매번 다시 만들지 않게 잠깐([PHOTO_BATCH_MS]) 모아서 내보낸다.
+        val got = java.util.concurrent.ConcurrentHashMap<String, Bitmap>()
+        val flush = kotlinx.coroutines.flow.MutableStateFlow(0)
+        val emitter = launch {
+            flush.collect {
+                if (got.size > value.size) value = HashMap(got)
+                delay(PHOTO_BATCH_MS)
+            }
         }
+        val load = suspend {
+            withContext(Dispatchers.Default) {
+                loadStayPhotos(context.applicationContext, repo, photoPins.filter { !got.containsKey(it.key) }, density) { k, b ->
+                    got[k] = b
+                    flush.value++
+                }
+            }
+        }
+        load()
+        // 앱을 막 켠 때처럼 사진 몇 장이 잠깐 안 받아지면 숫자 칸으로 남는다 → 빠진 게 있으면 잠시 뒤 한 번 더 (받은 건 캐시라 바로)
+        if (got.size < photoPins.size) {
+            delay(PHOTO_RETRY_MS)
+            load()
+        }
+        emitter.cancel()
+        if (got.size > value.size) value = HashMap(got)
     }
     LaunchedEffect(controller, marks, stayPhotos, palette) {
         val m = marks
@@ -305,3 +329,6 @@ internal interface MapPhotoEntryPoint {
 
 /** 지도 사진이 빠졌을 때 다시 받기까지 기다리는 시간 */
 private const val PHOTO_RETRY_MS = 3_000L
+
+/** 사진이 연달아 올 때 카드 그림을 다시 만드는 최소 간격 */
+private const val PHOTO_BATCH_MS = 120L
