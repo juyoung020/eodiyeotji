@@ -363,7 +363,7 @@ fn pass_through(s: &StopFact) -> bool {
     ["휴게소", "주유소", "충전소", "주차장"].iter().any(|w| s.category.contains(w) || s.name.ends_with(w))
 }
 
-fn episodes_between(conn: &Connection, d0: i64, d1: i64) -> Result<Vec<Episode>, CoreError> {
+pub(crate) fn episodes_between(conn: &Connection, d0: i64, d1: i64) -> Result<Vec<Episode>, CoreError> {
     let mut st =
         conn.prepare_cached(&format!("SELECT {EP_COLS} FROM episode e WHERE e.day BETWEEN ?1 AND ?2 ORDER BY e.day, e.ord"))?;
     let rows = st.query_map([d0, d1], |r| episode_from_row(r, 0))?;
@@ -448,7 +448,7 @@ fn title_of(conn: &Connection, d: i64, fallback: &str) -> Result<String, CoreErr
     Ok(day_title(conn, d)?.0.filter(|t| !t.trim().is_empty()).unwrap_or_else(|| fallback.to_owned()))
 }
 
-fn ep_rank(e: &Episode) -> (bool, usize, i64) {
+pub(crate) fn ep_rank(e: &Episode) -> (bool, usize, i64) {
     (e.facts.kind == EpisodeKind::Trip, e.facts.stops.len(), e.facts.distance_m as i64)
 }
 

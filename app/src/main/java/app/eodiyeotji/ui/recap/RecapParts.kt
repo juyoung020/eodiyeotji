@@ -65,6 +65,8 @@ import app.eodiyeotji.ui.agent.kmText
 import app.eodiyeotji.ui.agent.memoryDateText
 import app.eodiyeotji.ui.place.PhotoLoadingPlaceholder
 import app.eodiyeotji.ui.place.PlaceThumbnail
+import app.eodiyeotji.ui.replay.LocalOpenReplay
+import app.eodiyeotji.ui.agent.DrivingStatePort
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.theme.MemoryStamp
@@ -136,7 +138,7 @@ private fun RecapNote(text: String) {
 }
 
 /**
- * "N년 전 오늘" 카드: 금색 도장 · AI 하루 제목 · 날짜 줄 · 들른 곳 사진(최대 3장) · [그날 다시 보기] [그 코스로 안내] · 오늘은 닫기(×).
+ * "N년 전 오늘" 카드: 금색 도장 · AI 하루 제목 · 날짜 줄 · 들른 곳 사진(최대 3장) · [그날로 돌아가기] · [그날 기록 보기] [그 코스로 안내] · 오늘은 닫기(×).
  */
 @Composable
 fun OnThisDayCard(
@@ -186,9 +188,21 @@ fun OnThisDayCard(
                     repeat(3 - otd.photos.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
+            // 첫 버튼: 그날로 돌아가기 (사진 · 지도로 그날을 다시 본다)
+            val openReplay = LocalOpenReplay.current
+            Button(
+                onClick = { openReplay(otd.day) },
+                shape = CircleShape,
+                colors = ButtonDefaults.buttonColors(containerColor = c.memory, contentColor = c.onMemory),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 84.dp),
+            ) {
+                Icon(EodiIcons.Play, contentDescription = null, modifier = Modifier.size(32.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(stringResource(R.string.replay_open), style = EodiTheme.type.bodyStrong, fontWeight = FontWeight.Bold, maxLines = 1)
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                 FilledTonalButton(onClick = onOpenDay, shape = CircleShape, modifier = Modifier.weight(1f).heightIn(min = 76.dp)) {
-                    Text(stringResource(R.string.recap_open_day), style = EodiTheme.type.label, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text(stringResource(R.string.replay_open_day_list), style = EodiTheme.type.label, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
                 Button(
                     onClick = onNavigate,
@@ -211,6 +225,7 @@ fun OnThisDayCard(
 @InstallIn(SingletonComponent::class)
 interface RecallEntryPoint {
     fun recallCenter(): RecallCenter
+    fun drivingState(): DrivingStatePort
 }
 
 /**
@@ -221,8 +236,11 @@ interface RecallEntryPoint {
 @Composable
 fun RecallDrivingCard(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val center = remember { EntryPointAccessors.fromApplication(context.applicationContext, RecallEntryPoint::class.java).recallCenter() }
+    val entry = remember { EntryPointAccessors.fromApplication(context.applicationContext, RecallEntryPoint::class.java) }
+    val center = remember(entry) { entry.recallCenter() }
     val recall by center.current.collectAsStateWithLifecycle()
+    val driving by remember(entry) { entry.drivingState().isDriving }.collectAsStateWithLifecycle()
+    val openReplay = LocalOpenReplay.current
     val r = recall ?: return
     val c = EodiTheme.colors
     val shape = RoundedCornerShape(32.dp)
@@ -266,6 +284,21 @@ fun RecallDrivingCard(modifier: Modifier = Modifier) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(AgentIcons.Close, contentDescription = stringResource(R.string.recap_recall_close), tint = Color.White, modifier = Modifier.size(36.dp))
+        }
+        // 그날로 돌아가기: 정차 중에만 (주행 중에는 큰 사진 화면을 열지 않는다)
+        if (!driving) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 20.dp, end = 116.dp)
+                    .size(76.dp)
+                    .clip(CircleShape)
+                    .background(c.memory)
+                    .clickable(role = Role.Button) { openReplay(r.day) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(EodiIcons.Play, contentDescription = stringResource(R.string.replay_open), tint = c.onMemory, modifier = Modifier.size(36.dp))
+            }
         }
     }
 }

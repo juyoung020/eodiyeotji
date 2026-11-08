@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 그날로 돌아가기 (ui/replay) -->
+    <string name="replay_open">그날로 돌아가기</string>
+    <string name="replay_open_day_list">그날 기록 보기</string>
+    <string name="replay_close">닫기</string>
+    <string name="replay_prev">이전 장소</string>
+    <string name="replay_next">다음 장소</string>
+    <string name="replay_pause">멈춤</string>
+    <string name="replay_resume">다시 재생</string>
+    <string name="replay_again">처음부터</string>
+    <string name="replay_loading">그날을 불러오는 중</string>
+    <string name="replay_failed">그날을 불러오지 못했어요</string>
+    <string name="replay_no_places">이날은 이름 있는 들른 곳이 없어요</string>
+    <string name="replay_stop_order">%1$d번째 들른 곳</string>
+</resources>

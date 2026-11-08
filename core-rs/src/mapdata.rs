@@ -111,7 +111,7 @@ fn sep(out: &mut String, first: &mut bool) {
 }
 
 /// 지도에 그릴 주행 점 (위도, 경도). 경로 점이 1개뿐이면 LineString이 안 되므로 출발·도착을 쓴다.
-fn trip_points(t: &TripSummary) -> Vec<(f64, f64)> {
+pub(crate) fn trip_points(t: &TripSummary) -> Vec<(f64, f64)> {
     if t.path.len() >= 2 {
         t.path.iter().map(|p| (p.lat, p.lon)).collect()
     } else {
@@ -125,15 +125,15 @@ fn trip_points(t: &TripSummary) -> Vec<(f64, f64)> {
 ///   (집에서 나가 집으로 돌아온 날: 마지막 머문 곳이 "출발·도착"). 깃발이 그 머문 곳 카드와 겹치지 않는다.
 /// - 붙일 곳이 없을 때만 깃발(`endpoint`)을 따로 그린다. 주행이 없으면 경로가 없으므로 둘 다 없다.
 #[derive(Debug, Default, PartialEq)]
-struct RouteEnds {
-    start_stay: Option<usize>,
-    end_stay: Option<usize>,
+pub(crate) struct RouteEnds {
+    pub(crate) start_stay: Option<usize>,
+    pub(crate) end_stay: Option<usize>,
 }
 
 /// 출발·도착 지점과 이만큼(m) 가까운 머문 곳은 같은 곳으로 본다.
 const END_NEAR_M: f64 = 300.0;
 
-fn route_ends(d: &DayDetail) -> RouteEnds {
+pub(crate) fn route_ends(d: &DayDetail) -> RouteEnds {
     let (Some(first), Some(last)) = (d.trips.first(), d.trips.last()) else { return RouteEnds::default() };
     let nearest = |at: (f64, f64)| {
         d.stays
@@ -151,7 +151,7 @@ fn route_ends(d: &DayDetail) -> RouteEnds {
 }
 
 /// 머문 곳에 붙일 출발·도착 글.
-fn end_tag(ends: &RouteEnds, i: usize) -> Option<&'static str> {
+pub(crate) fn end_tag(ends: &RouteEnds, i: usize) -> Option<&'static str> {
     match (ends.start_stay == Some(i), ends.end_stay == Some(i)) {
         (true, true) => Some("출발·도착"),
         (true, false) => Some("출발"),
@@ -190,7 +190,7 @@ fn pt((lat, lon): (f64, f64)) -> Point {
 const TRIP_LABEL_MIN_M: f64 = 200.0;
 
 /// 걸린 시간 글: "18분", "1시간", "1시간 5분" (반올림한 분). 1분 미만은 None.
-fn duration_text(ms: i64) -> Option<String> {
+pub(crate) fn duration_text(ms: i64) -> Option<String> {
     let min = (ms.max(0) + 30_000) / 60_000;
     match (min / 60, min % 60) {
         (0, 0) => None,
@@ -201,7 +201,7 @@ fn duration_text(ms: i64) -> Option<String> {
 }
 
 /// 거리 글: "850m", "4.9km", "123km" (100km부터는 소수점 없이).
-fn distance_text(m: f64) -> String {
+pub(crate) fn distance_text(m: f64) -> String {
     if m < 1000.0 {
         format!("{}m", ((m / 10.0).round() * 10.0) as i64)
     } else if m < 100_000.0 {
@@ -307,7 +307,7 @@ pub fn map_safe_name(name: &str) -> Option<String> {
 }
 
 /// `,"key":"값"` — 값은 지도용으로 거른 이름(`map_safe_name`)을 JSON 문자열로 이스케이프한 것. 거르고 남는 게 없으면 안 쓴다.
-fn str_prop(out: &mut String, key: &str, name: &str) {
+pub(crate) fn str_prop(out: &mut String, key: &str, name: &str) {
     let Some(v) = map_safe_name(name) else { return };
     let _ = write!(out, r#","{key}":""#);
     // 제어 문자는 map_safe_name이 이미 걸렀으므로 따옴표·역슬래시만 이스케이프하면 된다.
@@ -320,15 +320,15 @@ fn str_prop(out: &mut String, key: &str, name: &str) {
     out.push('"');
 }
 
-fn coord(out: &mut String, lat: f64, lon: f64) {
+pub(crate) fn coord(out: &mut String, lat: f64, lon: f64) {
     let _ = write!(out, "[{lon:.6},{lat:.6}]");
 }
 
 #[derive(Default)]
-struct Bounds(Option<MapBounds>);
+pub(crate) struct Bounds(Option<MapBounds>);
 
 impl Bounds {
-    fn add(&mut self, lat: f64, lon: f64) {
+    pub(crate) fn add(&mut self, lat: f64, lon: f64) {
         let b = self.0.get_or_insert(MapBounds { min_lat: lat, min_lon: lon, max_lat: lat, max_lon: lon });
         b.min_lat = b.min_lat.min(lat);
         b.min_lon = b.min_lon.min(lon);
@@ -336,12 +336,12 @@ impl Bounds {
         b.max_lon = b.max_lon.max(lon);
     }
 
-    fn merge(&mut self, r: MapBounds) {
+    pub(crate) fn merge(&mut self, r: MapBounds) {
         self.add(r.min_lat, r.min_lon);
         self.add(r.max_lat, r.max_lon);
     }
 
-    fn get(self) -> Option<MapBounds> {
+    pub(crate) fn get(self) -> Option<MapBounds> {
         self.0
     }
 }
