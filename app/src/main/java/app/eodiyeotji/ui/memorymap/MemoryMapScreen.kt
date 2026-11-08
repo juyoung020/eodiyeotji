@@ -203,7 +203,7 @@ private fun MemoryMapStage(data: MemoryMap) {
             AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize().semantics { contentDescription = description })
         }
         // 지평선 위 밤하늘 · 반짝이는 별 · 비네트 (지도 위에 얹는 Canvas 한 장)
-        CinematicSky(SkyPhase.NIGHT, stars = true, skyFraction = 0.3f)
+        CinematicSky(SkyPhase.NIGHT, stars = true, skyFraction = 0.3f, haze = false)
 
         // 그리기: 카메라는 기울어진 채 조금 가까이서 시작해 천천히 돌며 전체 범위로 물러나고, 달은 하나씩 켠다.
         // 다 그리면 달린 길 전체로 물러난 뒤 한 줄을 띄우고, 숨 쉬듯 좌우로 천천히 돈다.
