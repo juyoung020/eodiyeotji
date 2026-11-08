@@ -130,7 +130,7 @@ class RouteSnapshots @Inject constructor(
     private companion object {
         const val TAG = "EodiRouteSnapshot"
         /** 스타일·카메라를 바꾸면 올린다 (저장된 그림을 다시 그리게). */
-        const val VERSION = 3
+        const val VERSION = 4
         /** 그림 크기 (논리 픽셀). 카드 대표 그림 비율 2.1 : 1. */
         const val WIDTH_DP = 640
         const val HEIGHT_DP = 305

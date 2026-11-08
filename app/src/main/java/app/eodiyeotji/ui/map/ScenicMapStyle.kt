@@ -23,10 +23,10 @@ internal object ScenicMapStyle {
         json.replace(ROUTE_SLOT, routeGeojson)
     }
 
-    /** 때별 색. 낮 = 따뜻한 미색 땅·맑은 물·코랄 길, 노을 = 살구빛 땅·분홍 물·금빛 길, 밤 = 남색 땅·불 켜진 건물·환한 길. */
+    /** 때별 색. 낮 = 따뜻한 미색 땅·맑은 물·코랄 길, 노을 = 살구빛 땅·청록에서 보랏빛으로 저무는 물(먼 바다일수록 깊게)·금빛 길, 밤 = 남색 땅·불 켜진 건물·환한 길. */
     private fun palette(theme: RouteTheme): Map<String, String> = when (theme) {
         RouteTheme.DAY -> mapOf(
-            "land" to "#ECE7DE", "green" to "#D3E6C6", "park" to "#C6E1BA", "water" to "#9CCFE6", "waterLabel" to "#4F7FA8",
+            "land" to "#ECE7DE", "green" to "#D3E6C6", "park" to "#C6E1BA", "water" to "#9CCFE6", "waterDeep" to "#9CCFE6", "waterLabel" to "#4F7FA8",
             "hillShadow" to "#7C7266", "hillHighlight" to "#FFFDF8", "hillAccent" to "#9A8E7E",
             "roadMinor" to "#FFFFFF", "roadMajor" to "#FFFCF5", "roadCasing" to "#D8D0C3", "roadLight" to "#FFFFFF",
             "buildingLow" to "#F2ECE3", "buildingMid" to "#E6DCCD", "buildingHigh" to "#D4C6B3", "boundary" to "#B5ADA2",
@@ -35,16 +35,16 @@ internal object ScenicMapStyle {
             "start" to "#00A35A", "end" to "#E0522A", "light" to "#FFFFFF",
         )
         RouteTheme.SUNSET -> mapOf(
-            "land" to "#F1CDAE", "green" to "#E3C29A", "park" to "#DDB98E", "water" to "#D99AA0", "waterLabel" to "#8A4B5C",
+            "land" to "#F1CDAE", "green" to "#E3C29A", "park" to "#DDB98E", "water" to "#6B4E71", "waterDeep" to "#2B3A55", "waterLabel" to "#E9D6EC",
             "hillShadow" to "#8E4E44", "hillHighlight" to "#FFE7CC", "hillAccent" to "#B77058",
             "roadMinor" to "#FBE3CC", "roadMajor" to "#FFEBD6", "roadCasing" to "#E0A884", "roadLight" to "#FFD9A8",
-            "buildingLow" to "#F7D2B0", "buildingMid" to "#EFB58E", "buildingHigh" to "#D98E73", "boundary" to "#C99780",
+            "buildingLow" to "#F6D0AA", "buildingMid" to "#ECAE84", "buildingHigh" to "#D4876A", "boundary" to "#C99780",
             "label" to "#6B3A2E", "labelHalo" to "#FCE6D2", "sightText" to "#7A2F3A",
             "routeHalo" to "#FF9E3D", "routeGlow" to "#FFC15E", "routeCore" to "#FFF6DD",
             "start" to "#2E9E6B", "end" to "#C2453B", "light" to "#FFB27A",
         )
         RouteTheme.NIGHT -> mapOf(
-            "land" to "#0F1626", "green" to "#121C2F", "park" to "#13223A", "water" to "#08213B", "waterLabel" to "#6E8FC7",
+            "land" to "#0F1626", "green" to "#121C2F", "park" to "#13223A", "water" to "#08213B", "waterDeep" to "#08213B", "waterLabel" to "#6E8FC7",
             "hillShadow" to "#000000", "hillHighlight" to "#2A3858", "hillAccent" to "#111A2C",
             "roadMinor" to "#1C2640", "roadMajor" to "#2F3D60", "roadCasing" to "#111829", "roadLight" to "#F0B45C",
             "buildingLow" to "#1F2742", "buildingMid" to "#4C4A6E", "buildingHigh" to "#F2C26B", "boundary" to "#2B3554",

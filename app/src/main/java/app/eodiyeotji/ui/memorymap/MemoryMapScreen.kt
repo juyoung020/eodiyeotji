@@ -37,6 +37,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -64,7 +66,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
-import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
@@ -87,18 +88,21 @@ private const val CAPTION_FADE_MS = 1_800
 private val ShownLayers = listOf("route-haze", "route-glow", "route-core", "visit-halo", "visit-star", "visit-pillar")
 private const val FRESH_LAYER = "route-fresh"
 
-/** 3D 카메라: 그리는 동안 기울기 · 도는 각도, 마지막에 나라 전체로 물러나는 시간. */
+/** 3D 카메라: 그리는 동안 기울기 · 도는 각도, 마지막에 달린 길 전체로 물러나는 시간. */
 private const val REVEAL_PITCH = 58.0
 private const val REVEAL_BEARING_FROM = -35.0
 private const val REVEAL_BEARING_TO = 35.0
 private const val FLY_OUT_MS = 3_800
-private const val COUNTRY_PITCH = 40.0
-private const val COUNTRY_ZOOM = 5.9
-private val CountryCenter = LatLng(35.9, 127.8)
+private const val END_PITCH = 40.0
+/** 끝 장면: 달린 길 범위 둘레 여백 (화면의 15%). 빈 바다 대신 길이 화면을 채운다. */
+private const val END_PAD_FRACTION = 0.15f
+/** 다 그린 뒤 숨 쉬듯 좌우로 천천히 (±10°, 한쪽 6초). */
+private const val BREATHE_DEG = 10.0
+private const val BREATHE_MS = 6_000
 
 /**
  * 기억 지도 (요약 화면 · 날짜 목록 위를 덮는 전체 화면). 1년 동안 달린 모든 길을 밤하늘 3D 지도(산 음영 · 건물 · 빛기둥) 위에
- * 금빛으로, 오래된 달부터 한 달씩 차례로 그린다. 그동안 카메라는 비스듬히 내려다보며 천천히 돌고, 다 그리면 나라 전체로
+ * 금빛으로, 오래된 달부터 한 달씩 차례로 그린다. 그동안 카메라는 비스듬히 내려다보며 천천히 돌고, 다 그리면 달린 길 전체로
  * 물러난 뒤 조용히 한 줄을 띄운다. 숫자 · 경로는 Rust `memory_map`.
  * 정차 중에만 열린다 (주행을 시작하면 [RecapViewModel]이 닫는다).
  */
@@ -150,11 +154,12 @@ private fun MemoryMapStage(data: MemoryMap) {
     var playKey by remember { mutableIntStateOf(0) }
     val total = data.months.size
     val done = step >= total
-    // 나라 전체로 물러나기까지 끝나면 한 줄을 띄운다
+    // 달린 길 전체로 물러나기까지 끝나면 한 줄을 띄운다
     var captionShown by remember(data) { mutableStateOf(false) }
+    var viewSize by remember { mutableStateOf(IntSize.Zero) }
 
     val opts = options
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().onSizeChanged { viewSize = it }) {
         if (opts != null) {
             val mapView = rememberMapViewWithLifecycle(context, opts, NightSky.toArgb())
             LaunchedEffect(mapView) { mapView.getMapAsync { m -> map = m } }
@@ -168,7 +173,7 @@ private fun MemoryMapStage(data: MemoryMap) {
         }
 
         // 그리기: 카메라는 기울어진 채 조금 가까이서 시작해 천천히 돌며 전체 범위로 물러나고, 달은 하나씩 켠다.
-        // 다 그리면 나라 전체로 높이 물러난 뒤 한 줄을 띄운다.
+        // 다 그리면 달린 길 전체로 물러난 뒤 한 줄을 띄우고, 숨 쉬듯 좌우로 천천히 돈다.
         val s = style
         val m = map
         LaunchedEffect(s, playKey) {
@@ -195,14 +200,26 @@ private fun MemoryMapStage(data: MemoryMap) {
             }
             step = total
             delay(400)
-            m.animateCamera(
-                CameraUpdateFactory.newCameraPosition(
-                    CameraPosition.Builder().target(CountryCenter).zoom(COUNTRY_ZOOM).tilt(COUNTRY_PITCH).bearing(0.0).build(),
-                ),
-                FLY_OUT_MS,
-            )
+            // 끝: 달린 길 범위에 맞춰(위에서 맞춘 줌 + 기울기) 물러나고, 한 줄을 띄운 뒤 숨 쉬듯 좌우로 천천히 돈다
+            val end = data.bounds?.let { b ->
+                val px = (viewSize.width * END_PAD_FRACTION).toInt()
+                val py = (viewSize.height * END_PAD_FRACTION).toInt()
+                m.getCameraForLatLngBounds(LatLngBounds.from(b.maxLat, b.maxLon, b.minLat, b.minLon), intArrayOf(px, py, px, py + py / 2), 0.0, 0.0) // 아래는 한 줄 자리만큼 더
+            }?.let { CameraPosition.Builder(it).tilt(END_PITCH).bearing(0.0).build() } ?: return@LaunchedEffect
+            m.animateCamera(CameraUpdateFactory.newCameraPosition(end), FLY_OUT_MS)
             delay(FLY_OUT_MS - 600L)
             captionShown = true
+            delay(600L)
+            try {
+                var side = 1.0
+                while (true) {
+                    m.easeCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(end).bearing(side * BREATHE_DEG).build()), BREATHE_MS, true)
+                    delay(BREATHE_MS.toLong())
+                    side = -side
+                }
+            } finally {
+                m.cancelTransitions()
+            }
         }
         LaunchedEffect(s, step) {
             if (s == null) return@LaunchedEffect

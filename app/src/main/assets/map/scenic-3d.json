@@ -45,7 +45,7 @@
         "hillshade-illumination-direction": 300
       }
     },
-    { "id": "water", "type": "fill", "source": "ofm", "source-layer": "water", "paint": { "fill-color": "{{water}}" } },
+    { "id": "water", "type": "fill", "source": "ofm", "source-layer": "water", "paint": { "fill-color": ["interpolate", ["linear"], ["zoom"], 6, "{{waterDeep}}", 13, "{{water}}"] } },
     {
       "id": "waterway",
       "type": "line",
@@ -173,6 +173,17 @@
         "line-opacity": 0.8,
         "line-width": ["interpolate", ["linear"], ["zoom"], 8, 5, 12, 10, 16, 16],
         "line-blur": 3
+      }
+    },
+    {
+      "id": "route-casing",
+      "type": "line",
+      "source": "route",
+      "filter": ["==", ["get", "kind"], "route"],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": {
+        "line-color": "#FFFFFF",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 8, 10, 12, 12, 16, 14]
       }
     },
     {

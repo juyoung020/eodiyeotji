@@ -77,9 +77,9 @@ private const val FLIGHT_PITCH = 60.0
 private const val DESCEND_MS = 600
 private const val ARRIVE_MS = 1_800
 
-/** 끝 화면에서 하루 전체를 한 번 도는 동안 한 번에 움직이는 각도 · 시간. */
-private const val ORBIT_DEG = 30.0
-private const val ORBIT_MS = 9_000
+/** 끝 화면에서 하루 전체를 천천히 도는 동안 한 번에 움직이는 각도 · 시간. */
+private const val ORBIT_DEG = 20.0
+private const val ORBIT_MS = 10_000
 
 private const val EMPTY = """{"type":"FeatureCollection","features":[]}"""
 
@@ -99,11 +99,7 @@ fun ReplayMap(bounds: MapBoundsLatLon?, done: String, leg: String?, modifier: Mo
     LaunchedEffect(m, bounds, orbit) {
         val b = bounds ?: return@LaunchedEffect
         if (m == null) return@LaunchedEffect
-        val pad = (PAD_DP * density).toInt()
-        val cam = awaitLayout(mapView) {
-            m.getCameraForLatLngBounds(LatLngBounds.from(b.maxLat, b.maxLon, b.minLat, b.minLon), intArrayOf(pad, pad, pad, pad), OVERVIEW_BEARING, OVERVIEW_PITCH)
-        } ?: return@LaunchedEffect
-        val start = CameraPosition.Builder(cam).zoom(cam.zoom.coerceAtMost(MAX_ZOOM)).build()
+        val start = awaitLayout(mapView) { fitTilted(m, mapView, b, if (orbit) FIT_PAD_FRACTION else 0f, PAD_DP * density) } ?: return@LaunchedEffect
         m.moveCamera(CameraUpdateFactory.newCameraPosition(start))
         if (!orbit) return@LaunchedEffect
         var bearing = start.bearing
@@ -231,6 +227,18 @@ fun ReplayFlightMap(
     AndroidView(factory = { mapView }, modifier = modifier)
 }
 
+/**
+ * 범위를 화면에 맞추되 기울기는 유지한다. MapLibre에 기울기(50°)째로 맞추라고 하면 먼 쪽까지 계산해 길이 아주 작아진다
+ * (4.5km 하루가 화면의 3%) → 위에서 내려다본 채로 맞춘 줌을 쓰고 기울기만 더한다. 여백은 화면의 [padFraction] (최소 [minPadPx]).
+ */
+private fun fitTilted(m: MapLibreMap, view: MapView, b: MapBoundsLatLon, padFraction: Float, minPadPx: Float): CameraPosition? {
+    val px = maxOf(minPadPx, view.width * padFraction).toInt()
+    val py = maxOf(minPadPx, view.height * padFraction).toInt()
+    val flat = m.getCameraForLatLngBounds(LatLngBounds.from(b.maxLat, b.maxLon, b.minLat, b.minLon), intArrayOf(px, py, px, py), OVERVIEW_BEARING, 0.0)
+        ?: return null
+    return CameraPosition.Builder(flat).zoom(flat.zoom.coerceAtMost(MAX_ZOOM)).tilt(OVERVIEW_PITCH).build()
+}
+
 private fun arrival(lat: Double, lon: Double, bearing: Double, zoom: Double): CameraPosition =
     CameraPosition.Builder().target(LatLng(lat, lon)).zoom(zoom).bearing(bearing.mod(360.0)).tilt(FLIGHT_PITCH - 5.0).build()
 
@@ -316,9 +324,10 @@ private class ReplayMapController(mapView: MapView) {
         val round = arrayOf(lineJoin(Property.LINE_JOIN_ROUND), lineCap(Property.LINE_CAP_ROUND))
         for ((src, kind) in listOf(DONE to "route", LEG to "leg")) {
             val f = eq(get("kind"), literal(kind))
-            s.addLayer(LineLayer("$src-halo", src).withFilter(f).withProperties(*round, lineWidth(26f), lineBlur(14f), lineOpacity(0.45f), lineColor(HALO)))
-            s.addLayer(LineLayer("$src-glow", src).withFilter(f).withProperties(*round, lineWidth(9f), lineBlur(3f), lineOpacity(0.85f), lineColor(GLOW)))
-            s.addLayer(LineLayer("$src-core", src).withFilter(f).withProperties(*round, lineWidth(3.5f), lineColor(CORE)))
+            // 은은한 바깥 빛 → 흰 테두리 1px → 금빛 길 6px (보랏빛 바다 · 살구빛 땅 어디서든 길이 또렷하게)
+            s.addLayer(LineLayer("$src-halo", src).withFilter(f).withProperties(*round, lineWidth(24f), lineBlur(12f), lineOpacity(0.5f), lineColor(HALO)))
+            s.addLayer(LineLayer("$src-casing", src).withFilter(f).withProperties(*round, lineWidth(8f), lineColor(android.graphics.Color.WHITE)))
+            s.addLayer(LineLayer("$src-core", src).withFilter(f).withProperties(*round, lineWidth(6f), lineColor(GOLD)))
         }
         val isNow = eq(get("now"), literal(true))
         s.addLayer(
@@ -339,11 +348,19 @@ private class ReplayMapController(mapView: MapView) {
             ),
         )
         s.addLayer(
-            CircleLayer("$LEG-car-glow", LEG).withFilter(eq(get("kind"), literal("car"))).withProperties(
-                circleRadius(26f),
-                circleColor(CORE),
+            CircleLayer("$LEG-car-halo", LEG).withFilter(eq(get("kind"), literal("car"))).withProperties(
+                circleRadius(40f),
+                circleColor(HALO),
                 circleBlur(1f),
-                circleOpacity(0.8f),
+                circleOpacity(0.55f),
+            ),
+        )
+        s.addLayer(
+            CircleLayer("$LEG-car-glow", LEG).withFilter(eq(get("kind"), literal("car"))).withProperties(
+                circleRadius(22f),
+                circleColor(CORE),
+                circleBlur(0.8f),
+                circleOpacity(0.9f),
             ),
         )
         s.addLayer(
@@ -363,8 +380,11 @@ private class ReplayMapController(mapView: MapView) {
         val HALO = Color(0xFFFF9E3D).toArgb()
         val GLOW = Color(0xFFFFC15E).toArgb()
         val CORE = Color(0xFFFFF6DD).toArgb()
+        val GOLD = Color(0xFFFFB938).toArgb()
     }
 }
 
 private const val PAD_DP = 28f
+/** 끝 화면 지도: 그날 길 둘레 여백 (화면의 15%). */
+private const val FIT_PAD_FRACTION = 0.15f
 private const val MAX_ZOOM = 15.0
