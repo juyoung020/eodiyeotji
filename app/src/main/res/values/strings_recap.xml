@@ -16,7 +16,7 @@
     <string name="recap_recall_close">회상 닫기</string>
 
     <!-- 요약 입구 · 화면 -->
-    <string name="recap_month_entry">%1$d월 돌아보기</string>
+    <string name="recap_month_entry">%1$d월 요약</string>
     <string name="recap_year_entry">올해 결산</string>
     <string name="recap_tab_month">달별 요약</string>
     <string name="recap_tab_year">올해 결산</string>
