@@ -1,5 +1,11 @@
 package app.eodiyeotji.ui.timeline
 
+import app.eodiyeotji.ui.community.RoundIconButton
+import app.eodiyeotji.ui.community.CenterMessage
+import app.eodiyeotji.ui.community.ErrorState
+import app.eodiyeotji.ui.community.LoadingBox
+import app.eodiyeotji.ui.common.durationText
+import app.eodiyeotji.ui.common.distanceText
 import app.eodiyeotji.core.PartnerOffer
 import app.eodiyeotji.ui.offers.PlaceCouponBadge
 import androidx.activity.compose.BackHandler
@@ -40,9 +46,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -97,7 +100,7 @@ import app.eodiyeotji.BuildConfig
 import app.eodiyeotji.R
 import app.eodiyeotji.ui.place.LocalOpenPlace
 import app.eodiyeotji.ui.place.placeDetailOpenLabel
-import app.eodiyeotji.ui.place.PlaceThumbnail
+import app.eodiyeotji.ui.community.StopPhotoBox
 import app.eodiyeotji.ui.places.EditTarget
 import app.eodiyeotji.ui.places.PlaceEditHost
 import app.eodiyeotji.ui.places.PlaceEditViewModel
@@ -258,8 +261,8 @@ fun TimelineScreen(
                 if (search?.active == true) {
                     search.results(Modifier.fillMaxSize().padding(start = space.page, end = space.page))
                 } else when (val days = state.days) {
-                    DaysState.Loading -> LoadingPane(Modifier.fillMaxSize())
-                    is DaysState.Failed -> FailedPane(days.message, onRetry, Modifier.fillMaxSize())
+                    DaysState.Loading -> LoadingBox(message = stringResource(R.string.timeline_loading))
+                    is DaysState.Failed -> ErrorState(days.message, onRetry, Modifier.fillMaxSize(), title = stringResource(R.string.timeline_failed_title), retryLabel = stringResource(R.string.timeline_retry))
                     is DaysState.Loaded -> when {
                         days.days.isEmpty() -> EmptyPane(Modifier.fillMaxSize())
                         wide -> Row(Modifier.fillMaxSize().then(bodyPadding)) {
@@ -405,8 +408,8 @@ private fun CompactTimeline(
                     if (searching) {
                         search!!.results(Modifier.fillMaxSize().padding(horizontal = space.page))
                     } else when (val days = state.days) {
-                        DaysState.Loading -> LoadingPane(Modifier.fillMaxSize())
-                        is DaysState.Failed -> FailedPane(days.message, onRetry, Modifier.fillMaxSize())
+                        DaysState.Loading -> LoadingBox(message = stringResource(R.string.timeline_loading))
+                        is DaysState.Failed -> ErrorState(days.message, onRetry, Modifier.fillMaxSize(), title = stringResource(R.string.timeline_failed_title), retryLabel = stringResource(R.string.timeline_retry))
                         is DaysState.Loaded ->
                             if (days.days.isEmpty()) {
                                 EmptyPane(Modifier.fillMaxSize())
@@ -454,7 +457,7 @@ private fun CompactDayDetail(
                 .padding(start = 20.dp, end = space.page, top = 12.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BackButton(onBack)
+            RoundIconButton(EodiIcons.Back, stringResource(R.string.timeline_back_description), onBack, iconSize = 36.dp)
             Spacer(Modifier.width(20.dp))
             if (summary != null) {
                 val title = summary.title?.takeIf { it.isNotBlank() }
@@ -505,8 +508,8 @@ private fun CompactDayDetail(
                     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                     when (detail) {
                         DetailState.None -> Unit
-                        is DetailState.Loading -> LoadingPane(Modifier.fillMaxSize(), compact = true)
-                        is DetailState.Failed -> CenteredText(stringResource(R.string.timeline_failed, detail.message))
+                        is DetailState.Loading -> LoadingBox(compact = true)
+                        is DetailState.Failed -> CenterMessage(stringResource(R.string.timeline_failed, detail.message))
                         is DetailState.Loaded -> EntryList(
                             entries = detail.entries,
                             offers = detail.offers,
@@ -831,11 +834,11 @@ private fun DayDetailCard(
             Box(Modifier.fillMaxWidth().weight(1f - MapWeight)) {
                 when (detail) {
                     DetailState.None -> Unit
-                    is DetailState.Loading -> LoadingPane(Modifier.fillMaxSize(), compact = true)
-                    is DetailState.Failed -> CenteredText(stringResource(R.string.timeline_failed, detail.message))
+                    is DetailState.Loading -> LoadingBox(compact = true)
+                    is DetailState.Failed -> CenterMessage(stringResource(R.string.timeline_failed, detail.message))
                     is DetailState.Loaded ->
                         if (detail.entries.isEmpty()) {
-                            CenteredText(stringResource(R.string.timeline_detail_empty))
+                            CenterMessage(stringResource(R.string.timeline_detail_empty))
                         } else {
                             EntryList(detail.entries, selectedEntry, onEntryClick, offers = detail.offers)
                         }
@@ -852,7 +855,7 @@ private fun DetailHeader(summary: DaySummary?, today: LocalDate, onBack: (() -> 
     Column(Modifier.fillMaxWidth().padding(start = space.xl, end = space.xl, top = 28.dp, bottom = space.l)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (onBack != null) {
-                BackButton(onBack)
+                RoundIconButton(EodiIcons.Back, stringResource(R.string.timeline_back_description), onBack, iconSize = 36.dp)
                 Spacer(Modifier.width(20.dp))
             }
             if (summary != null) {
@@ -925,24 +928,6 @@ private fun TagRow(tags: List<String>) {
                 softWrap = false,
                 modifier = Modifier.background(c.surfaceHigh, RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 5.dp),
             )
-        }
-    }
-}
-
-/** 76dp 둥근 뒤로 버튼 (아이콘만, 읽어 주기용 설명 붙임). */
-@Composable
-private fun BackButton(onBack: () -> Unit) {
-    val c = EodiTheme.colors
-    val description = stringResource(R.string.timeline_back_description)
-    Surface(
-        onClick = onBack,
-        shape = CircleShape,
-        color = c.surfaceHigh,
-        contentColor = c.textPrimary,
-        modifier = Modifier.size(EodiTheme.space.touch).semantics { contentDescription = description },
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(EodiIcons.Back, contentDescription = null, modifier = Modifier.size(36.dp))
         }
     }
 }
@@ -1126,7 +1111,7 @@ private fun StayRow(
                     },
                     tilt = if ((stay.arriveMs / 60_000) % 2 == 0L) -2.5f else 2.5f,
                 ) {
-                    PlaceThumbnail(p.name, p.address, stay.center.lat, stay.center.lon, modifier = Modifier.fillMaxSize())
+                    StopPhotoBox(p.name, p.address, stay.center.lat, stay.center.lon, null, Modifier.fillMaxSize(), radius = 0.dp, iconSize = 32.dp)
                 }
             }
         },
@@ -1321,28 +1306,6 @@ private fun NaviTag() {
 
 // ---------------------------------------------------------------- 상태 화면
 
-@Composable
-private fun LoadingPane(modifier: Modifier = Modifier, compact: Boolean = false) {
-    val c = EodiTheme.colors
-    Column(
-        modifier,
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        CircularProgressIndicator(
-            color = c.accent,
-            trackColor = c.accentSoft,
-            strokeWidth = if (compact) 5.dp else 6.dp,
-            strokeCap = StrokeCap.Round,
-            modifier = Modifier.size(if (compact) 48.dp else 64.dp),
-        )
-        if (!compact) {
-            Spacer(Modifier.height(24.dp))
-            Text(stringResource(R.string.timeline_loading), style = EodiTheme.type.body, color = c.textSecondary)
-        }
-    }
-}
-
 /** 기록이 없을 때. 시작 버튼은 일부러 없다 → 시동을 걸면 저절로 기록된다고만 알려 준다. */
 @Composable
 private fun EmptyPane(modifier: Modifier = Modifier) {
@@ -1367,45 +1330,6 @@ private fun EmptyPane(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun FailedPane(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
-    val c = EodiTheme.colors
-    StatePane(modifier) {
-        Box(Modifier.size(120.dp).background(c.surface, CircleShape), contentAlignment = Alignment.Center) {
-            Icon(EodiIcons.Alert, contentDescription = null, tint = c.error, modifier = Modifier.size(60.dp))
-        }
-        Spacer(Modifier.height(32.dp))
-        Text(
-            stringResource(R.string.timeline_failed_title),
-            style = EodiTheme.type.hero,
-            color = c.textPrimary,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(12.dp))
-        Text(
-            message,
-            style = EodiTheme.type.meta,
-            color = c.textTertiary,
-            textAlign = TextAlign.Center,
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 720.dp),
-        )
-        Spacer(Modifier.height(40.dp))
-        Button(
-            onClick = onRetry,
-            shape = RoundedCornerShape(EodiTheme.space.radiusM),
-            colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = c.onAccent),
-            contentPadding = PaddingValues(horizontal = 40.dp),
-            modifier = Modifier.heightIn(min = EodiTheme.space.touch).widthIn(min = 320.dp),
-        ) {
-            Icon(EodiIcons.Refresh, contentDescription = null, modifier = Modifier.size(30.dp))
-            Spacer(Modifier.width(14.dp))
-            Text(stringResource(R.string.timeline_retry), style = EodiTheme.type.bodyStrong)
-        }
-    }
-}
-
-@Composable
 private fun StatePane(modifier: Modifier, content: @Composable () -> Unit) {
     Column(
         modifier.padding(EodiTheme.space.page),
@@ -1415,7 +1339,7 @@ private fun StatePane(modifier: Modifier, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun CenteredText(text: String) {
+private fun CenterMessage(text: String) {
     Box(Modifier.fillMaxSize().padding(EodiTheme.space.page), contentAlignment = Alignment.Center) {
         Text(text, style = EodiTheme.type.body, color = EodiTheme.colors.textSecondary, textAlign = TextAlign.Center)
     }

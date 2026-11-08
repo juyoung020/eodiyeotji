@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.community
 
+import app.eodiyeotji.ui.common.agoText
 import app.eodiyeotji.ui.offers.CourseCouponBadge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -48,7 +49,6 @@ import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.core.Visit
 import app.eodiyeotji.core.StopReviews
 import app.eodiyeotji.core.TravelReview
-import app.eodiyeotji.ui.review.KeywordChip
 import app.eodiyeotji.ui.review.FeedHero
 import app.eodiyeotji.ui.review.StopStrip
 import app.eodiyeotji.ui.place.placeDetailOpenLabel
@@ -58,8 +58,8 @@ import app.eodiyeotji.ui.map.DayMap
 import app.eodiyeotji.ui.map.MapPhotoPin
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
-import app.eodiyeotji.ui.timeline.distanceText
-import app.eodiyeotji.ui.timeline.durationText
+import app.eodiyeotji.ui.common.distanceText
+import app.eodiyeotji.ui.common.durationText
 import app.eodiyeotji.ui.share.ShareButtonStyle
 import app.eodiyeotji.ui.share.ShareImageButton
 import app.eodiyeotji.ui.share.ShareTarget
@@ -87,29 +87,13 @@ fun SortChoice(sort: CommunitySort, onSort: (CommunitySort) -> Unit) {
 private fun courseStatsText(stops: Int, distanceM: Double, durationMs: Long): String =
     listOf(stringResource(R.string.community_stops_count, stops), distanceText(distanceM), durationText(durationMs)).joinToString(" · ")
 
-/** 조용한 정보 칩 (옅은 회색 바탕, 작은 글씨). */
-@Composable
-internal fun MetaChip(text: String, icon: (@Composable () -> Unit)? = null) {
-    val c = EodiTheme.colors
-    Row(
-        Modifier.background(c.surfaceHigh, CircleShape).padding(start = if (icon != null) 10.dp else 14.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (icon != null) {
-            icon()
-            Spacer(Modifier.width(6.dp))
-        }
-        Text(text, style = EodiTheme.type.caption, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
-
 /** 다녀온 날·계절·날씨 칩 (아이콘은 그날 날씨). */
 @Composable
 internal fun VisitChip(v: Visit) {
     val text = visitText(v)
     if (text.isBlank()) return
     val (icon, tint) = weatherIcon(v.weather)
-    MetaChip(text) { Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp)) }
+    InfoChip(text) { Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp)) }
 }
 
 /** 글자 + › 모양 가벼운 동작 (카드 아래 "코스 보기"). 누르는 자리는 76dp. */
@@ -226,13 +210,13 @@ internal fun CourseDetailScreen(
                                         verticalArrangement = Arrangement.spacedBy(10.dp),
                                     ) {
                                         VisitChip(d.course.visit)
-                                        MetaChip(courseStatsText(p.stops.size, p.distanceM, p.durationMs))
+                                        InfoChip(courseStatsText(p.stops.size, p.distanceM, p.durationMs))
                                         CourseCouponBadge(d.course.offers)
                                     }
                                     if (p.tags.isNotEmpty()) {
                                         Spacer(Modifier.height(14.dp))
                                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            p.tags.forEach { TagChip(it) }
+                                            p.tags.forEach { InfoChip("#$it", tone = ChipTone.Accent) }
                                         }
                                     }
                                 }
@@ -379,7 +363,7 @@ private fun StopReviewQuote(t: TravelReview, author: String?, onOpen: () -> Unit
             }
             if (r.keywords.isNotEmpty()) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    r.keywords.take(3).forEach { KeywordChip(it) }
+                    r.keywords.take(3).forEach { InfoChip(it, tone = ChipTone.Accent) }
                 }
             }
             if (r.text.isNotBlank()) {

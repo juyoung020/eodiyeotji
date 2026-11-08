@@ -49,7 +49,7 @@ object EodiIcons {
         }
     }
 
-    /** 내비 (위를 향한 화살촉) */
+    /** 내비 (위를 향한 화살촉). "안내" 버튼은 어느 화면이든 이 아이콘 하나 */
     val Navi: ImageVector by lazy {
         icon("Navi") {
             path(fill = Ink) {
@@ -121,6 +121,44 @@ object EodiIcons {
             path(fill = Ink) {
                 moveTo(6.5f, 5f); lineTo(10f, 5f); lineTo(10f, 19f); lineTo(6.5f, 19f); close()
                 moveTo(14f, 5f); lineTo(17.5f, 5f); lineTo(17.5f, 19f); lineTo(14f, 19f); close()
+            }
+        }
+    }
+
+    /** 닫기 × (창 · 칩 · 카드 닫기, 모든 화면 같은 모양) */
+    val Close: ImageVector by lazy {
+        icon("Close") { stroke(2.6f) { moveTo(6f, 6f); lineTo(18f, 18f); moveTo(18f, 6f); lineTo(6f, 18f) } }
+    }
+
+    /** 체크 (켜짐 · 고름 · 끝남) */
+    val Check: ImageVector by lazy {
+        icon("Check") { stroke(2.8f) { moveTo(5f, 12.5f); lineTo(10f, 17.5f); lineTo(19f, 7f) } }
+    }
+
+    /** 달력 (날짜 · 다른 날 보기) */
+    val Calendar: ImageVector by lazy {
+        icon("Calendar") {
+            stroke(2f) {
+                moveTo(5.5f, 5f); horizontalLineTo(18.5f)
+                curveTo(19.6f, 5f, 20.5f, 5.9f, 20.5f, 7f); verticalLineTo(19f)
+                curveTo(20.5f, 20.1f, 19.6f, 21f, 18.5f, 21f); horizontalLineTo(5.5f)
+                curveTo(4.4f, 21f, 3.5f, 20.1f, 3.5f, 19f); verticalLineTo(7f)
+                curveTo(3.5f, 5.9f, 4.4f, 5f, 5.5f, 5f); close()
+                moveTo(3.5f, 10f); horizontalLineTo(20.5f)
+                moveTo(8f, 3f); verticalLineTo(7f)
+                moveTo(16f, 3f); verticalLineTo(7f)
+            }
+        }
+    }
+
+    /** 지도 (접힌 지도, "지도에서 보기") */
+    val Map: ImageVector by lazy {
+        icon("Map") {
+            stroke(2f) {
+                moveTo(3.5f, 6.5f); lineTo(9f, 4.5f); lineTo(15f, 6.5f); lineTo(20.5f, 4.5f)
+                lineTo(20.5f, 17.5f); lineTo(15f, 19.5f); lineTo(9f, 17.5f); lineTo(3.5f, 19.5f); close()
+                moveTo(9f, 4.5f); lineTo(9f, 17.5f)
+                moveTo(15f, 6.5f); lineTo(15f, 19.5f)
             }
         }
     }

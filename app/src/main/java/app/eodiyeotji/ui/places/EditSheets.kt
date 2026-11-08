@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.places
 
+import app.eodiyeotji.ui.community.StopPhotoBox
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -34,7 +35,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -56,8 +56,6 @@ import app.eodiyeotji.ui.community.OverlayCard
 import app.eodiyeotji.ui.community.PrimaryPill
 import app.eodiyeotji.ui.community.RoundIconButton
 import app.eodiyeotji.ui.community.SecondaryPill
-import app.eodiyeotji.ui.place.PhotoLoadingPlaceholder
-import app.eodiyeotji.ui.place.PlaceThumbnail
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.timeline.clockText
@@ -178,18 +176,7 @@ private fun MenuHeader(target: EditTarget, card: PlaceCard?, onClose: () -> Unit
         }
         if (target is EditTarget.Stay) {
             val p = target.stay.place
-            Box(Modifier.size(104.dp).clip(RoundedCornerShape(EodiTheme.space.radiusM)).background(c.staySoft), contentAlignment = Alignment.Center) {
-                if (p != null && p.name.isNotBlank()) {
-                    PlaceThumbnail(
-                        p.name, p.address, target.stay.center.lat, target.stay.center.lon,
-                        modifier = Modifier.fillMaxSize(),
-                        fallback = { PinBox() },
-                        loading = { PhotoLoadingPlaceholder(c.staySoft) },
-                    )
-                } else {
-                    PinBox()
-                }
-            }
+            StopPhotoBox(p?.name.orEmpty(), p?.address.orEmpty(), target.stay.center.lat, target.stay.center.lon, null, Modifier.size(104.dp), radius = EodiTheme.space.radiusM, iconSize = 40.dp)
             Spacer(Modifier.width(24.dp))
         }
         Column(Modifier.weight(1f)) {
@@ -198,14 +185,7 @@ private fun MenuHeader(target: EditTarget, card: PlaceCard?, onClose: () -> Unit
             if (sub.isNotBlank()) Text(sub, style = type.meta, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.width(16.dp))
-        RoundIconButton(CommunityIcons.Close, stringResource(R.string.edit_close), onClose)
-    }
-}
-
-@Composable
-private fun PinBox() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Icon(EodiIcons.Pin, null, tint = EodiTheme.colors.stay.copy(alpha = 0.7f), modifier = Modifier.size(40.dp))
+        RoundIconButton(EodiIcons.Close, stringResource(R.string.edit_close), onClose)
     }
 }
 
@@ -289,7 +269,7 @@ private fun DayTitleSheet(day: String, current: String, onSave: (String) -> Unit
         Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 32.dp, end = 32.dp, top = 28.dp, bottom = 28.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.day_title_title), style = type.title, modifier = Modifier.weight(1f).semantics { heading() })
-                RoundIconButton(CommunityIcons.Close, stringResource(R.string.edit_cancel), onCancel)
+                RoundIconButton(EodiIcons.Close, stringResource(R.string.edit_cancel), onCancel)
             }
             Spacer(Modifier.height(20.dp))
             TextField(
@@ -312,7 +292,7 @@ private fun DayTitleSheet(day: String, current: String, onSave: (String) -> Unit
             Spacer(Modifier.height(12.dp))
             Text(stringResource(R.string.day_title_note), style = type.caption, color = c.textTertiary)
             Spacer(Modifier.height(20.dp))
-            PrimaryPill(stringResource(R.string.day_title_save), CommunityIcons.Check, { onSave(text) }, Modifier.fillMaxWidth())
+            PrimaryPill(stringResource(R.string.day_title_save), EodiIcons.Check, { onSave(text) }, Modifier.fillMaxWidth())
         }
     }
 }
@@ -331,7 +311,7 @@ private fun RenameSheet(r: RenameState, onSave: (String, PlaceLabel?) -> Unit, o
         Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 32.dp, end = 32.dp, top = 28.dp, bottom = 28.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.rename_title), style = type.title, modifier = Modifier.weight(1f).semantics { heading() })
-                RoundIconButton(CommunityIcons.Close, stringResource(R.string.edit_cancel), onCancel)
+                RoundIconButton(EodiIcons.Close, stringResource(R.string.edit_cancel), onCancel)
             }
             Spacer(Modifier.height(20.dp))
             TextField(
@@ -354,7 +334,7 @@ private fun RenameSheet(r: RenameState, onSave: (String, PlaceLabel?) -> Unit, o
             Spacer(Modifier.height(12.dp))
             Text(stringResource(R.string.rename_note), style = type.caption, color = c.textTertiary)
             Spacer(Modifier.height(20.dp))
-            PrimaryPill(stringResource(R.string.rename_save), CommunityIcons.Check, { onSave(text, null) }, Modifier.fillMaxWidth(), enabled = text.isNotBlank())
+            PrimaryPill(stringResource(R.string.rename_save), EodiIcons.Check, { onSave(text, null) }, Modifier.fillMaxWidth(), enabled = text.isNotBlank())
             Spacer(Modifier.height(28.dp))
             Text(stringResource(R.string.rename_candidates), style = type.eyebrow, color = c.textTertiary, modifier = Modifier.semantics { heading() })
             Spacer(Modifier.height(12.dp))

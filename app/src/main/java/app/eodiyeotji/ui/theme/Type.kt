@@ -50,6 +50,11 @@ data class EodiType(
     val caption: TextStyle = style(20, 24, FontWeight.Medium, tabular = true),
     /** 제목 위 작은 머리말 ("날짜별 기록", "1년 전" 도장). 굵고 자간을 살짝 넓혀 제목과 구별된다 */
     val eyebrow: TextStyle = style(20, 24, FontWeight.Bold, 0.03.em, tabular = true),
+    /** 운전 중 큰 카드 · 큰 버튼 글자 (멀리서 한눈에). 큰 순서: display > drivingTitle > drivingHeadline > drivingBody */
+    val display: TextStyle = style(56, 72, FontWeight.ExtraBold),
+    val drivingTitle: TextStyle = style(48, 64, FontWeight.Bold),
+    val drivingHeadline: TextStyle = style(40, 52, FontWeight.Bold),
+    val drivingBody: TextStyle = style(36, 44, FontWeight.Bold),
 )
 
 internal val LocalEodiType = staticCompositionLocalOf { EodiType() }
@@ -57,11 +62,11 @@ internal val LocalEodiType = staticCompositionLocalOf { EodiType() }
 /** Material 컴포넌트(버튼 글자 등)가 쓰는 단계도 같은 크기로 맞춘다. */
 internal fun materialTypography(t: EodiType) = Typography(
     displayLarge = style(60, 80, FontWeight.ExtraBold),
-    displayMedium = style(56, 72, FontWeight.ExtraBold),
-    displaySmall = style(48, 64, FontWeight.Bold),
-    headlineLarge = style(48, 64, FontWeight.Bold),
-    headlineMedium = style(40, 52, FontWeight.Bold),
-    headlineSmall = style(36, 44, FontWeight.Bold),
+    displayMedium = t.display,
+    displaySmall = t.drivingTitle,
+    headlineLarge = t.drivingTitle,
+    headlineMedium = t.drivingHeadline,
+    headlineSmall = t.drivingBody,
     titleLarge = t.titleSmall,
     titleMedium = t.bodyStrong,
     titleSmall = t.label,

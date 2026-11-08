@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.community
 
+import app.eodiyeotji.ui.theme.EodiIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,8 +49,8 @@ import app.eodiyeotji.core.driveShareCandidates
 import app.eodiyeotji.core.shareDriveRoute
 import app.eodiyeotji.core.weatherFor
 import app.eodiyeotji.ui.theme.EodiTheme
-import app.eodiyeotji.ui.timeline.distanceText
-import app.eodiyeotji.ui.timeline.durationText
+import app.eodiyeotji.ui.common.distanceText
+import app.eodiyeotji.ui.common.durationText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException
@@ -149,7 +150,7 @@ fun ShareDriveRouteSheet(onDone: (DriveRoute?) -> Unit, viewModel: ShareDriveVie
             Column(Modifier.padding(32.dp).heightIn(max = 1000.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.drive_share_pick_title), style = EodiTheme.type.title, modifier = Modifier.weight(1f))
-                    RoundIconButton(CommunityIcons.Close, stringResource(R.string.community_close), { onDone(null) })
+                    RoundIconButton(EodiIcons.Close, stringResource(R.string.community_close), { onDone(null) })
                 }
                 Spacer(Modifier.height(16.dp))
                 when (val l = state.candidates) {
@@ -255,7 +256,7 @@ private fun ShareDriveForm(
                 Modifier.fillMaxWidth().background(c.hereSoft, RoundedCornerShape(EodiTheme.space.radiusS)).padding(horizontal = 18.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(CommunityIcons.Check, null, tint = c.here, modifier = Modifier.size(26.dp))
+                Icon(EodiIcons.Check, null, tint = c.here, modifier = Modifier.size(26.dp))
                 Spacer(Modifier.width(12.dp))
                 Text(stringResource(R.string.drive_share_trimmed), style = type.label, color = c.textPrimary)
             }

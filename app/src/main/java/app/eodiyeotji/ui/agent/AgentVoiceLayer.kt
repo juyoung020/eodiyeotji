@@ -1,5 +1,7 @@
 package app.eodiyeotji.ui.agent
 
+import app.eodiyeotji.ui.theme.EodiTheme
+import app.eodiyeotji.ui.theme.EodiIcons
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
@@ -21,7 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,8 +59,8 @@ internal fun BoxScope.AgentVoiceLayer(
         Surface(
             onClick = onMic,
             shape = CircleShape,
-            color = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
+            color = EodiTheme.colors.accent,
+            contentColor = EodiTheme.colors.onAccent,
             shadowElevation = 6.dp,
             modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(top = 56.dp, end = 56.dp).size(96.dp),
         ) {
@@ -86,10 +87,10 @@ internal fun BoxScope.AgentVoiceLayer(
         exit = fadeOut(),
         modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 40.dp, start = 24.dp, end = 24.dp),
     ) {
-        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.inverseSurface, contentColor = MaterialTheme.colorScheme.inverseOnSurface) {
+        Surface(shape = CircleShape, color = EodiTheme.colors.textPrimary, contentColor = EodiTheme.colors.surface) {
             Text(
                 note.orEmpty(),
-                style = MaterialTheme.typography.titleLarge,
+                style = EodiTheme.type.titleSmall,
                 modifier = Modifier.padding(horizontal = 32.dp, vertical = 18.dp).semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
@@ -101,7 +102,7 @@ private fun ListeningCard(voice: VoiceUi, driving: Boolean, onMic: () -> Unit, o
     val pulse by animateFloatAsState(targetValue = 1f + voice.level * 0.35f, label = "micLevel")
     Surface(
         shape = RoundedCornerShape(36.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        color = EodiTheme.colors.surfaceHigh,
         shadowElevation = 12.dp,
         modifier = Modifier.widthIn(max = 960.dp).fillMaxWidth(),
     ) {
@@ -110,8 +111,8 @@ private fun ListeningCard(voice: VoiceUi, driving: Boolean, onMic: () -> Unit, o
                 Surface(
                     onClick = onMic,
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    color = EodiTheme.colors.accent,
+                    contentColor = EodiTheme.colors.onAccent,
                     modifier = Modifier.size(104.dp).scale(pulse),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -123,8 +124,8 @@ private fun ListeningCard(voice: VoiceUi, driving: Boolean, onMic: () -> Unit, o
             Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
                 Text(
                     stringResource(if (voice.followUp) R.string.agent_voice_follow_up else R.string.agent_voice_listening),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.primary,
+                    style = EodiTheme.type.titleSmall,
+                    color = EodiTheme.colors.accent,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
@@ -137,8 +138,8 @@ private fun ListeningCard(voice: VoiceUi, driving: Boolean, onMic: () -> Unit, o
                             }
                         )
                     },
-                    style = if (driving) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.headlineSmall,
-                    color = if (voice.partial.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                    style = if (driving) EodiTheme.type.drivingTitle else EodiTheme.type.drivingBody,
+                    color = if (voice.partial.isBlank()) EodiTheme.colors.textSecondary else EodiTheme.colors.textPrimary,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Start,
@@ -147,7 +148,7 @@ private fun ListeningCard(voice: VoiceUi, driving: Boolean, onMic: () -> Unit, o
                 Spacer(Modifier.height(2.dp))
             }
             IconButton(onClick = onCancel, modifier = Modifier.size(AgentTouchMin)) {
-                Icon(AgentIcons.Close, contentDescription = stringResource(R.string.agent_voice_cancel), modifier = Modifier.size(36.dp))
+                Icon(EodiIcons.Close, contentDescription = stringResource(R.string.agent_voice_cancel), modifier = Modifier.size(36.dp))
             }
         }
     }

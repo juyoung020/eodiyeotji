@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.community
 
+import app.eodiyeotji.ui.common.agoText
 import androidx.compose.foundation.BorderStroke
 
 import androidx.activity.compose.BackHandler
@@ -63,8 +64,8 @@ import app.eodiyeotji.ui.map.ScenicRouteMap
 import app.eodiyeotji.ui.theme.AlbumPhoto
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
-import app.eodiyeotji.ui.timeline.distanceText
-import app.eodiyeotji.ui.timeline.durationText
+import app.eodiyeotji.ui.common.distanceText
+import app.eodiyeotji.ui.common.durationText
 import kotlinx.coroutines.delay
 
 /** 이 폭 이상이면 상세를 3D 지도 | 글 두 칸으로 나눈다. */
@@ -96,9 +97,7 @@ fun DriveRoutePane(viewModel: DriveRouteViewModel = hiltViewModel()) {
             }
             when (val l = state.list) {
                 Load.Loading -> LoadingBox()
-                is Load.Failed -> CenterMessage(stringResource(R.string.community_failed, l.message)) {
-                    SecondaryPill(stringResource(R.string.community_retry), EodiIcons.Refresh, viewModel::reload)
-                }
+                is Load.Failed -> ErrorState(stringResource(R.string.community_failed, l.message), viewModel::reload)
                 is Load.Loaded ->
                     if (l.items.isEmpty()) {
                         CenterMessage(stringResource(R.string.drive_empty))
@@ -225,18 +224,7 @@ internal fun DriveRouteCard(
                 Box(Modifier.fillMaxSize().clip(RoundedCornerShape(18.dp))) {
                     RouteSnapshotImage(r, stringResource(R.string.drive_preview_description, r.title), Modifier.fillMaxSize())
                     BestTimeBadge(r.bestTime, r.theme, Modifier.align(Alignment.TopStart).padding(14.dp))
-                    if (rank != null) {
-                        Box(
-                            Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(12.dp)
-                                .size(52.dp)
-                                .background(if (focused) colors.accent else colors.surface, CircleShape),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(rank.toString(), style = type.title, fontWeight = FontWeight.Bold, color = if (focused) colors.onAccent else colors.textPrimary)
-                        }
-                    }
+                    if (rank != null) RankBadge(rank, focused, Modifier.align(Alignment.TopEnd).padding(12.dp))
                 }
             }
             Spacer(Modifier.height(18.dp))
@@ -253,8 +241,8 @@ internal fun DriveRouteCard(
             Spacer(Modifier.height(16.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), maxLines = 2) {
                 VisitChip(r.visit)
-                MetaChip(routeStatsText(r))
-                item.distanceKm?.let { MetaChip(stringResource(R.string.drive_from_here, distanceText(it * 1000.0))) }
+                InfoChip(routeStatsText(r))
+                item.distanceKm?.let { InfoChip(stringResource(R.string.drive_from_here, distanceText(it * 1000.0))) }
             }
             Spacer(Modifier.height(16.dp))
             Box(Modifier.fillMaxWidth().height(1.dp).background(colors.outline))
@@ -263,12 +251,7 @@ internal fun DriveRouteCard(
                 if (onHeart != null) {
                     HeartButton(r.hearts, r.heartedByMe, onHeart)
                 } else {
-                    // 누를 수 없는 하트 수 (에이전트 추천 카드)
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 12.dp, vertical = 20.dp)) {
-                        Icon(if (r.heartedByMe) CommunityIcons.HeartFilled else CommunityIcons.Heart, null, tint = colors.heart, modifier = Modifier.size(26.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(r.hearts.toString(), style = type.label, fontWeight = FontWeight.Bold, color = colors.textSecondary)
-                    }
+                    HeartCount(r.hearts, r.heartedByMe, Modifier.padding(horizontal = 12.dp, vertical = 20.dp))
                 }
                 Spacer(Modifier.weight(1f))
                 TextAction(action, onOpen)
@@ -396,8 +379,8 @@ private fun DriveRouteDetailScreen(
                                     Spacer(Modifier.height(16.dp))
                                     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                         VisitChip(r.visit)
-                                        MetaChip(routeStatsText(r))
-                                        d.item.distanceKm?.let { MetaChip(stringResource(R.string.drive_from_here, distanceText(it * 1000.0))) }
+                                        InfoChip(routeStatsText(r))
+                                        d.item.distanceKm?.let { InfoChip(stringResource(R.string.drive_from_here, distanceText(it * 1000.0))) }
                                     }
                                 }
                             }
@@ -407,7 +390,7 @@ private fun DriveRouteDetailScreen(
                                 Column(Modifier.padding(start = 8.dp, top = 6.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Text(stringResource(R.string.drive_sights_title), style = EodiTheme.type.label, color = colors.textTertiary)
                                     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        r.highlights.forEach { MetaChip(it.name) }
+                                        r.highlights.forEach { InfoChip(it.name) }
                                     }
                                 }
                             }

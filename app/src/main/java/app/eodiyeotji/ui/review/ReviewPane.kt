@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.review
 
+import app.eodiyeotji.ui.community.ErrorState
 import androidx.compose.foundation.horizontalScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -65,7 +66,6 @@ import app.eodiyeotji.ui.community.Notice
 import app.eodiyeotji.ui.community.OverlayCard
 import app.eodiyeotji.ui.community.PrimaryPill
 import app.eodiyeotji.ui.community.RoundIconButton
-import app.eodiyeotji.ui.community.SecondaryPill
 import app.eodiyeotji.ui.community.SortChoice
 import app.eodiyeotji.ui.community.StopPhoto
 import app.eodiyeotji.ui.community.TogglePill
@@ -120,9 +120,7 @@ fun ReviewPane(viewModel: ReviewViewModel = hiltViewModel(), courses: CourseView
             }
             when (val l = course.list) {
                 Load.Loading -> LoadingBox()
-                is Load.Failed -> CenterMessage(stringResource(R.string.community_failed, l.message)) {
-                    SecondaryPill(stringResource(R.string.community_retry), EodiIcons.Refresh, courses::reload)
-                }
+                is Load.Failed -> ErrorState(stringResource(R.string.community_failed, l.message), courses::reload)
                 is Load.Loaded ->
                     if (l.items.isEmpty()) {
                         CenterMessage(if (course.nearOn) stringResource(R.string.course_empty_near, 30) else stringResource(R.string.course_empty))
@@ -225,7 +223,7 @@ internal fun WriteReviewSheet(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                RoundIconButton(CommunityIcons.Close, stringResource(R.string.community_close), onClose)
+                RoundIconButton(EodiIcons.Close, stringResource(R.string.community_close), onClose)
             }
             Spacer(Modifier.height(20.dp))
             if (place == null) {
@@ -266,7 +264,7 @@ internal fun WriteReviewSheet(
                     d.error?.let { Text(stringResource(R.string.community_failed, it), style = EodiTheme.type.caption, color = c.error) }
                     PrimaryPill(
                         stringResource(if (d.submitting) R.string.share_submitting else R.string.review_submit),
-                        CommunityIcons.Check,
+                        EodiIcons.Check,
                         onSubmit,
                         Modifier.fillMaxWidth(),
                         enabled = !d.submitting,

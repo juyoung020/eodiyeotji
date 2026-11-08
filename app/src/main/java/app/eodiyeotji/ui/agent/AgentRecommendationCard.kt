@@ -1,12 +1,16 @@
 package app.eodiyeotji.ui.agent
 
+import app.eodiyeotji.ui.community.SubTextStyle
+import app.eodiyeotji.ui.theme.EodiIcons
+import app.eodiyeotji.ui.common.agoText
+import app.eodiyeotji.ui.common.durationText
+import app.eodiyeotji.ui.common.distanceText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -15,14 +19,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -34,7 +36,7 @@ import app.eodiyeotji.ui.review.StopStrip
 import app.eodiyeotji.ui.place.placeDetailOpenLabel
 import app.eodiyeotji.ui.theme.MemoryStamp
 import app.eodiyeotji.ui.place.LocalOpenPlace
-import app.eodiyeotji.ui.place.PlaceThumbnail
+import app.eodiyeotji.ui.community.StopPhotoBox
 import app.eodiyeotji.ui.share.ComposableImageShare
 import app.eodiyeotji.ui.share.ShareButtonStyle
 import app.eodiyeotji.ui.share.ShareImageButton
@@ -73,8 +75,8 @@ internal fun RecommendationCard(
             val sub = listOf(
                 facts.region,
                 stringResource(R.string.agent_stops_count, stops.size),
-                kmText(facts.distanceM),
-                spanText(facts.endMs - facts.startMs),
+                distanceText(facts.distanceM),
+                durationText(facts.endMs - facts.startMs),
             ).filter { it.isNotBlank() }.joinToString(" · ")
             if (hero != null) {
                 FeedHero(
@@ -91,7 +93,7 @@ internal fun RecommendationCard(
                 Text(sub, style = EodiTheme.type.meta, color = c.textSecondary, maxLines = 1)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(AgentIcons.Calendar, null, tint = c.textTertiary, modifier = Modifier.size(22.dp))
+                Icon(EodiIcons.Calendar, null, tint = c.textTertiary, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
                     memoryDateText(facts.day),
@@ -126,28 +128,28 @@ internal fun OtherDayRow(rec: RecommendationUi, today: LocalDate, onAsk: (String
     Surface(
         onClick = { onAsk(question) },
         shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = EodiTheme.colors.surface,
         modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)) {
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(56.dp).background(MaterialTheme.colorScheme.secondaryContainer, CircleShape),
+                modifier = Modifier.size(56.dp).background(EodiTheme.colors.surfaceHigh, CircleShape),
             ) {
-                Icon(AgentIcons.Calendar, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(28.dp))
+                Icon(EodiIcons.Calendar, contentDescription = null, tint = EodiTheme.colors.textPrimary, modifier = Modifier.size(28.dp))
             }
             Spacer(Modifier.width(20.dp))
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(title, style = EodiTheme.type.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
                     dateLine + "  ·  " + rec.stops.joinToString(" → ") { it.name },
-                    style = AgentSubStyle,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = SubTextStyle,
+                    color = EodiTheme.colors.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Icon(AgentIcons.Send, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+            Icon(AgentIcons.Send, contentDescription = null, tint = EodiTheme.colors.accent, modifier = Modifier.size(28.dp))
         }
     }
 }
@@ -163,18 +165,13 @@ internal fun DrivingMemoryCard(rec: RecommendationUi, modifier: Modifier = Modif
     val first = rec.stops.firstOrNull()
     Surface(shape = RoundedCornerShape(28.dp), color = c.surfaceHigh, modifier = modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(20.dp)) {
-            val photoShape = RoundedCornerShape(22.dp)
-            Box(Modifier.size(128.dp).clip(photoShape).background(c.staySoft, photoShape)) {
-                if (first != null) {
-                    PlaceThumbnail(first.name, first.address, first.lat, first.lon, modifier = Modifier.fillMaxSize())
-                }
-            }
+            StopPhotoBox(first?.name.orEmpty(), first?.address.orEmpty(), first?.lat ?: 0.0, first?.lon ?: 0.0, null, Modifier.size(128.dp), radius = 22.dp)
             Spacer(Modifier.width(28.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 MemoryStamp(agoText(LocalDate.parse(facts.day), today), large = true)
                 Text(
                     rec.hit.episode.title ?: rec.hit.dayTitle ?: facts.ruleLabel,
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = EodiTheme.type.drivingHeadline,
                     fontWeight = FontWeight.Bold,
                     color = c.textPrimary,
                     maxLines = 1,

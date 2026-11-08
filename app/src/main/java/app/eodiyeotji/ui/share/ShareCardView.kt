@@ -48,8 +48,8 @@ import androidx.compose.ui.unit.sp
 import app.eodiyeotji.R
 import app.eodiyeotji.ui.theme.BrandMark
 import app.eodiyeotji.ui.theme.EodiTheme
-import app.eodiyeotji.ui.timeline.distanceText
-import app.eodiyeotji.ui.timeline.durationText
+import app.eodiyeotji.ui.common.distanceText
+import app.eodiyeotji.ui.common.durationText
 import kotlin.math.roundToInt
 
 /** 카드 폭(dp). [ComposableImageShare]가 3배(1080px)로 그린다. */

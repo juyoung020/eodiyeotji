@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.recap
 
+import app.eodiyeotji.ui.community.SectionTitle
 import androidx.compose.ui.graphics.graphicsLayer
 
 import androidx.compose.ui.graphics.Brush
@@ -40,6 +41,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import app.eodiyeotji.ui.place.LocalOpenPlace
+import app.eodiyeotji.ui.community.StopPhotoBox
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -52,16 +54,13 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
 import app.eodiyeotji.core.OnThisDay
 import app.eodiyeotji.core.RecapDay
-import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.recap.RecallCenter
-import app.eodiyeotji.ui.agent.AgentIcons
-import app.eodiyeotji.ui.agent.kmText
+import app.eodiyeotji.ui.common.distanceText
 import app.eodiyeotji.ui.agent.memoryDateText
 import app.eodiyeotji.ui.place.PhotoLoadingPlaceholder
 import app.eodiyeotji.ui.place.PlaceThumbnail
@@ -165,7 +164,7 @@ fun OnThisDayCard(
                     Modifier.size(64.dp).clip(CircleShape).background(c.surfaceHigh).clickable(role = Role.Button, onClick = onDismiss),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(AgentIcons.Close, contentDescription = stringResource(R.string.recap_dismiss), tint = c.textSecondary, modifier = Modifier.size(32.dp))
+                    Icon(EodiIcons.Close, contentDescription = stringResource(R.string.recap_dismiss), tint = c.textSecondary, modifier = Modifier.size(32.dp))
                 }
             }
             Text(otd.title, style = EodiTheme.type.title, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -173,7 +172,7 @@ fun OnThisDayCard(
                 listOfNotNull(
                     memoryDateText(otd.day),
                     otd.region.takeIf { it.isNotBlank() },
-                    kmText(otd.distanceM),
+                    distanceText(otd.distanceM),
                     stringResource(R.string.recap_place_count, otd.stops.size).takeIf { otd.stops.isNotEmpty() },
                 ).joinToString(" · "),
                 style = EodiTheme.type.meta,
@@ -186,7 +185,8 @@ fun OnThisDayCard(
             }
             if (otd.photos.isNotEmpty()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    otd.photos.forEach { s -> PhotoTile(s, Modifier.weight(1f).height(150.dp)) }
+                    val openPlace = LocalOpenPlace.current
+                    otd.photos.forEach { s -> StopPhotoBox(s.name, s.address, s.lat, s.lon, null, Modifier.weight(1f).height(150.dp), radius = 20.dp, iconSize = 36.dp, loadingColor = c.surfaceHigh, showName = true, onClick = { openPlace(s) }) }
                     // 사진이 1~2장이면 빈 칸으로 너비를 맞춘다 (사진이 너무 커지지 않게)
                     repeat(3 - otd.photos.size) { Spacer(Modifier.weight(1f)) }
                 }
@@ -213,7 +213,7 @@ fun OnThisDayCard(
                     colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = c.onAccent),
                     modifier = Modifier.weight(1f).heightIn(min = 76.dp),
                 ) {
-                    Icon(AgentIcons.Navigate, contentDescription = null, modifier = Modifier.size(30.dp))
+                    Icon(EodiIcons.Navi, contentDescription = null, modifier = Modifier.size(30.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.recap_navigate), style = EodiTheme.type.label, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
@@ -286,7 +286,7 @@ fun RecallDrivingCard(modifier: Modifier = Modifier) {
                 .clickable(role = Role.Button, onClick = center::dismissCard),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(AgentIcons.Close, contentDescription = stringResource(R.string.recap_recall_close), tint = Color.White, modifier = Modifier.size(36.dp))
+            Icon(EodiIcons.Close, contentDescription = stringResource(R.string.recap_recall_close), tint = Color.White, modifier = Modifier.size(36.dp))
         }
         // 그날로 돌아가기: 정차 중에만 (주행 중에는 큰 사진 화면을 열지 않는다)
         if (!driving) {
@@ -307,38 +307,6 @@ fun RecallDrivingCard(modifier: Modifier = Modifier) {
 }
 
 // ---------------------------------------------------------------- 공통 조각
-
-/** 들른 곳 사진 한 칸 (없으면 코랄 옅은 칸 + 핀). [showName]이면 아래에 이름 받침. */
-@Composable
-internal fun PhotoTile(stop: StopFact, modifier: Modifier, showName: Boolean = true, radius: Dp = 20.dp) {
-    val c = EodiTheme.colors
-    val shape = RoundedCornerShape(radius)
-    val openPlace = LocalOpenPlace.current
-    // 누르면 그곳 장소 창(사진 · 별점 · 리뷰)
-    Box(modifier.clip(shape).background(c.staySoft, shape).clickable { openPlace(stop) }) {
-        val pin: @Composable () -> Unit = {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Icon(EodiIcons.Pin, contentDescription = null, tint = c.stay, modifier = Modifier.size(36.dp))
-            }
-        }
-        PlaceThumbnail(
-            stop.name, stop.address, stop.lat, stop.lon,
-            modifier = Modifier.fillMaxSize(),
-            fallback = pin,
-            loading = { PhotoLoadingPlaceholder(c.surfaceHigh) },
-        )
-        if (showName) {
-            Text(
-                stop.name,
-                style = EodiTheme.type.caption,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().background(c.scrim).padding(horizontal = 12.dp, vertical = 6.dp),
-            )
-        }
-    }
-}
 
 /** 통계 칸 줄 (카드 안 옅은 칸, 칸 사이 세로선). */
 @Composable
@@ -367,17 +335,6 @@ private fun RowScope.StatCell(value: String, label: String) {
     }
 }
 
-/** 섹션 머리말 (금색 반짝임 + 글). */
-@Composable
-internal fun SectionTitle(text: String, modifier: Modifier = Modifier) {
-    val c = EodiTheme.colors
-    Row(modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(EodiIcons.Sparkle, contentDescription = null, tint = c.memoryInk, modifier = Modifier.size(24.dp))
-        Spacer(Modifier.width(8.dp))
-        Text(text, style = EodiTheme.type.eyebrow, color = c.textTertiary)
-    }
-}
-
 /** 요약의 날 한 줄 (최고의 날 · 가장 긴 여행): 사진 · 도장 · 제목 · 날짜 줄. 누르면 그날. */
 @Composable
 internal fun RecapDayRow(stamp: String, day: RecapDay, onOpenDay: ((String) -> Unit)?, modifier: Modifier = Modifier) {
@@ -393,13 +350,14 @@ internal fun RecapDayRow(stamp: String, day: RecapDay, onOpenDay: ((String) -> U
     ) {
         val photo = day.photo
         if (photo != null) {
-            PhotoTile(photo, Modifier.size(140.dp), showName = false)
+            val openPlace = LocalOpenPlace.current
+            StopPhotoBox(photo.name, photo.address, photo.lat, photo.lon, null, Modifier.size(140.dp), radius = 20.dp, iconSize = 36.dp, loadingColor = c.surfaceHigh, onClick = { openPlace(photo) })
             Spacer(Modifier.width(24.dp))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             MemoryStamp(stamp)
             Text(day.title, style = EodiTheme.type.bodyStrong, fontWeight = FontWeight.Bold, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            val span = if (day.spanDays > 1) stringResource(R.string.recap_span, day.spanDays, kmText(day.distanceM)) else kmText(day.distanceM)
+            val span = if (day.spanDays > 1) stringResource(R.string.recap_span, day.spanDays, distanceText(day.distanceM)) else distanceText(day.distanceM)
             Text(
                 listOfNotNull(memoryDateText(day.day), day.region.takeIf { it.isNotBlank() }, span).joinToString(" · "),
                 style = EodiTheme.type.meta,

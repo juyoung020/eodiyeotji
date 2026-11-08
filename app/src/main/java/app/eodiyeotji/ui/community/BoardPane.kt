@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.community
 
+import app.eodiyeotji.ui.common.agoText
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -66,9 +67,7 @@ fun BoardPane(viewModel: BoardViewModel = hiltViewModel()) {
             }
             when (val l = state.list) {
                 Load.Loading -> LoadingBox()
-                is Load.Failed -> CenterMessage(stringResource(R.string.community_failed, l.message)) {
-                    SecondaryPill(stringResource(R.string.community_retry), EodiIcons.Refresh, viewModel::reload)
-                }
+                is Load.Failed -> ErrorState(stringResource(R.string.community_failed, l.message), viewModel::reload)
                 is Load.Loaded ->
                     if (l.items.isEmpty()) {
                         CenterMessage(stringResource(R.string.board_empty))
@@ -128,7 +127,7 @@ private fun PostCard(p: BoardPost, onOpen: () -> Unit, onHeart: () -> Unit) {
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp), maxLines = 1) {
-                    p.tags.forEach { TagChip(it) }
+                    p.tags.forEach { InfoChip("#$it", tone = ChipTone.Accent) }
                 }
                 CommentCount(p.commentCount)
                 Spacer(Modifier.width(16.dp))
@@ -180,7 +179,7 @@ private fun ThreadScreen(
                                 if (p.body.isNotBlank()) Text(p.body, style = EodiTheme.type.body)
                                 if (p.tags.isNotEmpty()) {
                                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        p.tags.forEach { TagChip(it) }
+                                        p.tags.forEach { InfoChip("#$it", tone = ChipTone.Accent) }
                                     }
                                 }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -256,7 +255,7 @@ private fun WritePostSheet(posting: Boolean, onPost: (String, String, String) ->
         Column(Modifier.verticalScroll(rememberScrollState()).padding(32.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.board_write_title), style = type.title, modifier = Modifier.weight(1f))
-                RoundIconButton(CommunityIcons.Close, stringResource(R.string.community_close), onDismiss)
+                RoundIconButton(EodiIcons.Close, stringResource(R.string.community_close), onDismiss)
             }
             OutlinedTextField(
                 value = title,

@@ -1,6 +1,8 @@
 package app.eodiyeotji.ui.agent
 
-import androidx.compose.foundation.background
+import app.eodiyeotji.ui.community.RankBadge
+import app.eodiyeotji.ui.theme.EodiTheme
+import app.eodiyeotji.ui.common.distanceText
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,9 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,12 +24,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.eodiyeotji.R
 import app.eodiyeotji.agent.RecommendedCourse
 import app.eodiyeotji.core.DriveRoute
 import app.eodiyeotji.core.DriveRouteItem
 import app.eodiyeotji.ui.community.DriveRouteCard
+import app.eodiyeotji.ui.community.HeartCount
 import app.eodiyeotji.ui.map.RouteSnapshotImage
 
 // 근처 추천 드라이브 길 카드 ("여기 근처 드라이브 추천코스"). 순위·거리·하트는 Rust가 끝내고 오고, 여기는 받은 순서대로 그리기만 한다.
@@ -44,9 +44,9 @@ internal fun CourseRecommendationList(turn: AgentTurn, onAsk: (String) -> Unit, 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp), modifier = modifier) {
         Text(
             stringResource(R.string.agent_courses_title),
-            style = MaterialTheme.typography.titleLarge,
+            style = EodiTheme.type.titleSmall,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = EodiTheme.colors.textSecondary,
         )
         turn.courses.forEachIndexed { i, c ->
             val question = stringResource(R.string.agent_followup_pick_course, c.rank)
@@ -62,48 +62,32 @@ internal fun CourseRecommendationList(turn: AgentTurn, onAsk: (String) -> Unit, 
     }
 }
 
-/** 주행 중 카드의 큰 숫자 줄: "♥ 486   여기서 4.1km" */
+/** 주행 중 카드의 큰 숫자 줄: "하트 486   여기서 4.1km" */
 @Composable
 private fun CourseNumbers(c: RecommendedCourse) {
-    val colors = MaterialTheme.colorScheme
-    val style = MaterialTheme.typography.headlineSmall
+    val colors = EodiTheme.colors
+    val style = EodiTheme.type.drivingBody
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-        Text(stringResource(R.string.agent_course_hearts, c.route.hearts), style = style, fontWeight = FontWeight.Bold, color = app.eodiyeotji.ui.theme.EodiTheme.colors.heart)
+        HeartCount(c.route.hearts, c.route.heartedByMe, large = true)
         c.distanceKm?.let {
-            Text(stringResource(R.string.agent_course_from_here, kmText(it * 1000.0)), style = style, fontWeight = FontWeight.SemiBold, color = colors.primary)
+            Text(stringResource(R.string.agent_course_from_here, distanceText(it * 1000.0)), style = style, fontWeight = FontWeight.SemiBold, color = colors.accent)
         }
-    }
-}
-
-@Composable
-private fun RankBadge(rank: Int, focused: Boolean, size: Int = 56) {
-    val colors = MaterialTheme.colorScheme
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier.size(size.dp).background(if (focused) colors.primary else colors.secondaryContainer, CircleShape),
-    ) {
-        Text(
-            rank.toString(),
-            fontSize = (size * 0.45f).sp,
-            fontWeight = FontWeight.Bold,
-            color = if (focused) colors.onPrimary else colors.onSecondaryContainer,
-        )
     }
 }
 
 /** 주행 중: 지금 제안한 길 하나만 크게 (미리보기 그림 · 순위 · 이름 · 하트 · 거리). 목록·움직이는 지도는 없다. */
 @Composable
 internal fun DrivingCourseCard(c: RecommendedCourse, modifier: Modifier = Modifier) {
-    val colors = MaterialTheme.colorScheme
+    val colors = EodiTheme.colors
     Surface(shape = RoundedCornerShape(28.dp), color = colors.surface, modifier = modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(20.dp)) {
             Box(Modifier.size(width = 196.dp, height = 112.dp).clip(RoundedCornerShape(24.dp))) {
                 RouteSnapshotImage(c.route, stringResource(R.string.drive_preview_description, c.route.title), Modifier.matchParentSize())
-                Box(Modifier.align(Alignment.TopStart).padding(6.dp)) { RankBadge(c.rank, focused = true, size = 44) }
+                Box(Modifier.align(Alignment.TopStart).padding(6.dp)) { RankBadge(c.rank, focused = true, size = 44.dp) }
             }
             Spacer(Modifier.width(28.dp))
             Column(Modifier.weight(1f)) {
-                Text(c.route.title, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(c.route.title, style = EodiTheme.type.drivingTitle, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(4.dp))
                 CourseNumbers(c)
             }

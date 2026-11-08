@@ -1,5 +1,7 @@
 package app.eodiyeotji.ui.places
 
+import app.eodiyeotji.ui.community.SectionTitle
+import app.eodiyeotji.ui.community.StopPhotoBox
 import app.eodiyeotji.core.PartnerOffer
 import app.eodiyeotji.ui.offers.CouponWallet
 import app.eodiyeotji.ui.offers.LocalCoupons
@@ -36,7 +38,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -61,9 +62,7 @@ import app.eodiyeotji.ui.community.LoadingBox
 import app.eodiyeotji.ui.community.Notice
 import app.eodiyeotji.ui.community.PrimaryPill
 import app.eodiyeotji.ui.community.SecondaryPill
-import app.eodiyeotji.ui.place.PhotoLoadingPlaceholder
 import app.eodiyeotji.ui.place.LocalOpenPlace
-import app.eodiyeotji.ui.place.PlaceThumbnail
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.timeline.clockText
@@ -203,18 +202,7 @@ private fun PlaceCardView(card: PlaceCard, offers: List<PartnerOffer>, onHeart: 
     ) {
         Column(Modifier.padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(120.dp).clip(RoundedCornerShape(EodiTheme.space.radiusM)).background(c.staySoft), contentAlignment = Alignment.Center) {
-                    val pin: @Composable () -> Unit = {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Icon(EodiIcons.Pin, null, tint = c.stay.copy(alpha = 0.7f), modifier = Modifier.size(40.dp))
-                        }
-                    }
-                    if (label != null) {
-                        PlaceThumbnail(label.name, label.address, card.lat, card.lon, Modifier.fillMaxSize(), fallback = pin, loading = { PhotoLoadingPlaceholder(c.staySoft) })
-                    } else {
-                        pin()
-                    }
-                }
+                StopPhotoBox(label?.name.orEmpty(), label?.address.orEmpty(), card.lat, card.lon, null, Modifier.size(120.dp), radius = EodiTheme.space.radiusM, iconSize = 40.dp)
                 Spacer(Modifier.width(20.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(label?.name ?: stringResource(R.string.edit_unknown_place), style = type.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -240,7 +228,7 @@ private fun PlaceCardView(card: PlaceCard, offers: List<PartnerOffer>, onHeart: 
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 PrimaryPill(stringResource(R.string.edit_navigate), EodiIcons.Navi, onNavigate, Modifier.weight(1f))
-                if (onRecords != null) SecondaryPill(stringResource(R.string.places_records), app.eodiyeotji.ui.agent.AgentIcons.Calendar, onRecords, Modifier.weight(1f))
+                if (onRecords != null) SecondaryPill(stringResource(R.string.places_records), EodiIcons.Calendar, onRecords, Modifier.weight(1f))
             }
         }
     }
@@ -257,11 +245,11 @@ private fun SettingsPane(s: PlacesUiState, vm: PlacesViewModel, compact: Boolean
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = modifier,
     ) {
-        full("anchor-h") { SectionTitle(stringResource(R.string.anchor_section)) }
+        full("anchor-h") { SectionTitle(stringResource(R.string.anchor_section), Modifier.padding(start = 4.dp, bottom = 4.dp)) }
         full("home") { AnchorRow(AnchorRole.HOME, s.homeOffice.home, onReset = { vm.resetAnchor(AnchorRole.HOME) }) }
         full("office") { AnchorRow(AnchorRole.OFFICE, s.homeOffice.office, onReset = { vm.resetAnchor(AnchorRole.OFFICE) }) }
         full("anchor-hint") { Text(stringResource(R.string.anchor_hint), style = EodiTheme.type.caption, color = c.textTertiary, modifier = Modifier.padding(start = 4.dp)) }
-        full("hidden-h") { Box(Modifier.padding(top = 20.dp)) { SectionTitle(stringResource(R.string.hidden_section)) } }
+        full("hidden-h") { Box(Modifier.padding(top = 20.dp)) { SectionTitle(stringResource(R.string.hidden_section), Modifier.padding(start = 4.dp, bottom = 4.dp)) } }
         if (s.hidden.isEmpty()) {
             full("hidden-empty") { Text(stringResource(R.string.hidden_empty), style = EodiTheme.type.body, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp)) }
         } else {
@@ -272,11 +260,6 @@ private fun SettingsPane(s: PlacesUiState, vm: PlacesViewModel, compact: Boolean
 
 private fun androidx.compose.foundation.lazy.grid.LazyGridScope.full(key: String, content: @Composable () -> Unit) {
     item(key = key, span = { GridItemSpan(maxLineSpan) }) { content() }
-}
-
-@Composable
-private fun SectionTitle(text: String) {
-    Text(text, style = EodiTheme.type.eyebrow, color = EodiTheme.colors.textTertiary, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp).semantics { heading() })
 }
 
 @Composable

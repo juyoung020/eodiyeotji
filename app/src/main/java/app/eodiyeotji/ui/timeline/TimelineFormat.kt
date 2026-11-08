@@ -5,6 +5,8 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import app.eodiyeotji.R
+import app.eodiyeotji.ui.common.distanceText
+import app.eodiyeotji.ui.common.durationText
 import app.eodiyeotji.core.DaySummary
 import app.eodiyeotji.core.PlaceLabel
 import app.eodiyeotji.core.PlaceSource
@@ -14,8 +16,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Locale
-import kotlin.math.roundToInt
 
 // 화면에 찍을 글자 만들기(표시 형식)만 한다. 값 계산은 Rust가 끝내고 온다.
 
@@ -91,31 +91,6 @@ internal fun daySummaryLine(s: DaySummary): String = buildList {
 /** 목록 행 머문 곳 줄: "경포해변 · 초당순두부마을 · 안목해변" (Rust가 앞 3개까지 골라 준다). 없으면 null. */
 internal fun stopNamesText(s: DaySummary): String? =
     s.stopNames.takeIf { it.isNotEmpty() }?.joinToString(SEPARATOR)
-
-/** 1km 미만은 m, 그 이상은 소수 한 자리 km. */
-@Composable
-@ReadOnlyComposable
-internal fun distanceText(meters: Double): String =
-    if (meters < 1000.0) {
-        stringResource(R.string.timeline_m, meters.roundToInt())
-    } else {
-        stringResource(R.string.timeline_km, String.format(Locale.ROOT, "%.1f", meters / 1000.0))
-    }
-
-/** "32분", "2시간", "1시간 20분", 1분이 안 되면 "1분 미만". */
-@Composable
-@ReadOnlyComposable
-internal fun durationText(millis: Long): String {
-    val totalMin = (millis / 60_000L).toInt()
-    val h = totalMin / 60
-    val m = totalMin % 60
-    return when {
-        totalMin <= 0 -> stringResource(R.string.timeline_under_minute)
-        h == 0 -> stringResource(R.string.timeline_minutes, m)
-        m == 0 -> stringResource(R.string.timeline_hours, h)
-        else -> stringResource(R.string.timeline_hours_minutes, h, m)
-    }
-}
 
 /** "09:10 – 09:42" (기기 시간대 기준). */
 @Composable

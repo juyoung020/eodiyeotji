@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathBuilder
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
+import app.eodiyeotji.ui.theme.EodiIcons
 
 /**
  * 기억 에이전트 화면 아이콘 (24×24 격자에 직접 그린 벡터). 색은 Icon의 tint가 칠한다.
@@ -60,48 +61,8 @@ internal object AgentIcons {
         }
     }
 
-    /** 닫기 ×. */
-    val Close: ImageVector by lazy {
-        icon("AgentClose") {
-            stroke {
-                moveTo(6f, 6f); lineTo(18f, 18f)
-                moveTo(18f, 6f); lineTo(6f, 18f)
-            }
-        }
-    }
 
-    /** 반짝임 (AI 답). 큰 별 하나 + 작은 별 하나. */
-    val Sparkle: ImageVector by lazy {
-        icon("AgentSparkle") {
-            fill {
-                moveTo(10f, 3f)
-                curveTo(10.6f, 7.4f, 12.6f, 9.4f, 17f, 10f)
-                curveTo(12.6f, 10.6f, 10.6f, 12.6f, 10f, 17f)
-                curveTo(9.4f, 12.6f, 7.4f, 10.6f, 3f, 10f)
-                curveTo(7.4f, 9.4f, 9.4f, 7.4f, 10f, 3f)
-                close()
-                moveTo(18f, 14f)
-                curveTo(18.3f, 16.1f, 18.9f, 16.7f, 21f, 17f)
-                curveTo(18.9f, 17.3f, 18.3f, 17.9f, 18f, 20f)
-                curveTo(17.7f, 17.9f, 17.1f, 17.3f, 15f, 17f)
-                curveTo(17.1f, 16.7f, 17.7f, 16.1f, 18f, 14f)
-                close()
-            }
-        }
-    }
 
-    /** 내비 화살표 (안내). */
-    val Navigate: ImageVector by lazy {
-        icon("AgentNavigate") {
-            fill {
-                moveTo(12f, 2.5f)
-                lineTo(20f, 21f)
-                lineTo(12f, 17f)
-                lineTo(4f, 21f)
-                close()
-            }
-        }
-    }
 
     /** 번개 (가장 빠른 순서). */
     val Fast: ImageVector by lazy {
@@ -118,57 +79,8 @@ internal object AgentIcons {
         }
     }
 
-    /** 장소 핀 (여기만 가기). */
-    val Pin: ImageVector by lazy {
-        icon("AgentPin") {
-            fill(PathFillType.EvenOdd) {
-                moveTo(12f, 2f)
-                curveTo(8.13f, 2f, 5f, 5.13f, 5f, 9f)
-                curveTo(5f, 14.25f, 12f, 22f, 12f, 22f)
-                curveTo(12f, 22f, 19f, 14.25f, 19f, 9f)
-                curveTo(19f, 5.13f, 15.87f, 2f, 12f, 2f)
-                close()
-                moveTo(12f, 6.5f)
-                curveTo(10.62f, 6.5f, 9.5f, 7.62f, 9.5f, 9f)
-                curveTo(9.5f, 10.38f, 10.62f, 11.5f, 12f, 11.5f)
-                curveTo(13.38f, 11.5f, 14.5f, 10.38f, 14.5f, 9f)
-                curveTo(14.5f, 7.62f, 13.38f, 6.5f, 12f, 6.5f)
-                close()
-            }
-        }
-    }
 
-    /** 달력 (다른 날도 보기). */
-    val Calendar: ImageVector by lazy {
-        icon("AgentCalendar") {
-            stroke {
-                moveTo(5.5f, 5f)
-                horizontalLineTo(18.5f)
-                curveTo(19.6f, 5f, 20.5f, 5.9f, 20.5f, 7f)
-                verticalLineTo(19f)
-                curveTo(20.5f, 20.1f, 19.6f, 21f, 18.5f, 21f)
-                horizontalLineTo(5.5f)
-                curveTo(4.4f, 21f, 3.5f, 20.1f, 3.5f, 19f)
-                verticalLineTo(7f)
-                curveTo(3.5f, 5.9f, 4.4f, 5f, 5.5f, 5f)
-                close()
-                moveTo(3.5f, 10f); horizontalLineTo(20.5f)
-                moveTo(8f, 3f); verticalLineTo(7f)
-                moveTo(16f, 3f); verticalLineTo(7f)
-            }
-        }
-    }
 
-    /** 체크 (안내 시작됨). */
-    val Check: ImageVector by lazy {
-        icon("AgentCheck") {
-            stroke {
-                moveTo(5f, 12.5f)
-                lineTo(10f, 17.5f)
-                lineTo(19f, 7f)
-            }
-        }
-    }
 
     /** 오른쪽 화살표 (질문 보내기). */
     val Send: ImageVector by lazy {
@@ -179,6 +91,10 @@ internal object AgentIcons {
             }
         }
     }
+
+    /** 닫기 · 안내 화살표는 앱 공통 아이콘과 같은 것 ([EodiIcons]). */
+    val Close: ImageVector get() = EodiIcons.Close
+    val Navigate: ImageVector get() = EodiIcons.Navi
 
     // ---- 그리기 도우미 ----
 

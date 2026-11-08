@@ -1,5 +1,6 @@
 package app.eodiyeotji.phone.ui
 
+import app.eodiyeotji.ui.community.SectionTitle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,7 +32,6 @@ import androidx.compose.ui.unit.dp
 import app.eodiyeotji.R
 import app.eodiyeotji.phone.MapApp
 import app.eodiyeotji.phone.NoMapAppRequest
-import app.eodiyeotji.ui.community.CommunityIcons
 import app.eodiyeotji.ui.community.PrimaryPill
 import app.eodiyeotji.ui.community.RoundIconButton
 import app.eodiyeotji.ui.community.SecondaryPill
@@ -57,10 +57,10 @@ fun PhoneSettingsSheet(
         Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 32.dp, end = 32.dp, top = 12.dp, bottom = 32.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.settings_title), style = type.title, modifier = Modifier.weight(1f).semantics { heading() })
-                RoundIconButton(CommunityIcons.Close, stringResource(R.string.settings_close), onClose)
+                RoundIconButton(EodiIcons.Close, stringResource(R.string.settings_close), onClose)
             }
             Spacer(Modifier.size(24.dp))
-            SectionTitle(stringResource(R.string.settings_map_app))
+            SectionTitle(stringResource(R.string.settings_map_app), Modifier.padding(start = 4.dp, bottom = 12.dp))
             Column(Modifier.clip(RoundedCornerShape(EodiTheme.space.radiusM)).background(c.surfaceHigh)) {
                 MapApp.entries.forEach { app ->
                     val missing = app != MapApp.AUTO && installed != null && app !in installed
@@ -73,7 +73,7 @@ fun PhoneSettingsSheet(
             Text(stringResource(R.string.settings_map_hint), style = type.caption, color = c.textTertiary)
 
             Spacer(Modifier.size(32.dp))
-            SectionTitle(stringResource(R.string.settings_permissions))
+            SectionTitle(stringResource(R.string.settings_permissions), Modifier.padding(start = 4.dp, bottom = 12.dp))
             Column(
                 Modifier.clip(RoundedCornerShape(EodiTheme.space.radiusM)).background(c.surfaceHigh).padding(vertical = 8.dp),
             ) {
@@ -95,16 +95,6 @@ private fun MapApp.label(): Int = when (this) {
     MapApp.KAKAO -> R.string.settings_map_kakao
     MapApp.TMAP -> R.string.settings_map_tmap
     MapApp.GOOGLE -> R.string.settings_map_google
-}
-
-@Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text,
-        style = EodiTheme.type.eyebrow,
-        color = EodiTheme.colors.textTertiary,
-        modifier = Modifier.padding(start = 4.dp, bottom = 12.dp).semantics { heading() },
-    )
 }
 
 /** 고르는 줄: 이름 (+ 설치 안 됨) · 오른쪽 동그라미 (고르면 파랑 채움 + 체크). */
@@ -131,7 +121,7 @@ private fun MapAppRow(label: String, note: String?, selected: Boolean, onClick: 
             Modifier.size(40.dp).background(if (selected) c.accent else c.surface, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            if (selected) Icon(CommunityIcons.Check, null, tint = c.onAccent, modifier = Modifier.size(26.dp))
+            if (selected) Icon(EodiIcons.Check, null, tint = c.onAccent, modifier = Modifier.size(26.dp))
         }
     }
 }

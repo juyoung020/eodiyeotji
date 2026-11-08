@@ -1,5 +1,6 @@
 package app.eodiyeotji.phone.ui
 
+import app.eodiyeotji.ui.community.RoundIconButton
 import android.Manifest
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -291,9 +292,9 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 RecordingStatusChip(Modifier.weight(1f, fill = false))
                                 Spacer(Modifier.width(12.dp))
-                                HeaderIconButton(CommunityIcons.Heart, stringResource(R.string.nav_places)) { placesOpen = true }
+                                RoundIconButton(CommunityIcons.Heart, stringResource(R.string.nav_places), { placesOpen = true }, containerColor = EodiTheme.colors.surface, contentColor = EodiTheme.colors.textSecondary, iconSize = 36.dp)
                                 Spacer(Modifier.width(12.dp))
-                                HeaderIconButton(PhoneIcons.Tune, stringResource(R.string.phone_settings)) { settingsOpen = true }
+                                RoundIconButton(PhoneIcons.Tune, stringResource(R.string.phone_settings), { settingsOpen = true }, containerColor = EodiTheme.colors.surface, contentColor = EodiTheme.colors.textSecondary, iconSize = 36.dp)
                             }
                         },
                         headerBanner = if (!permissions.location) {
@@ -504,21 +505,6 @@ private fun BannerPill(text: String, onClick: () -> Unit, onInk: Boolean) {
         Box(Modifier.padding(horizontal = 24.dp), contentAlignment = Alignment.Center) {
             Text(text, style = EodiTheme.type.label, fontWeight = FontWeight.Bold, maxLines = 1)
         }
-    }
-}
-
-/** 머리 오른쪽 둥근 아이콘 버튼 (설정). */
-@Composable
-private fun HeaderIconButton(icon: ImageVector, description: String, onClick: () -> Unit) {
-    val c = EodiTheme.colors
-    Surface(
-        onClick = onClick,
-        shape = CircleShape,
-        color = c.surface,
-        contentColor = c.textSecondary,
-        modifier = Modifier.size(EodiTheme.space.touch).semantics { contentDescription = description },
-    ) {
-        Box(contentAlignment = Alignment.Center) { Icon(icon, contentDescription = null, modifier = Modifier.size(36.dp)) }
     }
 }
 

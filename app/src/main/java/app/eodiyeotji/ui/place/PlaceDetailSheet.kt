@@ -1,5 +1,7 @@
 package app.eodiyeotji.ui.place
 
+import app.eodiyeotji.ui.community.LoadingBox
+import app.eodiyeotji.ui.community.RetryButton
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
@@ -29,7 +31,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -59,13 +60,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
 import app.eodiyeotji.core.PlaceDetail
 import app.eodiyeotji.core.StopFact
-import app.eodiyeotji.ui.agent.AgentIcons
 import app.eodiyeotji.ui.community.CommunityIcons
 import app.eodiyeotji.ui.community.LocalOverlayPresenter
 import app.eodiyeotji.ui.community.Notice
 import app.eodiyeotji.ui.community.OverlayCard
 import app.eodiyeotji.ui.community.RoundIconButton
-import app.eodiyeotji.ui.community.SecondaryPill
 import app.eodiyeotji.ui.community.dateText
 import app.eodiyeotji.ui.offers.PlaceCouponBadge
 import app.eodiyeotji.ui.review.LikedKeywords
@@ -214,11 +213,11 @@ private fun PlaceDetailContent(opened: StopFact, s: PlaceDetailUiState, vm: Plac
                 s.error != null -> item(key = "error", contentType = "message") {
                     Column(Modifier.padding(horizontal = pad), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text(stringResource(R.string.place_detail_failed), style = EodiTheme.type.body, color = c.error)
-                        SecondaryPill(stringResource(R.string.community_retry), EodiIcons.Refresh, vm::retry)
+                        RetryButton(vm::retry)
                     }
                 }
                 d == null -> item(key = "loading", contentType = "message") {
-                    Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = c.accent) }
+                    LoadingBox(Modifier.fillMaxWidth().height(200.dp), compact = true)
                 }
                 else -> {
                     if (d.keywords.isNotEmpty()) {
@@ -260,7 +259,7 @@ private fun PlaceDetailContent(opened: StopFact, s: PlaceDetailUiState, vm: Plac
         }
         // 닫기는 사진 위에 늘 떠 있다
         RoundIconButton(
-            CommunityIcons.Close,
+            EodiIcons.Close,
             stringResource(R.string.community_close),
             vm::close,
             Modifier.align(Alignment.TopEnd).padding(if (compact) 28.dp else 20.dp),
@@ -342,7 +341,7 @@ fun HalfStars(halves: Int, modifier: Modifier = Modifier, size: Dp = 24.dp) {
 private fun ActionRow(d: PlaceDetail?, vm: PlaceDetailViewModel) {
     val c = EodiTheme.colors
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
-        ActionTile(AgentIcons.Navigate, stringResource(R.string.place_detail_navigate), vm::navigate, Modifier.weight(1f), primary = true)
+        ActionTile(EodiIcons.Navi, stringResource(R.string.place_detail_navigate), vm::navigate, Modifier.weight(1f), primary = true)
         val saved = d?.saved == true
         ActionTile(
             if (saved) CommunityIcons.HeartFilled else CommunityIcons.Heart,
@@ -412,7 +411,7 @@ private fun VisitsLine(d: PlaceDetail, modifier: Modifier) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(48.dp).background(c.surface, CircleShape), contentAlignment = Alignment.Center) {
-            Icon(AgentIcons.Calendar, null, tint = c.accent, modifier = Modifier.size(28.dp))
+            Icon(EodiIcons.Calendar, null, tint = c.accent, modifier = Modifier.size(28.dp))
         }
         Spacer(Modifier.width(16.dp))
         Text(
