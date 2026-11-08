@@ -57,4 +57,16 @@
     <string name="recap_span">%1$d일 · %2$s</string>
     <string name="recap_season_days">나들이 · 여행 %1$d일</string>
     <string name="recap_region_days">%1$s · %2$d일</string>
+
+    <!-- 기억 지도 -->
+    <string name="memory_map_entry">기억 지도</string>
+    <string name="memory_map_title">기억 지도</string>
+    <string name="memory_map_caption_years">%1$d년 동안 %2$,dkm, 우리가 지나온 길</string>
+    <string name="memory_map_caption_months">%1$d개월 동안 %2$,dkm, 우리가 지나온 길</string>
+    <string name="memory_map_sub">%1$,d일 · %2$,d번의 길</string>
+    <string name="memory_map_loading">지나온 길을 모으는 중</string>
+    <string name="memory_map_empty">아직 지나온 길이 없어요</string>
+    <string name="memory_map_failed">기억 지도를 불러오지 못했어요</string>
+    <string name="memory_map_replay">다시 보기</string>
+    <string name="memory_map_description">1년 동안 달린 모든 길을 밤하늘처럼 그린 지도</string>
 </resources>

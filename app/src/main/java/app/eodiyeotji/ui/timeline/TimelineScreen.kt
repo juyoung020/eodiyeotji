@@ -119,6 +119,7 @@ import app.eodiyeotji.ui.share.ShareImageButton
 import app.eodiyeotji.ui.share.ShareTarget
 import app.eodiyeotji.ui.recap.RecapListTop
 import app.eodiyeotji.ui.recap.RecapOverlay
+import app.eodiyeotji.ui.memorymap.MemoryMapOverlay
 import app.eodiyeotji.ui.recap.RecapViewModel
 import app.eodiyeotji.ui.theme.AlbumPhoto
 import app.eodiyeotji.ui.theme.DottedRoute
@@ -190,6 +191,7 @@ fun TimelineRoute(
     ) }
     PlaceEditHost(editVm)
     RecapOverlay(recap, onOpenDay = openDay)
+    MemoryMapOverlay(recap)
     // 하루 상세에서 바로 커뮤니티에 코스로 올리기 (커뮤니티 탭까지 가지 않는다)
     shareEpisode?.let { id ->
         BackHandler { shareEpisode = null }

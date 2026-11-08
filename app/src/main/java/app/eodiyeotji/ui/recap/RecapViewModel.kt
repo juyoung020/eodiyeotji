@@ -7,10 +7,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.eodiyeotji.R
 import app.eodiyeotji.core.EodiCore
+import app.eodiyeotji.core.MemoryMap
 import app.eodiyeotji.core.MonthRecap
 import app.eodiyeotji.core.OnThisDay
 import app.eodiyeotji.core.YearRecap
 import app.eodiyeotji.core.dismissOnThisDay
+import app.eodiyeotji.core.memoryMap
 import app.eodiyeotji.core.monthRecap
 import app.eodiyeotji.core.onThisDay
 import app.eodiyeotji.core.yearRecap
@@ -56,6 +58,9 @@ data class RecapUiState(
     val monthRecap: Load<MonthRecap> = Load.Loading,
     val yearRecap: Load<YearRecap> = Load.Loading,
     @StringRes val note: Int? = null,
+    /** 기억 지도 화면 (정차 중에만, 주행을 시작하면 닫는다) */
+    val memoryMapOpen: Boolean = false,
+    val memoryMap: Load<MemoryMap> = Load.Loading,
 )
 
 /** 계산은 모두 Rust(`recap.rs`): 여기서는 부르고 상태에 담기만 한다. */
@@ -71,10 +76,11 @@ class RecapViewModel @Inject constructor(
     val state: StateFlow<RecapUiState> = _state.asStateFlow()
     private var loadJob: Job? = null
     private var noteJob: Job? = null
+    private var mapJob: Job? = null
 
     init {
         loadOnThisDay()
-        viewModelScope.launch { driving.isDriving.collect { d -> _state.update { it.copy(driving = d) } } }
+        viewModelScope.launch { driving.isDriving.collect { d -> _state.update { it.copy(driving = d, memoryMapOpen = it.memoryMapOpen && !d) } } }
         // 기록이 바뀌면(시연 데이터 · 라벨링) 잠시 모았다가 다시 읽는다. 주행 중(10초마다 위치 저장)에는 카드를 안 보이므로 읽지 않는다.
         viewModelScope.launch {
             core.changes.debounce(CHANGE_DEBOUNCE_MS).collect { if (!_state.value.driving) loadOnThisDay() }
@@ -115,6 +121,29 @@ class RecapViewModel @Inject constructor(
         val now = LocalDate.now()
         _state.update { it.copy(open = true, mode = mode, year = now.year, month = now.monthValue) }
         load()
+    }
+
+    /** 기억 지도 열기 (운전 중이면 열지 않는다). 데이터는 열 때마다 새로 읽는다 (1년치도 수 ms). */
+    fun openMemoryMap() {
+        if (_state.value.driving) return
+        _state.update { it.copy(memoryMapOpen = true, memoryMap = Load.Loading) }
+        mapJob?.cancel()
+        mapJob = viewModelScope.launch {
+            try {
+                val m = core.memoryMap()
+                _state.update { it.copy(memoryMap = Load.Ready(m)) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "기억 지도 실패", e)
+                _state.update { it.copy(memoryMap = Load.Failed) }
+            }
+        }
+    }
+
+    fun closeMemoryMap() {
+        mapJob?.cancel()
+        _state.update { it.copy(memoryMapOpen = false) }
     }
 
     fun closeRecap() {

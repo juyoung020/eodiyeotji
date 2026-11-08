@@ -110,7 +110,12 @@ fun RecapOverlay(viewModel: RecapViewModel, onOpenDay: (String) -> Unit) {
                     RecapMode.YEAR -> when (val y = state.yearRecap) {
                         Load.Loading -> StateText(stringResource(R.string.recap_loading))
                         Load.Failed -> StateText(stringResource(R.string.recap_failed))
-                        is Load.Ready -> YearRecapCard(y.value, cardModifier, onOpenDay = open)
+                        is Load.Ready -> Column(cardModifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            if (!state.driving && y.value.recordDays > 0) {
+                                EntryPill(stringResource(R.string.memory_map_entry), gold = true, Modifier.fillMaxWidth()) { viewModel.openMemoryMap() }
+                            }
+                            YearRecapCard(y.value, Modifier.fillMaxWidth(), onOpenDay = open)
+                        }
                     }
                 }
             }
