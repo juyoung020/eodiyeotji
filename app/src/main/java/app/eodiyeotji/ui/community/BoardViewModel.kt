@@ -44,7 +44,12 @@ class BoardViewModel @Inject constructor(private val core: EodiCore) : ViewModel
     val state: StateFlow<BoardUiState> = _state.asStateFlow()
     private var loadJob: Job? = null
 
-    init {
+    private var started = false
+
+    /** 목록 첫 읽기. 홈이 검색 결과 열기용으로 이 ViewModel을 일찍 만들어도 게시판 탭이 처음 보일 때만 읽는다. */
+    fun start() {
+        if (started) return
+        started = true
         reload()
     }
 

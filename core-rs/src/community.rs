@@ -30,7 +30,7 @@
 //! 집·회사([PRIVACY_RADIUS_M] 안)와 이름 모르는 곳은 자동으로 빼고 그 수를 미리보기에 알려 준다.
 //! 거리도 집에서 출발한 거리가 아니라 올리는 곳들 사이 거리로 다시 계산한다 (집 위치를 거꾸로 짐작할 수 없게).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
 use rusqlite::{params, Connection, OptionalExtension, Row};
@@ -1036,11 +1036,13 @@ pub(crate) fn keyword_summary<'a>(reviews: impl IntoIterator<Item = &'a PlaceRev
 /// 리뷰·코스 들른 곳을 같은 장소끼리 묶은 것 (모듈 설명 "같은 장소 묶기").
 pub(crate) struct PlaceGroups {
     pub groups: Vec<PlaceAgg>,
+    /// 띄어쓰기 뺀 이름 → 그 이름 묶음 번호 (넣은 순서). 같은 장소는 이름이 같아야 하니 이름 같은 묶음만 거리를 잰다.
+    by_name: HashMap<String, Vec<usize>>,
 }
 
 impl PlaceGroups {
     fn build(courses: &[CoursePost], reviews: &[PlaceReview]) -> Self {
-        let mut g = PlaceGroups { groups: Vec::new() };
+        let mut g = PlaceGroups { groups: Vec::new(), by_name: HashMap::new() };
         // 리뷰를 먼저 넣어 대표 장소 정보(분류·주소)가 리뷰 쪽 값이 되게 한다
         for r in reviews {
             let i = g.find_or_add(&r.place);
@@ -1065,21 +1067,29 @@ impl PlaceGroups {
         g
     }
 
+    fn position(&self, key: &str, s: &StopFact) -> Option<usize> {
+        let near = |&&i: &&usize| haversine_m(stop_point(&self.groups[i].place), stop_point(s)) <= SAME_PLACE_M;
+        self.by_name.get(key)?.iter().find(near).copied()
+    }
+
     fn find(&self, s: &StopFact) -> Option<&PlaceAgg> {
-        self.groups.iter().find(|g| same_place(&g.place, s))
+        self.position(&norm_name(&s.name), s).map(|i| &self.groups[i])
     }
 
     fn find_or_add(&mut self, s: &StopFact) -> usize {
-        if let Some(i) = self.groups.iter().position(|g| same_place(&g.place, s)) {
+        let key = norm_name(&s.name);
+        if let Some(i) = self.position(&key, s) {
             return i;
         }
         let place = StopFact { arrive_ms: 0, leave_ms: 0, first_visit: false, ..s.clone() };
         self.groups.push(PlaceAgg { place, hearts: 0, reviews: 0, rating_sum: 0, keywords: vec![0; REVIEW_KEYWORDS.len()] });
-        self.groups.len() - 1
+        let i = self.groups.len() - 1;
+        self.by_name.entry(key).or_default().push(i);
+        i
     }
 }
 
-fn norm_name(s: &str) -> String {
+pub(crate) fn norm_name(s: &str) -> String {
     s.chars().filter(|c| !c.is_whitespace()).collect()
 }
 

@@ -762,3 +762,25 @@ fn time_of_day_buckets() {
     let got: Vec<TimeOfDay> = [4, 5, 10, 11, 16, 17, 20, 21, 0, 23].into_iter().map(TimeOfDay::from_hour).collect();
     assert_eq!(got, [Night, Morning, Morning, Day, Day, Evening, Evening, Night, Night, Night]);
 }
+
+/// 리뷰·장소가 많을 때 장소 묶기·검색이 느려지지 않는지 (같은 장소 비교가 묶음 수에 비례하지 않게).
+#[test]
+fn many_reviews_group_and_search_stay_fast() {
+    let db = TempDb::new("many");
+    let store = db.open();
+    for i in 0..1500 {
+        let p = place(&format!("장소 {}", i % 600), 37.0 + (i % 600) as f64 * 0.01, 127.0);
+        store.add_place_review(p, 4, format!("좋은 곳 {i}"), NOW - i as i64).unwrap();
+    }
+    let t = std::time::Instant::now();
+    let top = store.popular_places(None, 500).unwrap();
+    let grouped = t.elapsed();
+    assert_eq!(top.len(), 500);
+    assert!(top.iter().all(|p| p.review_count >= 2));
+    let t = std::time::Instant::now();
+    let ans = store.search_typed("장소 7".into(), crate::search_ui::SearchScope::Reviews, crate::search_ui::SearchFilter::none(), NOW).unwrap();
+    let searched = t.elapsed();
+    assert!(!ans.groups.is_empty());
+    eprintln!("popular_places {grouped:?}, search {searched:?}");
+    assert!(searched.as_millis() < 300, "검색 {searched:?}");
+}

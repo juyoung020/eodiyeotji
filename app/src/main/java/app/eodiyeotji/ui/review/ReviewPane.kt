@@ -85,6 +85,7 @@ import kotlinx.coroutines.delay
 fun ReviewPane(viewModel: ReviewViewModel = hiltViewModel(), courses: CourseViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val course by courses.state.collectAsStateWithLifecycle()
+    LaunchedEffect(courses) { courses.start() }
     var picking by rememberSaveable { mutableStateOf(false) }
     var shareEpisode by rememberSaveable { mutableStateOf<Long?>(null) }
     val openPlace: (StopFact) -> Unit = LocalOpenPlace.current

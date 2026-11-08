@@ -77,7 +77,12 @@ class CourseViewModel @Inject constructor(
     val progress: StateFlow<CourseProgress?> = guide.progress
     private var loadJob: Job? = null
 
-    init {
+    private var started = false
+
+    /** 목록 첫 읽기. 홈이 검색 결과 열기용으로 이 ViewModel을 일찍 만들어도 여행 리뷰 탭이 처음 보일 때만 읽는다. */
+    fun start() {
+        if (started) return
+        started = true
         reload()
     }
 

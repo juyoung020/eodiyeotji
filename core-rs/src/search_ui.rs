@@ -35,7 +35,7 @@ use rusqlite::{params, Connection};
 
 use crate::agent::dates::{self, civil_from_days, days_from_civil, weekday, DayRange, WEEKDAYS};
 use crate::agent::words;
-use crate::community::{same_place, BoardPost, CommunitySort, CoursePost, PopularPlace};
+use crate::community::{norm_name, same_place, BoardPost, CommunitySort, CoursePost, PopularPlace};
 use crate::geo::{haversine_m, Point};
 use crate::memory::{
     concepts, episode_from_row, expand_terms, kind_code, match_expr, search_hits, squash, Episode, EpisodeKind, MemoryQuery,
@@ -601,10 +601,18 @@ impl EodiStore {
         let groups = term_groups(&q.terms);
         let places = self.popular_places(None, 500)?;
         let reviews = self.place_reviews(CommunitySort::Recent, None, 500)?;
+        // 같은 장소는 이름이 같아야 하니 이름별로 미리 나눠 두고 그 안에서만 비교한다 (장소 × 리뷰 전부 비교 안 함)
+        let mut by_name: HashMap<String, Vec<&crate::community::PlaceReview>> = HashMap::new();
+        for r in &reviews {
+            by_name.entry(norm_name(&r.place.name)).or_default().push(r);
+        }
         let mut hits: Vec<(PopularPlace, u32, usize)> = places
             .into_iter()
             .filter_map(|pp| {
-                let mine: Vec<_> = reviews.iter().filter(|r| same_place(&r.place, &pp.place)).collect();
+                let mine: Vec<&crate::community::PlaceReview> = by_name
+                    .get(&norm_name(&pp.place.name))
+                    .map(|v| v.iter().copied().filter(|r| same_place(&r.place, &pp.place)).collect())
+                    .unwrap_or_default();
                 if (lo.is_some() || hi.is_some()) && !mine.iter().any(|r| in_range(parse_day(&r.visited_day), lo, hi)) {
                     return None;
                 }
