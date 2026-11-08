@@ -60,6 +60,8 @@
 
     <!-- 기억 지도 -->
     <string name="memory_map_entry">기억 지도</string>
+    <string name="memory_map_intro">1년 동안 달린 길을 밤하늘에서 보기</string>
+    <string name="memory_map_intro_dismiss">닫기 (다시 보이지 않음)</string>
     <string name="memory_map_title">기억 지도</string>
     <string name="memory_map_caption_years">%1$d년 동안 %2$,dkm, 우리가 지나온 길</string>
     <string name="memory_map_caption_months">%1$d개월 동안 %2$,dkm, 우리가 지나온 길</string>

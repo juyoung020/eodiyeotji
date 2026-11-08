@@ -148,7 +148,7 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                 scope = SearchScope.RECORDS,
                 agent = agentViewModel,
                 actions = actions,
-                hint = stringResource(R.string.search_hint_records_long),
+                hint = stringResource(R.string.search_hint_records),
             )
             val communitySearch = rememberSearchSlot(
                 viewModel = hiltViewModel(key = "search-community"),

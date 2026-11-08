@@ -95,6 +95,9 @@ fun RecapListTop(viewModel: RecapViewModel, onOpenDay: (String) -> Unit, modifie
                 EntryPill(stringResource(R.string.memory_map_entry), gold = true, Modifier.weight(1f)) { viewModel.openMemoryMap() }
             }
         }
+        if (state.memoryMapIntro && !state.driving) {
+            MemoryMapIntroCard(onOpen = viewModel::openMemoryMapFromIntro, onDismiss = viewModel::dismissMemoryMapIntro)
+        }
         val otd = state.onThisDay
         if (otd != null && !state.driving) {
             OnThisDayCard(
@@ -105,6 +108,41 @@ fun RecapListTop(viewModel: RecapViewModel, onOpenDay: (String) -> Unit, modifie
             )
         }
         state.note?.let { RecapNote(stringResource(it)) }
+    }
+}
+
+/** 한 번만 보이는 소개 카드: "1년 동안 달린 길을 밤하늘에서 보기" → 기억 지도. 닫으면(×) 다시 나오지 않는다. */
+@Composable
+private fun MemoryMapIntroCard(onOpen: () -> Unit, onDismiss: () -> Unit) {
+    val night = androidx.compose.ui.graphics.Color(0xFF0B1426)
+    val gold = androidx.compose.ui.graphics.Color(0xFFFFD58A)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(EodiTheme.space.radiusL))
+            .background(night)
+            .clickable(role = Role.Button, onClick = onOpen)
+            .padding(start = 24.dp, end = 12.dp, top = 12.dp, bottom = 12.dp)
+            .heightIn(min = 76.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(EodiIcons.Sparkle, contentDescription = null, tint = gold, modifier = Modifier.size(32.dp))
+        Spacer(Modifier.width(14.dp))
+        Text(
+            stringResource(R.string.memory_map_intro),
+            style = EodiTheme.type.bodyStrong,
+            fontWeight = FontWeight.Bold,
+            color = gold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Box(
+            Modifier.size(64.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onDismiss),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(EodiIcons.Close, contentDescription = stringResource(R.string.memory_map_intro_dismiss), tint = gold.copy(alpha = 0.7f), modifier = Modifier.size(30.dp))
+        }
     }
 }
 
