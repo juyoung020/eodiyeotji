@@ -39,6 +39,8 @@ data class OnThisDay(
     val line: String,
     val dismissed: Boolean,
     val spoken: Boolean,
+    /** 그날로 돌아가기로 다시 볼 것이 있다 */
+    val replayable: Boolean = true,
 )
 
 /** 지나갈 때 회상 하나. */
@@ -129,6 +131,12 @@ suspend fun EodiCore.onThisDay(nowMs: Long = System.currentTimeMillis()): OnThis
 suspend fun EodiCore.dismissOnThisDay(nowMs: Long = System.currentTimeMillis()) = withContext(Dispatchers.IO) { rust.dismissOnThisDay(nowMs) }
 
 /** 오늘 "N년 전 오늘"을 읽었다. */
+/** 첫 화면 기억 지도 소개 카드를 띄울까 (기록 30일 이상 · 아직 안 닫음, Rust가 정한다). */
+suspend fun EodiCore.memoryMapIntro(nowMs: Long = System.currentTimeMillis()): Boolean = withContext(Dispatchers.IO) { rust.memoryMapIntro(nowMs) }
+
+/** 기억 지도 소개 카드를 닫는다 (다시 나오지 않는다). */
+suspend fun EodiCore.dismissMemoryMapIntro() = withContext(Dispatchers.IO) { rust.dismissMemoryMapIntro() }
+
 suspend fun EodiCore.markOnThisDaySpoken(nowMs: Long = System.currentTimeMillis()) = withContext(Dispatchers.IO) { rust.markOnThisDaySpoken(nowMs) }
 
 /** 위치 묶음 근처의 회상 하나 (횟수 제한 포함, 세지는 않는다). */
@@ -159,7 +167,7 @@ private fun REpisodeKind.recapKind() = when (this) {
 
 private fun ROnThisDay.toModel() = OnThisDay(
     yearsAgo.toInt(), day, title, summary, episodeId, kind.recapKind(), label, region, distanceM,
-    stops.map { it.toModel() }, photos.map { it.toModel() }, line, dismissed, spoken,
+    stops.map { it.toModel() }, photos.map { it.toModel() }, line, dismissed, spoken, replayable,
 )
 
 private fun RRecall.toModel() = Recall(key, place.toModel(), distanceM, day, dayTitle, episodeId, yearsAgo.toInt(), whenText, line)

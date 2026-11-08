@@ -362,6 +362,7 @@ mod tests {
             trips,
             stays,
             summary: DaySummary {
+                replayable: false,
                 day: "2026-11-05".into(),
                 trip_count: 0,
                 stay_count: 0,

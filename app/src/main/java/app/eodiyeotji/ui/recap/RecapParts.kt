@@ -191,9 +191,9 @@ fun OnThisDayCard(
                     repeat(3 - otd.photos.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
-            // 첫 버튼: 그날로 돌아가기 (사진 · 지도로 그날을 다시 본다)
+            // 첫 버튼: 그날로 돌아가기 (사진 · 지도로 그날을 다시 본다). 다시 볼 것이 있는 날만 (Rust `replayable`)
             val openReplay = LocalOpenReplay.current
-            Button(
+            if (otd.replayable) Button(
                 onClick = { openReplay(otd.day) },
                 shape = CircleShape,
                 colors = ButtonDefaults.buttonColors(containerColor = c.memory, contentColor = c.onMemory),

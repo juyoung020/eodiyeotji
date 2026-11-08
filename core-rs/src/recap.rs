@@ -80,6 +80,9 @@ const KEY_LAST: &str = "recall_last_ms";
 const KEY_PLACE: &str = "recall_place:";
 const KEY_OTD_DISMISSED: &str = "otd_dismissed_day";
 const KEY_OTD_SPOKEN: &str = "otd_spoken_day";
+const KEY_MEMMAP_INTRO_DISMISSED: &str = "memmap_intro_dismissed";
+/// 기억 지도 소개 카드를 띄울 만큼 기록이 쌓인 기간 (일).
+pub const MEMMAP_INTRO_MIN_DAYS: i64 = 30;
 
 /// "N년 전 오늘" 카드 · 음성 한 줄.
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
@@ -109,6 +112,8 @@ pub struct OnThisDay {
     pub line: String,
     /// 오늘 카드를 닫았다
     pub dismissed: bool,
+    /// 그날로 돌아가기로 다시 볼 것이 있다 (`store::is_replayable`)
+    pub replayable: bool,
     /// 오늘 음성으로 읽었다
     pub spoken: bool,
 }
@@ -256,6 +261,24 @@ impl EodiStore {
     pub fn dismiss_on_this_day(&self, now_ms: i64) -> Result<(), CoreError> {
         let conn = self.lock()?;
         set_meta(&conn, KEY_OTD_DISMISSED, self.local_day(now_ms))?;
+        Ok(())
+    }
+
+    /// 첫 화면 "1년 동안 달린 길을 밤하늘에서 보기" 카드를 띄울까: 첫 기록이 30일 이상 전이고 아직 닫지 않았다.
+    pub fn memory_map_intro(&self, now_ms: i64) -> Result<bool, CoreError> {
+        let mut conn = self.lock()?;
+        self.flush_all(&mut conn)?;
+        if get_meta(&conn, KEY_MEMMAP_INTRO_DISMISSED)?.is_some() {
+            return Ok(false);
+        }
+        let first: Option<i64> = conn.prepare_cached("SELECT min(day) FROM day_summary")?.query_row([], |r| r.get(0))?;
+        Ok(first.is_some_and(|d| self.local_day(now_ms) - d >= MEMMAP_INTRO_MIN_DAYS))
+    }
+
+    /// 기억 지도 소개 카드를 닫는다 (다시 나오지 않는다).
+    pub fn dismiss_memory_map_intro(&self) -> Result<(), CoreError> {
+        let conn = self.lock()?;
+        set_meta(&conn, KEY_MEMMAP_INTRO_DISMISSED, 1)?;
         Ok(())
     }
 
@@ -487,6 +510,10 @@ fn on_this_day(store: &EodiStore, conn: &Connection, now_ms: i64) -> Result<Opti
             stops,
             line: on_this_day_line(k as u32, &f.rule_label),
             dismissed: get_meta(conn, KEY_OTD_DISMISSED)? == Some(today),
+            replayable: crate::store::is_replayable(
+                f.stops.iter().filter(|s| !s.name.trim().is_empty()).count(),
+                eps.iter().map(|e| e.facts.distance_m).sum(),
+            ),
             spoken: get_meta(conn, KEY_OTD_SPOKEN)? == Some(today),
         }));
     }

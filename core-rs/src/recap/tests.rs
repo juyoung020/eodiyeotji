@@ -104,6 +104,7 @@ fn one_year_ago_today_is_the_gangneung_trip() {
     assert_eq!(otd.stops.len(), 4);
     assert!(otd.distance_m > 300_000.0, "서울 ↔ 강릉 왕복: {}", otd.distance_m);
     assert!(!otd.dismissed && !otd.spoken);
+    assert!(otd.replayable);
 
     // 오늘 닫음 · 읽음은 오늘만
     store.dismiss_on_this_day(today()).unwrap();
@@ -259,4 +260,14 @@ fn the_drive_in_progress_is_not_a_recent_visit_but_earlier_today_is() {
     let r = store.recall_near(at(CHODANG.0 - 0.001, CHODANG.1), now + 1000).unwrap();
     assert_eq!(r.map(|r| r.place.name).as_deref(), Some("초당할머니순두부"), "달리는 중인 주행의 끝은 들른 곳이 아니다");
     assert_eq!(store.recall_near(at(GYEONGPO.0, GYEONGPO.1), now + 1000).unwrap(), None, "오늘 아침 들른 곳");
+}
+
+// ---------------------------------------------------------------- 기억 지도 소개 카드
+
+#[test]
+fn memory_map_intro_shows_after_a_month_until_dismissed() {
+    let (_db, store) = seeded("memmap-intro");
+    assert!(store.memory_map_intro(today()).unwrap(), "1년치 기록");
+    store.dismiss_memory_map_intro().unwrap();
+    assert!(!store.memory_map_intro(today()).unwrap(), "닫으면 다시 안 나온다");
 }

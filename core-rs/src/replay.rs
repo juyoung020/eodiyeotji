@@ -31,6 +31,9 @@ use crate::memory::StopFact;
 use crate::recap::{ep_rank, episodes_between, season_of, years_between};
 use crate::store::{parse_day, CoreError, DayDetail, EodiStore, DAY_MS};
 
+/// 이보다 짧게 달린 날의 끝 문장은 들른 곳 중심이다 (m).
+pub const SHORT_DAY_M: f64 = 10_000.0;
+
 /// 구간 하나를 몇 단계로 나눠 그리는지.
 pub const LEG_FRAMES: usize = 12;
 
@@ -195,13 +198,22 @@ pub(crate) fn build_replay(d: &DayDetail, tz_minutes: i32, today: i64, ep: Optio
     let final_geojson = collection(&all, &stops, None);
 
     let distance_m = d.summary.distance_m;
+    // 짧게 달린 날은 거리 대신 들른 곳이 주인공이다 ("4.5km를 달렸어요 · 운전 2분"은 자랑할 거리가 아니다)
+    let short = distance_m < SHORT_DAY_M && !scenes.is_empty();
     let mut stats = Vec::new();
     if !scenes.is_empty() {
         stats.push(format!("들른 곳 {}곳", scenes.len()));
     }
-    if let Some(t) = duration_text(d.summary.drive_millis) {
+    if short {
+        stats.push(distance_text(distance_m));
+    } else if let Some(t) = duration_text(d.summary.drive_millis) {
         stats.push(format!("운전 {t}"));
     }
+    let summary_line = match scenes.as_slice() {
+        [one] if short => format!("그날, {}에 들렀어요", one.stop.name),
+        [first, ..] if short => format!("그날, {}부터 {}곳에 들렀어요", first.stop.name, scenes.len()),
+        _ => format!("그날, 우리는 {}를 달렸어요", distance_text(distance_m)),
+    };
     DayReplay {
         day: d.day.clone(),
         date_text,
@@ -212,7 +224,7 @@ pub(crate) fn build_replay(d: &DayDetail, tz_minutes: i32, today: i64, ep: Optio
         scenes,
         final_geojson,
         bounds: bounds.get(),
-        summary_line: format!("그날, 우리는 {}를 달렸어요", distance_text(distance_m)),
+        summary_line,
         stats_line: stats.join(" · "),
         distance_m,
         episode_id: ep.map(|e| e.id),

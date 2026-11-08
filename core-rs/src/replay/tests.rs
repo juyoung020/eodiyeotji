@@ -34,6 +34,7 @@ fn day(trips: Vec<TripSummary>, stays: Vec<StaySummary>) -> DayDetail {
         trips,
         stays,
         summary: DaySummary {
+            replayable: false,
             day: "2025-11-06".into(),
             trip_count: 3,
             stay_count: 0,
@@ -157,4 +158,32 @@ fn leg_flight_follows_the_leg_and_flies_higher_on_long_legs() {
     assert!(leg_flight_zoom(1_000.0) > leg_flight_zoom(200_000.0));
     assert_eq!(leg_flight_zoom(200_000.0), 10.5);
     assert!(leg_flight(&[(37.0, 127.0)]).is_empty());
+}
+
+#[test]
+fn a_short_day_ends_on_the_stops_not_the_distance() {
+    let home = p(37.50, 127.00);
+    let market = p(37.52, 127.01);
+    let cafe = p(37.53, 127.02);
+    let mut d = day(
+        vec![
+            trip(kst(10, 0), kst(10, 2), vec![home, market]),
+            trip(kst(11, 0), kst(11, 3), vec![market, cafe]),
+            trip(kst(12, 0), kst(12, 4), vec![cafe, home]),
+        ],
+        vec![
+            stay(market, kst(10, 2), kst(10, 50), 1, "광장시장"),
+            stay(cafe, kst(11, 3), kst(12, 0), 2, "북촌 카페"),
+            stay(home, kst(12, 4), kst(18, 0), 3, "우리집"),
+        ],
+    );
+    d.summary.distance_m = 4_500.0;
+    d.summary.drive_millis = 5 * MIN;
+    let r = build_replay(&d, KST, days_from_civil(2026, 11, 6), None);
+    assert_eq!(r.summary_line, "그날, 광장시장부터 2곳에 들렀어요");
+    assert_eq!(r.stats_line, "들른 곳 2곳 · 4.5km");
+
+    d.stays.truncate(1);
+    let r = build_replay(&d, KST, days_from_civil(2026, 11, 6), None);
+    assert_eq!(r.summary_line, "그날, 광장시장에 들렀어요");
 }

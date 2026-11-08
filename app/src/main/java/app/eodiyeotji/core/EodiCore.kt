@@ -364,6 +364,8 @@ data class DaySummary(
     /** 하루 제목 (LLM, 예: "비 오는 날 강릉 순두부 원정"; 평범한 날은 규칙 제목). 아직 없으면 null. */
     val title: String? = null,
     val tags: List<String> = emptyList(),
+    /** 그날로 돌아가기로 다시 볼 것이 있다 (이름 있는 머문 곳 1곳 이상 또는 5km 이상, Rust `is_replayable`). */
+    val replayable: Boolean = false,
 )
 
 /** 들른 곳 사진 한 장 ([name] = 구글 사진 리소스 이름, [author] = 올린 사람 — 사진과 함께 보여 준다). */
@@ -496,6 +498,7 @@ private fun RDaySummary.toModel() = DaySummary(
     stopNames = stopNames,
     title = title,
     tags = tags,
+    replayable = replayable,
 )
 
 internal fun RStopFact.toModel() = StopFact(name, category, address, arriveMs, leaveMs, lat, lon, firstVisit)

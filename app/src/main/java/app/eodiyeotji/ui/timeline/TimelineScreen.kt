@@ -884,10 +884,12 @@ private fun DetailHeader(summary: DaySummary?, today: LocalDate, onBack: (() -> 
                     )
                 }
                 // 넓은 창: 제목 옆. 좁은 창(뒤로 버튼이 있을 때)은 제목이 눌리지 않게 아래 줄에 둔다.
-                // 그날로 돌아가기 (재생 버튼)
-                val openReplay = app.eodiyeotji.ui.replay.LocalOpenReplay.current
-                Spacer(Modifier.width(16.dp))
-                SecondaryPill(stringResource(R.string.replay_open), app.eodiyeotji.ui.theme.EodiIcons.Play, { openReplay(summary.day) })
+                // 그날로 돌아가기 (재생 버튼): 다시 볼 것이 있는 날만 (Rust `replayable`)
+                if (summary.replayable) {
+                    val openReplay = app.eodiyeotji.ui.replay.LocalOpenReplay.current
+                    Spacer(Modifier.width(16.dp))
+                    SecondaryPill(stringResource(R.string.replay_open), app.eodiyeotji.ui.theme.EodiIcons.Play, { openReplay(summary.day) })
+                }
                 if (onShare != null && onBack == null) {
                     Spacer(Modifier.width(16.dp))
                     SecondaryPill(stringResource(R.string.timeline_share), CommunityIcons.Upload, onShare)

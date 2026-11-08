@@ -387,6 +387,7 @@ fn entries_merge_trips_and_stays_in_time_order() {
     assert_eq!(
         empty.summary,
         DaySummary {
+            replayable: false,
             day: "2026-01-01".into(),
             trip_count: 0,
             stay_count: 0,
@@ -809,4 +810,12 @@ fn old_day_summaries_are_rebuilt_when_day_rules_change() {
     drop(store);
     let store = db.open(KST);
     assert_eq!(store.day_summaries(10).unwrap()[0].trip_count, 1, "다시 열면 새 규칙으로 다시 만든다");
+}
+
+#[test]
+fn replayable_needs_a_named_stop_or_five_km() {
+    assert!(!is_replayable(0, 0.0));
+    assert!(!is_replayable(0, 4_999.0));
+    assert!(is_replayable(0, REPLAY_MIN_DISTANCE_M));
+    assert!(is_replayable(1, 300.0));
 }

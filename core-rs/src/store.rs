@@ -107,6 +107,16 @@ pub struct DaySummary {
     pub title: Option<String>,
     /// 하루 태그 (예: "바다", "여행", "가족")
     pub tags: Vec<String>,
+    /// "그날로 돌아가기"로 다시 볼 것이 있는 날: 이름 있는 머문 곳이 1곳 이상이거나 5km 이상 달렸다 ([`is_replayable`]).
+    pub replayable: bool,
+}
+
+/// 다시 보기를 보여 줄 최소 거리 (m). 이보다 짧고 이름 있는 곳도 없는 날은 다시 볼 장면이 없다.
+pub const REPLAY_MIN_DISTANCE_M: f64 = 5_000.0;
+
+/// 그날로 돌아가기를 띄울 만한 날인가: 이름 있는 머문 곳 1곳 이상 또는 거리 5km 이상.
+pub fn is_replayable(named_stops: usize, distance_m: f64) -> bool {
+    named_stops > 0 || distance_m >= REPLAY_MIN_DISTANCE_M
 }
 
 /// 주행 하나.
@@ -263,15 +273,18 @@ impl EodiStore {
              FROM day_summary s LEFT JOIN day_memory m ON m.day = s.day LEFT JOIN day_user_title u ON u.day = s.day ORDER BY s.day DESC LIMIT ?1",
         )?;
         let rows = st.query_map([limit], |r| {
+            let distance_m: f64 = r.get(3)?;
+            let stop_names = split_names(&r.get::<_, String>(7)?);
             Ok(DaySummary {
                 day: format_day(r.get(0)?),
                 trip_count: r.get(1)?,
                 stay_count: r.get(2)?,
-                distance_m: r.get(3)?,
+                distance_m,
                 drive_millis: r.get(4)?,
                 first_ms: r.get(5)?,
                 last_ms: r.get(6)?,
-                stop_names: split_names(&r.get::<_, String>(7)?),
+                replayable: is_replayable(stop_names.iter().filter(|n| !n.trim().is_empty()).count(), distance_m),
+                stop_names,
                 title: r.get(8)?,
                 tags: split_names(&r.get::<_, Option<String>>(9)?.unwrap_or_default()),
             })
@@ -612,11 +625,14 @@ impl DayAcc {
         let (first_ms, last_ms) = times
             .fold(None, |acc: Option<(i64, i64)>, t| Some(acc.map_or((t, t), |(a, b)| (a.min(t), b.max(t)))))
             .unwrap_or((0, 0));
+        let distance_m: f64 = self.trips.iter().map(|t| t.distance_m).sum();
+        let named = self.stays.iter().filter(|s| s.place.as_ref().is_some_and(|p| !p.name.trim().is_empty())).count();
         DaySummary {
             day: format_day(day),
             trip_count: self.trips.len() as u32,
             stay_count: self.stays.len() as u32,
-            distance_m: self.trips.iter().map(|t| t.distance_m).sum(),
+            replayable: is_replayable(named, distance_m),
+            distance_m,
             drive_millis: self.trips.iter().map(|t| t.end_ms - t.start_ms).sum(),
             first_ms,
             last_ms,
