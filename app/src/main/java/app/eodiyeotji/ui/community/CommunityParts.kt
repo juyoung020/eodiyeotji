@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.community
 
+import androidx.compose.ui.semantics.heading
 import app.eodiyeotji.ui.theme.EodiIcons
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -377,12 +378,51 @@ fun SecondaryPill(text: String, icon: ImageVector?, onClick: () -> Unit, modifie
     }
 }
 
-/** 둥근 아이콘 버튼 (76dp). */
+/**
+ * 둥근 아이콘 버튼 (76dp, 뒤로 · 닫기 · 앞뒤 넘기기 · 말하기). [filled]면 파란 바탕 · 흰 아이콘.
+ * 바탕색이 화면에 묻히면 [containerColor]로 바꾼다 (예: 회색 바탕 위에서는 흰 카드색). 못 누를 때는 흐리게.
+ */
 @Composable
-fun RoundIconButton(icon: ImageVector, description: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun RoundIconButton(
+    icon: ImageVector,
+    description: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    filled: Boolean = false,
+    enabled: Boolean = true,
+    containerColor: Color? = null,
+    contentColor: Color? = null,
+    iconSize: Dp = 32.dp,
+    iconModifier: Modifier = Modifier,
+) {
     val c = EodiTheme.colors
-    Surface(onClick = onClick, shape = CircleShape, color = c.surfaceHigh, contentColor = c.textPrimary, modifier = modifier.size(76.dp)) {
-        Box(contentAlignment = Alignment.Center) { Icon(icon, description, Modifier.size(32.dp)) }
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = CircleShape,
+        color = containerColor ?: if (filled) c.accent else c.surfaceHigh,
+        contentColor = when {
+            !enabled -> c.textTertiary
+            contentColor != null -> contentColor
+            filled -> c.onAccent
+            else -> c.textPrimary
+        },
+        modifier = modifier.size(EodiTheme.space.touch),
+    ) {
+        Box(contentAlignment = Alignment.Center) { Icon(icon, description, iconModifier.size(iconSize)) }
+    }
+}
+
+/** 구역 머리말 (작은 회색 대문자 줄, 읽기 도구에는 제목). [icon]이 있으면 앞에 금색 아이콘 (결산의 반짝임). */
+@Composable
+fun SectionTitle(text: String, modifier: Modifier = Modifier, icon: ImageVector? = null) {
+    val c = EodiTheme.colors
+    Row(modifier.semantics(mergeDescendants = true) { heading() }, verticalAlignment = Alignment.CenterVertically) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = c.memoryInk, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(text, style = EodiTheme.type.eyebrow, color = c.textTertiary)
     }
 }
 

@@ -1,5 +1,6 @@
 package app.eodiyeotji.phone.ui
 
+import app.eodiyeotji.ui.community.SectionTitle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,7 +60,7 @@ fun PhoneSettingsSheet(
                 RoundIconButton(EodiIcons.Close, stringResource(R.string.settings_close), onClose)
             }
             Spacer(Modifier.size(24.dp))
-            SectionTitle(stringResource(R.string.settings_map_app))
+            SectionTitle(stringResource(R.string.settings_map_app), Modifier.padding(start = 4.dp, bottom = 12.dp))
             Column(Modifier.clip(RoundedCornerShape(EodiTheme.space.radiusM)).background(c.surfaceHigh)) {
                 MapApp.entries.forEach { app ->
                     val missing = app != MapApp.AUTO && installed != null && app !in installed
@@ -72,7 +73,7 @@ fun PhoneSettingsSheet(
             Text(stringResource(R.string.settings_map_hint), style = type.caption, color = c.textTertiary)
 
             Spacer(Modifier.size(32.dp))
-            SectionTitle(stringResource(R.string.settings_permissions))
+            SectionTitle(stringResource(R.string.settings_permissions), Modifier.padding(start = 4.dp, bottom = 12.dp))
             Column(
                 Modifier.clip(RoundedCornerShape(EodiTheme.space.radiusM)).background(c.surfaceHigh).padding(vertical = 8.dp),
             ) {
@@ -94,16 +95,6 @@ private fun MapApp.label(): Int = when (this) {
     MapApp.KAKAO -> R.string.settings_map_kakao
     MapApp.TMAP -> R.string.settings_map_tmap
     MapApp.GOOGLE -> R.string.settings_map_google
-}
-
-@Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text,
-        style = EodiTheme.type.eyebrow,
-        color = EodiTheme.colors.textTertiary,
-        modifier = Modifier.padding(start = 4.dp, bottom = 12.dp).semantics { heading() },
-    )
 }
 
 /** 고르는 줄: 이름 (+ 설치 안 됨) · 오른쪽 동그라미 (고르면 파랑 채움 + 체크). */

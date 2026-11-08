@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.timeline
 
+import app.eodiyeotji.ui.community.RoundIconButton
 import app.eodiyeotji.ui.community.CenterMessage
 import app.eodiyeotji.ui.community.ErrorState
 import app.eodiyeotji.ui.community.LoadingBox
@@ -456,7 +457,7 @@ private fun CompactDayDetail(
                 .padding(start = 20.dp, end = space.page, top = 12.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BackButton(onBack)
+            RoundIconButton(EodiIcons.Back, stringResource(R.string.timeline_back_description), onBack, iconSize = 36.dp)
             Spacer(Modifier.width(20.dp))
             if (summary != null) {
                 val title = summary.title?.takeIf { it.isNotBlank() }
@@ -854,7 +855,7 @@ private fun DetailHeader(summary: DaySummary?, today: LocalDate, onBack: (() -> 
     Column(Modifier.fillMaxWidth().padding(start = space.xl, end = space.xl, top = 28.dp, bottom = space.l)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (onBack != null) {
-                BackButton(onBack)
+                RoundIconButton(EodiIcons.Back, stringResource(R.string.timeline_back_description), onBack, iconSize = 36.dp)
                 Spacer(Modifier.width(20.dp))
             }
             if (summary != null) {
@@ -927,24 +928,6 @@ private fun TagRow(tags: List<String>) {
                 softWrap = false,
                 modifier = Modifier.background(c.surfaceHigh, RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 5.dp),
             )
-        }
-    }
-}
-
-/** 76dp 둥근 뒤로 버튼 (아이콘만, 읽어 주기용 설명 붙임). */
-@Composable
-private fun BackButton(onBack: () -> Unit) {
-    val c = EodiTheme.colors
-    val description = stringResource(R.string.timeline_back_description)
-    Surface(
-        onClick = onBack,
-        shape = CircleShape,
-        color = c.surfaceHigh,
-        contentColor = c.textPrimary,
-        modifier = Modifier.size(EodiTheme.space.touch).semantics { contentDescription = description },
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(EodiIcons.Back, contentDescription = null, modifier = Modifier.size(36.dp))
         }
     }
 }

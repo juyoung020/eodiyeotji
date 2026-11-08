@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.places
 
+import app.eodiyeotji.ui.community.SectionTitle
 import app.eodiyeotji.ui.community.StopPhotoBox
 import app.eodiyeotji.core.PartnerOffer
 import app.eodiyeotji.ui.offers.CouponWallet
@@ -244,11 +245,11 @@ private fun SettingsPane(s: PlacesUiState, vm: PlacesViewModel, compact: Boolean
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = modifier,
     ) {
-        full("anchor-h") { SectionTitle(stringResource(R.string.anchor_section)) }
+        full("anchor-h") { SectionTitle(stringResource(R.string.anchor_section), Modifier.padding(start = 4.dp, bottom = 4.dp)) }
         full("home") { AnchorRow(AnchorRole.HOME, s.homeOffice.home, onReset = { vm.resetAnchor(AnchorRole.HOME) }) }
         full("office") { AnchorRow(AnchorRole.OFFICE, s.homeOffice.office, onReset = { vm.resetAnchor(AnchorRole.OFFICE) }) }
         full("anchor-hint") { Text(stringResource(R.string.anchor_hint), style = EodiTheme.type.caption, color = c.textTertiary, modifier = Modifier.padding(start = 4.dp)) }
-        full("hidden-h") { Box(Modifier.padding(top = 20.dp)) { SectionTitle(stringResource(R.string.hidden_section)) } }
+        full("hidden-h") { Box(Modifier.padding(top = 20.dp)) { SectionTitle(stringResource(R.string.hidden_section), Modifier.padding(start = 4.dp, bottom = 4.dp)) } }
         if (s.hidden.isEmpty()) {
             full("hidden-empty") { Text(stringResource(R.string.hidden_empty), style = EodiTheme.type.body, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp)) }
         } else {
@@ -259,11 +260,6 @@ private fun SettingsPane(s: PlacesUiState, vm: PlacesViewModel, compact: Boolean
 
 private fun androidx.compose.foundation.lazy.grid.LazyGridScope.full(key: String, content: @Composable () -> Unit) {
     item(key = key, span = { GridItemSpan(maxLineSpan) }) { content() }
-}
-
-@Composable
-private fun SectionTitle(text: String) {
-    Text(text, style = EodiTheme.type.eyebrow, color = EodiTheme.colors.textTertiary, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp).semantics { heading() })
 }
 
 @Composable

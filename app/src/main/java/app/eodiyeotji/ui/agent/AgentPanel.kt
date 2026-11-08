@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.agent
 
+import app.eodiyeotji.ui.community.RoundIconButton
 import app.eodiyeotji.ui.theme.EodiIcons
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.draw.drawBehind
@@ -373,7 +374,7 @@ private fun CompactAskBar(question: String?, onAsk: (String) -> Unit, onVoiceReq
                 Icon(EodiIcons.Sparkle, contentDescription = null, tint = EodiTheme.colors.memoryInk, modifier = Modifier.padding(start = 8.dp).size(30.dp))
             },
             trailingIcon = if (text.isNotBlank()) {
-                { RoundIconButton(AgentIcons.Send, stringResource(R.string.agent_send), onClick = submit, filled = false) }
+                { RoundIconButton(AgentIcons.Send, stringResource(R.string.agent_send), submit, containerColor = Color.Transparent, contentColor = EodiTheme.colors.accent) }
             } else {
                 null
             },
@@ -444,9 +445,9 @@ private fun QuestionBar(
             trailingIcon = {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 8.dp)) {
                     if (text.isNotBlank()) {
-                        RoundIconButton(AgentIcons.Send, stringResource(R.string.agent_send), onClick = submit, filled = false)
+                        RoundIconButton(AgentIcons.Send, stringResource(R.string.agent_send), submit, containerColor = Color.Transparent, contentColor = EodiTheme.colors.accent)
                     }
-                    RoundIconButton(AgentIcons.Mic, stringResource(R.string.agent_mic), onClick = onVoiceRequest, filled = true)
+                    RoundIconButton(AgentIcons.Mic, stringResource(R.string.agent_mic), onVoiceRequest, filled = true)
                 }
             },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -464,23 +465,6 @@ private fun QuestionBar(
             IconButton(onClick = onClose, modifier = Modifier.size(AgentTouchMin)) {
                 Icon(EodiIcons.Close, contentDescription = stringResource(R.string.agent_close), modifier = Modifier.size(32.dp))
             }
-        }
-    }
-}
-
-/** 원형 아이콘 버튼 (지름 72dp, 터치 영역 76dp). */
-@Composable
-private fun RoundIconButton(icon: ImageVector, label: String, onClick: () -> Unit, filled: Boolean) {
-    val colors = MaterialTheme.colorScheme
-    Surface(
-        onClick = onClick,
-        shape = CircleShape,
-        color = if (filled) colors.primary else Color.Transparent,
-        contentColor = if (filled) colors.onPrimary else colors.primary,
-        modifier = Modifier.size(AgentTouchMin).padding(2.dp),
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = label, modifier = Modifier.size(32.dp))
         }
     }
 }

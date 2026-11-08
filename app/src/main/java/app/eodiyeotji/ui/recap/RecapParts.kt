@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.recap
 
+import app.eodiyeotji.ui.community.SectionTitle
 import androidx.compose.ui.graphics.graphicsLayer
 
 import androidx.compose.ui.graphics.Brush
@@ -331,17 +332,6 @@ private fun RowScope.StatCell(value: String, label: String) {
     Column(Modifier.weight(1f).padding(horizontal = 8.dp).semantics(mergeDescendants = true) {}, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(value, style = EodiTheme.type.titleSmall, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(label, style = EodiTheme.type.caption, color = c.textTertiary, maxLines = 1)
-    }
-}
-
-/** 섹션 머리말 (금색 반짝임 + 글). */
-@Composable
-internal fun SectionTitle(text: String, modifier: Modifier = Modifier) {
-    val c = EodiTheme.colors
-    Row(modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(EodiIcons.Sparkle, contentDescription = null, tint = c.memoryInk, modifier = Modifier.size(24.dp))
-        Spacer(Modifier.width(8.dp))
-        Text(text, style = EodiTheme.type.eyebrow, color = c.textTertiary)
     }
 }
 

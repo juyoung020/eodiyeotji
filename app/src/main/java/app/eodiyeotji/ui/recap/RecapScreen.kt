@@ -1,5 +1,7 @@
 package app.eodiyeotji.ui.recap
 
+import app.eodiyeotji.ui.community.SectionTitle
+import app.eodiyeotji.ui.community.RoundIconButton
 import app.eodiyeotji.ui.community.CenterMessage
 import app.eodiyeotji.ui.community.LoadingBox
 import app.eodiyeotji.ui.community.StopPhotoBox
@@ -142,18 +144,14 @@ private fun RecapHeader(
         Modifier.fillMaxWidth().heightIn(min = 104.dp).padding(horizontal = EodiTheme.space.page, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RoundButton(onBack, stringResource(R.string.recap_back)) {
-            Icon(EodiIcons.Back, contentDescription = null, tint = c.textPrimary, modifier = Modifier.size(36.dp))
-        }
+        RoundIconButton(EodiIcons.Back, stringResource(R.string.recap_back), onBack, containerColor = c.surface, iconSize = 36.dp)
         Spacer(Modifier.width(16.dp))
         Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             ModeTab(stringResource(R.string.recap_tab_month), mode == RecapMode.MONTH, Modifier.weight(1f, fill = false)) { onMode(RecapMode.MONTH) }
             ModeTab(stringResource(R.string.recap_tab_year), mode == RecapMode.YEAR, Modifier.weight(1f, fill = false)) { onMode(RecapMode.YEAR) }
         }
         Spacer(Modifier.width(16.dp))
-        RoundButton({ if (hasPrev) onShift(-1) }, stringResource(R.string.recap_prev), enabled = hasPrev) {
-            Icon(EodiIcons.Chevron, contentDescription = null, tint = c.textPrimary, modifier = Modifier.size(32.dp).rotate(180f))
-        }
+        RoundIconButton(EodiIcons.Chevron, stringResource(R.string.recap_prev), { onShift(-1) }, enabled = hasPrev, containerColor = c.surface, iconModifier = Modifier.rotate(180f))
         Text(
             title,
             style = EodiTheme.type.bodyStrong,
@@ -163,24 +161,8 @@ private fun RecapHeader(
             textAlign = TextAlign.Center,
             modifier = Modifier.widthIn(min = 120.dp).padding(horizontal = 8.dp).semantics { heading() },
         )
-        RoundButton({ if (hasNext) onShift(1) }, stringResource(R.string.recap_next), enabled = hasNext) {
-            Icon(EodiIcons.Chevron, contentDescription = null, tint = c.textPrimary, modifier = Modifier.size(32.dp))
-        }
+        RoundIconButton(EodiIcons.Chevron, stringResource(R.string.recap_next), { onShift(1) }, enabled = hasNext, containerColor = c.surface)
     }
-}
-
-@Composable
-private fun RoundButton(onClick: () -> Unit, label: String, enabled: Boolean = true, content: @Composable () -> Unit) {
-    val c = EodiTheme.colors
-    Box(
-        Modifier
-            .size(76.dp)
-            .clip(CircleShape)
-            .background(c.surface)
-            .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
-            .then(if (enabled) Modifier else Modifier.background(c.background.copy(alpha = 0.55f))),
-        contentAlignment = Alignment.Center,
-    ) { content() }
 }
 
 @Composable
@@ -245,7 +227,7 @@ private fun MonthBody(recap: MonthRecap, onOpenDay: ((String) -> Unit)?) {
             Text(listOfNotNull(distance, outings).joinToString(" · "), style = EodiTheme.type.body, color = c.textSecondary)
         }
         recap.bestDay?.let {
-            SectionTitle(stringResource(R.string.recap_best_day_month))
+            SectionTitle(stringResource(R.string.recap_best_day_month), Modifier.padding(top = 8.dp), icon = EodiIcons.Sparkle)
             RecapDayRow(stringResource(R.string.recap_best_day_month), it, onOpenDay)
         }
         PlacesAndRegions(recap.topPlaces, recap.regions)
@@ -272,9 +254,9 @@ private fun YearBody(recap: YearRecap, onOpenDay: ((String) -> Unit)?) {
     val c = EodiTheme.colors
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         TotalsStrip(recap.totals)
-        SectionTitle(stringResource(R.string.recap_months_chart))
+        SectionTitle(stringResource(R.string.recap_months_chart), Modifier.padding(top = 8.dp), icon = EodiIcons.Sparkle)
         MonthBars(recap.monthDistanceM)
-        SectionTitle(stringResource(R.string.recap_seasons))
+        SectionTitle(stringResource(R.string.recap_seasons), Modifier.padding(top = 8.dp), icon = EodiIcons.Sparkle)
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val perRow = if (maxWidth >= TwoColumn) 4 else 2
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -307,11 +289,11 @@ private fun YearBody(recap: YearRecap, onOpenDay: ((String) -> Unit)?) {
             }
         }
         recap.longestTrip?.let {
-            SectionTitle(stringResource(R.string.recap_longest_trip))
+            SectionTitle(stringResource(R.string.recap_longest_trip), Modifier.padding(top = 8.dp), icon = EodiIcons.Sparkle)
             RecapDayRow(stringResource(R.string.recap_longest_trip), it, onOpenDay)
         }
         recap.bestDay?.takeIf { it.day != recap.longestTrip?.day }?.let {
-            SectionTitle(stringResource(R.string.recap_best_day_year))
+            SectionTitle(stringResource(R.string.recap_best_day_year), Modifier.padding(top = 8.dp), icon = EodiIcons.Sparkle)
             RecapDayRow(stringResource(R.string.recap_best_day_year), it, onOpenDay)
         }
         PlacesAndRegions(recap.topPlaces, recap.regions)
@@ -362,7 +344,7 @@ private fun PlacesAndRegions(places: List<RecapPlace>, regions: List<RecapRegion
 private fun TopPlaces(places: List<RecapPlace>) {
     if (places.isEmpty()) return
     val c = EodiTheme.colors
-    SectionTitle(stringResource(R.string.recap_top_places))
+    SectionTitle(stringResource(R.string.recap_top_places), Modifier.padding(top = 8.dp), icon = EodiIcons.Sparkle)
     val openPlace = LocalOpenPlace.current
     places.forEachIndexed { i, p ->
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -383,7 +365,7 @@ private fun TopPlaces(places: List<RecapPlace>) {
 private fun Regions(regions: List<RecapRegion>) {
     if (regions.isEmpty()) return
     val c = EodiTheme.colors
-    SectionTitle(stringResource(R.string.recap_regions))
+    SectionTitle(stringResource(R.string.recap_regions), Modifier.padding(top = 8.dp), icon = EodiIcons.Sparkle)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         regions.forEach { r ->
             Text(
