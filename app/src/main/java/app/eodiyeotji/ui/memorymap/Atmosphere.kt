@@ -28,7 +28,7 @@ import kotlin.math.sin
  * 색은 Rust가 정한 때([SkyPhase], 도착 시각 기준)로 고른다. 바뀌지 않는 칸은 한 번만 그려 지도 프레임에 부담이 없다.
  */
 @Composable
-fun CinematicSky(phase: SkyPhase, modifier: Modifier = Modifier, stars: Boolean = phase == SkyPhase.NIGHT || phase == SkyPhase.BLUE, skyFraction: Float = 0.34f, haze: Boolean = true) {
+fun CinematicSky(phase: SkyPhase, modifier: Modifier = Modifier, stars: Boolean = phase == SkyPhase.NIGHT || phase == SkyPhase.BLUE, skyFraction: Float = 0.34f, haze: Boolean = true, glow: Float = 1f) {
     val p = remember(phase) { skyPalette(phase) }
     val field = remember { starField() }
     // 반짝임 값은 Canvas 그리기 안에서만 읽는다 → 다시 그리기만 하고 재구성은 하지 않는다.
@@ -45,7 +45,7 @@ fun CinematicSky(phase: SkyPhase, modifier: Modifier = Modifier, stars: Boolean 
     // 하늘·빛 띠·비네트는 한 번 그려 둔 그림을 그대로 쓰고(바뀌지 않는다), 매 프레임은 별만 다시 그린다.
     // 별은 원래대로 하늘과 비네트 사이에 놓인다 (별 칸은 비네트 아래 같은 자리, 비네트는 맨 위 칸이 덮는다).
     Box(modifier.fillMaxSize()) {
-        Canvas(Modifier.fillMaxSize().graphicsLayer()) { drawSky(p, skyFraction, haze) }
+        Canvas(Modifier.fillMaxSize().graphicsLayer()) { drawSky(p, skyFraction, haze, glow) }
         if (twinkle != null) {
             Canvas(Modifier.fillMaxSize()) { drawStars(field, twinkle.value, size.height * skyFraction * 0.9f, p.star) }
         }
@@ -53,7 +53,8 @@ fun CinematicSky(phase: SkyPhase, modifier: Modifier = Modifier, stars: Boolean 
     }
 }
 
-private fun DrawScope.drawSky(p: SkyPalette, skyFraction: Float, haze: Boolean) {
+private fun DrawScope.drawSky(p: SkyPalette, skyFraction: Float, haze: Boolean, glow: Float) {
+    val g = p.glow.copy(alpha = p.glow.alpha * glow)
     val h = size.height
     val sky = h * skyFraction
     // 하늘: 위는 짙게 → 지평선 쪽으로 밝아지다 → 지평선 빛 띠 → 지도 쪽으로 투명
@@ -72,12 +73,12 @@ private fun DrawScope.drawSky(p: SkyPalette, skyFraction: Float, haze: Boolean) 
     // 지평선 빛: 가운데가 밝은 띠 (위아래로 부드럽게 사라진다) + 가운데 번짐
     val band = h * 0.14f
     drawRect(
-        Brush.verticalGradient(0f to Color.Transparent, 0.5f to p.glow, 1f to Color.Transparent, startY = sky - band, endY = sky + band),
+        Brush.verticalGradient(0f to Color.Transparent, 0.5f to g, 1f to Color.Transparent, startY = sky - band, endY = sky + band),
         topLeft = Offset(0f, sky - band),
         size = Size(size.width, band * 2f),
     )
     drawCircle(
-        Brush.radialGradient(0f to p.glow, 1f to Color.Transparent, center = Offset(size.width * 0.5f, sky), radius = band * 2.2f),
+        Brush.radialGradient(0f to g, 1f to Color.Transparent, center = Offset(size.width * 0.5f, sky), radius = band * 2.2f),
         radius = band * 2.2f,
         center = Offset(size.width * 0.5f, sky),
     )
