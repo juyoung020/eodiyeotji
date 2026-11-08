@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.memorymap
 
+import androidx.compose.runtime.State
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -31,12 +32,12 @@ import kotlin.math.sin
 fun CinematicSky(phase: SkyPhase, modifier: Modifier = Modifier, stars: Boolean = phase == SkyPhase.NIGHT || phase == SkyPhase.BLUE, skyFraction: Float = 0.34f) {
     val p = remember(phase) { skyPalette(phase) }
     val field = remember { starField() }
-    val twinkle = if (stars) {
-        val t by rememberInfiniteTransition(label = "stars").animateFloat(
+    // 반짝임 값은 Canvas 그리기 안에서만 읽는다 → 매 프레임 다시 그리기만 하고 재구성은 하지 않는다
+    val twinkle: State<Float>? = if (stars) {
+        rememberInfiniteTransition(label = "stars").animateFloat(
             0f, 1f, infiniteRepeatable(tween(TWINKLE_MS, easing = LinearEasing), RepeatMode.Restart), label = "twinkle",
         )
-        t
-    } else 0f
+    } else null
     Canvas(modifier.fillMaxSize()) {
         val h = size.height
         val sky = h * skyFraction
@@ -63,7 +64,7 @@ fun CinematicSky(phase: SkyPhase, modifier: Modifier = Modifier, stars: Boolean 
             radius = band * 2.2f,
             center = Offset(size.width * 0.5f, sky),
         )
-        if (stars) drawStars(field, twinkle, sky * 0.9f, p.star)
+        if (twinkle != null) drawStars(field, twinkle.value, sky * 0.9f, p.star)
         // 아래 안개 + 네 귀퉁이 비네트
         drawRect(Brush.verticalGradient(0.7f to Color.Transparent, 1f to p.floor))
         drawRect(

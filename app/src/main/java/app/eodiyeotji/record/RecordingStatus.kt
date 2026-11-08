@@ -1,5 +1,6 @@
 package app.eodiyeotji.record
 
+import androidx.compose.ui.graphics.graphicsLayer
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -42,7 +43,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -233,13 +233,14 @@ private fun StatusDot(headline: StatusHeadline) {
         else -> c.here
     }
     if (headline == StatusHeadline.DRIVING) {
-        val pulse by rememberInfiniteTransition(label = "rec").animateFloat(
+        // 값은 그리기 단계에서만 읽는다 (graphicsLayer) → 매 프레임 재구성 없이 투명도만 바뀐다
+        val pulse = rememberInfiniteTransition(label = "rec").animateFloat(
             initialValue = 1f,
             targetValue = 0.35f,
             animationSpec = infiniteRepeatable(tween(PULSE_MS, easing = FastOutSlowInEasing), RepeatMode.Reverse),
             label = "rec-dot",
         )
-        Box(Modifier.size(14.dp).alpha(pulse).background(color, CircleShape))
+        Box(Modifier.size(14.dp).graphicsLayer { alpha = pulse.value }.background(color, CircleShape))
     } else {
         Box(Modifier.size(14.dp).background(color, CircleShape))
     }

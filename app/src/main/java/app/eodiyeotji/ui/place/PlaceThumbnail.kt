@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.place
 
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -14,7 +15,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -67,13 +67,14 @@ fun PlaceThumbnail(
 /** 사진을 기다리는 동안의 자리: [color] 바탕이 천천히 밝아졌다 어두워진다 (불러오는 중이라는 표시). */
 @Composable
 fun PhotoLoadingPlaceholder(color: Color, modifier: Modifier = Modifier) {
-    val pulse by rememberInfiniteTransition(label = "photo-loading").animateFloat(
+    // 그리기 단계에서만 읽는다 → 사진 칸마다 매 프레임 재구성하지 않는다
+    val pulse = rememberInfiniteTransition(label = "photo-loading").animateFloat(
         initialValue = 0.45f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(PULSE_MS, easing = LinearEasing), RepeatMode.Reverse),
         label = "pulse",
     )
-    Box(modifier.fillMaxSize().alpha(pulse).background(color))
+    Box(modifier.fillMaxSize().graphicsLayer { alpha = pulse.value }.background(color))
 }
 
 private const val PULSE_MS = 700

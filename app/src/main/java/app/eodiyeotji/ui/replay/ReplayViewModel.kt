@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.replay
 
+import android.content.Context
 import android.util.Log
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Immutable
@@ -9,7 +10,10 @@ import app.eodiyeotji.R
 import app.eodiyeotji.core.DayReplay
 import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.dayReplay
+import app.eodiyeotji.place.PlacePhotoRepository
 import app.eodiyeotji.pleos.CourseGuide
+import coil.imageLoader
+import dagger.hilt.android.qualifiers.ApplicationContext
 import app.eodiyeotji.ui.agent.DrivingStatePort
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -38,7 +42,9 @@ data class ReplayUiState(
  */
 @HiltViewModel
 class ReplayViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val core: EodiCore,
+    private val photos: PlacePhotoRepository,
     private val guide: CourseGuide,
     driving: DrivingStatePort,
 ) : ViewModel() {
@@ -65,12 +71,31 @@ class ReplayViewModel @Inject constructor(
             try {
                 val r = core.dayReplay(day)
                 _state.update { if (it.day == day) it.copy(replay = r) else it }
+                prefetchPhotos(r)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "그날 다시 보기 실패 ($day)", e)
                 _state.update { if (it.day == day) it.copy(failed = true) else it }
             }
+        }
+    }
+
+    /**
+     * 장면 사진을 미리 받아 둔다: 장면마다 사진을 그 장면이 뜰 때 찾으면 2.6초 비행 뒤에 빈 칸이 먼저 보인다.
+     * 순서대로 찾고(구글 요청이 한꺼번에 몰리지 않게) 이미지는 Coil 디스크·메모리 캐시에 넣어 둔다 → 장면이 뜨면 바로 그려진다.
+     */
+    private suspend fun prefetchPhotos(r: DayReplay) {
+        for (scene in r.scenes) {
+            val stop = scene.stop
+            val photo = try {
+                photos.photos(stop.name, stop.address, stop.lat, stop.lon).firstOrNull()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            } ?: continue
+            context.imageLoader.enqueue(photos.imageRequest(photo))
         }
     }
 
