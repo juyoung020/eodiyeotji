@@ -229,18 +229,19 @@ private fun Player(r: DayReplay, onClose: () -> Unit, onNavigate: () -> Unit) {
             )
             // 작은 지도 (오른쪽 위, 사진 장면에서만): 지나온 길 + 방금 온 구간을 비스듬히 내려다본다
             val mapW = if (wide) minOf(460.dp, maxWidth * 0.36f) else maxWidth * 0.5f
-            val insetAlpha by animateFloatAsState(if (step > 0 && arrived) 1f else 0f, tween(FADE_MS), label = "inset")
+            val insetAlpha = animateFloatAsState(if (step > 0 && arrived) 1f else 0f, tween(FADE_MS), label = "inset")
             ReplayMap(
                 bounds = r.bounds,
                 done = scene?.doneGeojson ?: EMPTY,
                 leg = scene?.legFrames?.lastOrNull(),
                 sky = r.sky,
+                visible = step > 0 && arrived,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(top = 104.dp, end = 32.dp)
                     .width(mapW)
                     .height(mapW * 0.68f)
-                    .alpha(insetAlpha)
+                    .graphicsLayer { alpha = insetAlpha.value }
                     .clip(RoundedCornerShape(24.dp)),
             )
             Progress(n, step, Modifier.align(Alignment.TopCenter).padding(top = 28.dp, start = 140.dp, end = 140.dp))
