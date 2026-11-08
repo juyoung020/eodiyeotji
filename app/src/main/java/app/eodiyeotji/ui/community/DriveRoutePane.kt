@@ -97,9 +97,7 @@ fun DriveRoutePane(viewModel: DriveRouteViewModel = hiltViewModel()) {
             }
             when (val l = state.list) {
                 Load.Loading -> LoadingBox()
-                is Load.Failed -> CenterMessage(stringResource(R.string.community_failed, l.message)) {
-                    SecondaryPill(stringResource(R.string.community_retry), EodiIcons.Refresh, viewModel::reload)
-                }
+                is Load.Failed -> ErrorState(stringResource(R.string.community_failed, l.message), viewModel::reload)
                 is Load.Loaded ->
                     if (l.items.isEmpty()) {
                         CenterMessage(stringResource(R.string.drive_empty))
@@ -254,8 +252,8 @@ internal fun DriveRouteCard(
             Spacer(Modifier.height(16.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), maxLines = 2) {
                 VisitChip(r.visit)
-                MetaChip(routeStatsText(r))
-                item.distanceKm?.let { MetaChip(stringResource(R.string.drive_from_here, distanceText(it * 1000.0))) }
+                InfoChip(routeStatsText(r))
+                item.distanceKm?.let { InfoChip(stringResource(R.string.drive_from_here, distanceText(it * 1000.0))) }
             }
             Spacer(Modifier.height(16.dp))
             Box(Modifier.fillMaxWidth().height(1.dp).background(colors.outline))
@@ -392,8 +390,8 @@ private fun DriveRouteDetailScreen(
                                     Spacer(Modifier.height(16.dp))
                                     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                         VisitChip(r.visit)
-                                        MetaChip(routeStatsText(r))
-                                        d.item.distanceKm?.let { MetaChip(stringResource(R.string.drive_from_here, distanceText(it * 1000.0))) }
+                                        InfoChip(routeStatsText(r))
+                                        d.item.distanceKm?.let { InfoChip(stringResource(R.string.drive_from_here, distanceText(it * 1000.0))) }
                                     }
                                 }
                             }
@@ -403,7 +401,7 @@ private fun DriveRouteDetailScreen(
                                 Column(Modifier.padding(start = 8.dp, top = 6.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Text(stringResource(R.string.drive_sights_title), style = EodiTheme.type.label, color = colors.textTertiary)
                                     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        r.highlights.forEach { MetaChip(it.name) }
+                                        r.highlights.forEach { InfoChip(it.name) }
                                     }
                                 }
                             }

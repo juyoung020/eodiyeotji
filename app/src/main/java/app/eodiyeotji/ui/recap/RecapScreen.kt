@@ -1,5 +1,7 @@
 package app.eodiyeotji.ui.recap
 
+import app.eodiyeotji.ui.community.CenterMessage
+import app.eodiyeotji.ui.community.LoadingBox
 import app.eodiyeotji.ui.community.StopPhotoBox
 import app.eodiyeotji.ui.place.LocalOpenPlace
 import androidx.activity.compose.BackHandler
@@ -105,13 +107,13 @@ fun RecapOverlay(viewModel: RecapViewModel, onOpenDay: (String) -> Unit) {
                 val cardModifier = Modifier.widthIn(max = 1280.dp).fillMaxWidth().padding(bottom = EodiTheme.space.page)
                 when (state.mode) {
                     RecapMode.MONTH -> when (val m = state.monthRecap) {
-                        Load.Loading -> StateText(stringResource(R.string.recap_loading))
-                        Load.Failed -> StateText(stringResource(R.string.recap_failed))
+                        Load.Loading -> LoadingBox(Modifier.padding(top = 80.dp), message = stringResource(R.string.recap_loading))
+                        Load.Failed -> CenterMessage(stringResource(R.string.recap_failed), Modifier.padding(top = 48.dp))
                         is Load.Ready -> MonthRecapCard(m.value, cardModifier, onOpenDay = open)
                     }
                     RecapMode.YEAR -> when (val y = state.yearRecap) {
-                        Load.Loading -> StateText(stringResource(R.string.recap_loading))
-                        Load.Failed -> StateText(stringResource(R.string.recap_failed))
+                        Load.Loading -> LoadingBox(Modifier.padding(top = 80.dp), message = stringResource(R.string.recap_loading))
+                        Load.Failed -> CenterMessage(stringResource(R.string.recap_failed), Modifier.padding(top = 48.dp))
                         is Load.Ready -> Column(cardModifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                             if (!state.driving && y.value.recordDays > 0) {
                                 EntryPill(stringResource(R.string.memory_map_entry), gold = true, Modifier.fillMaxWidth()) { viewModel.openMemoryMap() }
@@ -198,11 +200,6 @@ private fun ModeTab(text: String, selected: Boolean, modifier: Modifier, onClick
             .clickable(role = Role.Tab, onClick = onClick)
             .padding(horizontal = 28.dp, vertical = 24.dp),
     )
-}
-
-@Composable
-private fun StateText(text: String) {
-    Text(text, style = EodiTheme.type.body, color = EodiTheme.colors.textTertiary, modifier = Modifier.padding(top = 80.dp))
 }
 
 // ---------------------------------------------------------------- 요약 카드 (공유 이미지로 찍을 수 있게 상태만 받는다)

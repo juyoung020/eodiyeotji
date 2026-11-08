@@ -53,13 +53,11 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
 import app.eodiyeotji.core.OnThisDay
 import app.eodiyeotji.core.RecapDay
-import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.recap.RecallCenter
 import app.eodiyeotji.ui.common.distanceText
 import app.eodiyeotji.ui.agent.memoryDateText

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -301,24 +302,40 @@ fun <T> ChoiceRow(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> 
     }
 }
 
-/** 켜고 끄는 알약 (예: "내 근처 30km"). 64dp 높이. */
+/**
+ * 켜고 끄는 알약 (예: "내 근처 30km", 리뷰의 "누구와"). 켜지면 파란 테두리 · 옅은 파랑 · 체크.
+ * [role]은 읽기 도구에 알릴 종류 (켜기/끄기 = Switch, 여러 개 중 고르기 = Checkbox). [minHeight]는 누르는 높이.
+ */
 @Composable
-fun TogglePill(text: String, on: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+fun TogglePill(
+    text: String,
+    on: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    role: Role = Role.Switch,
+    minHeight: Dp = 64.dp,
+) {
     val c = EodiTheme.colors
     Surface(
         onClick = onToggle,
+        enabled = enabled,
         shape = CircleShape,
         color = if (on) c.accentSoft else c.surfaceHigh,
-        contentColor = if (on) c.accent else c.textSecondary,
+        contentColor = when {
+            on -> c.accent
+            enabled -> c.textSecondary
+            else -> c.textTertiary
+        },
         border = BorderStroke(2.dp, if (on) c.accent else Color.Transparent),
-        modifier = modifier.heightIn(min = 64.dp).semantics { role = Role.Switch; selected = on },
+        modifier = modifier.heightIn(min = minHeight).semantics { this.role = role; selected = on },
     ) {
         Row(Modifier.padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
             if (on) {
                 Icon(EodiIcons.Check, null, Modifier.size(24.dp))
                 Spacer(Modifier.width(8.dp))
             }
-            Text(text, style = EodiTheme.type.label, maxLines = 1)
+            Text(text, style = EodiTheme.type.label, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, maxLines = 1)
         }
     }
 }
@@ -369,17 +386,30 @@ fun RoundIconButton(icon: ImageVector, description: String, onClick: () -> Unit,
     }
 }
 
-/** 작은 태그 알약 ("#해안도로"). */
+/** 정보 칩의 색 결: [Accent] = 옅은 파랑 · 파란 글자 (태그 · 키워드), [Quiet] = 옅은 회색 · 회색 글자 (거리 · 날짜 같은 정보). */
+enum class ChipTone { Accent, Quiet }
+
+/**
+ * 보여 주기만 하는 작은 알약 칩 (누르지 않는다). 태그("#해안도로")는 [text]에 #을 붙여 넘긴다.
+ * [icon]이 있으면 글자 앞에 작은 아이콘.
+ */
 @Composable
-fun TagChip(text: String) {
+fun InfoChip(text: String, modifier: Modifier = Modifier, tone: ChipTone = ChipTone.Quiet, icon: (@Composable () -> Unit)? = null) {
     val c = EodiTheme.colors
-    Text(
-        "#$text",
-        style = EodiTheme.type.caption,
-        color = c.accent,
-        maxLines = 1,
-        modifier = Modifier.background(c.accentSoft, CircleShape).padding(horizontal = 14.dp, vertical = 6.dp),
-    )
+    val (bg, fg) = when (tone) {
+        ChipTone.Accent -> c.accentSoft to c.accent
+        ChipTone.Quiet -> c.surfaceHigh to c.textSecondary
+    }
+    Row(
+        modifier.background(bg, CircleShape).padding(start = if (icon != null) 10.dp else 14.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            icon()
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(text, style = EodiTheme.type.caption, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
 }
 
 /** 별점 (채운 별 + 숫자). */
@@ -606,10 +636,73 @@ fun CenterMessage(text: String, modifier: Modifier = Modifier, action: (@Composa
     }
 }
 
+/**
+ * 불러오는 중: 가운데 둥근 진행 고리 (옅은 파란 바탕 위 파란 고리). [message]가 있으면 아래에 한 줄.
+ * [compact]는 작은 칸 · 상세 창 안에서 쓰는 작은 고리.
+ */
 @Composable
-fun LoadingBox(modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator(color = EodiTheme.colors.accent, strokeWidth = 5.dp, modifier = Modifier.size(56.dp))
+fun LoadingBox(modifier: Modifier = Modifier, message: String? = null, compact: Boolean = false) {
+    val c = EodiTheme.colors
+    Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        CircularProgressIndicator(
+            color = c.accent,
+            trackColor = c.accentSoft,
+            strokeWidth = if (compact) 5.dp else 6.dp,
+            strokeCap = StrokeCap.Round,
+            modifier = Modifier.size(if (compact) 48.dp else 64.dp),
+        )
+        if (message != null) {
+            Spacer(Modifier.height(24.dp))
+            Text(message, style = EodiTheme.type.body, color = c.textSecondary, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+/** 다시 시도 버튼 (모든 화면 같은 모양: 파란 알약 + 새로고침 아이콘). */
+@Composable
+fun RetryButton(onRetry: () -> Unit, modifier: Modifier = Modifier, label: String = stringResource(R.string.community_retry)) {
+    PrimaryPill(label, EodiIcons.Refresh, onRetry, modifier)
+}
+
+/**
+ * 불러오기 실패: [title]이 있으면 큰 판 (빨간 느낌표 · 큰 제목 · 작은 사유 · 다시 시도) — 화면 전체가 비었을 때,
+ * 없으면 가운데 글 한 줄 + 다시 시도 — 목록 · 칸 안에서.
+ */
+@Composable
+fun ErrorState(
+    message: String,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+    title: String? = null,
+    retryLabel: String = stringResource(R.string.community_retry),
+) {
+    val c = EodiTheme.colors
+    if (title == null) {
+        CenterMessage(message, modifier) { RetryButton(onRetry, label = retryLabel) }
+        return
+    }
+    Column(
+        modifier.padding(EodiTheme.space.page),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(Modifier.size(120.dp).background(c.surface, CircleShape), contentAlignment = Alignment.Center) {
+            Icon(EodiIcons.Alert, contentDescription = null, tint = c.error, modifier = Modifier.size(60.dp))
+        }
+        Spacer(Modifier.height(32.dp))
+        Text(title, style = EodiTheme.type.hero, color = c.textPrimary, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(12.dp))
+        Text(
+            message,
+            style = EodiTheme.type.meta,
+            color = c.textTertiary,
+            textAlign = TextAlign.Center,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 720.dp),
+        )
+        Spacer(Modifier.height(40.dp))
+        RetryButton(onRetry, Modifier.widthIn(min = 320.dp), label = retryLabel)
     }
 }
 

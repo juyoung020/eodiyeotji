@@ -1,5 +1,7 @@
 package app.eodiyeotji.ui.place
 
+import app.eodiyeotji.ui.community.LoadingBox
+import app.eodiyeotji.ui.community.RetryButton
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
@@ -29,7 +31,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -64,7 +65,6 @@ import app.eodiyeotji.ui.community.LocalOverlayPresenter
 import app.eodiyeotji.ui.community.Notice
 import app.eodiyeotji.ui.community.OverlayCard
 import app.eodiyeotji.ui.community.RoundIconButton
-import app.eodiyeotji.ui.community.SecondaryPill
 import app.eodiyeotji.ui.community.dateText
 import app.eodiyeotji.ui.offers.PlaceCouponBadge
 import app.eodiyeotji.ui.review.LikedKeywords
@@ -213,11 +213,11 @@ private fun PlaceDetailContent(opened: StopFact, s: PlaceDetailUiState, vm: Plac
                 s.error != null -> item(key = "error", contentType = "message") {
                     Column(Modifier.padding(horizontal = pad), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text(stringResource(R.string.place_detail_failed), style = EodiTheme.type.body, color = c.error)
-                        SecondaryPill(stringResource(R.string.community_retry), EodiIcons.Refresh, vm::retry)
+                        RetryButton(vm::retry)
                     }
                 }
                 d == null -> item(key = "loading", contentType = "message") {
-                    Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = c.accent) }
+                    LoadingBox(Modifier.fillMaxWidth().height(200.dp), compact = true)
                 }
                 else -> {
                     if (d.keywords.isNotEmpty()) {

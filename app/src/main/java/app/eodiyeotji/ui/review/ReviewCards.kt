@@ -1,11 +1,12 @@
 package app.eodiyeotji.ui.review
 
-import app.eodiyeotji.ui.theme.EodiIcons
+import app.eodiyeotji.ui.community.TogglePill
+import app.eodiyeotji.ui.community.ChipTone
+import app.eodiyeotji.ui.community.InfoChip
 import app.eodiyeotji.ui.community.StopPhotoBox
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,13 +20,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -59,7 +58,6 @@ import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.ui.offers.CourseCouponBadge
 import app.eodiyeotji.ui.common.distanceText
 import app.eodiyeotji.core.WithWhom
-import app.eodiyeotji.ui.community.CommunityIcons
 import app.eodiyeotji.ui.community.HeartButton
 import app.eodiyeotji.ui.community.HeartCount
 import app.eodiyeotji.ui.community.MineBadge
@@ -126,7 +124,7 @@ internal fun RichReviewCard(t: TravelReview, onHeart: () -> Unit, modifier: Modi
             }
             if (r.keywords.isNotEmpty()) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    r.keywords.forEach { KeywordChip(it) }
+                    r.keywords.forEach { InfoChip(it, tone = ChipTone.Accent) }
                 }
             }
             if (r.text.isNotBlank()) {
@@ -336,19 +334,6 @@ private fun reviewVisitExtras(r: PlaceReview): List<String> = listOfNotNull(
     r.stayMin.takeIf { it > 0 }?.let { stringResource(R.string.review_stay, durationText(it * 60_000L)) },
 )
 
-/** 옅은 키워드 칩 ("뷰가 좋아요"). 보여 주기만 한다 (누르지 않는다). */
-@Composable
-internal fun KeywordChip(text: String, modifier: Modifier = Modifier) {
-    val c = EodiTheme.colors
-    Text(
-        text,
-        style = EodiTheme.type.caption,
-        color = c.accent,
-        maxLines = 1,
-        modifier = modifier.background(c.accentSoft, CircleShape).padding(horizontal = 14.dp, vertical = 7.dp),
-    )
-}
-
 /**
  * 장소 창 "이런 점이 좋았어요": 키워드마다 가로 막대 (길이 = Rust가 계산한 ratio) + 수. 키워드가 없으면 그리지 않는다.
  */
@@ -405,7 +390,7 @@ internal fun KeywordPicker(options: List<String>, picked: List<String>, limit: I
         FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             options.forEach { k ->
                 val on = k in picked
-                SelectChip(k, on, enabled = on || picked.size < limit) { onToggle(k) }
+                TogglePill(k, on, { onToggle(k) }, enabled = on || picked.size < limit, role = Role.Checkbox, minHeight = EodiTheme.space.touch)
             }
         }
     }
@@ -418,34 +403,7 @@ internal fun WithWhomPicker(picked: WithWhom?, onPick: (WithWhom) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(stringResource(R.string.review_with_title), style = EodiTheme.type.label, color = EodiTheme.colors.textSecondary)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            WithWhom.entries.forEach { w -> SelectChip(withWhomLabel(w), w == picked, enabled = true) { onPick(w) } }
-        }
-    }
-}
-
-/** 고르는 칩 (켜지면 파란 테두리 · 옅은 파랑). 누르는 자리 76dp (Pleos 터치 크기). */
-@Composable
-private fun SelectChip(text: String, on: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    val c = EodiTheme.colors
-    Surface(
-        onClick = onClick,
-        enabled = enabled,
-        shape = CircleShape,
-        color = if (on) c.accentSoft else c.surfaceHigh,
-        contentColor = when {
-            on -> c.accent
-            enabled -> c.textPrimary
-            else -> c.textTertiary
-        },
-        border = BorderStroke(2.dp, if (on) c.accent else Color.Transparent),
-        modifier = Modifier.heightIn(min = EodiTheme.space.touch).semantics { role = Role.Checkbox; selected = on },
-    ) {
-        Row(Modifier.padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (on) {
-                Icon(EodiIcons.Check, null, Modifier.size(24.dp))
-                Spacer(Modifier.width(8.dp))
-            }
-            Text(text, style = EodiTheme.type.label, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, maxLines = 1)
+            WithWhom.entries.forEach { w -> TogglePill(withWhomLabel(w), w == picked, { onPick(w) }, role = Role.Checkbox, minHeight = EodiTheme.space.touch) }
         }
     }
 }
