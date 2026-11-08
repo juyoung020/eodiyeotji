@@ -13,6 +13,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
@@ -58,7 +59,7 @@ class PleosSpeech @Inject constructor(@ApplicationContext private val context: C
     /** Pleos 인식을 쓸 수 없다고 판단함 → Android 인식기로 */
     @Volatile private var pleosBroken = false
     @Volatile private var finished = true
-    private var stt: SpeechToText? = null
+    @Volatile private var stt: SpeechToText? = null
     private var android: SpeechRecognizer? = null
     private val timeout = Runnable { if (!finished) stop() }
 
@@ -94,7 +95,14 @@ class PleosSpeech @Inject constructor(@ApplicationContext private val context: C
         }
     }
 
+    /** 음성 인식 엔진 만들기는 오래 걸린다 → 전용 스레드(루퍼 있음)에서 만든다 (`PleosTts`와 같은 이유). 그 전의 듣기는 Android 인식기로. */
     init {
+        val init = HandlerThread("EodiSttInit").apply { start() }
+        Handler(init.looper).post(::initPleos) // SDK 콜백이 이 루퍼로 올 수 있어 스레드는 남겨 둔다
+        if (BuildConfig.DEBUG) registerDebugInput()
+    }
+
+    private fun initPleos() {
         runCatching {
             SpeechToText(context, Mode.ON_DEVICE).also { s ->
                 stt = s
@@ -114,7 +122,6 @@ class PleosSpeech @Inject constructor(@ApplicationContext private val context: C
                 })
             }
         }.onFailure { pleosBroken = true; Log.w(TAG, "Pleos SpeechToText 없음", it) }
-        if (BuildConfig.DEBUG) registerDebugInput()
     }
 
     /** Android 인식기로 대신 들어야 하는데 마이크 권한이 아직 없으면 true (화면이 권한을 물은 뒤 [start]). */

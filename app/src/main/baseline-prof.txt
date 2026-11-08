@@ -1,0 +1,11 @@
+# 릴리즈 APK에 같이 들어가는 Baseline Profile (AGP가 assets/dexopt/baseline.prof로 넣고, profileinstaller가 설치 때 미리 컴파일시킨다).
+# Compose·AndroidX는 자기 프로필을 이미 갖고 있으니 우리 코드와 프로필 없는 라이브러리(지도·이미지·Rust 바인딩)만 적는다.
+# 앱이 작아 앱 코드 전체를 첫 실행부터 기계어로 둔다 (해석 실행·JIT 대기로 생기는 첫 화면·첫 스크롤 버벅임 제거).
+HSPLapp/eodiyeotji/**->**(**)**
+Lapp/eodiyeotji/**;
+HSPLorg/maplibre/android/maps/**->**(**)**
+Lorg/maplibre/android/maps/**;
+HSPLcoil/**->**(**)**
+Lcoil/**;
+HSPLcom/sun/jna/**->**(**)**
+Lcom/sun/jna/**;
