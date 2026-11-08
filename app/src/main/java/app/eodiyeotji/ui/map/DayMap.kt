@@ -48,6 +48,9 @@ import app.eodiyeotji.ui.theme.MapInk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
 import kotlinx.coroutines.withContext
 import org.maplibre.android.LibraryLoader
 import org.maplibre.android.MapLibre
@@ -144,7 +147,7 @@ private fun DayMapContent(
     val currentOnSelect by rememberUpdatedState(onSelectKey)
     var style by remember { mutableStateOf<MapStyleSpec?>(null) }
 
-    val mapView = rememberMapViewWithLifecycle(context, baseOptions, palette.background)
+    val mapView = rememberMapViewWithLifecycle(context, baseOptions, palette.background, label = "day")
     val controller = remember(mapView) {
         DayMapController(
             mapView = mapView,
@@ -268,12 +271,16 @@ internal fun rememberMapViewWithLifecycle(
     loadingColor: Int,
     /** 기울이기·돌리기 손짓 (3D 미리보기 지도) */
     tiltAndRotate: Boolean = false,
+    /** 처음 카메라. 스타일이 뜨자마자 다른 곳으로 옮길 화면은 여기서 바로 그곳을 주면 서울 타일을 헛받지 않는다. */
+    initialCamera: CameraPosition? = null,
+    /** 성능 기록([MapFrameProbe])에 붙일 이름 */
+    label: String = "map",
 ): MapView {
     val mapView = remember {
         MapLibre.getInstance(context)
         val options = baseOptions
             .foregroundLoadColor(loadingColor)
-            .camera(CameraPosition.Builder().target(InitialCenter).zoom(INITIAL_ZOOM).build())
+            .camera(initialCamera ?: CameraPosition.Builder().target(InitialCenter).zoom(INITIAL_ZOOM).build())
             .localIdeographFontFamily(LOCAL_IDEOGRAPH_FONT)
             .logoEnabled(false)
             // 출처는 MapNotice로 직접 보여 준다 (차 안에서 i 버튼 → 외부 링크 대화상자를 띄우지 않는다)
@@ -283,6 +290,7 @@ internal fun rememberMapViewWithLifecycle(
             .tiltGesturesEnabled(tiltAndRotate)
         MapView(context, options)
     }
+    val frameProbe = remember(mapView) { MapFrameProbe.attach(mapView, label) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle, mapView) {
         // 화면이 이미 RESUMED여도 addObserver가 ON_CREATE → ON_START → ON_RESUME을 차례로 다시 보내 준다
@@ -315,11 +323,30 @@ internal fun rememberMapViewWithLifecycle(
             val state = lifecycle.currentState
             if (state.isAtLeast(Lifecycle.State.RESUMED)) mapView.onPause()
             if (state.isAtLeast(Lifecycle.State.STARTED)) mapView.onStop()
+            frameProbe?.dump()
             mapView.onDestroy()
         }
     }
     return mapView
 }
+
+/**
+ * 지금 화면의 타일이 다 그려질 때까지(최대 [timeoutMs]) 기다린다. 다 그렸으면 true.
+ * 3D 비행을 빈 타일 위에서 시작하지 않게, 첫 장면이 다 뜬 뒤 출발한다.
+ */
+internal suspend fun MapView.awaitFullyRendered(timeoutMs: Long): Boolean = withTimeoutOrNull(timeoutMs) {
+    suspendCancellableCoroutine { cont ->
+        val listener = object : MapView.OnDidFinishRenderingFrameListener {
+            override fun onDidFinishRenderingFrame(fully: Boolean, frameEncodingTime: Double, frameRenderingTime: Double) {
+                if (!fully) return
+                removeOnDidFinishRenderingFrameListener(this)
+                if (cont.isActive) cont.resume(Unit)
+            }
+        }
+        addOnDidFinishRenderingFrameListener(listener)
+        cont.invokeOnCancellation { post { removeOnDidFinishRenderingFrameListener(listener) } }
+    }
+} != null
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)

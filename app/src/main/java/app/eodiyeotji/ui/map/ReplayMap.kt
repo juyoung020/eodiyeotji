@@ -37,9 +37,11 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression.all
 import org.maplibre.android.style.expressions.Expression.eq
 import org.maplibre.android.style.expressions.Expression.get
 import org.maplibre.android.style.expressions.Expression.literal
+import org.maplibre.android.style.expressions.Expression.not
 import org.maplibre.android.style.expressions.Expression.switchCase
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
@@ -253,7 +255,7 @@ private fun rememberReplayMap(sky: SkyPhase): Pair<MapView, ReplayMapController>
         if (!inPreview) value = MapLibreNative.prepare(context.applicationContext)
     }
     val opts = options ?: return null
-    val mapView = rememberMapViewWithLifecycle(context, opts, ReplaySunsetLand.toArgb())
+    val mapView = rememberMapViewWithLifecycle(context, opts, ReplaySunsetLand.toArgb(), label = "replay")
     val controller = remember(mapView) { ReplayMapController(mapView) }
     LaunchedEffect(controller, sky) { controller.setStyle(replayStyle(context.applicationContext, sky)) }
     // 지금 곳 · 차 빛이 숨 쉬듯 커졌다 작아진다 (12fps, 레이어 2개 값만 바꾼다)
@@ -331,8 +333,8 @@ private class ReplayMapController(mapView: MapView) {
     /** 숨쉬기 [k] 0~1: 지금 곳의 빛 고리와 차 둘레 빛을 키우고 줄인다. */
     fun pulse(k: Float) {
         val s = style ?: return
-        val isNow = eq(get("now"), literal(true))
-        (s.getLayer("$DONE-stop-glow") as? CircleLayer)?.setProperties(circleRadius(switchCase(isNow, literal(26f + 18f * k), literal(16f))))
+        // 상수 값만 바꾼다 (곳마다 다른 식을 바꾸면 MapLibre가 그 소스 타일을 다시 만든다)
+        (s.getLayer("$DONE-stop-glow-now") as? CircleLayer)?.setProperties(circleRadius(26f + 18f * k))
         (s.getLayer("$LEG-car-halo") as? CircleLayer)?.setProperties(circleRadius(34f + 14f * k), circleOpacity(0.35f + 0.3f * k))
     }
 
@@ -354,15 +356,22 @@ private class ReplayMapController(mapView: MapView) {
             s.addLayer(LineLayer("$src-core", src).withFilter(f).withProperties(*round, lineWidth(6f), lineColor(GOLD)))
         }
         val isNow = eq(get("now"), literal(true))
-        s.addLayer(
-            CircleLayer("$DONE-stop-glow", DONE).withFilter(eq(get("kind"), literal("stop"))).withProperties(
-                circleRadius(switchCase(isNow, literal(30f), literal(16f))),
-                circleColor(HALO),
-                circleBlur(1f),
-                circleOpacity(0.7f),
-                circlePitchAlignment(Property.CIRCLE_PITCH_ALIGNMENT_MAP),
-            ),
-        )
+        val isStop = eq(get("kind"), literal("stop"))
+        // 빛 고리: 지난 곳(고정)과 지금 곳(숨쉬기)을 레이어로 나눠, 숨쉬기는 상수 반지름만 바꾼다
+        for ((id, filter, radius) in listOf(
+            Triple("$DONE-stop-glow", all(isStop, not(isNow)), 16f),
+            Triple("$DONE-stop-glow-now", all(isStop, isNow), 30f),
+        )) {
+            s.addLayer(
+                CircleLayer(id, DONE).withFilter(filter).withProperties(
+                    circleRadius(radius),
+                    circleColor(HALO),
+                    circleBlur(1f),
+                    circleOpacity(0.7f),
+                    circlePitchAlignment(Property.CIRCLE_PITCH_ALIGNMENT_MAP),
+                ),
+            )
+        }
         s.addLayer(
             CircleLayer("$DONE-stop", DONE).withFilter(eq(get("kind"), literal("stop"))).withProperties(
                 circleRadius(switchCase(isNow, literal(10f), literal(6f))),
