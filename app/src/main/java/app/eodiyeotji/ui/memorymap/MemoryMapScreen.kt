@@ -64,12 +64,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.FillExtrusionLayer
 import org.maplibre.android.style.layers.LineLayer
 
 /** 밤하늘 바탕 (스타일 background와 같은 색 → 불러오는 동안 깜빡이지 않게). */
@@ -82,12 +84,22 @@ private const val DRAW_TOTAL_MS = 6_500L
 private const val CAPTION_FADE_MS = 1_800
 
 /** 달마다 넓히는 레이어 (filter m <= k). */
-private val ShownLayers = listOf("route-haze", "route-glow", "route-core", "visit-halo", "visit-star")
+private val ShownLayers = listOf("route-haze", "route-glow", "route-core", "visit-halo", "visit-star", "visit-pillar")
 private const val FRESH_LAYER = "route-fresh"
 
+/** 3D 카메라: 그리는 동안 기울기 · 도는 각도, 마지막에 나라 전체로 물러나는 시간. */
+private const val REVEAL_PITCH = 58.0
+private const val REVEAL_BEARING_FROM = -35.0
+private const val REVEAL_BEARING_TO = 35.0
+private const val FLY_OUT_MS = 3_800
+private const val COUNTRY_PITCH = 40.0
+private const val COUNTRY_ZOOM = 5.9
+private val CountryCenter = LatLng(35.9, 127.8)
+
 /**
- * 기억 지도 (요약 화면 · 날짜 목록 위를 덮는 전체 화면). 1년 동안 달린 모든 길을 밤하늘 지도 위에 금빛으로,
- * 오래된 달부터 한 달씩 차례로 그리고, 끝나면 조용히 한 줄을 띄운다. 숫자 · 경로는 Rust `memory_map`.
+ * 기억 지도 (요약 화면 · 날짜 목록 위를 덮는 전체 화면). 1년 동안 달린 모든 길을 밤하늘 3D 지도(산 음영 · 건물 · 빛기둥) 위에
+ * 금빛으로, 오래된 달부터 한 달씩 차례로 그린다. 그동안 카메라는 비스듬히 내려다보며 천천히 돌고, 다 그리면 나라 전체로
+ * 물러난 뒤 조용히 한 줄을 띄운다. 숫자 · 경로는 Rust `memory_map`.
  * 정차 중에만 열린다 (주행을 시작하면 [RecapViewModel]이 닫는다).
  */
 @Composable
@@ -138,6 +150,8 @@ private fun MemoryMapStage(data: MemoryMap) {
     var playKey by remember { mutableIntStateOf(0) }
     val total = data.months.size
     val done = step >= total
+    // 나라 전체로 물러나기까지 끝나면 한 줄을 띄운다
+    var captionShown by remember(data) { mutableStateOf(false) }
 
     val opts = options
     Box(Modifier.fillMaxSize()) {
@@ -153,20 +167,24 @@ private fun MemoryMapStage(data: MemoryMap) {
             AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize().semantics { contentDescription = description })
         }
 
-        // 그리기: 카메라는 조금 가까이서 시작해 전체 범위로 천천히 물러나고, 달은 하나씩 켠다
+        // 그리기: 카메라는 기울어진 채 조금 가까이서 시작해 천천히 돌며 전체 범위로 물러나고, 달은 하나씩 켠다.
+        // 다 그리면 나라 전체로 높이 물러난 뒤 한 줄을 띄운다.
         val s = style
         val m = map
         LaunchedEffect(s, playKey) {
             if (s == null || m == null) return@LaunchedEffect
+            captionShown = false
             val stepMs = (DRAW_TOTAL_MS / total.coerceAtLeast(1)).coerceIn(300L, 700L)
+            val revealMs = (stepMs * total + 1_000).toInt()
             data.bounds?.let { b ->
-                val target = m.getCameraForLatLngBounds(
-                    LatLngBounds.from(b.maxLat, b.maxLon, b.minLat, b.minLon),
-                    intArrayOf(120, 200, 120, 260),
-                )
-                if (target != null) {
-                    m.moveCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(target).zoom(target.zoom + 0.8).build()))
-                    m.animateCamera(CameraUpdateFactory.newCameraPosition(target), (stepMs * total + 1_000).toInt())
+                val bb = LatLngBounds.from(b.maxLat, b.maxLon, b.minLat, b.minLon)
+                val pad = intArrayOf(120, 200, 120, 260)
+                val from = m.getCameraForLatLngBounds(bb, pad, REVEAL_BEARING_FROM, REVEAL_PITCH)
+                val to = m.getCameraForLatLngBounds(bb, pad, REVEAL_BEARING_TO, REVEAL_PITCH)
+                if (from != null && to != null) {
+                    m.cancelTransitions()
+                    m.moveCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(from).zoom(from.zoom + 1.0).build()))
+                    m.easeCamera(CameraUpdateFactory.newCameraPosition(to), revealMs, true)
                 }
             }
             step = -1
@@ -176,6 +194,15 @@ private fun MemoryMapStage(data: MemoryMap) {
                 delay(stepMs)
             }
             step = total
+            delay(400)
+            m.animateCamera(
+                CameraUpdateFactory.newCameraPosition(
+                    CameraPosition.Builder().target(CountryCenter).zoom(COUNTRY_ZOOM).tilt(COUNTRY_PITCH).bearing(0.0).build(),
+                ),
+                FLY_OUT_MS,
+            )
+            delay(FLY_OUT_MS - 600L)
+            captionShown = true
         }
         LaunchedEffect(s, step) {
             if (s == null) return@LaunchedEffect
@@ -184,6 +211,7 @@ private fun MemoryMapStage(data: MemoryMap) {
                 when (val l = s.getLayer(id)) {
                     is LineLayer -> l.setFilter(shown)
                     is CircleLayer -> l.setFilter(shown)
+                    is FillExtrusionLayer -> l.setFilter(shown)
                     else -> Unit
                 }
             }
@@ -202,7 +230,7 @@ private fun MemoryMapStage(data: MemoryMap) {
 
         // 마지막 한 줄
         AnimatedVisibility(
-            visible = done,
+            visible = done && captionShown,
             enter = fadeIn(tween(CAPTION_FADE_MS)),
             exit = fadeOut(tween(300)),
             modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 48.dp),
@@ -241,4 +269,5 @@ private suspend fun buildStyle(context: Context, data: MemoryMap): String = with
     context.assets.open("map/memory-night.json").bufferedReader().use { it.readText() }
         .replace("\"__ROUTES__\"", data.routesGeojson)
         .replace("\"__VISITS__\"", data.visitsGeojson)
+        .replace("\"__PILLARS__\"", data.pillarsGeojson)
 }

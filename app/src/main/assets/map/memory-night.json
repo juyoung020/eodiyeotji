@@ -1,14 +1,20 @@
 {
   "version": 8,
   "name": "eodi-memory-night",
-  "metadata": {"comment": "기억 지도 스타일 (ui/memorymap/MemoryMapScreen.kt가 읽는다). 밤하늘 같은 남색 바탕 + 아주 옅은 물·큰길(OpenFreeMap, 없으면 바탕만) 위에 Rust memory_map의 경로(__ROUTES__)를 금빛으로 번지게, 자주 간 곳(__VISITS__)을 별처럼 그린다. 경로·별의 filter는 앱이 달(m)마다 바꿔 차례로 드러낸다."},
+  "light": {"anchor": "viewport", "color": "#FFD9A0", "intensity": 0.35, "position": [1.3, 200, 40]},
+  "metadata": {"comment": "기억 지도 3D 스타일 (ui/memorymap/MemoryMapScreen.kt가 읽는다). 밤하늘 같은 남색 바탕 + 어둡게 비친 산 음영(AWS Terrain Tiles terrarium) + 아주 옅은 물·큰길·불 켜진 건물 3D(OpenFreeMap, 없으면 바탕만) 위에 Rust memory_map의 경로(__ROUTES__)를 금빛으로 번지게, 자주 간 곳(__VISITS__)을 별처럼, 많이 간 곳(__PILLARS__)은 빛기둥으로 세운다. MapLibre Native 13은 3D 지형이 없어 산은 음영 + 카메라 기울기로만 보인다. 경로·별의 filter는 앱이 달(m)마다 바꿔 차례로 드러낸다."},
   "sources": {
     "ofm": {"type": "vector", "url": "https://tiles.openfreemap.org/planet", "attribution": "© OpenFreeMap © OpenMapTiles © OpenStreetMap"},
+    "dem": {"type": "raster-dem", "tiles": ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"], "encoding": "terrarium", "tileSize": 256, "maxzoom": 12, "attribution": "Terrain Tiles (Mapzen · AWS Open Data)"},
     "routes": {"type": "geojson", "data": "__ROUTES__"},
+    "pillars": {"type": "geojson", "data": "__PILLARS__"},
     "visits": {"type": "geojson", "data": "__VISITS__"}
   },
   "layers": [
     {"id": "background", "type": "background", "paint": {"background-color": "#070D1C"}},
+    {"id": "hills", "type": "hillshade", "source": "dem",
+     "paint": {"hillshade-exaggeration": 0.6, "hillshade-shadow-color": "#02050D", "hillshade-highlight-color": "#26375E",
+               "hillshade-accent-color": "#0A1226", "hillshade-illumination-direction": 315}},
     {"id": "water", "type": "fill", "source": "ofm", "source-layer": "water", "paint": {"fill-color": "#04091A", "fill-opacity": 0.9}},
     {"id": "boundary", "type": "line", "source": "ofm", "source-layer": "boundary",
      "filter": ["<=", ["get", "admin_level"], 4],
@@ -16,6 +22,11 @@
     {"id": "roads", "type": "line", "source": "ofm", "source-layer": "transportation",
      "filter": ["match", ["get", "class"], ["motorway", "trunk", "primary"], true, false],
      "paint": {"line-color": "#121C35", "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.4, 12, 1.4]}},
+    {"id": "buildings-3d", "type": "fill-extrusion", "source": "ofm", "source-layer": "building", "minzoom": 12.5,
+     "paint": {"fill-extrusion-color": ["interpolate", ["linear"], ["coalesce", ["get", "render_height"], 8], 0, "#141C33", 40, "#2B2F52", 150, "#8A6A3C"],
+               "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 12.5, 0, 13.2, ["coalesce", ["get", "render_height"], 8]],
+               "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
+               "fill-extrusion-opacity": 0.75, "fill-extrusion-vertical-gradient": true}},
     {"id": "route-haze", "type": "line", "source": "routes", "filter": ["<=", ["get", "m"], -1],
      "layout": {"line-cap": "round", "line-join": "round"},
      "paint": {"line-color": "#FF9E2C", "line-opacity": 0.10,
@@ -42,6 +53,10 @@
     {"id": "visit-star", "type": "circle", "source": "visits", "filter": ["<=", ["get", "m"], -1],
      "paint": {"circle-color": "#FFF4D6",
                "circle-radius": ["*", ["interpolate", ["linear"], ["zoom"], 5, 1.0, 12, 1.8], ["+", 0.8, ["*", 3.2, ["get", "w"]]]],
-               "circle-blur": 0.4, "circle-opacity": ["+", 0.35, ["*", 0.65, ["get", "w"]]]}}
+               "circle-blur": 0.4, "circle-opacity": ["+", 0.35, ["*", 0.65, ["get", "w"]]]}},
+    {"id": "visit-pillar", "type": "fill-extrusion", "source": "pillars", "filter": ["<=", ["get", "m"], -1],
+     "paint": {"fill-extrusion-color": ["interpolate", ["linear"], ["get", "w"], 0, "#FFB547", 1, "#FFF1C9"],
+               "fill-extrusion-height": ["get", "h"], "fill-extrusion-base": 0,
+               "fill-extrusion-opacity": 0.55, "fill-extrusion-vertical-gradient": true}}
   ]
 }

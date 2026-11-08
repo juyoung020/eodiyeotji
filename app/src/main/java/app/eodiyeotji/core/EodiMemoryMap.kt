@@ -16,6 +16,8 @@ data class MemoryMap(
     val routesGeojson: String,
     /** 자주 간 곳 Point, properties `n`(날 수) · `w`(0~1 밝기) · `m`(처음 간 달) */
     val visitsGeojson: String,
+    /** 많이 간 곳 빛기둥 (팔각형, fill-extrusion) */
+    val pillarsGeojson: String,
     val bounds: MapBoundsLatLon?,
     /** "2025년 11월" … */
     val months: List<String>,
@@ -36,6 +38,7 @@ suspend fun EodiCore.memoryMap(
     MemoryMap(
         routesGeojson = m.routesGeojson,
         visitsGeojson = m.visitsGeojson,
+        pillarsGeojson = m.pillarsGeojson,
         bounds = m.bounds?.let { MapBoundsLatLon(it.minLat, it.minLon, it.maxLat, it.maxLon) },
         months = m.months,
         distanceKm = m.distanceKm.toInt(),

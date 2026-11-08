@@ -22,6 +22,8 @@ data class ReplayScene(
     val doneGeojson: String,
     /** 이 장면으로 오는 구간을 조금씩 그리는 단계 (선 + 차) */
     val legFrames: List<String>,
+    /** 이 구간을 따라가는 3D 카메라 비행 (구간이 없으면 빈 목록) */
+    val legFlight: List<FlightFrame>,
 )
 
 @Immutable
@@ -52,7 +54,7 @@ suspend fun EodiCore.dayReplay(day: String, nowMs: Long = System.currentTimeMill
 
 private fun RDayReplay.toModel() = DayReplay(
     day, dateText, yearsAgo.toInt(), stamp, title, subtitle,
-    scenes.map { ReplayScene(it.stop.toModel(), it.order.toInt(), it.timeText, it.stayText, it.doneGeojson, it.legFrames) },
+    scenes.map { ReplayScene(it.stop.toModel(), it.order.toInt(), it.timeText, it.stayText, it.doneGeojson, it.legFrames, it.legFlight.map { f -> FlightFrame(f.lat, f.lon, f.bearing, f.zoom) }) },
     finalGeojson,
     bounds?.let { MapBoundsLatLon(it.minLat, it.minLon, it.maxLat, it.maxLon) },
     summaryLine, statsLine, distanceM, episodeId,

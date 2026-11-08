@@ -144,3 +144,17 @@ fn seeded_on_this_day_replays_with_scenes() {
         let _ = std::fs::remove_file(format!("{}{s}", path.display()));
     }
 }
+
+#[test]
+fn leg_flight_follows_the_leg_and_flies_higher_on_long_legs() {
+    let r = build_replay(&sample(), KST, days_from_civil(2026, 11, 6), None);
+    let f = &r.scenes[0].leg_flight;
+    assert_eq!(f.len(), LEG_FLIGHT_FRAMES);
+    // 끝 장면은 해변(128.9, 37.8) 근처
+    let last = f.last().unwrap();
+    assert!((last.lon - 128.9).abs() < 0.01 && (last.lat - 37.8).abs() < 0.01);
+    assert!(f.iter().all(|x| (10.5..=15.0).contains(&x.zoom)));
+    assert!(leg_flight_zoom(1_000.0) > leg_flight_zoom(200_000.0));
+    assert_eq!(leg_flight_zoom(200_000.0), 10.5);
+    assert!(leg_flight(&[(37.0, 127.0)]).is_empty());
+}

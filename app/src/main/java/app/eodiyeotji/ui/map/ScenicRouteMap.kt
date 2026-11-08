@@ -193,7 +193,7 @@ internal fun RouteCameraSpec.toPosition(): CameraPosition =
     CameraPosition.Builder().target(LatLng(lat, lon)).zoom(zoom).bearing(bearing).tilt(pitch).build()
 
 /** 비행 진행 [t](0~1)의 카메라: 이웃한 두 장면 사이를 섞는다 (방향은 Rust가 이어지게 풀어 둔 값이라 그대로 섞는다). */
-private fun frameAt(frames: List<FlightFrame>, t: Float): CameraPosition {
+internal fun frameAt(frames: List<FlightFrame>, t: Float, pitch: Double = FLIGHT_PITCH): CameraPosition {
     val x = t.coerceIn(0f, 1f) * (frames.size - 1)
     val i = floor(x).toInt().coerceAtMost(frames.size - 2)
     val f = (x - i).toDouble()
@@ -204,7 +204,7 @@ private fun frameAt(frames: List<FlightFrame>, t: Float): CameraPosition {
         .target(LatLng(mix(a.lat, b.lat), mix(a.lon, b.lon)))
         .zoom(mix(a.zoom, b.zoom))
         .bearing(mix(a.bearing, b.bearing).mod(360.0))
-        .tilt(FLIGHT_PITCH)
+        .tilt(pitch)
         .build()
 }
 

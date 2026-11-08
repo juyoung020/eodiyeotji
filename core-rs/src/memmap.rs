@@ -14,6 +14,11 @@
 //! - `Point`(묶음의 평균 위치), properties `{"n":날 수,"w":0~1 밝기,"m":처음 간 달}`. 밝기 = ln(1+n) / ln(1+최대 n).
 //! - 많이 간 곳부터 최대 [MAX_VISITS]곳.
 //!
+//! # 빛기둥 (`pillars_geojson`, 3D 기억 지도)
+//! - 많이 간 곳 위쪽 [MAX_PILLARS]곳을 팔각형 `Polygon`으로 (fill-extrusion으로 세운다).
+//! - properties `{"w":밝기,"m":처음 간 달,"h":높이 m}`. 반지름 = [PILLAR_MIN_R_M] + [PILLAR_GROW_R_M]×w,
+//!   높이 = [PILLAR_MIN_H_M] + [PILLAR_GROW_H_M]×w (나라 전체를 보는 축척에서도 보이게 크다).
+//!
 //! # 합계
 //! - 거리 · 달린 날: 날짜별 요약(`day_summary`)의 합 (올해 결산과 같은 숫자). 주행 수: 주행 표.
 //! - 기간 길이: 첫 기록 날 ~ 마지막 기록 날. 360일 이상이면 `span_years`(반올림), 아니면 `span_months`만 쓴다.
@@ -36,6 +41,12 @@ pub const MAX_POINTS: usize = 40_000;
 pub const CELL_DEG: f64 = 0.003;
 /// 자주 간 곳 최대 개수.
 pub const MAX_VISITS: usize = 400;
+/// 빛기둥 최대 개수.
+pub const MAX_PILLARS: usize = 40;
+pub const PILLAR_MIN_R_M: f64 = 250.0;
+pub const PILLAR_GROW_R_M: f64 = 650.0;
+pub const PILLAR_MIN_H_M: f64 = 1_500.0;
+pub const PILLAR_GROW_H_M: f64 = 16_000.0;
 
 /// 기억 지도 데이터.
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
@@ -44,6 +55,8 @@ pub struct MemoryMap {
     pub routes_geojson: String,
     /// 자주 간 곳 GeoJSON (모듈 설명)
     pub visits_geojson: String,
+    /// 자주 간 곳 빛기둥 GeoJSON (모듈 설명)
+    pub pillars_geojson: String,
     /// 그릴 것이 없으면 None
     pub bounds: Option<MapBounds>,
     /// 달 이름 ("2025년 11월", 화면에 그대로 쓴다), 인덱스 = 경로의 `m`. 기록이 없는 달도 이어서 넣는다.
@@ -116,6 +129,7 @@ pub(crate) fn build(trips: &[(i64, Point, Vec<Point>)], distance_m: f64, drive_d
         return MemoryMap {
             routes_geojson: r#"{"type":"FeatureCollection","features":[]}"#.into(),
             visits_geojson: r#"{"type":"FeatureCollection","features":[]}"#.into(),
+            pillars_geojson: r#"{"type":"FeatureCollection","features":[]}"#.into(),
             bounds: None,
             months: Vec::new(),
             distance_m,
@@ -215,11 +229,33 @@ pub(crate) fn build(trips: &[(i64, Point, Vec<Point>)], distance_m: f64, drive_d
         );
     }
     visits.push_str("]}");
+    let mut pillars = String::from(r#"{"type":"FeatureCollection","features":["#);
+    for (i, (n, lat, lon, m)) in list.iter().take(MAX_PILLARS).enumerate() {
+        if i > 0 {
+            pillars.push(',');
+        }
+        let w = (1.0 + *n as f64).ln() / (1.0 + max_n).ln();
+        let r = PILLAR_MIN_R_M + PILLAR_GROW_R_M * w;
+        let h = PILLAR_MIN_H_M + PILLAR_GROW_H_M * w;
+        let _ = write!(pillars, r#"{{"type":"Feature","properties":{{"w":{w:.3},"m":{m},"h":{h:.0}}},"geometry":{{"type":"Polygon","coordinates":[["#);
+        let dlat = r / 111_320.0;
+        let dlon = r / (111_320.0 * lat.to_radians().cos().max(0.01));
+        for k in 0..=8 {
+            let a = (k % 8) as f64 * std::f64::consts::FRAC_PI_4;
+            if k > 0 {
+                pillars.push(',');
+            }
+            let _ = write!(pillars, "[{:.5},{:.5}]", lon + dlon * a.cos(), lat + dlat * a.sin());
+        }
+        pillars.push_str("]]}}");
+    }
+    pillars.push_str("]}");
 
     let span_days = (last.0 - first.0 + 1) as u32;
     MemoryMap {
         routes_geojson: routes,
         visits_geojson: visits,
+        pillars_geojson: pillars,
         bounds,
         months,
         distance_m,
@@ -298,6 +334,11 @@ mod tests {
         let first_visit = m.visits_geojson.find(r#""n":2,"w":1.000,"m":0"#).expect("집이 먼저");
         let sea_visit = m.visits_geojson.find(r#""n":1,"#).expect("바다");
         assert!(first_visit < sea_visit);
+        // 빛기둥: 곳마다 닫힌 팔각형 하나, 많이 간 집이 더 높다
+        assert_eq!(m.pillars_geojson.matches(r#""type":"Polygon""#).count(), 2);
+        let home_h = PILLAR_MIN_H_M + PILLAR_GROW_H_M;
+        assert!(m.pillars_geojson.contains(&format!(r#""w":1.000,"m":0,"h":{home_h:.0}"#)));
+        assert!(serde_json::from_str::<serde_json::Value>(&m.pillars_geojson).is_ok());
         let b = m.bounds.unwrap();
         assert!(b.min_lat >= 37.49 && b.max_lat <= 37.64);
         assert!(m.point_count as usize <= 4 * 300);

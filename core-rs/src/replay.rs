@@ -24,6 +24,7 @@ use std::fmt::Write;
 use rusqlite::Connection;
 
 use crate::agent::dates::civil_from_days;
+use crate::community::drive::{flight, FlightFrame};
 use crate::geo::{haversine_m, Point};
 use crate::mapdata::{coord, distance_text, duration_text, end_tag, route_ends, trip_points, Bounds, MapBounds};
 use crate::memory::StopFact;
@@ -32,6 +33,9 @@ use crate::store::{parse_day, CoreError, DayDetail, EodiStore, DAY_MS};
 
 /// 구간 하나를 몇 단계로 나눠 그리는지.
 pub const LEG_FRAMES: usize = 12;
+
+/// 구간 비행 장면 수 (2~3초 비행을 Kotlin이 장면 사이를 섞어 그린다).
+pub const LEG_FLIGHT_FRAMES: usize = 90;
 
 /// 장면 하나 (들른 곳 하나).
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
@@ -47,6 +51,8 @@ pub struct ReplayScene {
     pub done_geojson: String,
     /// 이 장면으로 오는 구간을 [LEG_FRAMES]단계로 (구간이 없으면 빈 목록)
     pub leg_frames: Vec<String>,
+    /// 이 구간을 따라가는 3D 카메라 비행 ([LEG_FLIGHT_FRAMES]장면, 앞을 보는 방향 · 구간 길이에 맞춘 높이). 구간이 없으면 빈 목록
+    pub leg_flight: Vec<FlightFrame>,
 }
 
 /// 하루 다시 보기.
@@ -159,6 +165,7 @@ pub(crate) fn build_replay(d: &DayDetail, tz_minutes: i32, today: i64, ep: Optio
         } else {
             Vec::new()
         };
+        let leg_flight = leg_flight(&leg);
         let done_geojson = collection(&done, &stops[..=k], Some(k));
         if leg.len() >= 2 {
             done.push(leg);
@@ -181,6 +188,7 @@ pub(crate) fn build_replay(d: &DayDetail, tz_minutes: i32, today: i64, ep: Optio
             stay_text: stay_text.unwrap_or_default(),
             done_geojson,
             leg_frames,
+            leg_flight,
         });
     }
     let all: Vec<Vec<(f64, f64)>> = d.trips.iter().map(trip_points).filter(|p| p.len() >= 2).collect();
@@ -238,6 +246,22 @@ pub(crate) fn leg_prefix(leg: &[(f64, f64)], frac: f64) -> Vec<(f64, f64)> {
         out.push(w[1]);
     }
     out
+}
+
+/// 구간 비행: 길을 따라 앞을 보는 카메라. 2~3초 안에 지나가야 하므로 높이는 구간 길이로 정한다
+/// (3km면 건물이 보이는 15, 길이가 두 배마다 한 단계 높이, 10.5~15).
+pub(crate) fn leg_flight(leg: &[(f64, f64)]) -> Vec<FlightFrame> {
+    if leg.len() < 2 {
+        return Vec::new();
+    }
+    let pts: Vec<Point> = leg.iter().map(|&(lat, lon)| Point { lat, lon }).collect();
+    let total: f64 = pts.windows(2).map(|w| haversine_m(w[0], w[1])).sum();
+    let zoom = leg_flight_zoom(total);
+    flight(&pts, LEG_FLIGHT_FRAMES).into_iter().map(|f| FlightFrame { zoom, ..f }).collect()
+}
+
+pub(crate) fn leg_flight_zoom(length_m: f64) -> f64 {
+    (15.0 - (length_m.max(1.0) / 3_000.0).log2()).clamp(10.5, 15.0)
 }
 
 /// 구간 한 단계: 앞쪽 선 + 끝의 차 (지나온 길 · 들른 곳은 `done_geojson`이 따로 그린다).

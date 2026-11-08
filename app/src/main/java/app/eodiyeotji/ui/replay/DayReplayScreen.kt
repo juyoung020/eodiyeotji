@@ -3,6 +3,7 @@ package app.eodiyeotji.ui.replay
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -68,6 +69,7 @@ import app.eodiyeotji.R
 import app.eodiyeotji.core.DayReplay
 import app.eodiyeotji.core.ReplayScene
 import app.eodiyeotji.ui.agent.AgentIcons
+import app.eodiyeotji.ui.map.ReplayFlightMap
 import app.eodiyeotji.ui.map.ReplayMap
 import app.eodiyeotji.ui.place.PhotoLoadingPlaceholder
 import app.eodiyeotji.ui.place.PlaceThumbnail
@@ -96,10 +98,10 @@ fun ReplayScope(viewModel: ReplayViewModel = hiltViewModel(), content: @Composab
 
 private val Night = Color(0xFF0D1015)
 
-/** 한 장면 시간 · 구간 그리기 시간 · 사진이 천천히 다가가는 시간 (ms). */
+/** 시작 화면 · 사진 장면 시간 · 장면 사이 3D 비행 시간 · 사진이 천천히 다가가는 시간 (ms). */
 private const val INTRO_MS = 3_200L
 private const val SCENE_MS = 3_600L
-private const val LEG_MS = 1_800L
+private const val FLIGHT_MS = 2_600L
 private const val KEN_BURNS_MS = 4_800
 private const val FADE_MS = 900
 private const val SWIPE_PX = 120f
@@ -144,8 +146,18 @@ private fun Center(text: String) {
     }
 }
 
+/** 비행 장면 하늘 쪽 노을빛 안개 (지도 위쪽, 먼 곳이 따뜻하게 흐려 보이게). */
+private val SunsetHaze = Brush.verticalGradient(
+    0f to Color(0xD9FF9A5C),
+    0.22f to Color(0x66FFB880),
+    0.45f to Color.Transparent,
+    0.8f to Color.Transparent,
+    1f to Color(0x8C2A1410),
+)
+
 /**
- * 재생기: 0 = 시작 화면, 1..n = 들른 곳 장면, n+1 = 끝 화면. 누르면 멈춤/다시 재생, 옆으로 밀거나 화살표로 이전 · 다음.
+ * 재생기: 0 = 시작 화면, 1..n = 들른 곳 장면, n+1 = 끝 화면. 들른 곳 장면은 앞 곳에서 그곳까지 노을빛 3D 지도 위를 길 따라
+ * 날아간 뒤(전체 화면, [FLIGHT_MS]) 사진으로 넘어간다. 누르면 멈춤/다시 재생, 옆으로 밀거나 화살표로 이전 · 다음.
  */
 @Composable
 private fun Player(r: DayReplay, onClose: () -> Unit, onNavigate: () -> Unit) {
@@ -156,22 +168,13 @@ private fun Player(r: DayReplay, onClose: () -> Unit, onNavigate: () -> Unit) {
     val go = { to: Int -> step = to.coerceIn(0, last) }
     val currentStep by rememberUpdatedState(step)
 
-    LaunchedEffect(r, step, paused) {
-        if (!paused && step < last) {
+    val scene = r.scenes.getOrNull(step - 1)
+    // 이 장면으로 오는 비행이 끝났나 (끝나면 사진으로 넘어간다)
+    var arrived by remember(r, step) { mutableStateOf(false) }
+    LaunchedEffect(r, step, paused, arrived) {
+        if (!paused && step < last && (step == 0 || arrived)) {
             kotlinx.coroutines.delay(if (step == 0) INTRO_MS else SCENE_MS)
             step += 1
-        }
-    }
-    // 구간 그리기 단계 (멈추면 그 자리에서 선다)
-    val scene = r.scenes.getOrNull(step - 1)
-    var frame by remember(r, step) { mutableIntStateOf(0) }
-    LaunchedEffect(r, step, paused) {
-        val frames = scene?.legFrames ?: return@LaunchedEffect
-        if (frames.isEmpty()) return@LaunchedEffect
-        val each = LEG_MS / frames.size
-        while (!paused && frame < frames.size - 1) {
-            kotlinx.coroutines.delay(each)
-            frame += 1
         }
     }
 
@@ -197,8 +200,23 @@ private fun Player(r: DayReplay, onClose: () -> Unit, onNavigate: () -> Unit) {
         if (step == last) {
             EndScreen(r, wide, onNavigate = onNavigate, onAgain = { paused = false; go(0) }, onClose = onClose)
         } else {
-            Crossfade(targetState = step, animationSpec = tween(FADE_MS), label = "replay-scene") { s ->
-                if (s == 0) IntroCard(r) else r.scenes.getOrNull(s - 1)?.let { SceneCard(r, it, paused) }
+            // 바탕: 전체 화면 3D 비행 지도 (MapView 하나를 장면 내내 쓴다) + 노을빛 하늘 안개
+            ReplayFlightMap(
+                bounds = r.bounds,
+                scene = scene,
+                flightMs = FLIGHT_MS,
+                paused = paused,
+                onArrive = { arrived = true },
+                modifier = Modifier.fillMaxSize(),
+            )
+            Box(Modifier.fillMaxSize().background(SunsetHaze))
+            // 위: 시작 화면 · 사진 장면 (비행 중에는 비워 지도가 보인다, -1)
+            Crossfade(targetState = if (step > 0 && !arrived) -1 else step, animationSpec = tween(FADE_MS), label = "replay-scene") { s ->
+                when {
+                    s == 0 -> IntroCard(r)
+                    s > 0 -> r.scenes.getOrNull(s - 1)?.let { SceneCard(r, it, paused) }
+                    else -> Box(Modifier.fillMaxSize())
+                }
             }
             // 손짓 판: 누르면 멈춤/다시 재생, 옆으로 밀면 이전 · 다음 (지도 위도 덮는다)
             var drag by remember { mutableStateOf(0f) }
@@ -216,17 +234,19 @@ private fun Player(r: DayReplay, onClose: () -> Unit, onNavigate: () -> Unit) {
                         )
                     },
             )
-            // 작은 지도 (오른쪽 위): 지나온 길 + 지금 구간
+            // 작은 지도 (오른쪽 위, 사진 장면에서만): 지나온 길 + 방금 온 구간을 비스듬히 내려다본다
             val mapW = if (wide) minOf(460.dp, maxWidth * 0.36f) else maxWidth * 0.5f
+            val insetAlpha by animateFloatAsState(if (step > 0 && arrived) 1f else 0f, tween(FADE_MS), label = "inset")
             ReplayMap(
                 bounds = r.bounds,
                 done = scene?.doneGeojson ?: EMPTY,
-                leg = scene?.legFrames?.getOrNull(frame),
+                leg = scene?.legFrames?.lastOrNull(),
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(top = 104.dp, end = 32.dp)
                     .width(mapW)
                     .height(mapW * 0.68f)
+                    .alpha(insetAlpha)
                     .clip(RoundedCornerShape(24.dp)),
             )
             Progress(n, step, Modifier.align(Alignment.TopCenter).padding(top = 28.dp, start = 140.dp, end = 140.dp))
@@ -326,7 +346,7 @@ private fun SceneCard(r: DayReplay, s: ReplayScene, paused: Boolean) {
     }
 }
 
-/** 끝 화면: "그날, 우리는 384km를 달렸어요" + 그날 경로 전체 지도 + [그 코스로 안내] [처음부터] [닫기]. */
+/** 끝 화면: "그날, 우리는 384km를 달렸어요" + 그날 경로 전체 3D 지도(비스듬히, 천천히 돈다) + [그 코스로 안내] [처음부터] [닫기]. */
 @Composable
 private fun EndScreen(r: DayReplay, wide: Boolean, onNavigate: () -> Unit, onAgain: () -> Unit, onClose: () -> Unit) {
     val a = remember { Animatable(0f) }
@@ -360,7 +380,7 @@ private fun EndScreen(r: DayReplay, wide: Boolean, onNavigate: () -> Unit, onAga
             }
         }
     }
-    val map: @Composable (Modifier) -> Unit = { m -> ReplayMap(r.bounds, r.finalGeojson, null, m.clip(RoundedCornerShape(28.dp))) }
+    val map: @Composable (Modifier) -> Unit = { m -> ReplayMap(r.bounds, r.finalGeojson, null, m.clip(RoundedCornerShape(28.dp)), orbit = true) }
     if (wide) {
         Row(Modifier.fillMaxSize().padding(56.dp), verticalAlignment = Alignment.CenterVertically) {
             text(Modifier.weight(1f))
