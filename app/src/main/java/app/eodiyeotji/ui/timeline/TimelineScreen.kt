@@ -1,5 +1,7 @@
 package app.eodiyeotji.ui.timeline
 
+import app.eodiyeotji.ui.common.durationText
+import app.eodiyeotji.ui.common.distanceText
 import app.eodiyeotji.core.PartnerOffer
 import app.eodiyeotji.ui.offers.PlaceCouponBadge
 import androidx.activity.compose.BackHandler
@@ -97,7 +99,7 @@ import app.eodiyeotji.BuildConfig
 import app.eodiyeotji.R
 import app.eodiyeotji.ui.place.LocalOpenPlace
 import app.eodiyeotji.ui.place.placeDetailOpenLabel
-import app.eodiyeotji.ui.place.PlaceThumbnail
+import app.eodiyeotji.ui.community.StopPhotoBox
 import app.eodiyeotji.ui.places.EditTarget
 import app.eodiyeotji.ui.places.PlaceEditHost
 import app.eodiyeotji.ui.places.PlaceEditViewModel
@@ -1126,7 +1128,7 @@ private fun StayRow(
                     },
                     tilt = if ((stay.arriveMs / 60_000) % 2 == 0L) -2.5f else 2.5f,
                 ) {
-                    PlaceThumbnail(p.name, p.address, stay.center.lat, stay.center.lon, modifier = Modifier.fillMaxSize())
+                    StopPhotoBox(p.name, p.address, stay.center.lat, stay.center.lon, null, Modifier.fillMaxSize(), radius = 0.dp, iconSize = 32.dp)
                 }
             }
         },

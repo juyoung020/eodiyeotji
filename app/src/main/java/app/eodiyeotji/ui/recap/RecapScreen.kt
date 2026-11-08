@@ -1,5 +1,7 @@
 package app.eodiyeotji.ui.recap
 
+import app.eodiyeotji.ui.community.StopPhotoBox
+import app.eodiyeotji.ui.place.LocalOpenPlace
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -53,8 +55,8 @@ import app.eodiyeotji.core.RecapPlace
 import app.eodiyeotji.core.RecapRegion
 import app.eodiyeotji.core.RecapTotals
 import app.eodiyeotji.core.YearRecap
-import app.eodiyeotji.ui.agent.kmText
-import app.eodiyeotji.ui.agent.spanText
+import app.eodiyeotji.ui.common.distanceText
+import app.eodiyeotji.ui.common.durationText
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
 import kotlin.math.abs
@@ -216,7 +218,7 @@ fun MonthRecapCard(recap: MonthRecap, modifier: Modifier = Modifier, onOpenDay: 
         val eyebrow = stringResource(R.string.recap_title_month, recap.year, recap.month) +
             if (recap.inProgress) " · " + stringResource(R.string.recap_until_day, java.time.LocalDate.now().dayOfMonth) else ""
         Text(eyebrow, style = EodiTheme.type.eyebrow, color = c.memoryInk)
-        Text(stringResource(R.string.recap_headline, kmText(recap.totals.distanceM)), style = EodiTheme.type.hero, color = c.textPrimary)
+        Text(stringResource(R.string.recap_headline, distanceText(recap.totals.distanceM)), style = EodiTheme.type.hero, color = c.textPrimary)
         if (recap.recordDays == 0) {
             Text(stringResource(R.string.recap_empty), style = EodiTheme.type.body, color = c.textTertiary)
         } else {
@@ -231,7 +233,7 @@ private fun MonthBody(recap: MonthRecap, onOpenDay: ((String) -> Unit)?) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         TotalsStrip(recap.totals)
         if (recap.hasPrevRecords) {
-            val km = kmText(abs(recap.vsPrevDistanceM))
+            val km = distanceText(abs(recap.vsPrevDistanceM))
             val distance = when {
                 recap.inProgress && recap.vsPrevDistanceM >= 0 -> stringResource(R.string.recap_compare_more_same_period, km)
                 recap.inProgress -> stringResource(R.string.recap_compare_less_same_period, km)
@@ -259,7 +261,7 @@ fun YearRecapCard(recap: YearRecap, modifier: Modifier = Modifier, onOpenDay: ((
     val c = EodiTheme.colors
     RecapCardFrame(modifier) {
         Text(stringResource(R.string.recap_title_year, recap.year), style = EodiTheme.type.eyebrow, color = c.memoryInk)
-        Text(stringResource(R.string.recap_headline, kmText(recap.totals.distanceM)), style = EodiTheme.type.hero, color = c.textPrimary)
+        Text(stringResource(R.string.recap_headline, distanceText(recap.totals.distanceM)), style = EodiTheme.type.hero, color = c.textPrimary)
         if (recap.recordDays == 0) {
             Text(stringResource(R.string.recap_empty), style = EodiTheme.type.body, color = c.textTertiary)
         } else {
@@ -292,7 +294,7 @@ private fun YearBody(recap: YearRecap, onOpenDay: ((String) -> Unit)?) {
                                 verticalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
                                 Text(s.name, style = EodiTheme.type.bodyStrong, fontWeight = FontWeight.Bold, color = c.textPrimary)
-                                Text(kmText(s.distanceM), style = EodiTheme.type.titleSmall, color = c.textPrimary)
+                                Text(distanceText(s.distanceM), style = EodiTheme.type.titleSmall, color = c.textPrimary)
                                 Text(stringResource(R.string.recap_season_days, s.outingDays), style = EodiTheme.type.caption, color = c.textTertiary)
                                 Text(
                                     s.bestDay?.title ?: "—",
@@ -331,7 +333,7 @@ private fun RecapCardFrame(modifier: Modifier, content: @Composable () -> Unit) 
 private fun TotalsStrip(t: RecapTotals) {
     StatStrip(
         listOf(
-            spanText(t.driveMillis) to stringResource(R.string.recap_stat_time),
+            durationText(t.driveMillis) to stringResource(R.string.recap_stat_time),
             stringResource(R.string.recap_count_days, t.driveDays) to stringResource(R.string.recap_stat_days),
             stringResource(R.string.recap_count_times, t.outings) to stringResource(R.string.recap_stat_outings),
             stringResource(R.string.recap_count_times, t.trips) to stringResource(R.string.recap_stat_trips),
@@ -364,10 +366,11 @@ private fun TopPlaces(places: List<RecapPlace>) {
     if (places.isEmpty()) return
     val c = EodiTheme.colors
     SectionTitle(stringResource(R.string.recap_top_places))
+    val openPlace = LocalOpenPlace.current
     places.forEachIndexed { i, p ->
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Text("${i + 1}", style = EodiTheme.type.titleSmall, color = c.textTertiary, modifier = Modifier.width(40.dp))
-            PhotoTile(p.place, Modifier.size(76.dp), showName = false, radius = 16.dp)
+            StopPhotoBox(p.place.name, p.place.address, p.place.lat, p.place.lon, null, Modifier.size(76.dp), iconSize = 36.dp, loadingColor = c.surfaceHigh, onClick = { openPlace(p.place) })
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(p.place.name, style = EodiTheme.type.bodyStrong, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)

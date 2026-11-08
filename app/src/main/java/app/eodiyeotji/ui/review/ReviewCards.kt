@@ -56,21 +56,22 @@ import app.eodiyeotji.core.TravelReview
 import app.eodiyeotji.core.DriveCourse
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.ui.offers.CourseCouponBadge
-import app.eodiyeotji.ui.timeline.distanceText
+import app.eodiyeotji.ui.common.distanceText
 import app.eodiyeotji.core.WithWhom
 import app.eodiyeotji.ui.community.CommunityIcons
 import app.eodiyeotji.ui.community.HeartButton
+import app.eodiyeotji.ui.community.HeartCount
 import app.eodiyeotji.ui.community.MineBadge
 import app.eodiyeotji.ui.community.OrderDot
 import app.eodiyeotji.ui.community.PostHeader
 import app.eodiyeotji.ui.community.RatingStars
 import app.eodiyeotji.ui.community.VisitLine
-import app.eodiyeotji.ui.community.agoText
+import app.eodiyeotji.ui.common.agoText
 import app.eodiyeotji.ui.offers.PlaceCouponBadge
 import app.eodiyeotji.ui.place.LocalOpenPlace
 import app.eodiyeotji.ui.place.placeDetailOpenLabel
 import app.eodiyeotji.ui.theme.EodiTheme
-import app.eodiyeotji.ui.timeline.durationText
+import app.eodiyeotji.ui.common.durationText
 
 /*
  * 자세한 여행 리뷰 (네이버 지도 리뷰처럼). 리뷰 탭 목록과 장소 상세 창이 같은 카드를 쓴다.
@@ -195,7 +196,7 @@ internal fun TripReviewCard(t: DriveCourse, onOpen: () -> Unit, onHeart: (() -> 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CourseCouponBadge(t.offers)
                 Spacer(Modifier.weight(1f))
-                if (onHeart != null) HeartButton(p.hearts, p.heartedByMe, onHeart, compact = true) else HeartCount(p.hearts, p.heartedByMe)
+                if (onHeart != null) HeartButton(p.hearts, p.heartedByMe, onHeart, compact = true) else HeartCount(p.hearts, p.heartedByMe, Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
             }
         }
     }
@@ -262,16 +263,6 @@ internal fun StopStrip(stops: List<StopFact>, onMore: () -> Unit, selected: Int?
 }
 
 /** 누를 수 없는 하트 수 ("♥ 149", 검색 결과 카드). */
-@Composable
-private fun HeartCount(hearts: Int, mine: Boolean) {
-    val c = EodiTheme.colors
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-        Icon(if (mine) CommunityIcons.HeartFilled else CommunityIcons.Heart, null, tint = c.heart, modifier = Modifier.size(24.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(hearts.toString(), style = EodiTheme.type.label, color = c.textSecondary)
-    }
-}
-
 /**
  * 카드 맨 위 큰 사진 (게시글처럼 카드 폭 가득, 2.1:1): [photo] 곳의 대표 사진 위 아래쪽에 [title] · [sub],
  * [label]이 있으면 왼쪽 위에 작은 띠. 누르면 [onClick] (장소 리뷰 → 장소 창, 여행 코스 후기 → 코스 상세).

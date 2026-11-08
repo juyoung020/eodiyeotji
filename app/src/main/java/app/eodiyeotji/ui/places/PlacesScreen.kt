@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.places
 
+import app.eodiyeotji.ui.community.StopPhotoBox
 import app.eodiyeotji.core.PartnerOffer
 import app.eodiyeotji.ui.offers.CouponWallet
 import app.eodiyeotji.ui.offers.LocalCoupons
@@ -61,9 +62,7 @@ import app.eodiyeotji.ui.community.LoadingBox
 import app.eodiyeotji.ui.community.Notice
 import app.eodiyeotji.ui.community.PrimaryPill
 import app.eodiyeotji.ui.community.SecondaryPill
-import app.eodiyeotji.ui.place.PhotoLoadingPlaceholder
 import app.eodiyeotji.ui.place.LocalOpenPlace
-import app.eodiyeotji.ui.place.PlaceThumbnail
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.timeline.clockText
@@ -203,18 +202,7 @@ private fun PlaceCardView(card: PlaceCard, offers: List<PartnerOffer>, onHeart: 
     ) {
         Column(Modifier.padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(120.dp).clip(RoundedCornerShape(EodiTheme.space.radiusM)).background(c.staySoft), contentAlignment = Alignment.Center) {
-                    val pin: @Composable () -> Unit = {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Icon(EodiIcons.Pin, null, tint = c.stay.copy(alpha = 0.7f), modifier = Modifier.size(40.dp))
-                        }
-                    }
-                    if (label != null) {
-                        PlaceThumbnail(label.name, label.address, card.lat, card.lon, Modifier.fillMaxSize(), fallback = pin, loading = { PhotoLoadingPlaceholder(c.staySoft) })
-                    } else {
-                        pin()
-                    }
-                }
+                StopPhotoBox(label?.name.orEmpty(), label?.address.orEmpty(), card.lat, card.lon, null, Modifier.size(120.dp), radius = EodiTheme.space.radiusM, iconSize = 40.dp)
                 Spacer(Modifier.width(20.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(label?.name ?: stringResource(R.string.edit_unknown_place), style = type.title, maxLines = 1, overflow = TextOverflow.Ellipsis)

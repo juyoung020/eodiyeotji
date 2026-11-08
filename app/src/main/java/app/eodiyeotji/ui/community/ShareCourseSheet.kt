@@ -54,7 +54,7 @@ import app.eodiyeotji.core.shareCourseWith
 import app.eodiyeotji.core.sharePreview
 import app.eodiyeotji.core.weatherFor
 import app.eodiyeotji.ui.theme.EodiTheme
-import app.eodiyeotji.ui.timeline.distanceText
+import app.eodiyeotji.ui.common.distanceText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException

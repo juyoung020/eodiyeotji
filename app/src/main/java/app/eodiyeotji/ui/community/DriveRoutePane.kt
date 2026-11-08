@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.community
 
+import app.eodiyeotji.ui.common.agoText
 import androidx.compose.foundation.BorderStroke
 
 import androidx.activity.compose.BackHandler
@@ -63,8 +64,8 @@ import app.eodiyeotji.ui.map.ScenicRouteMap
 import app.eodiyeotji.ui.theme.AlbumPhoto
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
-import app.eodiyeotji.ui.timeline.distanceText
-import app.eodiyeotji.ui.timeline.durationText
+import app.eodiyeotji.ui.common.distanceText
+import app.eodiyeotji.ui.common.durationText
 import kotlinx.coroutines.delay
 
 /** 이 폭 이상이면 상세를 3D 지도 | 글 두 칸으로 나눈다. */
@@ -263,12 +264,7 @@ internal fun DriveRouteCard(
                 if (onHeart != null) {
                     HeartButton(r.hearts, r.heartedByMe, onHeart)
                 } else {
-                    // 누를 수 없는 하트 수 (에이전트 추천 카드)
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 12.dp, vertical = 20.dp)) {
-                        Icon(if (r.heartedByMe) CommunityIcons.HeartFilled else CommunityIcons.Heart, null, tint = colors.heart, modifier = Modifier.size(26.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(r.hearts.toString(), style = type.label, fontWeight = FontWeight.Bold, color = colors.textSecondary)
-                    }
+                    HeartCount(r.hearts, r.heartedByMe, Modifier.padding(horizontal = 12.dp, vertical = 20.dp))
                 }
                 Spacer(Modifier.weight(1f))
                 TextAction(action, onOpen)

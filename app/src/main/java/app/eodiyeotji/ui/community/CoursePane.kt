@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.community
 
+import app.eodiyeotji.ui.common.agoText
 import app.eodiyeotji.ui.offers.CourseCouponBadge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -58,8 +59,8 @@ import app.eodiyeotji.ui.map.DayMap
 import app.eodiyeotji.ui.map.MapPhotoPin
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
-import app.eodiyeotji.ui.timeline.distanceText
-import app.eodiyeotji.ui.timeline.durationText
+import app.eodiyeotji.ui.common.distanceText
+import app.eodiyeotji.ui.common.durationText
 import app.eodiyeotji.ui.share.ShareButtonStyle
 import app.eodiyeotji.ui.share.ShareImageButton
 import app.eodiyeotji.ui.share.ShareTarget

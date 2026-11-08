@@ -40,6 +40,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import app.eodiyeotji.ui.place.LocalOpenPlace
+import app.eodiyeotji.ui.community.StopPhotoBox
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -61,7 +62,7 @@ import app.eodiyeotji.core.RecapDay
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.recap.RecallCenter
 import app.eodiyeotji.ui.agent.AgentIcons
-import app.eodiyeotji.ui.agent.kmText
+import app.eodiyeotji.ui.common.distanceText
 import app.eodiyeotji.ui.agent.memoryDateText
 import app.eodiyeotji.ui.place.PhotoLoadingPlaceholder
 import app.eodiyeotji.ui.place.PlaceThumbnail
@@ -173,7 +174,7 @@ fun OnThisDayCard(
                 listOfNotNull(
                     memoryDateText(otd.day),
                     otd.region.takeIf { it.isNotBlank() },
-                    kmText(otd.distanceM),
+                    distanceText(otd.distanceM),
                     stringResource(R.string.recap_place_count, otd.stops.size).takeIf { otd.stops.isNotEmpty() },
                 ).joinToString(" · "),
                 style = EodiTheme.type.meta,
@@ -186,7 +187,8 @@ fun OnThisDayCard(
             }
             if (otd.photos.isNotEmpty()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    otd.photos.forEach { s -> PhotoTile(s, Modifier.weight(1f).height(150.dp)) }
+                    val openPlace = LocalOpenPlace.current
+                    otd.photos.forEach { s -> StopPhotoBox(s.name, s.address, s.lat, s.lon, null, Modifier.weight(1f).height(150.dp), radius = 20.dp, iconSize = 36.dp, loadingColor = c.surfaceHigh, showName = true, onClick = { openPlace(s) }) }
                     // 사진이 1~2장이면 빈 칸으로 너비를 맞춘다 (사진이 너무 커지지 않게)
                     repeat(3 - otd.photos.size) { Spacer(Modifier.weight(1f)) }
                 }
@@ -308,38 +310,6 @@ fun RecallDrivingCard(modifier: Modifier = Modifier) {
 
 // ---------------------------------------------------------------- 공통 조각
 
-/** 들른 곳 사진 한 칸 (없으면 코랄 옅은 칸 + 핀). [showName]이면 아래에 이름 받침. */
-@Composable
-internal fun PhotoTile(stop: StopFact, modifier: Modifier, showName: Boolean = true, radius: Dp = 20.dp) {
-    val c = EodiTheme.colors
-    val shape = RoundedCornerShape(radius)
-    val openPlace = LocalOpenPlace.current
-    // 누르면 그곳 장소 창(사진 · 별점 · 리뷰)
-    Box(modifier.clip(shape).background(c.staySoft, shape).clickable { openPlace(stop) }) {
-        val pin: @Composable () -> Unit = {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Icon(EodiIcons.Pin, contentDescription = null, tint = c.stay, modifier = Modifier.size(36.dp))
-            }
-        }
-        PlaceThumbnail(
-            stop.name, stop.address, stop.lat, stop.lon,
-            modifier = Modifier.fillMaxSize(),
-            fallback = pin,
-            loading = { PhotoLoadingPlaceholder(c.surfaceHigh) },
-        )
-        if (showName) {
-            Text(
-                stop.name,
-                style = EodiTheme.type.caption,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().background(c.scrim).padding(horizontal = 12.dp, vertical = 6.dp),
-            )
-        }
-    }
-}
-
 /** 통계 칸 줄 (카드 안 옅은 칸, 칸 사이 세로선). */
 @Composable
 internal fun StatStrip(cells: List<Pair<String, String>>, modifier: Modifier = Modifier) {
@@ -393,13 +363,14 @@ internal fun RecapDayRow(stamp: String, day: RecapDay, onOpenDay: ((String) -> U
     ) {
         val photo = day.photo
         if (photo != null) {
-            PhotoTile(photo, Modifier.size(140.dp), showName = false)
+            val openPlace = LocalOpenPlace.current
+            StopPhotoBox(photo.name, photo.address, photo.lat, photo.lon, null, Modifier.size(140.dp), radius = 20.dp, iconSize = 36.dp, loadingColor = c.surfaceHigh, onClick = { openPlace(photo) })
             Spacer(Modifier.width(24.dp))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             MemoryStamp(stamp)
             Text(day.title, style = EodiTheme.type.bodyStrong, fontWeight = FontWeight.Bold, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            val span = if (day.spanDays > 1) stringResource(R.string.recap_span, day.spanDays, kmText(day.distanceM)) else kmText(day.distanceM)
+            val span = if (day.spanDays > 1) stringResource(R.string.recap_span, day.spanDays, distanceText(day.distanceM)) else distanceText(day.distanceM)
             Text(
                 listOfNotNull(memoryDateText(day.day), day.region.takeIf { it.isNotBlank() }, span).joinToString(" · "),
                 style = EodiTheme.type.meta,

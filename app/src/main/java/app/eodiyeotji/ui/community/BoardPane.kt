@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.community
 
+import app.eodiyeotji.ui.common.agoText
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box

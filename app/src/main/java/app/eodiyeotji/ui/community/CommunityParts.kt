@@ -243,6 +243,29 @@ fun HeartButton(hearts: Int, hearted: Boolean, onToggle: () -> Unit, modifier: M
     }
 }
 
+/**
+ * 누를 수 없는 하트 수 ([HeartButton]과 같은 아이콘 · 색). 남의 글 미리보기, 에이전트 추천 카드 등.
+ * [large]는 주행 중 큰 카드용 (멀리서도 읽히는 크기).
+ */
+@Composable
+fun HeartCount(hearts: Int, hearted: Boolean, modifier: Modifier = Modifier, large: Boolean = false) {
+    val c = EodiTheme.colors
+    val desc = stringResource(R.string.community_hearts_description, hearts)
+    Row(
+        modifier.semantics(mergeDescendants = true) { contentDescription = desc },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(if (hearted) CommunityIcons.HeartFilled else CommunityIcons.Heart, null, tint = c.heart, modifier = Modifier.size(if (large) 36.dp else 26.dp))
+        Spacer(Modifier.width(if (large) 10.dp else 8.dp))
+        Text(
+            hearts.toString(),
+            style = if (large) EodiTheme.type.title else EodiTheme.type.label,
+            fontWeight = FontWeight.Bold,
+            color = if (large) c.heart else c.textSecondary,
+            maxLines = 1,
+        )
+    }
+}
 
 /**
  * 고르는 칩 줄 (분절 버튼). 정렬(인기순/최신순), 하위 탭 등에 쓴다. 항목 하나 높이 64dp 이상.
@@ -381,32 +404,65 @@ fun StopPhoto(name: String, address: String, lat: Double, lon: Double, order: In
     StopPhotoBox(name, address, lat, lon, order, modifier.size(size), radius = radius, iconSize = size / 3)
 }
 
-/** [StopPhoto]의 크기 자유판: 크기는 [modifier]로 (예: 카드 맨 위 큰 사진은 폭 가득 · 16:9). 사진 요청은 같다. */
+/**
+ * [StopPhoto]의 크기 자유판: 크기는 [modifier]로 (예: 카드 맨 위 큰 사진은 폭 가득 · 16:9). 사진 요청은 같다.
+ * 앱 전체가 쓰는 장소 사진 칸: 받는 동안 [loadingColor]로 은은하게 깜빡이고, 사진이 없거나 이름을 모르면([name]이 비면) 핀.
+ * [showName]이면 아래쪽에 이름 띠, [onClick]이 있으면 누를 수 있다 (보통 그곳 장소 창).
+ */
 @Composable
-fun StopPhotoBox(name: String, address: String, lat: Double, lon: Double, order: Int?, modifier: Modifier = Modifier, radius: Dp = 16.dp, iconSize: Dp = 48.dp) {
+fun StopPhotoBox(
+    name: String,
+    address: String,
+    lat: Double,
+    lon: Double,
+    order: Int?,
+    modifier: Modifier = Modifier,
+    radius: Dp = 16.dp,
+    iconSize: Dp = 48.dp,
+    loadingColor: Color = EodiTheme.colors.staySoft,
+    showName: Boolean = false,
+    onClick: (() -> Unit)? = null,
+    onClickLabel: String? = null,
+) {
     val c = EodiTheme.colors
     val shape = RoundedCornerShape(radius)
     val description = if (order != null) "$order $name" else name
-    val box = modifier.clip(shape).background(c.surfaceHigh, shape).semantics { contentDescription = description }
+    val box = modifier
+        .clip(shape)
+        .background(c.surfaceHigh, shape)
+        .then(if (onClick != null) Modifier.clickable(onClickLabel = onClickLabel, onClick = onClick) else Modifier)
+        .semantics { if (name.isNotBlank()) contentDescription = description }
     val fallback: @Composable () -> Unit = {
         Box(Modifier.fillMaxSize().background(c.staySoft), contentAlignment = Alignment.Center) {
             Icon(app.eodiyeotji.ui.theme.EodiIcons.Pin, null, tint = c.stay.copy(alpha = 0.7f), modifier = Modifier.size(iconSize))
         }
     }
-    // 미리보기(@Preview)에는 사진 저장소(Hilt)가 없으니 사진 없는 자리로 그린다
-    if (LocalInspectionMode.current) {
-        Box(box) { fallback() }
-        return
+    Box(box) {
+        // 미리보기(@Preview)에는 사진 저장소(Hilt)가 없으니 사진 없는 자리로 그린다
+        if (LocalInspectionMode.current || name.isBlank()) {
+            fallback()
+        } else {
+            PlaceThumbnail(
+                name = name,
+                address = address,
+                lat = lat,
+                lon = lon,
+                modifier = Modifier.fillMaxSize(),
+                loading = { PhotoLoadingPlaceholder(loadingColor) },
+                fallback = fallback,
+            )
+        }
+        if (showName && name.isNotBlank()) {
+            Text(
+                name,
+                style = EodiTheme.type.caption,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().background(c.scrim).padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+        }
     }
-    PlaceThumbnail(
-        name = name,
-        address = address,
-        lat = lat,
-        lon = lon,
-        modifier = box,
-        loading = { PhotoLoadingPlaceholder(c.staySoft) },
-        fallback = fallback,
-    )
 }
 
 /**
@@ -487,23 +543,6 @@ fun dateText(d: LocalDate): String =
     } else {
         stringResource(R.string.community_date_ymd, d.year, d.monthValue, d.dayOfMonth)
     }
-
-/** "방금 · 3분 전 · 5시간 전 · 2일 전 · 3주 전 · 2개월 전". */
-@Composable
-@ReadOnlyComposable
-fun agoText(ms: Long, nowMs: Long = System.currentTimeMillis()): String {
-    val min = (nowMs - ms).coerceAtLeast(0) / 60_000
-    val hours = min / 60
-    val days = hours / 24
-    return when {
-        min < 1 -> stringResource(R.string.community_ago_now)
-        hours < 1 -> stringResource(R.string.community_ago_minutes, min.toInt())
-        days < 1 -> stringResource(R.string.community_ago_hours, hours.toInt())
-        days < 7 -> stringResource(R.string.community_ago_days, days.toInt())
-        days < 31 -> stringResource(R.string.community_ago_weeks, (days / 7).toInt())
-        else -> stringResource(R.string.community_ago_months, (days / 30).toInt())
-    }
-}
 
 /** 시각 → 현지 날짜 (리뷰 쓸 곳 목록의 "11월 2일"). */
 fun localDate(ms: Long): LocalDate = Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).toLocalDate()

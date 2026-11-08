@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.places
 
+import app.eodiyeotji.ui.community.StopPhotoBox
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -56,8 +57,6 @@ import app.eodiyeotji.ui.community.OverlayCard
 import app.eodiyeotji.ui.community.PrimaryPill
 import app.eodiyeotji.ui.community.RoundIconButton
 import app.eodiyeotji.ui.community.SecondaryPill
-import app.eodiyeotji.ui.place.PhotoLoadingPlaceholder
-import app.eodiyeotji.ui.place.PlaceThumbnail
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.timeline.clockText
@@ -178,18 +177,7 @@ private fun MenuHeader(target: EditTarget, card: PlaceCard?, onClose: () -> Unit
         }
         if (target is EditTarget.Stay) {
             val p = target.stay.place
-            Box(Modifier.size(104.dp).clip(RoundedCornerShape(EodiTheme.space.radiusM)).background(c.staySoft), contentAlignment = Alignment.Center) {
-                if (p != null && p.name.isNotBlank()) {
-                    PlaceThumbnail(
-                        p.name, p.address, target.stay.center.lat, target.stay.center.lon,
-                        modifier = Modifier.fillMaxSize(),
-                        fallback = { PinBox() },
-                        loading = { PhotoLoadingPlaceholder(c.staySoft) },
-                    )
-                } else {
-                    PinBox()
-                }
-            }
+            StopPhotoBox(p?.name.orEmpty(), p?.address.orEmpty(), target.stay.center.lat, target.stay.center.lon, null, Modifier.size(104.dp), radius = EodiTheme.space.radiusM, iconSize = 40.dp)
             Spacer(Modifier.width(24.dp))
         }
         Column(Modifier.weight(1f)) {
@@ -199,13 +187,6 @@ private fun MenuHeader(target: EditTarget, card: PlaceCard?, onClose: () -> Unit
         }
         Spacer(Modifier.width(16.dp))
         RoundIconButton(CommunityIcons.Close, stringResource(R.string.edit_close), onClose)
-    }
-}
-
-@Composable
-private fun PinBox() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Icon(EodiIcons.Pin, null, tint = EodiTheme.colors.stay.copy(alpha = 0.7f), modifier = Modifier.size(40.dp))
     }
 }
 

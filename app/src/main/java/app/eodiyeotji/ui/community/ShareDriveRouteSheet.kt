@@ -48,8 +48,8 @@ import app.eodiyeotji.core.driveShareCandidates
 import app.eodiyeotji.core.shareDriveRoute
 import app.eodiyeotji.core.weatherFor
 import app.eodiyeotji.ui.theme.EodiTheme
-import app.eodiyeotji.ui.timeline.distanceText
-import app.eodiyeotji.ui.timeline.durationText
+import app.eodiyeotji.ui.common.distanceText
+import app.eodiyeotji.ui.common.durationText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException

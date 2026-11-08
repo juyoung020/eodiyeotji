@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.agent
 
+import app.eodiyeotji.ui.common.distanceText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +31,7 @@ import app.eodiyeotji.agent.RecommendedCourse
 import app.eodiyeotji.core.DriveRoute
 import app.eodiyeotji.core.DriveRouteItem
 import app.eodiyeotji.ui.community.DriveRouteCard
+import app.eodiyeotji.ui.community.HeartCount
 import app.eodiyeotji.ui.map.RouteSnapshotImage
 
 // 근처 추천 드라이브 길 카드 ("여기 근처 드라이브 추천코스"). 순위·거리·하트는 Rust가 끝내고 오고, 여기는 받은 순서대로 그리기만 한다.
@@ -62,15 +64,15 @@ internal fun CourseRecommendationList(turn: AgentTurn, onAsk: (String) -> Unit, 
     }
 }
 
-/** 주행 중 카드의 큰 숫자 줄: "♥ 486   여기서 4.1km" */
+/** 주행 중 카드의 큰 숫자 줄: "하트 486   여기서 4.1km" */
 @Composable
 private fun CourseNumbers(c: RecommendedCourse) {
     val colors = MaterialTheme.colorScheme
     val style = MaterialTheme.typography.headlineSmall
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-        Text(stringResource(R.string.agent_course_hearts, c.route.hearts), style = style, fontWeight = FontWeight.Bold, color = app.eodiyeotji.ui.theme.EodiTheme.colors.heart)
+        HeartCount(c.route.hearts, c.route.heartedByMe, large = true)
         c.distanceKm?.let {
-            Text(stringResource(R.string.agent_course_from_here, kmText(it * 1000.0)), style = style, fontWeight = FontWeight.SemiBold, color = colors.primary)
+            Text(stringResource(R.string.agent_course_from_here, distanceText(it * 1000.0)), style = style, fontWeight = FontWeight.SemiBold, color = colors.primary)
         }
     }
 }

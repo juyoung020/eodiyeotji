@@ -43,10 +43,6 @@
     <string name="agent_months_ago">%1$d개월 전</string>
     <string name="agent_years_ago">%1$d년 전</string>
     <string name="agent_stops_count">들른 곳 %1$d곳</string>
-    <string name="agent_km">%1$skm</string>
-    <string name="agent_hours_minutes">%1$d시간 %2$d분</string>
-    <string name="agent_hours">%1$d시간</string>
-    <string name="agent_minutes">%1$d분</string>
     <string name="agent_map_none">지도 기록이 없는 날이에요</string>
     <string name="agent_more_days">다른 날</string>
 
@@ -82,7 +78,6 @@
     <!-- 근처 추천 코스 카드 -->
     <string name="agent_courses_title">근처 인기 드라이브 길</string>
     <string name="agent_course_by">%1$s 님의 길</string>
-    <string name="agent_course_hearts">♥ %1$d</string>
     <string name="agent_course_from_here">여기서 %1$s</string>
     <string name="agent_course_focus">안내 제안 중</string>
     <string name="agent_pick_course">%1$d번으로 안내</string>

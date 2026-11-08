@@ -1,5 +1,8 @@
 package app.eodiyeotji.ui.agent
 
+import app.eodiyeotji.ui.common.agoText
+import app.eodiyeotji.ui.common.durationText
+import app.eodiyeotji.ui.common.distanceText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,7 +37,7 @@ import app.eodiyeotji.ui.review.StopStrip
 import app.eodiyeotji.ui.place.placeDetailOpenLabel
 import app.eodiyeotji.ui.theme.MemoryStamp
 import app.eodiyeotji.ui.place.LocalOpenPlace
-import app.eodiyeotji.ui.place.PlaceThumbnail
+import app.eodiyeotji.ui.community.StopPhotoBox
 import app.eodiyeotji.ui.share.ComposableImageShare
 import app.eodiyeotji.ui.share.ShareButtonStyle
 import app.eodiyeotji.ui.share.ShareImageButton
@@ -73,8 +76,8 @@ internal fun RecommendationCard(
             val sub = listOf(
                 facts.region,
                 stringResource(R.string.agent_stops_count, stops.size),
-                kmText(facts.distanceM),
-                spanText(facts.endMs - facts.startMs),
+                distanceText(facts.distanceM),
+                durationText(facts.endMs - facts.startMs),
             ).filter { it.isNotBlank() }.joinToString(" · ")
             if (hero != null) {
                 FeedHero(
@@ -163,12 +166,7 @@ internal fun DrivingMemoryCard(rec: RecommendationUi, modifier: Modifier = Modif
     val first = rec.stops.firstOrNull()
     Surface(shape = RoundedCornerShape(28.dp), color = c.surfaceHigh, modifier = modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(20.dp)) {
-            val photoShape = RoundedCornerShape(22.dp)
-            Box(Modifier.size(128.dp).clip(photoShape).background(c.staySoft, photoShape)) {
-                if (first != null) {
-                    PlaceThumbnail(first.name, first.address, first.lat, first.lon, modifier = Modifier.fillMaxSize())
-                }
-            }
+            StopPhotoBox(first?.name.orEmpty(), first?.address.orEmpty(), first?.lat ?: 0.0, first?.lon ?: 0.0, null, Modifier.size(128.dp), radius = 22.dp)
             Spacer(Modifier.width(28.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 MemoryStamp(agoText(LocalDate.parse(facts.day), today), large = true)
