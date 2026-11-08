@@ -182,7 +182,7 @@ private fun ScenicMapContent(
             RouteTheme.SUNSET -> SkyPhase.GOLDEN
             RouteTheme.NIGHT -> SkyPhase.NIGHT
         }
-        CinematicSky(sky, skyFraction = 0.26f)
+        CinematicSky(sky, skyFraction = 0.26f, haze = false)
         Text(
             stringResource(R.string.drive_map_attribution),
             style = AttributionStyle,

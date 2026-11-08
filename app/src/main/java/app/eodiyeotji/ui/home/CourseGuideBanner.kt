@@ -58,7 +58,8 @@ class CourseGuideViewModel @Inject constructor(private val guide: CourseGuide) :
 /**
  * 코스 안내 중 알림 카드 (화면 아래 가운데, 어느 탭에서든 보인다).
  * 내비 화면에서 앱으로 돌아왔을 때 "지금 몇 번째 구간이고 다음은 어디인지"를 바로 알 수 있게 한다.
- * 다음 구간은 도착하면 알아서 이어지므로 버튼은 건너뛰기·끝내기만 둔다.
+ * 장소 하나로 가는 "길안내"도 같은 카드다. 다음 구간은 도착하면 알아서 이어지므로 버튼은 건너뛰기·안내 종료만 둔다
+ * (안내 종료 = 내비 안내까지 끈다). 내비에서 안내를 끄면 카드가 닫히고 이 앱이 다시 앞으로 나온다 ([CourseGuide]).
  */
 @Composable
 fun CourseGuideBanner(
@@ -92,18 +93,8 @@ fun CourseGuideBanner(
 @Composable
 private fun BannerCard(p: CourseProgress, interactive: Boolean, onNext: () -> Unit, onRetry: () -> Unit, onStop: () -> Unit) {
     val c = EodiTheme.colors
-    val title = when {
-        p.finished -> stringResource(R.string.guide_finished)
-        else -> stringResource(R.string.guide_title, p.leg, p.total)
-    }
-    val detail = when {
-        p.finished -> p.title
-        p.failed -> stringResource(R.string.guide_failed)
-        else -> listOfNotNull(
-            p.upcoming.firstOrNull()?.let { stringResource(R.string.guide_next_stop, it) },
-            p.nextLeg?.let { stringResource(R.string.guide_next_leg, it) } ?: stringResource(R.string.guide_last_leg),
-        ).joinToString("  ·  ")
-    }
+    val title = bannerTitle(p)
+    val detail = bannerDetail(p)
     // 테마와 상관없이 진한 남색 판 (라이트에서도 다크에서도 "지금 안내 중"이 화면 위에 떠 보인다)
     Surface(
         color = c.ink,
@@ -147,15 +138,8 @@ private fun BannerCard(p: CourseProgress, interactive: Boolean, onNext: () -> Un
 @Composable
 private fun CompactBannerCard(p: CourseProgress, onNext: () -> Unit, onRetry: () -> Unit, onStop: () -> Unit) {
     val c = EodiTheme.colors
-    val title = if (p.finished) stringResource(R.string.guide_finished) else stringResource(R.string.guide_title, p.leg, p.total)
-    val detail = when {
-        p.finished -> p.title
-        p.failed -> stringResource(R.string.guide_failed)
-        else -> listOfNotNull(
-            p.upcoming.firstOrNull()?.let { stringResource(R.string.guide_next_stop, it) },
-            p.nextLeg?.let { stringResource(R.string.guide_next_leg, it) } ?: stringResource(R.string.guide_last_leg),
-        ).joinToString("  ·  ")
-    }
+    val title = bannerTitle(p)
+    val detail = bannerDetail(p)
     Surface(
         color = c.ink,
         contentColor = c.onInk,
@@ -187,13 +171,33 @@ private fun CompactBannerCard(p: CourseProgress, onNext: () -> Unit, onRetry: ()
                         when {
                             p.failed -> BannerButton(stringResource(R.string.guide_retry), EodiIcons.Refresh, primary = true, onRetry)
                             p.hasNextLeg -> BannerButton(stringResource(R.string.guide_skip), null, primary = true, onNext)
-                            else -> BannerButton(stringResource(R.string.guide_reopen), EodiIcons.Navi, primary = true, onNext)
+                            !p.single -> BannerButton(stringResource(R.string.guide_reopen), EodiIcons.Navi, primary = true, onNext)
                         }
                     }
                 }
             }
         }
     }
+}
+
+/** 코스: "코스 안내 중 · 1/2 구간", 장소 하나: "길 안내 중 · 이름". */
+@Composable
+private fun bannerTitle(p: CourseProgress): String = when {
+    p.finished && p.single -> stringResource(R.string.guide_place_finished)
+    p.finished -> stringResource(R.string.guide_finished)
+    p.single -> stringResource(R.string.guide_place_title, p.title.orEmpty())
+    else -> stringResource(R.string.guide_title, p.leg, p.total)
+}
+
+@Composable
+private fun bannerDetail(p: CourseProgress): String? = when {
+    p.finished -> p.title
+    p.failed -> stringResource(R.string.guide_failed)
+    p.single -> stringResource(R.string.guide_place_hint)
+    else -> listOfNotNull(
+        p.upcoming.firstOrNull()?.let { stringResource(R.string.guide_next_stop, it) },
+        p.nextLeg?.let { stringResource(R.string.guide_next_leg, it) } ?: stringResource(R.string.guide_last_leg),
+    ).joinToString("  ·  ")
 }
 
 @Composable

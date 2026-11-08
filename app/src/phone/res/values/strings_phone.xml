@@ -10,6 +10,8 @@
 
     <string name="guide_failed">지도 앱을 열지 못했어요</string>
     <string name="guide_retry">다시 열기</string>
+    <string name="guide_stop">끝내기</string>
+    <string name="guide_place_hint">지도 앱에서 돌아오면 여기서 안내를 끝낼 수 있어요</string>
 
     <string name="agent_empty_body">지난 기록에서 찾아 드려요. 그날 코스를 지도 앱으로 바로 안내할 수도 있어요.</string>
     <string name="agent_voice_follow_up_hint">“응”이라고 하면 지도 앱으로 안내해요</string>

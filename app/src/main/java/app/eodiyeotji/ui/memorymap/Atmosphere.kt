@@ -28,7 +28,7 @@ import kotlin.math.sin
  * 색은 Rust가 정한 때([SkyPhase], 도착 시각 기준)로 고른다. 바뀌지 않는 칸은 한 번만 그려 지도 프레임에 부담이 없다.
  */
 @Composable
-fun CinematicSky(phase: SkyPhase, modifier: Modifier = Modifier, stars: Boolean = phase == SkyPhase.NIGHT || phase == SkyPhase.BLUE, skyFraction: Float = 0.34f) {
+fun CinematicSky(phase: SkyPhase, modifier: Modifier = Modifier, stars: Boolean = phase == SkyPhase.NIGHT || phase == SkyPhase.BLUE, skyFraction: Float = 0.34f, haze: Boolean = true) {
     val p = remember(phase) { skyPalette(phase) }
     val field = remember { starField() }
     // 반짝임 값은 Canvas 그리기 안에서만 읽는다 → 다시 그리기만 하고 재구성은 하지 않는다.
@@ -45,15 +45,15 @@ fun CinematicSky(phase: SkyPhase, modifier: Modifier = Modifier, stars: Boolean 
     // 하늘·빛 띠·비네트는 한 번 그려 둔 그림을 그대로 쓰고(바뀌지 않는다), 매 프레임은 별만 다시 그린다.
     // 별은 원래대로 하늘과 비네트 사이에 놓인다 (별 칸은 비네트 아래 같은 자리, 비네트는 맨 위 칸이 덮는다).
     Box(modifier.fillMaxSize()) {
-        Canvas(Modifier.fillMaxSize().graphicsLayer()) { drawSky(p, skyFraction) }
+        Canvas(Modifier.fillMaxSize().graphicsLayer()) { drawSky(p, skyFraction, haze) }
         if (twinkle != null) {
             Canvas(Modifier.fillMaxSize()) { drawStars(field, twinkle.value, size.height * skyFraction * 0.9f, p.star) }
         }
-        Canvas(Modifier.fillMaxSize().graphicsLayer()) { drawVignette(p) }
+        Canvas(Modifier.fillMaxSize().graphicsLayer()) { drawVignette(p, haze) }
     }
 }
 
-private fun DrawScope.drawSky(p: SkyPalette, skyFraction: Float) {
+private fun DrawScope.drawSky(p: SkyPalette, skyFraction: Float, haze: Boolean) {
     val h = size.height
     val sky = h * skyFraction
     // 하늘: 위는 짙게 → 지평선 쪽으로 밝아지다 → 지평선 빛 띠 → 지도 쪽으로 투명
@@ -64,9 +64,11 @@ private fun DrawScope.drawSky(p: SkyPalette, skyFraction: Float) {
             0.85f to p.horizon,
             1f to p.horizon.copy(alpha = 0f),
             startY = 0f,
-            endY = sky * 1.35f,
+            endY = if (haze) sky * 1.35f else sky * 1.04f,
         ),
     )
+    // haze=false: 지도 위에 빛 띠·번짐을 얹지 않아 지도가 또렷하다 (드라이브 코스)
+    if (!haze) return
     // 지평선 빛: 가운데가 밝은 띠 (위아래로 부드럽게 사라진다) + 가운데 번짐
     val band = h * 0.14f
     drawRect(
@@ -81,14 +83,14 @@ private fun DrawScope.drawSky(p: SkyPalette, skyFraction: Float) {
     )
 }
 
-private fun DrawScope.drawVignette(p: SkyPalette) {
+private fun DrawScope.drawVignette(p: SkyPalette, haze: Boolean) {
     val h = size.height
     // 아래 안개 + 네 귀퉁이 비네트
-    drawRect(Brush.verticalGradient(0.7f to Color.Transparent, 1f to p.floor))
+    if (haze) drawRect(Brush.verticalGradient(0.7f to Color.Transparent, 1f to p.floor))
     drawRect(
         Brush.radialGradient(
             0.55f to Color.Transparent,
-            1f to Color.Black.copy(alpha = p.vignette),
+            1f to Color.Black.copy(alpha = if (haze) p.vignette else p.vignette * 0.5f),
             center = Offset(size.width / 2f, h / 2f),
             radius = maxOf(size.width, h) * 0.75f,
         ),

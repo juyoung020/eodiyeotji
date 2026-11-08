@@ -22,7 +22,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
@@ -55,6 +58,10 @@ class AgentBridge @Inject constructor(
 
     /** 아직 내비에 요청하지 않은 코스 구간. 내비 도착 이벤트(NaviEvent.DestinationArrived)를 받는 쪽이 [continueCourse]를 부른다. */
     val pendingLegs: StateFlow<List<CourseLeg>> = _pendingLegs.asStateFlow()
+
+    /** 에이전트가 장소 하나로 안내를 보냈다 (CourseGuide가 받아 "길 안내 중" 카드와 안내 종료를 띄운다). */
+    private val _placeGuided = MutableSharedFlow<RouteStop>(extraBufferCapacity = 1)
+    val placeGuided: SharedFlow<RouteStop> = _placeGuided.asSharedFlow()
 
     /**
      * 질문 하나. 모으는 동안 Rust `ask`가 IO 스레드에서 돈다. 모으기를 취소하면 Rust 쪽 LLM 스트림도 끊는다.
@@ -141,6 +148,7 @@ class AgentBridge @Inject constructor(
         is AgentNavAction.Course -> startLegs(a.legs)
         is AgentNavAction.SharedCourse -> startLegs(a.legs)
         is AgentNavAction.Place -> navi.requestRoute(a.stop.name, a.stop.lat, a.stop.lon, a.stop.address)
+            .also { if (it) _placeGuided.tryEmit(a.stop.toRouteStop()) }
         is AgentNavAction.Search -> navi.openPlaceSearch(a.keyword)
     }
 

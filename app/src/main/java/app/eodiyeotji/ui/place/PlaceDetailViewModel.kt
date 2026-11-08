@@ -14,7 +14,7 @@ import app.eodiyeotji.core.placeDetail
 import app.eodiyeotji.core.setPlaceSaved
 import app.eodiyeotji.core.toggleReviewHeart
 import app.eodiyeotji.core.visitWeather
-import app.eodiyeotji.platform.Navigator
+import app.eodiyeotji.pleos.CourseGuide
 import app.eodiyeotji.ui.agent.DrivingStatePort
 import app.eodiyeotji.ui.community.Load
 import app.eodiyeotji.ui.review.ReviewDraft
@@ -54,7 +54,7 @@ data class PlaceDetailUiState(
 @HiltViewModel
 class PlaceDetailViewModel @Inject constructor(
     private val core: EodiCore,
-    private val navi: Navigator,
+    private val guide: CourseGuide,
     private val driving: DrivingStatePort,
 ) : ViewModel() {
     private val _state = MutableStateFlow(PlaceDetailUiState())
@@ -106,7 +106,7 @@ class PlaceDetailViewModel @Inject constructor(
         val p = s.detail?.place ?: s.place ?: return
         naviJob?.cancel()
         naviJob = viewModelScope.launch {
-            val ok = runCatching { navi.requestRoute(p.name, p.lat, p.lon, p.address) }.getOrDefault(false)
+            val ok = runCatching { guide.startPlace(p.name, p.lat, p.lon, p.address) }.getOrDefault(false)
             _state.update { it.copy(navi = ok) }
             delay(NOTICE_MS)
             _state.update { it.copy(navi = null) }
