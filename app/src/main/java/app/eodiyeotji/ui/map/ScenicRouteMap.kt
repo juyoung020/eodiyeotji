@@ -182,7 +182,8 @@ private fun ScenicMapContent(
             RouteTheme.SUNSET -> SkyPhase.GOLDEN
             RouteTheme.NIGHT -> SkyPhase.NIGHT
         }
-        CinematicSky(sky, skyFraction = 0.26f)
+        // 지평선이 안 보이는 기울기라 낮·노을엔 하늘을 덮지 않는다 (덮으면 지도 위쪽이 뿌옇게 번진다). 밤엔 별만.
+        if (theme == RouteTheme.NIGHT) CinematicSky(sky, skyFraction = 0.26f, haze = false)
         Text(
             stringResource(R.string.drive_map_attribution),
             style = AttributionStyle,

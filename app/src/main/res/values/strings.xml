@@ -18,7 +18,10 @@
     <string name="guide_finished">코스 안내를 마쳤어요</string>
     <string name="guide_skip">다음 구간</string>
     <string name="guide_retry">다시 보내기</string>
-    <string name="guide_stop">끝내기</string>
+    <string name="guide_stop">안내 종료</string>
+    <string name="guide_place_title">길 안내 중 · %1$s</string>
+    <string name="guide_place_hint">내비에서 “안내 종료”를 누르면 이 화면으로 돌아와요</string>
+    <string name="guide_place_finished">도착했어요</string>
     <string name="guide_close">닫기</string>
     <!-- 폰 세로 화면 알림 카드만 쓴다 (지도 앱은 도착을 알려 주지 않는다) -->
     <string name="guide_manual_hint">도착하면 \'다음 구간\'을 눌러 이어 가요</string>

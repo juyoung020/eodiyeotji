@@ -29,7 +29,7 @@ import app.eodiyeotji.core.SearchRowKind
 import app.eodiyeotji.core.placeCard
 import app.eodiyeotji.core.placesSavedAt
 import app.eodiyeotji.core.setPlaceSaved
-import app.eodiyeotji.platform.Navigator
+import app.eodiyeotji.pleos.CourseGuide
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.LocalDate
 import javax.inject.Inject
@@ -78,7 +78,7 @@ data class SearchUiState(
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val core: EodiCore,
-    private val navi: Navigator,
+    private val guide: CourseGuide,
 ) : ViewModel() {
     private val _state = MutableStateFlow(SearchUiState())
     val state: StateFlow<SearchUiState> = _state.asStateFlow()
@@ -184,7 +184,7 @@ class SearchViewModel @Inject constructor(
     /** "여기로 안내" (목적지 하나). */
     fun navigate(name: String, lat: Double, lon: Double, address: String) {
         viewModelScope.launch {
-            val ok = runCatching { navi.requestRoute(name, lat, lon, address) }.getOrDefault(false)
+            val ok = runCatching { guide.startPlace(name, lat, lon, address) }.getOrDefault(false)
             _state.update { it.copy(navi = ok) }
             kotlinx.coroutines.delay(NAVI_NOTE_MS)
             _state.update { it.copy(navi = null) }

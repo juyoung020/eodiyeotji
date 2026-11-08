@@ -21,7 +21,7 @@ import app.eodiyeotji.core.restoreHidden
 import app.eodiyeotji.core.savedPlaces
 import app.eodiyeotji.core.setMyAnchor
 import app.eodiyeotji.core.setPlaceSaved
-import app.eodiyeotji.platform.Navigator
+import app.eodiyeotji.pleos.CourseGuide
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException
@@ -63,7 +63,7 @@ data class PlacesUiState(
 @HiltViewModel
 class PlacesViewModel @Inject constructor(
     private val core: EodiCore,
-    private val navi: Navigator,
+    private val guide: CourseGuide,
 ) : ViewModel() {
     private val _state = MutableStateFlow(PlacesUiState())
     val state: StateFlow<PlacesUiState> = _state.asStateFlow()
@@ -112,7 +112,7 @@ class PlacesViewModel @Inject constructor(
     fun navigate(card: PlaceCard) {
         viewModelScope.launch {
             val l = card.label
-            val ok = runCatching { navi.requestRoute(l?.name.orEmpty(), card.lat, card.lon, l?.address.orEmpty()) }.getOrDefault(false)
+            val ok = runCatching { guide.startPlace(l?.name.orEmpty(), card.lat, card.lon, l?.address.orEmpty()) }.getOrDefault(false)
             show(if (ok) R.string.notice_navi_ok else R.string.notice_navi_fail)
         }
     }
