@@ -18,7 +18,10 @@ class MainActivity : ComponentActivity() {
                 // 쿠폰 배지 · 쿠폰함이 어느 화면에서든 같은 받은 쿠폰 · 주행 상태를 본다
                 // 장소 상세 창(별점 · 리뷰)도 어느 화면에서든 LocalOpenPlace로 연다 (그리는 자리는 판마다 PlaceDetailHost)
                 app.eodiyeotji.ui.offers.CouponScope {
-                    app.eodiyeotji.ui.place.PlaceDetailScope { AppRoot() }
+                    app.eodiyeotji.ui.place.PlaceDetailScope {
+                        // 그날로 돌아가기도 어느 화면에서든 LocalOpenReplay로 연다 (앱 화면 위를 전부 덮는다)
+                        app.eodiyeotji.ui.replay.ReplayScope { AppRoot() }
+                    }
                 }
             }
         }

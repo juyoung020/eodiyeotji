@@ -107,4 +107,21 @@ object EodiIcons {
             }
         }
     }
+
+    /** 재생 (그날로 돌아가기) — 채운 삼각형 */
+    val Play: ImageVector by lazy {
+        icon("Play") {
+            path(fill = Ink) { moveTo(7.5f, 4.8f); lineTo(19f, 12f); lineTo(7.5f, 19.2f); close() }
+        }
+    }
+
+    /** 멈춤 — 채운 막대 두 개 */
+    val Pause: ImageVector by lazy {
+        icon("Pause") {
+            path(fill = Ink) {
+                moveTo(6.5f, 5f); lineTo(10f, 5f); lineTo(10f, 19f); lineTo(6.5f, 19f); close()
+                moveTo(14f, 5f); lineTo(17.5f, 5f); lineTo(17.5f, 19f); lineTo(14f, 19f); close()
+            }
+        }
+    }
 }
