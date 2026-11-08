@@ -3,6 +3,11 @@ package app.eodiyeotji.place
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * 플랫폼 [HttpURLConnection]만 쓰는 GET (추가 HTTP 라이브러리 없음). 반드시 IO 스레드에서 부른다.
@@ -86,4 +91,18 @@ object PlatformHttp : HttpGetter {
             readTimeout = READ_TIMEOUT_MS
             useCaches = false
         }
+}
+
+/** 막는(blocking) HTTP 호출을 기다리는 쪽에서 떼어 내는 범위. 기다림을 그만둬도 요청은 여기서 조용히 끝난다. */
+private val detachedIo = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+/**
+ * [block](막는 HTTP 호출)을 IO 스레드에서 돌리되 [ms] 안에 안 끝나면 바로 null.
+ * `withTimeoutOrNull { withContext(IO) { http.get() } }`는 막힌 스레드를 깨우지 못해 DNS · 연결 · 읽기 시간을
+ * 다 기다린 뒤에야 돌아온다(오프라인이면 수 초~십수 초). 여기서는 요청을 떼어 놓고 기다림만 끊는다.
+ * [block]이 던진 예외는 그대로 다시 던진다.
+ */
+internal suspend fun <T> blockingWithTimeout(ms: Long, block: () -> T): T? {
+    val job = detachedIo.async { block() }
+    return withTimeoutOrNull(ms) { job.await() }
 }

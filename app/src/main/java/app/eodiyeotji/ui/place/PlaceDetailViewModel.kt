@@ -27,6 +27,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 /**
@@ -139,9 +141,14 @@ class PlaceDetailViewModel @Inject constructor(
 
     // ---- 리뷰 쓰기 (내가 실제로 다녀온 곳만: 마지막 방문의 날짜 · 날씨로 쓴다) ----
 
+    /** 리뷰 쓰는 곳 → 미리 받는 그날 날씨 */
+    private var weather: Pair<StopFact, Deferred<String?>>? = null
+
     fun startReview() {
         val visit = _state.value.detail?.lastVisit ?: return
         _state.update { it.copy(draft = ReviewDraft(candidates = Load.Loaded(listOf(visit)), place = visit)) }
+        // 그날 날씨(인터넷)는 글을 쓰는 동안 미리 받아 둔다 → [올리기]가 날씨를 기다리지 않는다
+        weather = visit to viewModelScope.async { runCatching { core.visitWeather(visit) }.getOrNull() }
         viewModelScope.launch {
             val options = runCatching { core.reviewKeywordOptions() }.getOrNull() ?: return@launch
             _state.update { s -> s.copy(draft = s.draft?.withOptions(options)) }
@@ -162,8 +169,9 @@ class PlaceDetailViewModel @Inject constructor(
         _state.update { it.copy(draft = d.copy(submitting = true, error = null)) }
         viewModelScope.launch {
             try {
-                val weather = core.visitWeather(visit)
-                core.writePlaceReview(visit, d.rating, d.text, d.keywords, d.withWhom, weather)
+                val pre = weather?.takeIf { it.first == visit }?.second
+                val w = if (pre != null) pre.await() else core.visitWeather(visit)
+                core.writePlaceReview(visit, d.rating, d.text, d.keywords, d.withWhom, w)
                 _state.update { it.copy(draft = null, justPosted = true) }
                 _state.value.place?.let { load(it) }
                 delay(NOTICE_MS)

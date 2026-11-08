@@ -10,12 +10,9 @@ import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * "이 장소 이름 고치기"에 보여 줄 근처 이름 후보 (카카오 로컬 분류 검색, 반경 [RADIUS_M] m).
@@ -32,25 +29,23 @@ class PlaceCandidates @Inject constructor() {
     suspend fun near(lat: Double, lon: Double): List<PlaceLabel> {
         if (!available) return emptyList()
         val headers = mapOf("Authorization" to "KakaoAK $key")
-        val found: List<PlaceCandidate> = withTimeoutOrNull(TIMEOUT_MS) {
-            withContext(Dispatchers.IO) {
-                coroutineScope {
-                    CODES.map { code ->
-                        async {
-                            try {
-                                KakaoParse.places(http.get(url(code, lat, lon), headers))
-                                    .map { PlaceCandidate(it.label.copy(source = PlaceSource.KAKAO), it.distanceM) }
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (e: Exception) {
-                                Log.w(TAG, "후보 찾기 실패 ($code): ${e.message}")
-                                emptyList()
-                            }
-                        }
-                    }.awaitAll().flatten()
+        // 막는 HTTP는 떼어 놓고 기다림만 [TIMEOUT_MS]에서 끊는다 (오프라인 DNS 대기로 이름 고치기 창이 멈추지 않게)
+        val found: List<PlaceCandidate> = coroutineScope {
+            CODES.map { code ->
+                async {
+                    try {
+                        blockingWithTimeout(TIMEOUT_MS) { KakaoParse.places(http.get(url(code, lat, lon), headers)) }
+                            .orEmpty()
+                            .map { PlaceCandidate(it.label.copy(source = PlaceSource.KAKAO), it.distanceM) }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "후보 찾기 실패 ($code): ${e.message}")
+                        emptyList()
+                    }
                 }
-            }
-        }.orEmpty()
+            }.awaitAll().flatten()
+        }
         return rankCandidates(found, LIMIT)
     }
 
