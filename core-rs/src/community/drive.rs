@@ -264,7 +264,7 @@ impl EodiStore {
                 return Err(CoreError::InvalidInput(format!("from {p:?}")));
             }
         }
-        let rows = load_routes(&*self.lock()?, None)?;
+        let rows = load_routes(&*self.snapshot()?, None)?;
         let mut out: Vec<DriveRouteRecommendation> = rows
             .into_iter()
             .map(|r| {
@@ -290,12 +290,12 @@ impl EodiStore {
 
     /// 드라이브 코스 하나 (없으면 `InvalidInput`).
     pub fn drive_route(&self, id: String) -> Result<DriveRoutePost, CoreError> {
-        Ok(route_by_id(&*self.lock()?, &id)?.post)
+        Ok(route_by_id(&*self.snapshot()?, &id)?.post)
     }
 
     /// 드라이브 코스 하트 누르기/취소. 반환: 바뀐 하트 수. 없는 id면 `InvalidInput`.
     pub fn toggle_drive_route_heart(&self, id: String) -> Result<u32, CoreError> {
-        let conn = self.lock()?;
+        let conn = self.lock_community()?;
         toggle_heart(&conn, "drive_route", &id)?.ok_or_else(|| CoreError::InvalidInput(format!("드라이브 코스 없음: {id}")))
     }
 
@@ -312,7 +312,7 @@ impl EodiStore {
                 return Err(CoreError::InvalidInput(format!("from {p:?}")));
             }
         }
-        let rows = load_routes(&*self.lock()?, None)?;
+        let rows = load_routes(&*self.snapshot()?, None)?;
         let mut out: Vec<DriveRouteRecommendation> = rows
             .into_iter()
             .filter(|r| !r.post.mine)
@@ -334,27 +334,27 @@ impl EodiStore {
 
     /// 3D 미리보기 지도 데이터 (모양은 [DriveRouteMap]). 없는 id면 `InvalidInput`.
     pub fn drive_route_map(&self, id: String) -> Result<DriveRouteMap, CoreError> {
-        let r = route_by_id(&*self.lock()?, &id)?;
+        let r = route_by_id(&*self.snapshot()?, &id)?;
         Ok(route_map(&r))
     }
 
     /// 길 방향을 따라 보는 카메라: 시작 → 끝 방향이 화면 위쪽, [pitch]도 기울여 길 전체가 [width]×[height](논리 픽셀,
     /// 안쪽 여백 [padding]) 안에 들어오게. 목록 카드 스냅숏과 상세 첫 화면이 같은 값을 쓴다. 없는 id면 `InvalidInput`.
     pub fn drive_route_camera(&self, id: String, width: f64, height: f64, padding: f64, pitch: f64) -> Result<RouteCamera, CoreError> {
-        let r = route_by_id(&*self.lock()?, &id)?;
+        let r = route_by_id(&*self.snapshot()?, &id)?;
         Ok(fit_camera(&r.line, width, height, padding, pitch))
     }
 
     /// 미리보기 비행 경로: 길을 같은 간격 [frames]개(0이면 480, 최대 4000)로 나눈 카메라 자리. 방향은 조금 앞을 본다. 없는 id면 `InvalidInput`.
     pub fn drive_route_flight(&self, id: String, frames: u32) -> Result<Vec<FlightFrame>, CoreError> {
-        let r = route_by_id(&*self.lock()?, &id)?;
+        let r = route_by_id(&*self.snapshot()?, &id)?;
         let n = if frames == 0 { FLIGHT_FRAMES } else { frames.clamp(2, MAX_FLIGHT_FRAMES) };
         Ok(flight(&r.line, n as usize))
     }
 
     /// 안내 구간: ① 길 시작점까지 ② 도착하면 끝점까지 — 둘 다 경유지 없음 ([route_legs]). 없는 id면 `InvalidInput`.
     pub fn drive_route_legs(&self, id: String) -> Result<Vec<CourseLeg>, CoreError> {
-        Ok(route_legs(&route_by_id(&*self.lock()?, &id)?.post))
+        Ok(route_legs(&route_by_id(&*self.snapshot()?, &id)?.post))
     }
 
     // ---- 내 기록에서 올리기 ----
@@ -365,7 +365,7 @@ impl EodiStore {
         let days = if days == 0 { 60 } else { days.min(365) };
         let summaries = self.day_summaries(days)?;
         let (anchors, shared, today) = {
-            let conn = self.lock()?;
+            let conn = self.snapshot()?;
             (anchor_points(&conn)?, shared_trips(&conn)?, format_day(self.local_day(crate::places::now_ms())))
         };
         let mut out = Vec::new();
@@ -403,7 +403,7 @@ impl EodiStore {
             .into_iter()
             .find(|t| t.start_ms == trip_start_ms)
             .ok_or_else(|| CoreError::InvalidInput(format!("주행 없음: {trip_start_ms}")))?;
-        let anchors = anchor_points(&*self.lock()?)?;
+        let anchors = anchor_points(&*self.snapshot()?)?;
         let piece = shareable_piece(&trip, &anchors).ok_or_else(|| CoreError::InvalidInput("올릴 수 있는 길이 너무 짧다".into()))?;
         let (from_name, to_name) = end_names(&trip, &piece);
         let line = simplified(&piece.line);

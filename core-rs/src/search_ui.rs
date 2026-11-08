@@ -419,7 +419,18 @@ struct PlaceAgg {
 impl EodiStore {
     /// 검색 화면: 친 말([text])로 [scope]를 바로 찾는다 (모듈 설명). 1년치도 수 ms.
     /// [filter]는 내 기록 찾기에만 쓴다. 말이 비고 칩도 없으면 빈 결과 (화면은 [EodiStore::search_suggestions]를 보인다).
+    /// 같은 말·범위·칩·날짜를 다시 찾으면(탭 오가기·지우고 다시 치기) 데이터가 바뀌기 전까지 저장해 둔 결과를 준다.
     pub fn search_typed(&self, text: String, scope: SearchScope, filter: SearchFilter, now_ms: i64) -> Result<SearchAnswer, CoreError> {
+        let started = Instant::now();
+        let key = format!("search_typed {text:?} {scope:?} {filter:?} {}", self.local_day(now_ms));
+        let mut ans = self.cached(crate::store::Domain::Both, key, || self.search_typed_uncached(text, scope, filter, now_ms))?;
+        ans.elapsed_micros = started.elapsed().as_micros() as u64;
+        Ok(ans)
+    }
+}
+
+impl EodiStore {
+    fn search_typed_uncached(&self, text: String, scope: SearchScope, filter: SearchFilter, now_ms: i64) -> Result<SearchAnswer, CoreError> {
         let started = Instant::now();
         let today = self.local_day(now_ms);
         let q = parse_query(&text, today);
@@ -451,12 +462,14 @@ impl EodiStore {
             elapsed_micros: started.elapsed().as_micros() as u64,
         })
     }
+}
 
+#[uniffi::export]
+impl EodiStore {
     /// 아무것도 치지 않았을 때: 최근 검색어(최신순 8개) + 추천 칩(바다 · 카페 · 지난주 · 휴게소 · 작년 이맘때 +
     /// 자주 가는 곳 3곳, 집 · 회사 근처는 뺀다).
     pub fn search_suggestions(&self) -> Result<SearchSuggestions, CoreError> {
-        let mut conn = self.lock()?;
-        self.flush_all(&mut conn)?;
+        let conn = self.read()?;
         let recent: Vec<String> = {
             let mut st = conn.prepare_cached("SELECT text FROM search_recent ORDER BY used_ms DESC LIMIT ?1")?;
             let rows = st.query_map([RECENT_SHOW], |r| r.get(0))?;
@@ -478,7 +491,7 @@ impl EodiStore {
         if t.is_empty() {
             return Ok(());
         }
-        let conn = self.lock()?;
+        let conn = self.lock_side()?;
         conn.execute("INSERT OR REPLACE INTO search_recent (text, used_ms) VALUES (?1, ?2)", params![t, now_ms])?;
         conn.execute(
             "DELETE FROM search_recent WHERE text NOT IN (SELECT text FROM search_recent ORDER BY used_ms DESC LIMIT ?1)",
@@ -489,14 +502,14 @@ impl EodiStore {
 
     /// 최근 검색어 하나 지우기.
     pub fn forget_search(&self, text: String) -> Result<(), CoreError> {
-        let conn = self.lock()?;
+        let conn = self.lock_side()?;
         conn.execute("DELETE FROM search_recent WHERE text = ?1", [text.trim()])?;
         Ok(())
     }
 
     /// 최근 검색어 모두 지우기.
     pub fn clear_recent_searches(&self) -> Result<(), CoreError> {
-        let conn = self.lock()?;
+        let conn = self.lock_side()?;
         conn.execute("DELETE FROM search_recent", [])?;
         Ok(())
     }
@@ -516,8 +529,7 @@ impl EodiStore {
         let from_ms = lo.map(|d| dates::day_start_ms(d, tz));
         let to_ms = hi.map(|d| dates::day_start_ms(d + 1, tz) - 1);
         let (places, days) = {
-            let mut conn = self.lock()?;
-            self.flush_all(&mut conn)?;
+            let conn = self.read()?;
             let places = place_group(&conn, q, from_ms, to_ms, filter, today, 8)?;
             let days = day_group(&conn, q, from_ms, to_ms, filter, today, 20)?;
             (places, days)

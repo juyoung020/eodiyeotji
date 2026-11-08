@@ -11,7 +11,7 @@ use crate::store::{CoreError, EodiStore, GeoFix};
 impl EodiStore {
     /// 가장 최근에 저장된 위치 점. 기록이 없으면 None.
     pub fn last_fix(&self) -> Result<Option<GeoFix>, CoreError> {
-        let conn = self.lock()?;
+        let conn = self.snapshot()?;
         let fix = conn
             .query_row("SELECT t_ms, lat, lon, accuracy_m FROM fix ORDER BY t_ms DESC LIMIT 1", [], |r| {
                 Ok(GeoFix { t_ms: r.get(0)?, lat: r.get(1)?, lon: r.get(2)?, accuracy_m: r.get::<_, f64>(3)? as f32 })

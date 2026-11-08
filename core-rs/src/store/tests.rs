@@ -819,3 +819,106 @@ fn replayable_needs_a_named_stop_or_five_km() {
     assert!(is_replayable(0, REPLAY_MIN_DISTANCE_M));
     assert!(is_replayable(1, 300.0));
 }
+
+// ---- 동시성 · 캐시 (conn 모듈) ----
+
+#[test]
+fn v11_db_gets_trip_start_index_and_keeps_records() {
+    let db = TempDb::new("v11");
+    let t0 = kst(2026, 3, 2, 9, 0);
+    {
+        let store = db.open(KST);
+        store.ingest(drive(t0, 600, 37.5, 127.0)).unwrap();
+        assert_eq!(store.day_summaries(10).unwrap().len(), 1);
+        let c = store.lock().unwrap();
+        c.execute_batch("DROP INDEX trip_start;").unwrap();
+        c.pragma_update(None, "user_version", 11).unwrap();
+    }
+    let store = db.open(KST);
+    let c = store.snapshot().unwrap();
+    let v: i32 = c.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
+    assert_eq!(v, SCHEMA_VERSION);
+    let plan: String = c
+        .query_row("EXPLAIN QUERY PLAN SELECT path FROM trip WHERE start_ms >= 1 AND start_ms < 2", [], |r| r.get(3))
+        .unwrap();
+    assert!(plan.contains("trip_start"), "{plan}");
+    drop(c);
+    assert_eq!(store.day_summaries(10).unwrap()[0].trip_count, 1);
+}
+
+#[test]
+fn cached_reads_follow_every_write() {
+    let db = TempDb::new("cache");
+    let store = db.open(KST);
+    let t0 = kst(2026, 3, 2, 9, 0);
+    store.ingest(drive(t0, 600, 37.5, 127.0)).unwrap();
+    let a = store.day_summaries(10).unwrap();
+    assert_eq!(a, store.day_summaries(10).unwrap());
+    assert_eq!(a[0].trip_count, 1);
+    // 위치 저장 → 다음 조회가 밀린 계산을 반영하고 새로 센다
+    store.ingest(drive(t0 + 3 * HOUR, 600, 37.6, 127.1)).unwrap();
+    assert_eq!(store.day_summaries(10).unwrap()[0].trip_count, 2);
+    // 사용자 편집(숨기기)도 캐시를 버린다
+    store.hide_trip(t0, t0 + 5 * HOUR).unwrap();
+    assert_eq!(store.day_summaries(10).unwrap()[0].trip_count, 1);
+    // 다른 날 다시 열어도(새 저장소) 같은 결과
+    drop(store);
+    assert_eq!(db.open(KST).day_summaries(10).unwrap()[0].trip_count, 1);
+}
+
+#[test]
+fn reads_run_while_the_writer_is_held() {
+    let db = TempDb::new("par");
+    let store = db.open(KST);
+    let t0 = kst(2026, 3, 2, 9, 0);
+    store.ingest(drive(t0, 600, 37.5, 127.0)).unwrap();
+    store.day_summaries(10).unwrap();
+    // 쓰기 연결을 잡고(긴 저장 중) 있는 동안 다른 스레드의 조회가 끝나야 한다
+    let held = store.lock().unwrap();
+    let s2 = store.clone();
+    let h = std::thread::spawn(move || (s2.day_detail(format_day(s2.local_day(t0))).unwrap(), s2.fix_count().unwrap()));
+    let started = Instant::now();
+    while !h.is_finished() {
+        assert!(started.elapsed().as_secs() < 5, "조회가 쓰기 잠금을 기다렸다");
+        std::thread::yield_now();
+    }
+    drop(held);
+    let (detail, n) = h.join().unwrap();
+    assert_eq!(detail.trips.len(), 1);
+    assert_eq!(n, 600);
+}
+
+#[test]
+fn concurrent_ingest_and_reads_agree_at_the_end() {
+    let db = TempDb::new("mix");
+    let store = db.open(KST);
+    let t0 = kst(2026, 3, 2, 9, 0);
+    let w = {
+        let s = store.clone();
+        std::thread::spawn(move || {
+            for k in 0..60 {
+                s.ingest(drive(t0 + k * 10 * SEC, 10, 37.5 + k as f64 * 1e-3, 127.0)).unwrap();
+            }
+        })
+    };
+    let readers: Vec<_> = (0..4)
+        .map(|_| {
+            let s = store.clone();
+            std::thread::spawn(move || {
+                for _ in 0..50 {
+                    s.day_summaries(10).unwrap();
+                    s.day_detail(format_day(s.local_day(t0))).unwrap();
+                }
+            })
+        })
+        .collect();
+    w.join().unwrap();
+    readers.into_iter().for_each(|h| h.join().unwrap());
+    assert_eq!(store.fix_count().unwrap(), 600);
+    let fresh = TempDb::new("mix-ref");
+    let reference = fresh.open(KST);
+    for k in 0..60 {
+        reference.ingest(drive(t0 + k * 10 * SEC, 10, 37.5 + k as f64 * 1e-3, 127.0)).unwrap();
+    }
+    assert_eq!(store.day_summaries(10).unwrap(), reference.day_summaries(10).unwrap());
+}

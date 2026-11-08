@@ -108,8 +108,7 @@ pub fn rank_place_candidates(candidates: Vec<PlaceCandidate>, limit: u32) -> Vec
 impl EodiStore {
     /// 고른 자리의 장소 카드 (모듈 설명). 장소가 없으면 None.
     pub fn place_card(&self, spot: PlaceSpot) -> Result<Option<PlaceCard>, CoreError> {
-        let mut conn = self.lock()?;
-        self.flush_all(&mut conn)?;
+        let conn = self.read()?;
         let Some(id) = resolve_spot(&conn, spot)? else { return Ok(None) };
         let anchors = current_anchors(&conn)?;
         Ok(card(&conn, id, &anchors)?)
@@ -134,8 +133,7 @@ impl EodiStore {
 
     /// 저장한 곳 (최근에 저장한 것부터). 기억 에이전트도 쓴다.
     pub fn saved_places(&self) -> Result<Vec<PlaceCard>, CoreError> {
-        let mut conn = self.lock()?;
-        self.flush_all(&mut conn)?;
+        let conn = self.read()?;
         let ids: Vec<i64> = {
             let mut st = conn.prepare_cached("SELECT place_id FROM saved_place ORDER BY saved_ms DESC, place_id DESC")?;
             let rows = st.query_map([], |r| r.get(0))?;
@@ -151,8 +149,7 @@ impl EodiStore {
 
     /// 자주 가는 곳 (점수 높은 순, 규칙은 모듈 설명) 최대 `limit`개. `now_ms` = 지금 (최근 가중치 기준).
     pub fn frequent_places(&self, limit: u32, now_ms: i64) -> Result<Vec<PlaceCard>, CoreError> {
-        let mut conn = self.lock()?;
-        self.flush_all(&mut conn)?;
+        let conn = self.read()?;
         let anchors = current_anchors(&conn)?;
         let today = self.local_day(now_ms);
         let mut scored: Vec<(f64, i64, i64)> = Vec::new();
@@ -183,7 +180,7 @@ impl EodiStore {
 
     /// 좌표마다 그 자리(100m 안 가장 가까운 장소)가 저장된 곳인지 (검색 결과의 ♥). 장소가 없으면 false.
     pub fn places_saved_at(&self, points: Vec<GeoPoint>) -> Result<Vec<bool>, CoreError> {
-        let conn = self.lock()?;
+        let conn = self.snapshot()?;
         let mut out = Vec::with_capacity(points.len());
         for p in points {
             let saved = match places::nearest_place(&conn, Point::from(p), PLACE_RADIUS_M)? {

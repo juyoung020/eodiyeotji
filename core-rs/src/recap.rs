@@ -52,6 +52,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use crate::agent::dates::{civil_from_days, days_from_civil};
 use crate::ffi::GeoPoint;
 use crate::geo::{haversine_m, Point};
+use crate::store::Domain;
 use crate::memory::{day_title, episode_from_row, flush_memory, kind_code, Episode, EpisodeKind, StopFact, EP_COLS};
 use crate::store::{format_day, CoreError, EodiStore, DAY_MS};
 
@@ -252,14 +253,13 @@ fn bad(what: &str) -> CoreError {
 impl EodiStore {
     /// "N년 전 오늘" (모듈 설명). 1~10년 전 같은 날에 나들이 · 여행이 없으면 None. `now_ms` = 지금 (UTC ms).
     pub fn on_this_day(&self, now_ms: i64) -> Result<Option<OnThisDay>, CoreError> {
-        let mut conn = self.lock()?;
-        self.flush_all(&mut conn)?;
+        let conn = self.read()?;
         on_this_day(self, &conn, now_ms)
     }
 
     /// 오늘은 "N년 전 오늘" 카드를 닫는다 (내일 다시 나온다).
     pub fn dismiss_on_this_day(&self, now_ms: i64) -> Result<(), CoreError> {
-        let conn = self.lock()?;
+        let conn = self.lock_side()?;
         set_meta(&conn, KEY_OTD_DISMISSED, self.local_day(now_ms))?;
         Ok(())
     }
@@ -284,7 +284,7 @@ impl EodiStore {
 
     /// 오늘 "N년 전 오늘"을 음성으로 읽었다 (오늘은 다시 읽지 않는다).
     pub fn mark_on_this_day_spoken(&self, now_ms: i64) -> Result<(), CoreError> {
-        let conn = self.lock()?;
+        let conn = self.lock_side()?;
         set_meta(&conn, KEY_OTD_SPOKEN, self.local_day(now_ms))?;
         Ok(())
     }
@@ -330,16 +330,14 @@ impl EodiStore {
         if !(1..=12).contains(&month) {
             return Err(bad("month"));
         }
-        let mut conn = self.lock()?;
-        self.flush_all(&mut conn)?;
-        month_recap(self, &conn, year as i64, month, now_ms)
+        let key = format!("month_recap {year} {month} {}", self.local_day(now_ms));
+        self.cached(Domain::Records, key, || month_recap(self, &*self.read()?, year as i64, month, now_ms))
     }
 
     /// 한 해 결산 ("올해의 어디였지"). 진행 중인 해면 오늘까지.
     pub fn year_recap(&self, year: i32, now_ms: i64) -> Result<YearRecap, CoreError> {
-        let mut conn = self.lock()?;
-        self.flush_all(&mut conn)?;
-        year_recap(self, &conn, year as i64, now_ms)
+        let key = format!("year_recap {year} {}", self.local_day(now_ms));
+        self.cached(Domain::Records, key, || year_recap(self, &*self.read()?, year as i64, now_ms))
     }
 }
 

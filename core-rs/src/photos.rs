@@ -107,7 +107,7 @@ pub fn parse_google_place_photos(json: String) -> Result<PlacePhotos, CoreError>
 impl EodiStore {
     /// 저장해 둔 사진 (없거나 [PHOTO_TTL_MS]보다 오래됐으면 None → 다시 받는다).
     pub fn cached_place_photos(&self, key: String, now_ms: i64) -> Result<Option<PlacePhotos>, CoreError> {
-        let conn = self.lock()?;
+        let conn = self.snapshot()?;
         let row: Option<(bool, Option<String>, String, i64)> = conn
             .query_row(
                 "SELECT found, google_place_id, photos, fetched_ms FROM place_photo WHERE key = ?1",
@@ -124,7 +124,7 @@ impl EodiStore {
 
     /// 받은 사진을 저장한다 (같은 키는 덮어쓴다).
     pub fn save_place_photos(&self, key: String, photos: PlacePhotos, now_ms: i64) -> Result<(), CoreError> {
-        let conn = self.lock()?;
+        let conn = self.lock_side()?;
         conn.execute(
             "INSERT INTO place_photo (key, found, google_place_id, photos, fetched_ms) VALUES (?1, ?2, ?3, ?4, ?5)
              ON CONFLICT (key) DO UPDATE SET found = excluded.found, google_place_id = excluded.google_place_id,

@@ -116,7 +116,7 @@ impl EodiStore {
         let detail = self.day_detail(day.clone())?;
         let episodes = self.episodes_for_day(day.clone())?;
         let (anchors, weather) = {
-            let conn = self.lock()?;
+            let conn = self.snapshot()?;
             (anchor_points(&conn)?, saved_weather(&conn, &day, None)?)
         };
         let title = detail
@@ -155,7 +155,7 @@ impl EodiStore {
             trips.extend(self.day_detail(format_day(d))?.trips.into_iter().filter(|t| in_span(t, f.start_ms, f.end_ms)));
         }
         let (anchors, weather) = {
-            let conn = self.lock()?;
+            let conn = self.snapshot()?;
             (anchor_points(&conn)?, saved_weather(&conn, &f.day, Some(episode_id))?)
         };
         let title = [ep.title.clone(), day_title]
@@ -182,7 +182,7 @@ impl EodiStore {
     /// 커뮤니티 코스 공유 카드 — 들른 곳을 순서대로 이은 선. 내가 올린 코스만 집·회사 근처를 거른다. 없는 id면 `InvalidInput`.
     pub fn share_card_course(&self, post_id: String, sketch_aspect: f64) -> Result<ShareCard, CoreError> {
         let post = self.course_by_id(&post_id)?;
-        let anchors = if post.mine { anchor_points(&*self.lock()?)? } else { Vec::new() };
+        let anchors = if post.mine { anchor_points(&*self.snapshot()?)? } else { Vec::new() };
         let raw = RawCard {
             kind: ShareKind::Course,
             title: post.title.clone(),

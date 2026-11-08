@@ -215,7 +215,7 @@ impl EodiStore {
 
     /// "숨긴 기록" 목록 (최근에 숨긴 것부터). 지운 기록의 흔적은 나오지 않는다.
     pub fn hidden_records(&self) -> Result<Vec<HiddenRecord>, CoreError> {
-        let conn = self.lock()?;
+        let conn = self.snapshot()?;
         let mut st = conn.prepare_cached(
             "SELECT id, kind, from_ms, to_ms, label, hidden_ms FROM hidden WHERE permanent = 0 ORDER BY hidden_ms DESC, id DESC",
         )?;
@@ -387,8 +387,7 @@ impl EodiStore {
 
     /// 지금 쓰는 집 · 회사와 누가 정했는지 (설정 화면). 모르면 None.
     pub fn home_office(&self) -> Result<HomeOffice, CoreError> {
-        let mut conn = self.lock()?;
-        self.flush_all(&mut conn)?;
+        let conn = self.read()?;
         let [home, office] = crate::memory::anchor_sources(&conn)?;
         let info = |role: AnchorRole, a: Option<(Point, u8)>| -> Result<Option<AnchorInfo>, CoreError> {
             let Some((p, src)) = a else { return Ok(None) };

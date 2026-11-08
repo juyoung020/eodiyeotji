@@ -92,7 +92,7 @@ impl EodiStore {
     pub fn day_replay(&self, day: String, now_ms: i64) -> Result<DayReplay, CoreError> {
         let detail = self.day_detail(day)?;
         let d = parse_day(&detail.day).unwrap_or(0);
-        let conn = self.lock()?;
+        let conn = self.snapshot()?;
         let ep = best_episode(&conn, d)?;
         let today = self.local_day(now_ms);
         Ok(build_replay(&detail, self.tz_minutes(), today, ep))

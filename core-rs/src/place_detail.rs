@@ -146,7 +146,14 @@ pub(crate) fn my_visits(conn: &Connection, qn: &[char], q: Point) -> Result<MyVi
 #[uniffi::export]
 impl EodiStore {
     /// 장소 상세 창 (모듈 설명). 좌표가 틀리면 `InvalidInput`.
+    /// 기록·커뮤니티가 바뀌기 전까지 같은 장소는 저장해 둔 결과를 준다.
     pub fn place_detail(&self, place: StopFact) -> Result<PlaceDetail, CoreError> {
+        self.cached(crate::store::Domain::Both, format!("place_detail {place:?}"), || self.place_detail_uncached(place))
+    }
+}
+
+impl EodiStore {
+    fn place_detail_uncached(&self, place: StopFact) -> Result<PlaceDetail, CoreError> {
         if !valid_point(place.lat, place.lon) {
             return Err(CoreError::InvalidInput(format!("장소 {:?} ({}, {})", place.name, place.lat, place.lon)));
         }
@@ -159,8 +166,7 @@ impl EodiStore {
             self.review_candidates(VISIT_CANDIDATES)?.into_iter().find(|s| same_spot(&qn, q, &s.name, stop_point(s)))
         };
 
-        let mut conn = self.lock()?;
-        self.flush_all(&mut conn)?;
+        let conn = self.read()?;
 
         // 리뷰 · 하트
         let mut reviews: Vec<PlaceReview> =

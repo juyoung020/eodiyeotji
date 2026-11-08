@@ -294,7 +294,7 @@ impl EodiStore {
         let Some(o) = find_offer(&offer_id) else {
             return Err(CoreError::InvalidInput(format!("offer {offer_id} not found")));
         };
-        let conn = self.lock()?;
+        let conn = self.lock_side()?;
         conn.execute(
             "INSERT INTO claimed_coupon (offer_id, code, claimed_ms) VALUES (?1, ?2, ?3) ON CONFLICT (offer_id) DO NOTHING",
             params![offer_id, coupon_code(&offer_id, now_ms), now_ms],
@@ -307,7 +307,7 @@ impl EodiStore {
 
     /// 받은 쿠폰 하나 (안 받았으면 None). 쿠폰 창이 "받았어요" 상태를 보일 때.
     pub fn claimed_coupon(&self, offer_id: String) -> Result<Option<ClaimedCoupon>, CoreError> {
-        let conn = self.lock()?;
+        let conn = self.snapshot()?;
         let row: Option<(String, i64)> = conn
             .prepare_cached("SELECT code, claimed_ms FROM claimed_coupon WHERE offer_id = ?1")?
             .query_row([&offer_id], |r| Ok((r.get(0)?, r.get(1)?)))
@@ -317,7 +317,7 @@ impl EodiStore {
 
     /// 쿠폰함: 받은 쿠폰 (최근에 받은 것부터). 지금 목록에 없는 쿠폰은 뺀다.
     pub fn claimed_coupons(&self) -> Result<Vec<ClaimedCoupon>, CoreError> {
-        let conn = self.lock()?;
+        let conn = self.snapshot()?;
         let mut st = conn.prepare_cached("SELECT offer_id, code, claimed_ms FROM claimed_coupon ORDER BY claimed_ms DESC, offer_id")?;
         let rows = st.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)?)))?;
         let mut out = Vec::new();

@@ -88,8 +88,7 @@ impl EodiStore {
         if from > to {
             return Err(CoreError::InvalidInput("from > to".into()));
         }
-        let mut conn = self.lock()?;
-        self.flush_all(&mut conn)?;
+        let conn = self.read()?;
         let lo = self.day_start_ms(from);
         let hi = self.day_start_ms(to + 1);
 

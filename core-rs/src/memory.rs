@@ -235,8 +235,7 @@ impl EodiStore {
     /// LLM 라벨링이 필요한 날 (최신순, 최대 `limit`개). 출퇴근·동네 볼일뿐인 평범한 날은 규칙 제목으로 끝나므로
     /// 나오지 않는다. 다시 시도 대기 중인 날, 아직 기록 중인 날(오늘이고 마지막 위치가 10분 안)도 빠진다 (모듈 설명).
     pub fn pending_day_enrichments(&self, limit: u32) -> Result<Vec<DayFacts>, CoreError> {
-        let mut conn = self.lock()?;
-        self.flush_all(&mut conn)?;
+        let conn = self.read()?;
         episode::pending_days(self, &conn, limit, crate::places::now_ms())
     }
 
@@ -266,16 +265,14 @@ impl EodiStore {
     /// 하루의 에피소드 (시간순). 기록이 없는 날은 빈 목록. 날짜 형식이 틀리면 `InvalidInput`.
     pub fn episodes_for_day(&self, day: String) -> Result<Vec<Episode>, CoreError> {
         let d = parse_day(&day).ok_or_else(|| bad_day(&day))?;
-        let mut conn = self.lock()?;
-        self.flush_all(&mut conn)?;
+        let conn = self.read()?;
         episode::episodes_of_day(&conn, d)
     }
 
     /// 기억 검색 (기기 안, 1년치 수 ms). 점수 높은 순으로 최대 `limit`개 (0이면 10개, 많아도 200개).
     /// `terms`가 모두 비면 기간·종류만으로 최신순.
     pub fn search_memories(&self, query: MemoryQuery) -> Result<Vec<MemoryHit>, CoreError> {
-        let mut conn = self.lock()?;
-        self.flush_all(&mut conn)?;
+        let conn = self.read()?;
         search::search(&conn, &query)
     }
 
@@ -285,8 +282,7 @@ impl EodiStore {
     /// 들른 곳이 없는 에피소드(출퇴근 등)는 도착지 하나짜리 코스. 없는 id면 `InvalidInput`.
     /// `distance_m` = `from`(있으면)부터 방문 순서대로 직선(대원) 거리 합.
     pub fn course_route(&self, episode_id: i64, from: Option<GeoPoint>, optimize: bool) -> Result<CourseRoute, CoreError> {
-        let mut conn = self.lock()?;
-        self.flush_all(&mut conn)?;
+        let conn = self.read()?;
         let stops = episode::course_stops(&conn, episode_id)?
             .ok_or_else(|| CoreError::InvalidInput(format!("episode {episode_id} not found")))?;
         drop(conn);

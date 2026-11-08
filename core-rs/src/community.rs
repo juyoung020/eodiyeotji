@@ -32,6 +32,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
+use std::sync::Arc;
 
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde_json::{json, Value};
@@ -442,7 +443,7 @@ impl EodiStore {
     /// 여행 코스 후기 피드. [near]가 있으면 들른 곳 중 하나라도 반경 안인 코스만. `limit` 0이면 50개 (최대 500).
     pub fn community_courses(&self, sort: CommunitySort, near: Option<NearFilter>, limit: u32) -> Result<Vec<CoursePost>, CoreError> {
         let near = check_near(near)?;
-        let conn = self.lock()?;
+        let conn = self.snapshot()?;
         let mut posts: Vec<CoursePost> = load_courses(&conn, None)?
             .into_iter()
             .filter(|p| near.is_none_or(|(c, r)| p.stops.iter().any(|s| haversine_m(c, stop_point(s)) <= r)))
@@ -454,7 +455,7 @@ impl EodiStore {
 
     /// 코스 하트 누르기/취소. 반환: 바뀐 하트 수. 없는 id면 `InvalidInput`.
     pub fn toggle_course_heart(&self, id: String) -> Result<u32, CoreError> {
-        let conn = self.lock()?;
+        let conn = self.lock_community()?;
         toggle_heart(&conn, "community_course", &id)?.ok_or_else(|| CoreError::InvalidInput(format!("코스 없음: {id}")))
     }
 
@@ -477,7 +478,7 @@ impl EodiStore {
         }
         let radius_km = if radius_km.is_finite() && radius_km > 0.0 { radius_km } else { 30.0 };
         let k = if k == 0 { 3 } else { k.min(20) } as usize;
-        let conn = self.lock()?;
+        let conn = self.snapshot()?;
         let courses = load_courses(&conn, None)?;
         let groups = PlaceGroups::build(&courses, &load_reviews(&conn, None)?);
         drop(conn);
@@ -528,7 +529,7 @@ impl EodiStore {
 
     /// 차가 마지막으로 있던 곳 (기록의 마지막 위치 점, "내 근처" 기준). 기록이 없으면 None.
     pub fn last_known_position(&self) -> Result<Option<GeoPoint>, CoreError> {
-        let conn = self.lock()?;
+        let conn = self.snapshot()?;
         Ok(conn
             .query_row("SELECT lat, lon FROM fix ORDER BY t_ms DESC LIMIT 1", [], |r| Ok(GeoPoint { lat: r.get(0)?, lon: r.get(1)? }))
             .optional()?)
@@ -546,7 +547,7 @@ impl EodiStore {
             kinds: vec![EpisodeKind::Outing, EpisodeKind::Trip],
             limit,
         })?;
-        let conn = self.lock()?;
+        let conn = self.snapshot()?;
         let ctx = ShareCtx::load(self, &conn)?;
         Ok(hits.into_iter().map(|h| ctx.preview(h.episode, h.day_title)).filter(|p| !p.stops.is_empty()).collect())
     }
@@ -562,7 +563,7 @@ impl EodiStore {
             kinds: vec![EpisodeKind::Outing, EpisodeKind::Trip],
             limit: 20,
         })?;
-        let conn = self.lock()?;
+        let conn = self.snapshot()?;
         let ctx = ShareCtx::load(self, &conn)?;
         let mut out: Vec<SharePreview> = hits
             .into_iter()
@@ -578,7 +579,7 @@ impl EodiStore {
     /// 만든다 (올리기는 [EodiStore::share_course_with]가 막는다). 없는 id면 `InvalidInput`.
     pub fn share_preview(&self, episode_id: i64) -> Result<SharePreview, CoreError> {
         let (ep, day_title) = self.episode_by_id(episode_id)?;
-        let conn = self.lock()?;
+        let conn = self.snapshot()?;
         Ok(ShareCtx::load(self, &conn)?.preview(ep, day_title))
     }
 
@@ -655,7 +656,7 @@ impl EodiStore {
     /// 여행 리뷰 피드. [near]가 있으면 그 장소가 반경 안인 리뷰만. `limit` 0이면 50개.
     pub fn place_reviews(&self, sort: CommunitySort, near: Option<NearFilter>, limit: u32) -> Result<Vec<PlaceReview>, CoreError> {
         let near = check_near(near)?;
-        let conn = self.lock()?;
+        let conn = self.snapshot()?;
         let mut reviews: Vec<PlaceReview> = load_reviews(&conn, None)?
             .into_iter()
             .filter(|r| near.is_none_or(|(c, rad)| haversine_m(c, stop_point(&r.place)) <= rad))
@@ -667,7 +668,7 @@ impl EodiStore {
 
     /// 여행 코스 후기의 들른 곳마다 리뷰 요약 ([StopReviews], 들른 곳 순서대로). 없는 코스면 `InvalidInput`.
     pub fn course_stop_reviews(&self, post_id: String) -> Result<Vec<StopReviews>, CoreError> {
-        let conn = self.lock()?;
+        let conn = self.snapshot()?;
         let post = load_courses(&conn, Some(&post_id))?.pop().ok_or_else(|| CoreError::InvalidInput(format!("코스 없음: {post_id}")))?;
         let reviews = load_reviews(&conn, None)?;
         Ok(post.stops.iter().map(|stop| stop_reviews(&reviews, stop, &post.author)).collect())
@@ -675,7 +676,7 @@ impl EodiStore {
 
     /// 한 장소의 리뷰 (이름이 같고 500m 안인 곳, 모듈 설명 "같은 장소 묶기"). `limit` 0이면 50개.
     pub fn reviews_of_place(&self, place: StopFact, sort: CommunitySort, limit: u32) -> Result<Vec<PlaceReview>, CoreError> {
-        let conn = self.lock()?;
+        let conn = self.snapshot()?;
         let mut reviews: Vec<PlaceReview> =
             load_reviews(&conn, None)?.into_iter().filter(|r| same_place(&r.place, &place)).collect();
         sort_by_hearts(&mut reviews, sort, |r| (r.hearts, r.created_ms, r.id.as_str()));
@@ -687,18 +688,21 @@ impl EodiStore {
     /// [near]가 있으면 반경 안 장소만. `limit` 0이면 50개.
     pub fn popular_places(&self, near: Option<NearFilter>, limit: u32) -> Result<Vec<PopularPlace>, CoreError> {
         let near = check_near(near)?;
-        let conn = self.lock()?;
-        let groups = PlaceGroups::build(&load_courses(&conn, None)?, &load_reviews(&conn, None)?);
+        // 장소 묶기(PlaceGroups)는 피드 전체를 훑는다 → 커뮤니티가 바뀌기 전까지 묶은 결과를 다시 쓴다
+        let groups = self.cached(crate::store::Domain::Community, "place_groups".into(), || {
+            let conn = self.snapshot()?;
+            Ok(Arc::new(PlaceGroups::build(&load_courses(&conn, None)?, &load_reviews(&conn, None)?)))
+        })?;
         let mut out: Vec<PopularPlace> = groups
             .groups
-            .into_iter()
+            .iter()
             .filter(|g| near.is_none_or(|(c, r)| haversine_m(c, stop_point(&g.place)) <= r))
             .map(|g| PopularPlace {
                 hearts: g.hearts.min(u32::MAX as u64) as u32,
                 review_count: g.reviews,
                 avg_rating: g.avg_rating().unwrap_or(0.0) as f32,
                 top_keyword: rank_keywords(&g.keywords, 1).pop().map(|k| k.keyword),
-                place: g.place,
+                place: g.place.clone(),
             })
             .collect();
         out.sort_by(|a, b| {
@@ -714,7 +718,7 @@ impl EodiStore {
 
     /// 리뷰 하트 누르기/취소. 반환: 바뀐 하트 수. 없는 id면 `InvalidInput`.
     pub fn toggle_review_heart(&self, id: String) -> Result<u32, CoreError> {
-        let conn = self.lock()?;
+        let conn = self.lock_community()?;
         toggle_heart(&conn, "place_review", &id)?.ok_or_else(|| CoreError::InvalidInput(format!("리뷰 없음: {id}")))
     }
 
@@ -848,7 +852,7 @@ impl EodiStore {
 
     /// 게시판 글 목록. 인기순 = 하트 → 댓글 수 → 최신. `limit` 0이면 50개.
     pub fn board_posts(&self, sort: CommunitySort, limit: u32) -> Result<Vec<BoardPost>, CoreError> {
-        let conn = self.lock()?;
+        let conn = self.snapshot()?;
         let mut posts = load_board_posts(&conn, None)?;
         match sort {
             CommunitySort::Popular => posts.sort_by(|a, b| {
@@ -866,13 +870,13 @@ impl EodiStore {
 
     /// 게시판 글 하나 (없으면 None).
     pub fn board_post(&self, id: String) -> Result<Option<BoardPost>, CoreError> {
-        let conn = self.lock()?;
+        let conn = self.snapshot()?;
         Ok(load_board_posts(&conn, Some(&id))?.pop())
     }
 
     /// 글의 댓글 (쓴 순서대로). 없는 글이면 빈 목록.
     pub fn board_comments(&self, post_id: String) -> Result<Vec<BoardComment>, CoreError> {
-        let conn = self.lock()?;
+        let conn = self.snapshot()?;
         let mut st = conn.prepare_cached(
             "SELECT id, post_id, author, mine, body, created_ms, others_hearts + my_heart, my_heart
              FROM board_comment WHERE post_id = ?1 ORDER BY created_ms, id",
@@ -890,7 +894,7 @@ impl EodiStore {
         let body: String = body.trim().chars().take(2000).collect();
         let tags: Vec<String> =
             tags.iter().map(|t| t.trim().trim_start_matches('#').to_string()).filter(|t| !t.is_empty()).take(5).collect();
-        let conn = self.lock()?;
+        let conn = self.lock_community()?;
         let id = free_id(&conn, "board_post", &format!("me-p{now_ms}"))?;
         conn.execute(
             "INSERT INTO board_post (id, title, body, author, mine, region, tags, created_ms, others_hearts, my_heart)
@@ -906,7 +910,7 @@ impl EodiStore {
         if body.is_empty() {
             return Err(CoreError::InvalidInput("댓글이 비었다".into()));
         }
-        let conn = self.lock()?;
+        let conn = self.lock_community()?;
         if conn.query_row("SELECT 1 FROM board_post WHERE id = ?1", [&post_id], |_| Ok(())).optional()?.is_none() {
             return Err(CoreError::InvalidInput(format!("글 없음: {post_id}")));
         }
@@ -921,13 +925,13 @@ impl EodiStore {
 
     /// 게시판 글 하트 누르기/취소. 반환: 바뀐 하트 수. 없는 id면 `InvalidInput`.
     pub fn toggle_board_post_heart(&self, id: String) -> Result<u32, CoreError> {
-        let conn = self.lock()?;
+        let conn = self.lock_community()?;
         toggle_heart(&conn, "board_post", &id)?.ok_or_else(|| CoreError::InvalidInput(format!("글 없음: {id}")))
     }
 
     /// 댓글 하트 누르기/취소. 반환: 바뀐 하트 수. 없는 id면 `InvalidInput`.
     pub fn toggle_board_comment_heart(&self, id: String) -> Result<u32, CoreError> {
-        let conn = self.lock()?;
+        let conn = self.lock_community()?;
         toggle_heart(&conn, "board_comment", &id)?.ok_or_else(|| CoreError::InvalidInput(format!("댓글 없음: {id}")))
     }
 
@@ -1188,8 +1192,7 @@ impl EodiStore {
     pub(crate) fn episode_by_id(&self, id: i64) -> Result<(Episode, Option<String>), CoreError> {
         let not_found = || CoreError::InvalidInput(format!("에피소드 없음: {id}"));
         let (day, title) = {
-            let mut conn = self.lock()?;
-            self.flush_all(&mut conn)?;
+            let conn = self.read()?;
             let day: i64 =
                 conn.query_row("SELECT day FROM episode WHERE id = ?1", [id], |r| r.get(0)).optional()?.ok_or_else(not_found)?;
             (day, crate::memory::day_title(&conn, day)?.0)
@@ -1199,7 +1202,7 @@ impl EodiStore {
     }
 
     pub(crate) fn course_by_id(&self, id: &str) -> Result<CoursePost, CoreError> {
-        let conn = self.lock()?;
+        let conn = self.snapshot()?;
         load_courses(&conn, Some(id))?.pop().ok_or_else(|| CoreError::InvalidInput(format!("코스 없음: {id}")))
     }
 }

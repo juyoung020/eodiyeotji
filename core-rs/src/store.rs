@@ -46,7 +46,7 @@
 //! 기억 에이전트·커뮤니티 공유 후보에서도 모두 빠진다.
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 
 use rusqlite::{params, Connection, OptionalExtension};
 
@@ -56,7 +56,7 @@ use crate::places::{self, PlaceLabel, REF_END, REF_START, REF_STAY};
 use crate::trip::{self, DriveMark, MarkKind, Segmenter, Stay, TripConfig};
 
 /// DB 구조 버전 (`PRAGMA user_version`). 구조를 바꾸면 올리고 `migrate`에 단계를 추가한다.
-pub(crate) const SCHEMA_VERSION: i32 = 11;
+pub(crate) const SCHEMA_VERSION: i32 = 12;
 /// 이보다 정확도가 나쁜(m) 점은 버린다.
 pub const MAX_ACCURACY_M: f32 = 100.0;
 /// 지도에 넘길 경로의 단순화 허용 오차(m).
@@ -183,12 +183,13 @@ impl From<rusqlite::Error> for CoreError {
 }
 
 /// 기기 안 기록 저장소. 한 앱에서 하나만 열어 계속 쓴다. 여러 스레드에서 불러도 안전하다
-/// (연결 하나를 Mutex로 감싸 한 번에 한 호출씩 처리).
+/// (쓰기 연결 하나 + 읽기 전용 연결 여러 개, 조회 결과 캐시: [`conn`] 모듈 설명).
 #[derive(uniffi::Object)]
 pub struct EodiStore {
     tz_offset_minutes: i32,
     cfg: TripConfig,
     conn: Mutex<Connection>,
+    pool: conn::Pool,
 }
 
 #[uniffi::export]
@@ -210,7 +211,7 @@ impl EodiStore {
         conn.query_row("PRAGMA journal_mode = WAL", [], |r| r.get::<_, String>(0))?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
         migrate(&mut conn)?;
-        let store = Self { tz_offset_minutes, cfg: TripConfig::default(), conn: Mutex::new(conn) };
+        let store = Self { tz_offset_minutes, cfg: TripConfig::default(), conn: Mutex::new(conn), pool: conn::Pool::new(&path) };
         store.apply_timezone()?;
         Ok(Arc::new(store))
     }
@@ -265,31 +266,7 @@ impl EodiStore {
 
     /// 기록(주행 또는 머문 곳)이 있는 날을 최신순으로 최대 `limit`개. 1년치(365일)도 100ms 이내.
     pub fn day_summaries(&self, limit: u32) -> Result<Vec<DaySummary>, CoreError> {
-        let mut conn = self.lock()?;
-        self.flush_all(&mut conn)?;
-        let mut st = conn.prepare_cached(
-            "SELECT s.day, s.trip_count, s.stay_count, s.distance_m, s.drive_millis, s.first_ms, s.last_ms, s.stop_names,
-                    coalesce(u.title, m.title, m.rule_title), CASE WHEN m.title IS NULL THEN '' ELSE m.tags END
-             FROM day_summary s LEFT JOIN day_memory m ON m.day = s.day LEFT JOIN day_user_title u ON u.day = s.day ORDER BY s.day DESC LIMIT ?1",
-        )?;
-        let rows = st.query_map([limit], |r| {
-            let distance_m: f64 = r.get(3)?;
-            let stop_names = split_names(&r.get::<_, String>(7)?);
-            Ok(DaySummary {
-                day: format_day(r.get(0)?),
-                trip_count: r.get(1)?,
-                stay_count: r.get(2)?,
-                distance_m,
-                drive_millis: r.get(4)?,
-                first_ms: r.get(5)?,
-                last_ms: r.get(6)?,
-                replayable: is_replayable(stop_names.iter().filter(|n| !n.trim().is_empty()).count(), distance_m),
-                stop_names,
-                title: r.get(8)?,
-                tags: split_names(&r.get::<_, Option<String>>(9)?.unwrap_or_default()),
-            })
-        })?;
-        Ok(rows.collect::<Result<_, _>>()?)
+        self.cached(Domain::Records, format!("day_summaries {limit}"), || self.day_summaries_uncached(limit))
     }
 
     /// 하루 상세 (`day` = "YYYY-MM-DD"). 기록이 없는 날이면 빈 trips/stays. 날짜 형식이 틀리면 `InvalidInput`.
@@ -302,8 +279,7 @@ impl EodiStore {
 
     pub fn day_detail(&self, day: String) -> Result<DayDetail, CoreError> {
         let d = parse_day(&day).ok_or_else(|| CoreError::InvalidInput(format!("day {day:?}")))?;
-        let mut conn = self.lock()?;
-        self.flush_all(&mut conn)?;
+        let conn = self.read()?;
         let acc = self.collect_days(&conn, d, d, true)?.remove(&d).unwrap_or_default();
         let mut summary = acc.summary(d);
         (summary.title, summary.tags) = crate::memory::day_title(&conn, d)?;
@@ -313,7 +289,7 @@ impl EodiStore {
 
     /// 저장된 위치 점 수 (디버그·검증용).
     pub fn fix_count(&self) -> Result<u64, CoreError> {
-        let conn = self.lock()?;
+        let conn = self.snapshot()?;
         let n: i64 = conn.query_row("SELECT count(*) FROM fix", [], |r| r.get(0))?;
         Ok(n as u64)
     }
@@ -418,7 +394,11 @@ fn migrate(conn: &mut Connection) -> Result<(), CoreError> {
         // 사용자가 직접 고친 하루 제목 (edits 모듈)
         tx.execute_batch(crate::edits::SCHEMA_V11)?;
     }
-    // 다음 버전은 여기에: if version < 12 { ... }
+    if version < 12 {
+        // 출발 시각으로 주행을 찾는 조회(기억 지도 · 기록 지우기)가 표 전체를 훑지 않게
+        tx.execute_batch("CREATE INDEX IF NOT EXISTS trip_start ON trip (start_ms);")?;
+    }
+    // 다음 버전은 여기에: if version < 13 { ... }
     tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     tx.commit()?;
     Ok(())
@@ -656,8 +636,31 @@ impl DayAcc {
 }
 
 impl EodiStore {
-    pub(crate) fn lock(&self) -> Result<MutexGuard<'_, Connection>, CoreError> {
-        self.conn.lock().map_err(|e| CoreError::Db(e.to_string()))
+    fn day_summaries_uncached(&self, limit: u32) -> Result<Vec<DaySummary>, CoreError> {
+        let conn = self.read()?;
+        let mut st = conn.prepare_cached(
+            "SELECT s.day, s.trip_count, s.stay_count, s.distance_m, s.drive_millis, s.first_ms, s.last_ms, s.stop_names,
+                    coalesce(u.title, m.title, m.rule_title), CASE WHEN m.title IS NULL THEN '' ELSE m.tags END
+             FROM day_summary s LEFT JOIN day_memory m ON m.day = s.day LEFT JOIN day_user_title u ON u.day = s.day ORDER BY s.day DESC LIMIT ?1",
+        )?;
+        let rows = st.query_map([limit], |r| {
+            let distance_m: f64 = r.get(3)?;
+            let stop_names = split_names(&r.get::<_, String>(7)?);
+            Ok(DaySummary {
+                day: format_day(r.get(0)?),
+                trip_count: r.get(1)?,
+                stay_count: r.get(2)?,
+                distance_m,
+                drive_millis: r.get(4)?,
+                first_ms: r.get(5)?,
+                last_ms: r.get(6)?,
+                replayable: is_replayable(stop_names.iter().filter(|n| !n.trim().is_empty()).count(), distance_m),
+                stop_names,
+                title: r.get(8)?,
+                tags: split_names(&r.get::<_, Option<String>>(9)?.unwrap_or_default()),
+            })
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
     }
 
     /// 현지 시간대 (분, 한국 = 540).
@@ -1149,6 +1152,9 @@ pub(crate) fn parse_day(s: &str) -> Option<i64> {
     let day = days_from_civil(y, m, d);
     (format_day(day) == s).then_some(day)
 }
+
+mod conn;
+pub(crate) use conn::Domain;
 
 #[cfg(test)]
 mod tests;

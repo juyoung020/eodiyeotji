@@ -27,5 +27,7 @@ pub mod search_ui;
 pub mod share;
 pub mod store;
 pub mod trip;
+#[cfg(test)]
+mod perf_tests;
 
 pub use geo::{Fix, Point};
