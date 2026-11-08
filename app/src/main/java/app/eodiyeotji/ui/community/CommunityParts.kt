@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.community
 
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.heading
 import app.eodiyeotji.ui.theme.EodiIcons
 import androidx.compose.foundation.BorderStroke
@@ -341,9 +342,11 @@ fun TogglePill(
     }
 }
 
-/** 주된 동작 버튼 (파란 알약, 76dp). */
+/**
+ * 주된 동작 버튼 (파란 알약, 76dp). [large]는 운전 중 큰 버튼 (높이 144dp · 큰 글자 · 큰 아이콘).
+ */
 @Composable
-fun PrimaryPill(text: String, icon: ImageVector?, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+fun PrimaryPill(text: String, icon: ImageVector?, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, large: Boolean = false) {
     val c = EodiTheme.colors
     Surface(
         onClick = onClick,
@@ -351,30 +354,139 @@ fun PrimaryPill(text: String, icon: ImageVector?, onClick: () -> Unit, modifier:
         shape = CircleShape,
         color = if (enabled) c.accent else c.surfaceHigh,
         contentColor = if (enabled) c.onAccent else c.textTertiary,
-        modifier = modifier.heightIn(min = 76.dp),
+        modifier = if (large) modifier.height(LargePillHeight) else modifier.heightIn(min = 76.dp),
     ) {
-        Row(Modifier.padding(horizontal = 30.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-            if (icon != null) {
-                Icon(icon, null, Modifier.size(28.dp))
-                Spacer(Modifier.width(12.dp))
+        PillContent(text, icon, iconTint = null, large = large, bold = true, horizontal = 30.dp)
+    }
+}
+
+/** 보조 버튼 (회색 알약, 76dp). [large]는 운전 중 큰 버튼 (높이 144dp). */
+@Composable
+fun SecondaryPill(text: String, icon: ImageVector?, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, large: Boolean = false) {
+    val c = EodiTheme.colors
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = CircleShape,
+        color = c.surfaceHigh,
+        contentColor = if (enabled) c.textPrimary else c.textTertiary,
+        modifier = if (large) modifier.height(LargePillHeight) else modifier.heightIn(min = 76.dp),
+    ) {
+        PillContent(text, icon, iconTint = if (enabled && !large) c.accent else null, large = large, bold = true, horizontal = 28.dp, normalStyle = EodiTheme.type.label)
+    }
+}
+
+private val LargePillHeight = 144.dp
+
+@Composable
+private fun PillContent(
+    text: String,
+    icon: ImageVector?,
+    iconTint: Color?,
+    large: Boolean,
+    bold: Boolean,
+    horizontal: Dp,
+    normalStyle: androidx.compose.ui.text.TextStyle = EodiTheme.type.bodyStrong,
+) {
+    Row(
+        Modifier.padding(horizontal = if (large) 36.dp else horizontal),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        if (icon != null) {
+            val size = if (large) 48.dp else 28.dp
+            if (iconTint != null) Icon(icon, null, Modifier.size(size), tint = iconTint) else Icon(icon, null, Modifier.size(size))
+            Spacer(Modifier.width(if (large) 20.dp else 12.dp))
+        }
+        Text(
+            text,
+            style = if (large) EodiTheme.type.drivingTitle else normalStyle,
+            fontWeight = if (bold) FontWeight.Bold else null,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/**
+ * 두 줄 알약 버튼: 굵은 [title] + 작은 [detail] (예: "이 코스로 안내" / "3곳 · 42km", "여기만 가기" / 장소 이름).
+ * [primary]면 파란 바탕, 아니면 회색 바탕에 파란 아이콘. [running]이면 아이콘 자리에 도는 고리.
+ * [large]는 제목을 한 단계 크게 (안내 제안처럼 한눈에 읽어야 하는 버튼).
+ */
+@Composable
+fun TwoLinePill(
+    title: String,
+    detail: String?,
+    icon: ImageVector?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    primary: Boolean = false,
+    running: Boolean = false,
+    large: Boolean = false,
+    detailLines: Int = 1,
+) {
+    val c = EodiTheme.colors
+    val content = if (primary) c.onAccent else c.textPrimary
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(EodiTheme.space.radiusL),
+        color = if (primary) c.accent else c.surfaceHigh,
+        contentColor = content,
+        modifier = modifier.heightIn(min = if (large) 96.dp else 88.dp),
+    ) {
+        Row(
+            Modifier.padding(horizontal = if (large) 28.dp else 24.dp, vertical = if (large) 14.dp else 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val iconSize = if (large) 32.dp else 28.dp
+            if (running) {
+                CircularProgressIndicator(strokeWidth = 3.dp, color = content, modifier = Modifier.size(iconSize))
+            } else if (icon != null) {
+                Icon(icon, null, Modifier.size(iconSize), tint = if (primary) content else c.accent)
             }
-            Text(text, style = EodiTheme.type.bodyStrong, fontWeight = FontWeight.Bold, maxLines = 1)
+            if (running || icon != null) Spacer(Modifier.width(if (large) 20.dp else 14.dp))
+            Column(Modifier.weight(1f, fill = large)) {
+                Text(
+                    title,
+                    style = if (large) EodiTheme.type.drivingBody else EodiTheme.type.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (!detail.isNullOrBlank()) {
+                    // 파랑 바탕 위 작은 글자는 굵게 · 흐리지 않게 (다크 파랑 위 흰 글자 대비 3.5:1 → 굵은 글자 기준 AA)
+                    Text(
+                        detail,
+                        style = SubTextStyle,
+                        fontWeight = if (primary) FontWeight.Bold else null,
+                        color = if (primary) content else c.textSecondary,
+                        maxLines = detailLines,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
     }
 }
 
-/** 보조 버튼 (회색 알약, 76dp). */
+/** 보조 글자(설명 · 분류 · 요약 줄): Pleos 가장 작은 글자 크기(20sp)에 줄 간격만 넉넉히. */
+val SubTextStyle: androidx.compose.ui.text.TextStyle
+    @Composable @ReadOnlyComposable get() = EodiTheme.type.bodyStrong.copy(fontSize = 20.sp, lineHeight = 28.sp)
+
+/** 순위 동그라미 (드라이브 코스 카드 · 에이전트 추천). [focused]면 파란 바탕 (지금 안내 제안 중인 것). */
 @Composable
-fun SecondaryPill(text: String, icon: ImageVector?, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun RankBadge(rank: Int, focused: Boolean, modifier: Modifier = Modifier, size: Dp = 52.dp) {
     val c = EodiTheme.colors
-    Surface(onClick = onClick, shape = CircleShape, color = c.surfaceHigh, contentColor = c.textPrimary, modifier = modifier.heightIn(min = 76.dp)) {
-        Row(Modifier.padding(horizontal = 28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-            if (icon != null) {
-                Icon(icon, null, Modifier.size(28.dp), tint = c.accent)
-                Spacer(Modifier.width(12.dp))
-            }
-            Text(text, style = EodiTheme.type.label, fontWeight = FontWeight.Bold, maxLines = 1)
-        }
+    Box(
+        modifier.size(size).background(if (focused) c.accent else c.surface, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            rank.toString(),
+            style = if (size >= 52.dp) EodiTheme.type.title else EodiTheme.type.label,
+            fontWeight = FontWeight.Bold,
+            color = if (focused) c.onAccent else c.textPrimary,
+        )
     }
 }
 

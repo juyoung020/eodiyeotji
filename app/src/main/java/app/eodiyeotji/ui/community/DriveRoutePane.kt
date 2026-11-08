@@ -224,18 +224,7 @@ internal fun DriveRouteCard(
                 Box(Modifier.fillMaxSize().clip(RoundedCornerShape(18.dp))) {
                     RouteSnapshotImage(r, stringResource(R.string.drive_preview_description, r.title), Modifier.fillMaxSize())
                     BestTimeBadge(r.bestTime, r.theme, Modifier.align(Alignment.TopStart).padding(14.dp))
-                    if (rank != null) {
-                        Box(
-                            Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(12.dp)
-                                .size(52.dp)
-                                .background(if (focused) colors.accent else colors.surface, CircleShape),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(rank.toString(), style = type.title, fontWeight = FontWeight.Bold, color = if (focused) colors.onAccent else colors.textPrimary)
-                        }
-                    }
+                    if (rank != null) RankBadge(rank, focused, Modifier.align(Alignment.TopEnd).padding(12.dp))
                 }
             }
             Spacer(Modifier.height(18.dp))

@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.agent
 
+import app.eodiyeotji.ui.community.SubTextStyle
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.common.agoText
 import app.eodiyeotji.ui.common.durationText
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -128,28 +128,28 @@ internal fun OtherDayRow(rec: RecommendationUi, today: LocalDate, onAsk: (String
     Surface(
         onClick = { onAsk(question) },
         shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = EodiTheme.colors.surface,
         modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)) {
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(56.dp).background(MaterialTheme.colorScheme.secondaryContainer, CircleShape),
+                modifier = Modifier.size(56.dp).background(EodiTheme.colors.surfaceHigh, CircleShape),
             ) {
-                Icon(EodiIcons.Calendar, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(28.dp))
+                Icon(EodiIcons.Calendar, contentDescription = null, tint = EodiTheme.colors.textPrimary, modifier = Modifier.size(28.dp))
             }
             Spacer(Modifier.width(20.dp))
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(title, style = EodiTheme.type.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
                     dateLine + "  ·  " + rec.stops.joinToString(" → ") { it.name },
-                    style = AgentSubStyle,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = SubTextStyle,
+                    color = EodiTheme.colors.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Icon(AgentIcons.Send, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+            Icon(AgentIcons.Send, contentDescription = null, tint = EodiTheme.colors.accent, modifier = Modifier.size(28.dp))
         }
     }
 }
@@ -171,7 +171,7 @@ internal fun DrivingMemoryCard(rec: RecommendationUi, modifier: Modifier = Modif
                 MemoryStamp(agoText(LocalDate.parse(facts.day), today), large = true)
                 Text(
                     rec.hit.episode.title ?: rec.hit.dayTitle ?: facts.ruleLabel,
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = EodiTheme.type.drivingHeadline,
                     fontWeight = FontWeight.Bold,
                     color = c.textPrimary,
                     maxLines = 1,

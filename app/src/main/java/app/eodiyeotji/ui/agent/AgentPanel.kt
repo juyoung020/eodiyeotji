@@ -1,5 +1,9 @@
 package app.eodiyeotji.ui.agent
 
+import app.eodiyeotji.ui.community.RetryButton
+import app.eodiyeotji.ui.community.SecondaryPill
+import app.eodiyeotji.ui.community.PrimaryPill
+import app.eodiyeotji.ui.community.TwoLinePill
 import app.eodiyeotji.ui.community.RoundIconButton
 import app.eodiyeotji.ui.theme.EodiIcons
 import androidx.compose.foundation.BorderStroke
@@ -21,8 +25,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -41,13 +43,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -120,8 +117,8 @@ fun AgentEntryButton(onClick: () -> Unit, modifier: Modifier = Modifier, driving
     Surface(
         onClick = onClick,
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        color = EodiTheme.colors.accentSoft,
+        contentColor = EodiTheme.colors.accent,
         shadowElevation = 2.dp,
         modifier = Modifier.heightIn(min = 88.dp),
     ) {
@@ -134,7 +131,7 @@ fun AgentEntryButton(onClick: () -> Unit, modifier: Modifier = Modifier, driving
             Spacer(Modifier.width(14.dp))
             Text(
                 stringResource(label),
-                style = MaterialTheme.typography.titleMedium,
+                style = EodiTheme.type.bodyStrong,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 softWrap = false,
@@ -144,9 +141,9 @@ fun AgentEntryButton(onClick: () -> Unit, modifier: Modifier = Modifier, driving
                 Spacer(Modifier.width(24.dp))
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(64.dp).background(MaterialTheme.colorScheme.primary, CircleShape),
+                    modifier = Modifier.size(64.dp).background(EodiTheme.colors.accent, CircleShape),
                 ) {
-                    Icon(AgentIcons.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(32.dp))
+                    Icon(AgentIcons.Mic, contentDescription = null, tint = EodiTheme.colors.onAccent, modifier = Modifier.size(32.dp))
                 }
             }
         }
@@ -220,7 +217,7 @@ fun AgentPanelContent(
     compact: Boolean = false,
     topSpace: Dp = 0.dp,
 ) {
-    Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+    Surface(modifier = modifier.fillMaxSize(), color = EodiTheme.colors.background) {
         Crossfade(targetState = state.isDriving, label = "agentMode", modifier = Modifier.padding(top = topSpace)) { driving ->
             if (driving) {
                 DrivingAgent(state.turn, onConfirm, onClear, onClose, onVoiceRequest, onRetry)
@@ -346,7 +343,7 @@ private fun CompactParkedAgent(
             onVoiceRequest = onVoiceRequest,
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.background)
+                .background(EodiTheme.colors.background)
                 .padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 20.dp),
         )
     }
@@ -366,9 +363,9 @@ private fun CompactAskBar(question: String?, onAsk: (String) -> Unit, onVoiceReq
             value = text,
             onValueChange = { text = it },
             singleLine = true,
-            textStyle = MaterialTheme.typography.titleLarge,
+            textStyle = EodiTheme.type.titleSmall,
             placeholder = {
-                Text(stringResource(R.string.agent_field_hint), style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(stringResource(R.string.agent_field_hint), style = EodiTheme.type.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             },
             leadingIcon = {
                 Icon(EodiIcons.Sparkle, contentDescription = null, tint = EodiTheme.colors.memoryInk, modifier = Modifier.padding(start = 8.dp).size(30.dp))
@@ -382,8 +379,8 @@ private fun CompactAskBar(question: String?, onAsk: (String) -> Unit, onVoiceReq
             keyboardActions = KeyboardActions(onSearch = { submit() }),
             shape = CircleShape,
             colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                focusedContainerColor = EodiTheme.colors.surfaceHigh,
+                unfocusedContainerColor = EodiTheme.colors.surfaceHigh,
                 focusedIndicatorColor = Color.Transparent,
                 unfocusedIndicatorColor = Color.Transparent,
             ),
@@ -392,8 +389,8 @@ private fun CompactAskBar(question: String?, onAsk: (String) -> Unit, onVoiceReq
         Surface(
             onClick = onVoiceRequest,
             shape = CircleShape,
-            color = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
+            color = EodiTheme.colors.accent,
+            contentColor = EodiTheme.colors.onAccent,
             shadowElevation = 4.dp,
             modifier = Modifier.size(112.dp),
         ) {
@@ -425,11 +422,11 @@ private fun QuestionBar(
             value = text,
             onValueChange = { text = it },
             singleLine = true,
-            textStyle = MaterialTheme.typography.headlineSmall,
+            textStyle = EodiTheme.type.drivingBody,
             placeholder = {
                 Text(
                     stringResource(R.string.agent_field_hint),
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = EodiTheme.type.drivingBody,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -454,8 +451,8 @@ private fun QuestionBar(
             keyboardActions = KeyboardActions(onSearch = { submit() }),
             shape = CircleShape,
             colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                focusedContainerColor = EodiTheme.colors.surfaceHigh,
+                unfocusedContainerColor = EodiTheme.colors.surfaceHigh,
                 focusedIndicatorColor = Color.Transparent,
                 unfocusedIndicatorColor = Color.Transparent,
             ),
@@ -488,21 +485,21 @@ private fun EmptyState(onAsk: (String) -> Unit, modifier: Modifier = Modifier) {
         Spacer(Modifier.height(32.dp))
         Text(
             stringResource(R.string.agent_empty_title),
-            style = MaterialTheme.typography.displaySmall,
+            style = EodiTheme.type.drivingTitle,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
+            color = EodiTheme.colors.textPrimary,
         )
         Spacer(Modifier.height(12.dp))
         Text(
             stringResource(R.string.agent_empty_body),
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = EodiTheme.type.drivingBody,
+            color = EodiTheme.colors.textSecondary,
         )
         Spacer(Modifier.height(48.dp))
         Text(
             stringResource(R.string.agent_examples),
             style = EodiTheme.type.eyebrow,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = EodiTheme.colors.textSecondary,
         )
         Spacer(Modifier.height(16.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -510,15 +507,15 @@ private fun EmptyState(onAsk: (String) -> Unit, modifier: Modifier = Modifier) {
                 Surface(
                     onClick = { onAsk(q) },
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surface,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    color = EodiTheme.colors.surface,
+                    contentColor = EodiTheme.colors.textPrimary,
                     border = BorderStroke(2.dp, EodiTheme.colors.outline),
                     modifier = Modifier.heightIn(min = AgentTouchMin),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 22.dp, end = 28.dp, top = 18.dp, bottom = 18.dp)) {
                         Icon(EodiIcons.Sparkle, contentDescription = null, tint = EodiTheme.colors.memoryInk, modifier = Modifier.size(26.dp))
                         Spacer(Modifier.width(10.dp))
-                        Text(q, style = MaterialTheme.typography.titleLarge)
+                        Text(q, style = EodiTheme.type.titleSmall)
                     }
                 }
             }
@@ -532,11 +529,11 @@ private fun AnswerBlock(turn: AgentTurn, onRetry: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Surface(
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 28.dp, bottomEnd = 8.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            color = EodiTheme.colors.surfaceHigh,
+            contentColor = EodiTheme.colors.textPrimary,
             modifier = Modifier.align(Alignment.End).widthIn(max = 640.dp),
         ) {
-            Text(turn.question, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp))
+            Text(turn.question, style = EodiTheme.type.titleSmall, modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp))
         }
         Row(verticalAlignment = Alignment.Top) {
             SparkleBadge(size = 52.dp)
@@ -548,13 +545,11 @@ private fun AnswerBlock(turn: AgentTurn, onRetry: () -> Unit) {
                         if (turn.answer.isNotEmpty()) AnswerText(turn.answer, streaming = false, large = false)
                         Text(
                             turn.error ?: stringResource(R.string.agent_failed),
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.error,
+                            style = EodiTheme.type.titleSmall,
+                            color = EodiTheme.colors.error,
                         )
                         Spacer(Modifier.height(16.dp))
-                        FilledTonalButton(onClick = onRetry, modifier = Modifier.heightIn(min = AgentTouchMin)) {
-                            Text(stringResource(R.string.agent_retry), style = MaterialTheme.typography.titleLarge)
-                        }
+                        RetryButton(onRetry, label = stringResource(R.string.agent_retry))
                     }
                     else -> AnswerText(turn.answer, streaming = turn.phase == AnswerPhase.Streaming, large = false)
                 }
@@ -566,20 +561,20 @@ private fun AnswerBlock(turn: AgentTurn, onRetry: () -> Unit) {
 /** 답 글자. 오는 중에는 끝에 커서(▍)를 붙여 타자 치듯 보이게 한다. */
 @Composable
 private fun AnswerText(answer: String, streaming: Boolean, large: Boolean, maxLines: Int = Int.MAX_VALUE) {
-    val caretColor = MaterialTheme.colorScheme.primary
+    val caretColor = EodiTheme.colors.accent
     val text: AnnotatedString = remember(answer, streaming, caretColor) {
         buildAnnotatedString {
             append(answer)
             if (streaming) withStyle(SpanStyle(color = caretColor)) { append(" ▍") }
         }
     }
-    val base = if (large) MaterialTheme.typography.displayMedium else MaterialTheme.typography.headlineMedium
+    val base = if (large) EodiTheme.type.display else EodiTheme.type.drivingHeadline
     Text(
         text,
         // 한국어를 글자 단위가 아니라 어절 단위로 줄바꿈 (Android 13+, 그 아래는 글자 단위)
         style = base.copy(lineHeight = base.fontSize * 1.45f, lineBreak = LineBreak.Paragraph.copy(wordBreak = LineBreak.WordBreak.Phrase)),
         fontWeight = FontWeight.Medium,
-        color = MaterialTheme.colorScheme.onSurface,
+        color = EodiTheme.colors.textPrimary,
         maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
@@ -602,14 +597,14 @@ private fun Thinking(large: Boolean = false) {
             Box(
                 Modifier.padding(end = 8.dp).size(if (large) 18.dp else 12.dp)
                     .alpha(if (on) 1f else 0.3f)
-                    .background(MaterialTheme.colorScheme.primary, CircleShape),
+                    .background(EodiTheme.colors.accent, CircleShape),
             )
         }
         Spacer(Modifier.width(12.dp))
         Text(
             stringResource(R.string.agent_thinking),
-            style = if (large) MaterialTheme.typography.displaySmall else MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = if (large) EodiTheme.type.drivingTitle else EodiTheme.type.drivingBody,
+            color = EodiTheme.colors.textSecondary,
         )
     }
 }
@@ -657,59 +652,33 @@ private fun ActionBlock(turn: AgentTurn, onConfirm: (AgentEvent.ActionProposal) 
 
 @Composable
 private fun ProposalButton(p: AgentEvent.ActionProposal, primary: Boolean, running: Boolean, onConfirm: (AgentEvent.ActionProposal) -> Unit) {
-    val content: @Composable RowScope.() -> Unit = {
-        if (running) {
-            CircularProgressIndicator(strokeWidth = 3.dp, color = if (primary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(32.dp))
-        } else {
-            Icon(if (primary) EodiIcons.Navi else AgentIcons.Fast, contentDescription = null, modifier = Modifier.size(32.dp))
-        }
-        Spacer(Modifier.width(20.dp))
-        Column(Modifier.weight(1f)) {
-            Text(p.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (p.description.isNotBlank()) {
-                // 파랑 버튼 위 작은 글자는 굵게 · 흐리지 않게 (다크 파랑 위 흰 글자 대비 3.5:1 → 굵은 글자 기준 AA)
-                Text(p.description, style = AgentSubStyle, fontWeight = if (primary) FontWeight.Bold else null, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-        }
-    }
-    val modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp)
-    val padding = PaddingValues(horizontal = 28.dp, vertical = 14.dp)
-    val shape = RoundedCornerShape(24.dp)
-    if (primary) {
-        Button(onClick = { onConfirm(p) }, shape = shape, contentPadding = padding, modifier = modifier, content = content)
-    } else {
-        FilledTonalButton(onClick = { onConfirm(p) }, shape = shape, contentPadding = padding, modifier = modifier, content = content)
-    }
+    TwoLinePill(
+        title = p.title,
+        detail = p.description,
+        icon = if (primary) EodiIcons.Navi else AgentIcons.Fast,
+        onClick = { onConfirm(p) },
+        modifier = Modifier.fillMaxWidth(),
+        primary = primary,
+        running = running,
+        large = true,
+        detailLines = 2,
+    )
 }
 
 @Composable
 private fun SecondaryAction(icon: ImageVector, label: String, detail: String?, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    OutlinedButton(
-        onClick = onClick,
-        shape = RoundedCornerShape(24.dp),
-        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
-        modifier = modifier.heightIn(min = 88.dp),
-    ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(28.dp))
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f, fill = false)) {
-            Text(label, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (detail != null) {
-                Text(detail, style = AgentSubStyle, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-        }
-    }
+    TwoLinePill(title = label, detail = detail, icon = icon, onClick = onClick, modifier = modifier)
 }
 
 /** 안내 요청 결과 한 줄 (보내는 중 / 시작함 / 실패). */
 @Composable
 private fun ActionStatus(action: ActionState, large: Boolean = false) {
-    val colors = MaterialTheme.colorScheme
+    val colors = EodiTheme.colors
     val (text, container, content) = when (action) {
         ActionState.Idle -> return
-        is ActionState.Running -> Triple(stringResource(R.string.agent_action_running), colors.surfaceContainerHigh, colors.onSurface)
-        is ActionState.Done -> Triple(stringResource(R.string.agent_action_done), colors.primaryContainer, colors.onPrimaryContainer)
-        is ActionState.Failed -> Triple(stringResource(R.string.agent_action_failed, action.message), colors.errorContainer, colors.onErrorContainer)
+        is ActionState.Running -> Triple(stringResource(R.string.agent_action_running), colors.surfaceHigh, colors.textPrimary)
+        is ActionState.Done -> Triple(stringResource(R.string.agent_action_done), colors.accentSoft, colors.accent)
+        is ActionState.Failed -> Triple(stringResource(R.string.agent_action_failed, action.message), colors.surfaceHigh, colors.error)
     }
     Surface(shape = RoundedCornerShape(20.dp), color = container, contentColor = content, modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 24.dp, vertical = if (large) 24.dp else 18.dp)) {
@@ -717,7 +686,7 @@ private fun ActionStatus(action: ActionState, large: Boolean = false) {
                 Icon(EodiIcons.Check, contentDescription = null, modifier = Modifier.size(if (large) 44.dp else 30.dp))
                 Spacer(Modifier.width(16.dp))
             }
-            Text(text, style = if (large) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text(text, style = if (large) EodiTheme.type.drivingHeadline else EodiTheme.type.titleSmall, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -743,8 +712,8 @@ private fun OtherDays(turn: AgentTurn, today: LocalDate, onAsk: (String) -> Unit
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             stringResource(R.string.agent_more_days),
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = EodiTheme.type.titleSmall,
+            color = EodiTheme.colors.textSecondary,
             modifier = Modifier.padding(top = 8.dp),
         )
         others.forEach { rec -> OtherDayRow(rec, today, onAsk) }
@@ -767,7 +736,7 @@ private fun DrivingAgent(
     Box(Modifier.fillMaxSize().safeDrawingPadding().padding(PagePadding)) {
         Surface(
             shape = RoundedCornerShape(40.dp),
-            color = MaterialTheme.colorScheme.surface,
+            color = EodiTheme.colors.surface,
             modifier = Modifier.fillMaxSize(),
         ) {
             Column(Modifier.fillMaxSize().padding(48.dp)) {
@@ -784,8 +753,8 @@ private fun DrivingAgent(
                 } else {
                     Text(
                         "“${turn.question}”",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = EodiTheme.type.drivingHeadline,
+                        color = EodiTheme.colors.textSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -807,8 +776,8 @@ private fun DrivingAgent(
                             AnswerPhase.Thinking -> Thinking(large = true)
                             AnswerPhase.Failed -> Text(
                                 turn.error ?: stringResource(R.string.agent_failed),
-                                style = MaterialTheme.typography.displaySmall,
-                                color = MaterialTheme.colorScheme.error,
+                                style = EodiTheme.type.drivingTitle,
+                                color = EodiTheme.colors.error,
                             )
                             else -> AnswerText(turn.answer, streaming = turn.phase == AnswerPhase.Streaming, large = true, maxLines = 6)
                         }
@@ -859,8 +828,8 @@ private fun DrivingPrompt(onVoiceRequest: () -> Unit, modifier: Modifier = Modif
             Surface(
                 onClick = onVoiceRequest,
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
+                color = EodiTheme.colors.accent,
+                contentColor = EodiTheme.colors.onAccent,
                 modifier = Modifier.size(180.dp),
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -871,13 +840,14 @@ private fun DrivingPrompt(onVoiceRequest: () -> Unit, modifier: Modifier = Modif
         Spacer(Modifier.height(16.dp))
         Text(
             stringResource(R.string.agent_entry_driving),
-            style = MaterialTheme.typography.displaySmall,
+            style = EodiTheme.type.drivingTitle,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = EodiTheme.colors.textPrimary,
         )
     }
 }
 
+/** 운전 중 큰 버튼 (높이 144dp): 공통 큰 알약 ([PrimaryPill] / [SecondaryPill]의 large). */
 @Composable
 private fun BigButton(
     label: String,
@@ -887,18 +857,9 @@ private fun BigButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val content: @Composable RowScope.() -> Unit = {
-        if (icon != null) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(48.dp))
-            Spacer(Modifier.width(20.dp))
-        }
-        Text(label, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
-    }
-    val shape = RoundedCornerShape(32.dp)
-    val m = modifier.height(144.dp)
     if (primary) {
-        Button(onClick = onClick, enabled = enabled, shape = shape, modifier = m, content = content)
+        PrimaryPill(label, icon, onClick, modifier, enabled = enabled, large = true)
     } else {
-        FilledTonalButton(onClick = onClick, enabled = enabled, shape = shape, modifier = m, content = content)
+        SecondaryPill(label, icon, onClick, modifier, enabled = enabled, large = true)
     }
 }
