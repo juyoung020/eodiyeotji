@@ -840,3 +840,34 @@ fn llm_answer_that_found_nothing_gets_no_proposal() {
     assert_eq!(r.answer(), "기록에서 찾지 못했어요.");
     assert!(r.proposals().is_empty());
 }
+
+#[test]
+fn ai_titles_may_not_call_a_short_hop_a_trip() {
+    use crate::memory::{DayEnrichment, DayFacts, EpisodeFacts, EpisodeKind, EpisodeLabel};
+    let ep = |id: i64, km: f64, min: i64| EpisodeFacts {
+        id,
+        day: "2026-11-08".into(),
+        kind: EpisodeKind::Trip,
+        rule_label: "경포해변 들름".into(),
+        start_ms: 0,
+        end_ms: min * 60_000,
+        distance_m: km * 1000.0,
+        from_name: "호연재".into(),
+        to_name: "경포해변".into(),
+        stops: vec![],
+        region: "강원 강릉시".into(),
+    };
+    let en = |title: &str, ep_title: &str| DayEnrichment {
+        day: "2026-11-08".into(),
+        title: title.into(),
+        summary: String::new(),
+        tags: vec![],
+        episodes: vec![EpisodeLabel { episode_id: 1, title: ep_title.into(), tags: vec![] }],
+    };
+    let short = DayFacts { day: "2026-11-08".into(), weekday: "일".into(), episodes: vec![ep(1, 0.747, 1)], total_distance_m: 747.0 };
+    assert!(label::short_move_problem(&en("강릉 여행", "경포 바다"), &short).is_some(), "747m · 1분 날을 여행이라 부르면 안 된다");
+    assert!(label::short_move_problem(&en("경포 바다 한 바퀴", "강릉 바다 여행"), &short).is_some(), "에피소드 제목도");
+    assert_eq!(label::short_move_problem(&en("경포해변 잠깐 들름", "경포해변 들름"), &short), None);
+    let long = DayFacts { episodes: vec![ep(1, 236.0, 300)], total_distance_m: 236_000.0, ..short.clone() };
+    assert_eq!(label::short_move_problem(&en("강릉 바다 여행", "강릉 여행"), &long), None, "긴 여행은 그대로");
+}

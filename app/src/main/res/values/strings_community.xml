@@ -64,7 +64,8 @@
     <string name="share_title_label">제목</string>
     <string name="share_body_label">소개 (안 써도 돼요)</string>
     <string name="share_stops_hint">빼고 싶은 곳은 눌러서 체크를 풀어 주세요</string>
-    <string name="share_hidden">집·회사 근처 %1$d곳은 자동으로 가렸어요</string>
+    <string name="share_privacy_auto">집·회사 근처는 자동으로 가려요</string>
+    <string name="share_hidden">집·회사 근처는 자동으로 가려요 · 이번에 %1$d곳 가림</string>
     <string name="share_unnamed">이름 모르는 %1$d곳은 뺐어요</string>
     <string name="share_submit">올리기</string>
     <string name="share_submitting">올리는 중…</string>
@@ -131,7 +132,7 @@
     <!-- 드라이브 코스 = 들를 곳 없는 경치 길 (ui/community/DriveRoutePane.kt) -->
     <string name="drive_sort_near">내 근처</string>
     <string name="drive_empty">아직 올라온 드라이브 코스가 없어요</string>
-    <string name="drive_view">길 보기</string>
+    <string name="drive_view">3D로 미리 달리기</string>
     <string name="drive_from_to">%1$s → %2$s</string>
     <string name="drive_from_here">여기서 %1$s</string>
     <string name="drive_best_chip">%1$s 추천</string>

@@ -56,7 +56,7 @@ use crate::places::{self, PlaceLabel, REF_END, REF_START, REF_STAY};
 use crate::trip::{self, DriveMark, MarkKind, Segmenter, Stay, TripConfig};
 
 /// DB 구조 버전 (`PRAGMA user_version`). 구조를 바꾸면 올리고 `migrate`에 단계를 추가한다.
-pub(crate) const SCHEMA_VERSION: i32 = 10;
+pub(crate) const SCHEMA_VERSION: i32 = 11;
 /// 이보다 정확도가 나쁜(m) 점은 버린다.
 pub const MAX_ACCURACY_M: f32 = 100.0;
 /// 지도에 넘길 경로의 단순화 허용 오차(m).
@@ -259,8 +259,8 @@ impl EodiStore {
         self.flush_all(&mut conn)?;
         let mut st = conn.prepare_cached(
             "SELECT s.day, s.trip_count, s.stay_count, s.distance_m, s.drive_millis, s.first_ms, s.last_ms, s.stop_names,
-                    coalesce(m.title, m.rule_title), CASE WHEN m.title IS NULL THEN '' ELSE m.tags END
-             FROM day_summary s LEFT JOIN day_memory m ON m.day = s.day ORDER BY s.day DESC LIMIT ?1",
+                    coalesce(u.title, m.title, m.rule_title), CASE WHEN m.title IS NULL THEN '' ELSE m.tags END
+             FROM day_summary s LEFT JOIN day_memory m ON m.day = s.day LEFT JOIN day_user_title u ON u.day = s.day ORDER BY s.day DESC LIMIT ?1",
         )?;
         let rows = st.query_map([limit], |r| {
             Ok(DaySummary {
@@ -401,7 +401,11 @@ fn migrate(conn: &mut Connection) -> Result<(), CoreError> {
         // 드라이브 코스 = 들를 곳 없는 경치 길 (선·풍경·언제). 기존 코스 글은 여행 코스 후기로 그대로 남는다.
         tx.execute_batch(crate::community::drive::SCHEMA_V10)?;
     }
-    // 다음 버전은 여기에: if version < 11 { ... }
+    if version < 11 {
+        // 사용자가 직접 고친 하루 제목 (edits 모듈)
+        tx.execute_batch(crate::edits::SCHEMA_V11)?;
+    }
+    // 다음 버전은 여기에: if version < 12 { ... }
     tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     tx.commit()?;
     Ok(())

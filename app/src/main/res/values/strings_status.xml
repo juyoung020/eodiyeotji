@@ -2,7 +2,7 @@
 <resources>
     <!-- 머리의 기록 상태 표시 · 설명 시트 (record/RecordingStatus.kt) -->
     <string name="status_driving">기록 중</string>
-    <string name="status_waiting">대기 중</string>
+    <string name="status_waiting">시동 걸면 자동 기록</string>
     <string name="status_off">기록 꺼짐</string>
     <string name="status_location_off">위치 권한 꺼짐</string>
     <string name="status_background_off">백그라운드 위치 꺼짐</string>

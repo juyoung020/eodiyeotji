@@ -80,6 +80,10 @@ fun PlaceEditHost(vm: PlaceEditViewModel) {
         BackHandler { vm.cancelRename() }
         RenameSheet(r, onSave = vm::rename, onCancel = vm::cancelRename)
     }
+    s.dayTitle?.let { d ->
+        BackHandler { vm.cancelDayTitle() }
+        DayTitleSheet(d.day, d.title.orEmpty(), onSave = vm::saveDayTitle, onCancel = vm::cancelDayTitle)
+    }
     s.confirmDelete?.let { target ->
         BackHandler { vm.cancelDelete() }
         ConfirmDelete(target, onDelete = vm::confirmDelete, onHide = vm::hideInstead, onCancel = vm::cancelDelete)
@@ -107,7 +111,9 @@ private fun EditMenu(target: EditTarget, card: PlaceCard?, vm: PlaceEditViewMode
                     MenuItem(PlacesIcons.Hide, stringResource(R.string.edit_hide_trip)) { vm.hide(target) },
                     MenuItem(PlacesIcons.Trash, stringResource(R.string.edit_delete_trip), danger = true) { vm.askDelete(target) },
                 )
+                // 지우기(되돌릴 수 없음)는 항상 맨 끝 줄
                 is EditTarget.Day -> listOf(
+                    MenuItem(CommunityIcons.Pen, stringResource(R.string.edit_day_title)) { vm.startDayTitle(target.summary) },
                     MenuItem(PlacesIcons.Hide, stringResource(R.string.edit_hide_day)) { vm.hide(target) },
                     MenuItem(PlacesIcons.Trash, stringResource(R.string.edit_delete_day), danger = true) { vm.askDelete(target) },
                 )
@@ -270,6 +276,49 @@ private fun MenuCell(item: MenuItem, modifier: Modifier) {
         }
     }
 }
+
+// ---------------------------------------------------------------- 하루 제목 고치기
+
+/** 하루 제목 고치기: 지금 제목을 채워 두고, 비우고 저장하면 자동 제목으로 돌아간다. 글자 수는 Rust(30자)와 같게 막는다. */
+@Composable
+private fun DayTitleSheet(day: String, current: String, onSave: (String) -> Unit, onCancel: () -> Unit) {
+    val c = EodiTheme.colors
+    val type = EodiTheme.type
+    var text by rememberSaveable(day) { mutableStateOf(current) }
+    OverlayCard(onDismiss = onCancel, maxWidth = 960.dp) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 32.dp, end = 32.dp, top = 28.dp, bottom = 28.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.day_title_title), style = type.title, modifier = Modifier.weight(1f).semantics { heading() })
+                RoundIconButton(CommunityIcons.Close, stringResource(R.string.edit_cancel), onCancel)
+            }
+            Spacer(Modifier.height(20.dp))
+            TextField(
+                value = text,
+                onValueChange = { if (it.length <= DayTitleMax) text = it },
+                singleLine = true,
+                textStyle = type.title,
+                placeholder = { Text(stringResource(R.string.day_title_hint), style = type.title, maxLines = 1) },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { onSave(text) }),
+                shape = RoundedCornerShape(EodiTheme.space.radiusM),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = c.surfaceHigh,
+                    unfocusedContainerColor = c.surfaceHigh,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                ),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp),
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(stringResource(R.string.day_title_note), style = type.caption, color = c.textTertiary)
+            Spacer(Modifier.height(20.dp))
+            PrimaryPill(stringResource(R.string.day_title_save), CommunityIcons.Check, { onSave(text) }, Modifier.fillMaxWidth())
+        }
+    }
+}
+
+/** Rust `edits::DAY_TITLE_MAX`와 같은 값. */
+private const val DayTitleMax = 30
 
 // ---------------------------------------------------------------- 이름 고치기
 

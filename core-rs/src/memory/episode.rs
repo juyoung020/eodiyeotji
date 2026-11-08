@@ -18,6 +18,9 @@ pub(crate) const USUAL_AREA_M: f64 = 10_000.0;
 pub(crate) const FAR_M: f64 = 80_000.0;
 /// 집에서 이 거리(m) 이상인 곳에서 자정을 넘겨 머물면(외박) 여행.
 pub(crate) const OVERNIGHT_AWAY_M: f64 = 20_000.0;
+/// 이보다 짧게(거리·시간 둘 다) 움직인 나들이·여행 묶음은 "여행"·"나들이"라 부르지 않고 "경포해변 들름"처럼 사실만 쓴다.
+pub(crate) const SHORT_MOVE_M: f64 = 5_000.0;
+pub(crate) const SHORT_MOVE_MS: i64 = 20 * 60_000;
 /// 머문 날이 이 수 이상인 장소는 자주 가는 곳 (미만이면 드문 곳).
 pub(crate) const FREQUENT_DAYS: i64 = 3;
 /// 마지막 위치 점에서 이만큼(ms) 지나면 그날 기록이 끝난 것으로 본다 (라벨링 대기열).
@@ -722,6 +725,9 @@ fn build_episodes(ctx: &Ctx, d: i64, rec: &DayRec) -> Vec<Built> {
                     (false, None) => if near_home { "동네 볼일" } else { "볼일" }.to_owned(),
                 }
             }
+            EpisodeKind::Outing | EpisodeKind::Trip if is_short_move(trips[i0..=i1].iter().map(|t| t.distance_m).sum(), t1 - t0) => {
+                short_move_label(main_stop.map(|s| s.name.as_str()), &short_city(&region))
+            }
             EpisodeKind::Outing => {
                 let area = main_stop.map(area_name).unwrap_or_else(|| short_city(&region));
                 if area.is_empty() { "나들이".to_owned() } else { format!("{area} 나들이") }
@@ -752,6 +758,20 @@ fn build_episodes(ctx: &Ctx, d: i64, rec: &DayRec) -> Vec<Built> {
         });
     }
     out
+}
+
+/// 거리·시간이 둘 다 짧은 이동인지 ([SHORT_MOVE_M], [SHORT_MOVE_MS]).
+pub(crate) fn is_short_move(distance_m: f64, dur_ms: i64) -> bool {
+    distance_m < SHORT_MOVE_M && dur_ms < SHORT_MOVE_MS
+}
+
+/// 짧은 이동의 사실 그대로 라벨: "경포해변 들름" → (이름 모름) "강릉 잠깐 이동" → "잠깐 이동".
+pub(crate) fn short_move_label(stop: Option<&str>, city: &str) -> String {
+    match (stop.filter(|n| !n.is_empty()), city.is_empty()) {
+        (Some(n), _) => format!("{n} 들름"),
+        (None, false) => format!("{city} 잠깐 이동"),
+        (None, true) => "잠깐 이동".to_owned(),
+    }
 }
 
 fn with_stop(base: &str, stop: Option<&str>) -> String {
@@ -971,12 +991,18 @@ pub(crate) fn course_stops(conn: &Connection, id: i64) -> Result<Option<Vec<Stop
     }))
 }
 
-/// 하루 제목·태그 (`DaySummary.title`·`tags`): LLM 제목이 있으면 그것과 LLM 태그, 없으면 규칙 제목, 없으면 None.
+/// 하루 제목·태그 (`DaySummary.title`·`tags`): 사용자가 고친 제목(`day_user_title`)이 있으면 그것, 다음은 LLM 제목이 있으면 그것과 LLM 태그, 없으면 규칙 제목, 없으면 None.
 pub(crate) fn day_title(conn: &Connection, d: i64) -> Result<(Option<String>, Vec<String>), CoreError> {
+    let user: Option<String> =
+        conn.prepare_cached("SELECT title FROM day_user_title WHERE day = ?1")?.query_row([d], |r| r.get(0)).optional()?;
     let row: Option<(Option<String>, Option<String>, String)> = conn
         .prepare_cached("SELECT title, rule_title, tags FROM day_memory WHERE day = ?1")?
         .query_row([d], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
         .optional()?;
+    if let Some(u) = user {
+        let tags = row.map(|r| if r.0.is_some() { split_names(&r.2) } else { Vec::new() }).unwrap_or_default();
+        return Ok((Some(u), tags));
+    }
     Ok(match row {
         Some((Some(t), _, tags)) => (Some(t), split_names(&tags)),
         Some((None, rule, _)) => (rule, Vec::new()),
@@ -987,7 +1013,7 @@ pub(crate) fn day_title(conn: &Connection, d: i64) -> Result<(Option<String>, Ve
 /// 하루의 검색 색인을 다시 쓴다 (에피소드마다 한 줄).
 pub(crate) fn reindex_day(conn: &Connection, d: i64) -> Result<(), CoreError> {
     let (title, summary, tags): (String, String, String) = conn
-        .prepare_cached("SELECT coalesce(title, rule_title, ''), summary, tags FROM day_memory WHERE day = ?1")?
+        .prepare_cached("SELECT coalesce((SELECT title FROM day_user_title WHERE day = ?1), title, rule_title, ''), summary, tags FROM day_memory WHERE day = ?1")?
         .query_row([d], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
         .optional()?
         .unwrap_or_default();

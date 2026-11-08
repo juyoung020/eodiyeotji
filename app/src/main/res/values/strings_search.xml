@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- 검색 (ui/search): 내 기록 · 커뮤니티 위 검색 칸과 결과 -->
-    <string name="search_hint_records">장소, 날짜, 기록 찾기</string>
-    <string name="search_hint_records_long">장소 · 날짜 · 기록 찾기 (예: 순두부, 지난주 카페)</string>
+    <string name="search_hint_records">장소·날짜를 찾거나 물어보세요</string>
+    <string name="search_hint_records_long">장소·날짜를 찾거나 물어보세요 (예: 순두부, 지난주 같이 간 카페?)</string>
     <string name="search_hint_courses">드라이브 코스 찾기</string>
     <string name="search_hint_reviews">리뷰 · 장소 찾기</string>
     <string name="search_hint_board">게시글 찾기</string>

@@ -26,6 +26,10 @@
 //! 제목에 남지 않게). 그날은 규칙 제목으로 보이다가 라벨링 대기열에 다시 나온다.
 //! 장소 이름을 고치면 옛 이름이 든 LLM 제목 · 이야기만 같은 방법으로 지운다.
 //!
+//! # 하루 제목 고치기
+//! [EodiStore::set_day_title]: 사용자가 쓴 제목은 `day_user_title`에 따로 두어 AI · 규칙 제목보다 우선하고,
+//! 숨기기 · 다시 라벨링해도 남는다. 빈 제목(None)이면 지워 AI · 규칙 제목으로 돌아간다. 그날을 지우면 같이 지운다.
+//!
 //! # 장소 이름 고치기
 //! [EodiStore::rename_place]: 출처 `User`로 저장한다 (모든 출처보다 우선, `places` 모듈). 이름은 장소에 붙으므로
 //! 그 장소의 모든 방문(다른 날 포함)에 같이 보인다. 분류 · 주소를 비워 넘기면 원래 값을 그대로 둔다.
@@ -60,6 +64,16 @@ CREATE TABLE IF NOT EXISTS hidden (
 -- 저장한 곳 (♥, saved 모듈).
 CREATE TABLE IF NOT EXISTS saved_place (place_id INTEGER PRIMARY KEY, saved_ms INTEGER NOT NULL);
 ";
+
+/// DB 구조 버전 11: 사용자가 직접 고친 하루 제목. AI·규칙 제목보다 우선하고, 다시 라벨링해도 남는다.
+pub(crate) const SCHEMA_V11: &str = "CREATE TABLE IF NOT EXISTS day_user_title (day INTEGER PRIMARY KEY, title TEXT NOT NULL);";
+
+/// 하루 제목 최대 글자 수 ([EodiStore::set_day_title]).
+pub const DAY_TITLE_MAX: usize = 30;
+
+/// 예전 버전 DB를 흉내 내는 테스트용 (v11 표 지우기).
+#[cfg(test)]
+pub(crate) const DROP_V11: &str = "DROP TABLE day_user_title;";
 
 /// 예전 버전 DB를 흉내 내는 테스트용 (v7 표 지우기).
 #[cfg(test)]
@@ -143,6 +157,29 @@ impl EodiStore {
         let tx = conn.transaction()?;
         insert_hidden(&tx, KIND_TRIP, t.start_ms, t.end_ms, &trip_label(&t), now_ms, false)?;
         self.after_edit(&tx, t.start_ms, t.start_ms)?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// 하루 제목을 사용자가 고친다 (`day` = "YYYY-MM-DD"). 앞뒤 공백을 자르고, 비었거나 None이면 사용자 제목을 지운다.
+    /// [DAY_TITLE_MAX]자를 넘거나 틀린 날짜면 `InvalidInput`. 검색 색인도 새 제목으로 다시 쓴다.
+    pub fn set_day_title(&self, day: String, title: Option<String>) -> Result<(), CoreError> {
+        let d = parse_day(&day).ok_or_else(|| CoreError::InvalidInput(format!("day {day:?}")))?;
+        let t = title.map(|t| t.split_whitespace().collect::<Vec<_>>().join(" ")).filter(|t| !t.is_empty());
+        if t.as_ref().is_some_and(|t| t.chars().count() > DAY_TITLE_MAX) {
+            return Err(CoreError::InvalidInput(format!("title longer than {DAY_TITLE_MAX}")));
+        }
+        let mut conn = self.lock()?;
+        self.flush_all(&mut conn)?;
+        let tx = conn.transaction()?;
+        match &t {
+            Some(t) => tx.execute(
+                "INSERT INTO day_user_title (day, title) VALUES (?1, ?2) ON CONFLICT(day) DO UPDATE SET title = excluded.title",
+                params![d, t],
+            )?,
+            None => tx.execute("DELETE FROM day_user_title WHERE day = ?1", [d])?,
+        };
+        crate::memory::reindex_day(&tx, d)?;
         tx.commit()?;
         Ok(())
     }
@@ -291,6 +328,7 @@ impl EodiStore {
             delete_raw(&tx, stray_lo, de - 1)?;
         }
         insert_hidden(&tx, KIND_DAY, ds, (de - 1).min(now_ms).max(ds), "", now_ms, true)?;
+        tx.execute("DELETE FROM day_user_title WHERE day = ?1", [d])?;
         forget_labels(&tx, d, self.local_day(hi))?;
         mark_dirty(&tx, lo, hi)?;
         self.refresh_days(&tx, d, d)?;
