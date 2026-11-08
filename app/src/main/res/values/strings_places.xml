@@ -16,7 +16,7 @@
     <string name="edit_unknown_place">이름 모르는 곳</string>
 
     <!-- 메뉴 항목 -->
-    <string name="edit_save">저장하기</string>
+    <string name="edit_save">저장</string>
     <string name="edit_saved">저장했어요</string>
     <string name="edit_rename">이 장소 이름 고치기</string>
     <string name="edit_rename_start">출발지 이름 고치기</string>
@@ -28,6 +28,7 @@
     <string name="edit_navigate">여기로 안내</string>
     <string name="edit_hide_trip">이 주행 숨기기</string>
     <string name="edit_hide_stay">이 장소 들른 기록 숨기기</string>
+    <string name="edit_day_title">제목 고치기</string>
     <string name="edit_hide_day">이 날 통째로 숨기기</string>
     <string name="edit_delete_trip">이 주행 지우기</string>
     <string name="edit_delete_stay">이 장소 들른 기록 지우기</string>
@@ -42,6 +43,12 @@
     <string name="rename_candidates_none">근처에서 찾은 곳이 없어요. 직접 입력해 주세요.</string>
     <string name="rename_save">이 이름으로 저장</string>
     <string name="rename_note">고친 이름은 이 장소의 모든 방문에 보여요.</string>
+
+    <!-- 하루 제목 고치기 -->
+    <string name="day_title_title">이 날 제목 고치기</string>
+    <string name="day_title_hint">예: 엄마랑 경포 바다</string>
+    <string name="day_title_note">비워 두고 저장하면 자동으로 붙는 제목으로 돌아가요.</string>
+    <string name="day_title_save">저장</string>
 
     <!-- 지우기 확인 -->
     <string name="delete_title_trip">이 주행을 지울까요?</string>
@@ -58,6 +65,7 @@
     <string name="notice_hidden">숨겼어요 · 내 장소 › 숨긴 기록에서 되살릴 수 있어요</string>
     <string name="notice_deleted">지웠어요</string>
     <string name="notice_renamed">이름을 고쳤어요</string>
+    <string name="notice_day_titled">제목을 고쳤어요</string>
     <string name="notice_home">집으로 정했어요</string>
     <string name="notice_office">회사로 정했어요</string>
     <string name="notice_saved">저장한 곳에 넣었어요</string>
@@ -75,7 +83,7 @@
     <string name="places_tab_settings">집 · 회사 · 숨긴 기록</string>
     <string name="places_saved_empty">아직 저장한 곳이 없어요.\n타임라인에서 머문 곳의 ⋯ 를 눌러 ♥ 저장해 보세요.</string>
     <string name="places_frequent_empty">두 번 이상 들른 곳이 생기면 여기에 보여요.</string>
-    <string name="places_visits">%1$d일 다녀옴</string>
+    <string name="places_visits">%1$d번 다녀옴</string>
     <string name="places_last_visit">마지막 %1$s</string>
     <string name="places_records">기록 보기</string>
     <string name="places_unsave">저장 풀기</string>

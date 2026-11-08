@@ -243,7 +243,8 @@ private fun ShareSheetBody(
             style = type.meta,
             color = c.textSecondary,
         )
-        if (preview.hiddenCount > 0) PrivacyNote(stringResource(R.string.share_hidden, preview.hiddenCount))
+        // 늘 한 줄로 알린다: 집·회사 근처는 자동으로 가린다 (가린 곳이 있으면 몇 곳인지)
+        PrivacyNote(if (preview.hiddenCount > 0) stringResource(R.string.share_hidden, preview.hiddenCount) else stringResource(R.string.share_privacy_auto))
         if (preview.unnamedCount > 0) PrivacyNote(stringResource(R.string.share_unnamed, preview.unnamedCount))
         if (preview.shared) Text(stringResource(R.string.share_reshare_note), style = type.caption, color = c.textTertiary)
         state.submitError?.let { Text(stringResource(R.string.share_failed, it), style = type.caption, color = c.error) }

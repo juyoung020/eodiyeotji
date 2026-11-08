@@ -96,6 +96,8 @@ suspend fun EodiCore.hideStay(arriveMs: Long) = edit { rust.hideStay(arriveMs, S
 suspend fun EodiCore.hideDay(day: String) = edit { rust.hideDay(day, System.currentTimeMillis()) }
 suspend fun EodiCore.deleteTrip(startMs: Long) = edit { rust.deleteTrip(startMs) }
 suspend fun EodiCore.deleteStay(arriveMs: Long) = edit { rust.deleteStay(arriveMs, System.currentTimeMillis()) }
+/** 하루 제목을 직접 고친다. 빈 글이면 사용자 제목을 지워 AI · 규칙 제목으로 돌아간다. */
+suspend fun EodiCore.setDayTitle(day: String, title: String) = edit { rust.setDayTitle(day, title.takeIf { it.isNotBlank() }) }
 suspend fun EodiCore.deleteDay(day: String) = edit { rust.deleteDay(day, System.currentTimeMillis()) }
 suspend fun EodiCore.restoreHidden(id: Long) = edit { rust.restoreHidden(id) }
 

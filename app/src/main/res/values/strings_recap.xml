@@ -16,12 +16,12 @@
     <string name="recap_recall_close">회상 닫기</string>
 
     <!-- 요약 입구 · 화면 -->
-    <string name="recap_month_entry">%1$d월 요약</string>
-    <string name="recap_year_entry">올해의 어디였지</string>
+    <string name="recap_month_entry">%1$d월 돌아보기</string>
+    <string name="recap_year_entry">올해 결산</string>
     <string name="recap_tab_month">달별 요약</string>
     <string name="recap_tab_year">올해 결산</string>
     <string name="recap_title_month">%1$d년 %2$d월</string>
-    <string name="recap_title_year">%1$d 올해의 어디였지</string>
+    <string name="recap_title_year">%1$d 결산</string>
     <string name="recap_until_day">%1$d일까지</string>
     <string name="recap_back">뒤로</string>
     <string name="recap_prev">이전</string>

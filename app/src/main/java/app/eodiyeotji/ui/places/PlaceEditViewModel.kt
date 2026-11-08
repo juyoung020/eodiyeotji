@@ -23,6 +23,7 @@ import app.eodiyeotji.core.hideStay
 import app.eodiyeotji.core.hideTrip
 import app.eodiyeotji.core.placeCard
 import app.eodiyeotji.core.renamePlace
+import app.eodiyeotji.core.setDayTitle
 import app.eodiyeotji.core.setMyAnchor
 import app.eodiyeotji.core.setPlaceSaved
 import app.eodiyeotji.place.PlaceCandidates
@@ -60,6 +61,8 @@ data class PlaceEditUiState(
     /** 머문 곳 메뉴의 장소 카드 (♥ · 집 · 회사 표시). 읽는 중이면 null. */
     val card: PlaceCard? = null,
     val rename: RenameState? = null,
+    /** 하루 제목 고치기 창이 열린 날 */
+    val dayTitle: DaySummary? = null,
     /** 지우기 확인 창 */
     val confirmDelete: EditTarget? = null,
     /** 잠깐 보이는 알림 한 줄 */
@@ -124,6 +127,22 @@ class PlaceEditViewModel @Inject constructor(
         if (name.isBlank()) return
         _state.update { it.copy(rename = null) }
         act(R.string.notice_renamed) { core.renamePlace(r.card.id, name.trim(), picked?.category.orEmpty(), picked?.address.orEmpty()) }
+    }
+
+    /** 하루 제목 고치기 창을 연다. */
+    fun startDayTitle(day: DaySummary) {
+        _state.update { it.copy(menu = null, dayTitle = day) }
+    }
+
+    fun cancelDayTitle() {
+        _state.update { it.copy(dayTitle = null) }
+    }
+
+    /** 빈 글이면 직접 쓴 제목을 지우고 자동 제목으로 돌아간다. */
+    fun saveDayTitle(title: String) {
+        val day = _state.value.dayTitle ?: return
+        _state.update { it.copy(dayTitle = null) }
+        act(R.string.notice_day_titled) { core.setDayTitle(day.day, title.trim()) }
     }
 
     fun setAnchor(role: AnchorRole, card: PlaceCard) =

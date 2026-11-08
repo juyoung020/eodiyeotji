@@ -15,7 +15,7 @@ use super::dates::{civil_from_days, hhmm, parse_ymd};
 use super::llm::{LlmClient, LlmError, Params};
 use super::tools::{kind_name, km};
 use super::{prompts, LabelReport, MemoryAgent};
-use crate::memory::{DayEnrichment, DayFacts, EpisodeLabel};
+use crate::memory::{is_short_move, DayEnrichment, DayFacts, EpisodeFacts, EpisodeLabel};
 
 pub const BAD_OUTPUT_RETRY_MS: i64 = 6 * 60 * 60_000;
 const MAX_STOPS: usize = 12;
@@ -113,7 +113,7 @@ pub fn label_one(llm: &LlmClient, facts: &DayFacts, tz: i32) -> Labeled {
             }
         };
         alog!("[label] {} {}ms (시도 {}) timings={}", facts.day, r.total_ms, attempt + 1, r.timings.as_ref().map(|t| t.to_string()).unwrap_or_default());
-        match parse_enrichment(facts, &r.content).and_then(|e| match title_problem(&e.title, &stop_names(facts)) {
+        match parse_enrichment(facts, &r.content).and_then(|e| match title_problem(&e.title, &stop_names(facts)).or_else(|| short_move_problem(&e, facts)) {
             Some(p) => Err(format!("title \"{}\"이 규칙에 맞지 않습니다: {p}", e.title)),
             None => Ok(e),
         }) {
@@ -248,6 +248,27 @@ pub fn title_problem(title: &str, stops: &[String]) -> Option<String> {
     let named = stops.iter().filter(|n| n.chars().count() >= 2 && t.contains(n.as_str())).count();
     if named >= 3 {
         return Some("들른 곳 이름을 늘어놓지 말고 가장 기억에 남을 곳 하나만 쓰세요".into());
+    }
+    None
+}
+
+/// 짧게 잠깐 움직인 날·에피소드(예: 747m · 1분)를 "여행"이라 부풀리면 문제 (모델에게 그대로 돌려준다).
+/// 에피소드 제목은 그 에피소드가, 하루 제목은 그날 모든 에피소드가 짧을 때만 본다.
+pub fn short_move_problem(e: &DayEnrichment, f: &DayFacts) -> Option<String> {
+    let short = |x: &EpisodeFacts| is_short_move(x.distance_m, x.end_ms - x.start_ms);
+    let exaggerates = |t: &str| ["여행", "원정", "투어"].iter().find(|w| t.contains(*w)).copied();
+    let msg = |w: &str| format!("잠깐({}m 남짓) 움직인 기록이라 '{w}'은 과장입니다. \"경포해변 들름\"처럼 사실대로 쓰세요", f.total_distance_m.round());
+    if !f.episodes.is_empty() && f.episodes.iter().all(short) {
+        if let Some(w) = exaggerates(&e.title) {
+            return Some(msg(w));
+        }
+    }
+    for l in &e.episodes {
+        if f.episodes.iter().any(|x| x.id == l.episode_id && short(x)) {
+            if let Some(w) = exaggerates(&l.title) {
+                return Some(msg(w));
+            }
+        }
     }
     None
 }

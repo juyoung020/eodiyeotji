@@ -451,3 +451,73 @@ fn v6_database_gets_edit_tables_and_keeps_records() {
     store.hide_day("2026-10-10".into(), NOW).unwrap();
     assert_eq!(store.hidden_records().unwrap().len(), 1);
 }
+
+// ---- 하루 제목 고치기 · 짧은 이동 제목 ----
+
+#[test]
+fn a_user_day_title_beats_ai_and_rule_titles_and_survives_relabeling() {
+    let db = TempDb::new("day-title");
+    let store = db.open();
+    store.set_home_office(Some(pt(HOME)), Some(pt(OFFICE))).unwrap();
+    small_week(&store);
+    let title = |s: &EodiStore| summary_of(&s.day_summaries(30).unwrap(), "2026-10-11").unwrap().title.clone();
+    let rule = title(&store);
+
+    store.set_day_title("2026-10-11".into(), Some("  엄마랑   성수 커피  ".into())).unwrap();
+    assert_eq!(title(&store).as_deref(), Some("엄마랑 성수 커피"), "공백을 정리해 저장");
+    assert_eq!(search(&store, "엄마랑"), ["2026-10-11"], "검색 색인도 새 제목");
+    store
+        .set_day_enrichment(DayEnrichment {
+            day: "2026-10-11".into(),
+            title: "대림창고에서 커피".into(),
+            summary: "성수 카페".into(),
+            tags: vec!["카페".into()],
+            episodes: vec![],
+        })
+        .unwrap();
+    assert_eq!(title(&store).as_deref(), Some("엄마랑 성수 커피"), "AI 제목이 와도 사용자 제목이 이긴다");
+
+    store.set_day_title("2026-10-11".into(), Some("   ".into())).unwrap();
+    assert_eq!(title(&store).as_deref(), Some("대림창고에서 커피"), "비우면 AI 제목으로 돌아간다");
+    store.set_day_title("2026-10-11".into(), None).unwrap();
+    assert_ne!(title(&store), None);
+    assert_ne!(rule, None);
+
+    assert!(store.set_day_title("2026-13-01".into(), Some("x".into())).is_err(), "틀린 날짜");
+    let long = "가".repeat(DAY_TITLE_MAX + 1);
+    assert!(store.set_day_title("2026-10-11".into(), Some(long)).is_err(), "너무 긴 제목");
+
+    store.set_day_title("2026-10-10".into(), Some("강릉 바다".into())).unwrap();
+    store.delete_day("2026-10-10".into(), NOW).unwrap();
+    let left: i64 = store.lock().unwrap().query_row("SELECT count(*) FROM day_user_title", [], |r| r.get(0)).unwrap();
+    assert_eq!(left, 0, "그날을 지우면 사용자 제목도 지운다");
+}
+
+#[test]
+fn a_short_hop_far_from_home_is_not_called_a_trip() {
+    let db = TempDb::new("short-hop");
+    let store = db.open();
+    store.set_home_office(Some(pt(HOME)), Some(pt(OFFICE))).unwrap();
+    // 강릉에서 경포해변 → 초당할머니순두부 잠깐 (약 1.6km · 3분). 집에서 멀어 규칙상 '여행' 묶음이다.
+    drive(&store, kst(2026, 10, 14, 9, 18), BEACH, TOFU, 10.0);
+    name_places(&store);
+    let eps = store.episodes_for_day("2026-10-14".into()).unwrap();
+    assert_eq!(eps.len(), 1);
+    let label = &eps[0].facts.rule_label;
+    assert!(!label.contains("여행") && !label.contains("나들이"), "{label}");
+    assert_eq!(label, "초당할머니순두부 들름");
+    let day = summary_of(&store.day_summaries(30).unwrap(), "2026-10-14").unwrap().title.clone();
+    assert_eq!(day.as_deref(), Some("초당할머니순두부 들름"));
+    // 긴 강릉 여행은 그대로 '여행'
+    small_week(&store);
+    let sat = summary_of(&store.day_summaries(30).unwrap(), "2026-10-10").unwrap().title.clone().unwrap();
+    assert!(sat.contains("여행"), "{sat}");
+}
+
+#[test]
+fn short_move_labels_are_factual() {
+    use crate::memory::is_short_move;
+    assert!(is_short_move(747.0, MIN));
+    assert!(!is_short_move(747.0, HOUR), "오래 머물렀으면 짧은 이동이 아니다");
+    assert!(!is_short_move(30_000.0, 10 * MIN));
+}

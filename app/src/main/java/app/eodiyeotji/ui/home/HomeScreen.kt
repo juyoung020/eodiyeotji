@@ -30,6 +30,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -95,7 +99,8 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
             }
         } else {
             // 머리: [검색 칸 (손으로 · 말로 찾기)] + [✦ 물어보기 (기억 에이전트)]. 마이크는 검색 칸 안에 하나만 둔다.
-            // 내 기록 머리 오른쪽: 작은 기록 상태(기록 중 · 대기 중 · 권한 꺼짐, 누르면 설명) + 물어보기
+            // 검색 칸이 글로 찾기·묻기의 한 곳: 문장으로 쓰면 결과 맨 위가 "AI에게 물어보기"(Rust search_ui의 question 판정).
+            // 내 기록 머리 오른쪽: 작은 기록 상태(기록 중 · 시동 걸면 자동 기록 · 권한 꺼짐, 누르면 설명) + 물어보기(바로 대화로)
             val entry: @Composable () -> Unit = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RecordingStatusChip()
@@ -199,13 +204,16 @@ private fun NavRail(selected: HomeTab, onSelect: (HomeTab) -> Unit) {
         BrandMark(Modifier.padding(top = 4.dp, bottom = 20.dp), size = 64.dp)
         RailItem(CommunityIcons.Clock, stringResource(R.string.nav_timeline), selected == HomeTab.TIMELINE) { onSelect(HomeTab.TIMELINE) }
         RailItem(CommunityIcons.People, stringResource(R.string.nav_community), selected == HomeTab.COMMUNITY) { onSelect(HomeTab.COMMUNITY) }
-        RailItem(CommunityIcons.Heart, stringResource(R.string.nav_places), selected == HomeTab.PLACES) { onSelect(HomeTab.PLACES) }
+        // 받은 쿠폰이 있으면 내 장소 칸에 장 수 배지 (쿠폰함이 내 장소 안에 있다는 걸 보이게)
+        val coupons = app.eodiyeotji.ui.offers.LocalCoupons.current?.claimed?.collectAsStateWithLifecycle()?.value?.size ?: 0
+        RailItem(CommunityIcons.Heart, stringResource(R.string.nav_places), selected == HomeTab.PLACES, badge = coupons) { onSelect(HomeTab.PLACES) }
     }
 }
 
 @Composable
-private fun RailItem(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit) {
+private fun RailItem(icon: ImageVector, label: String, selected: Boolean, badge: Int = 0, onClick: () -> Unit) {
     val c = EodiTheme.colors
+    val badgeText = if (badge > 0) stringResource(R.string.coupon_rail_badge, badge) else null
     Column(
         Modifier
             .fillMaxWidth()
@@ -213,11 +221,30 @@ private fun RailItem(icon: ImageVector, label: String, selected: Boolean, onClic
             .clip(RoundedCornerShape(EodiTheme.space.radiusM))
             .background(if (selected) c.accentSoft else Color.Transparent)
             .selectable(selected = selected, role = Role.Tab, onClick = onClick)
+            .then(if (badgeText != null) Modifier.semantics { stateDescription = badgeText } else Modifier)
             .padding(vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = if (selected) c.accent else c.textSecondary, modifier = Modifier.size(40.dp))
+        Box {
+            Icon(icon, contentDescription = null, tint = if (selected) c.accent else c.textSecondary, modifier = Modifier.size(40.dp))
+            if (badge > 0) {
+                Text(
+                    if (badge > 9) "9+" else badge.toString(),
+                    style = EodiTheme.type.caption,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 14.dp, y = (-8).dp)
+                        .background(c.coupon, CircleShape)
+                        .widthIn(min = 30.dp)
+                        .padding(horizontal = 6.dp),
+                )
+            }
+        }
         Spacer(Modifier.height(8.dp))
         Text(
             label,

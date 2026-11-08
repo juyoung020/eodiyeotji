@@ -30,6 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -165,6 +166,8 @@ fun CouponBadge(text: String, offers: List<PartnerOffer>, modifier: Modifier = M
     val driving = host?.isDriving?.collectAsStateWithLifecycle()?.value ?: false
     val interactive = host != null && !driving && offers.isNotEmpty()
     var open by rememberSaveable { mutableStateOf(false) }
+    // 출발하면 창을 닫는다 (멈춘 뒤 저절로 다시 뜨지 않게 — 쿠폰 번호가 운전 중 화면에 남지 않는다)
+    LaunchedEffect(driving) { if (driving) open = false }
     val pill: @Composable () -> Unit = {
         Row(
             Modifier.background(c.couponSoft, CircleShape).padding(start = 10.dp, end = 14.dp, top = 5.dp, bottom = 5.dp),
@@ -304,6 +307,12 @@ private fun ClaimedCode(mine: ClaimedCoupon) {
 fun CouponWallet(compact: Boolean, modifier: Modifier = Modifier) {
     val host = LocalCoupons.current
     val claimed = host?.claimed?.collectAsStateWithLifecycle()?.value.orEmpty()
+    val driving = host?.isDriving?.collectAsStateWithLifecycle()?.value ?: false
+    if (driving && claimed.isNotEmpty()) {
+        // 운전 중에는 쿠폰 번호를 가린다 (폰 판처럼 주행 중에도 화면이 열려 있는 경우)
+        CenterMessage(stringResource(R.string.coupon_wallet_driving), modifier)
+        return
+    }
     if (claimed.isEmpty()) {
         CenterMessage(stringResource(R.string.coupon_wallet_empty), modifier)
         return

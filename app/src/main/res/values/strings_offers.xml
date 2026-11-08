@@ -20,5 +20,8 @@
     <!-- 내 장소 › 쿠폰함 -->
     <string name="places_tab_coupons">쿠폰함</string>
     <string name="coupon_wallet_empty">아직 받은 쿠폰이 없어요.\n장소 · 코스에 붙은 쿠폰 배지를 눌러 받아 보세요.</string>
+    <string name="coupon_wallet_driving">운전 중에는 쿠폰 번호를 가려요. 차를 세우면 다시 보여요.</string>
+    <!-- 레일 내 장소 칸의 받은 쿠폰 수 배지 (읽어 주기) -->
+    <string name="coupon_rail_badge">받은 쿠폰 %1$d장</string>
     <string name="coupon_claimed_on">%1$s 받음</string>
 </resources>

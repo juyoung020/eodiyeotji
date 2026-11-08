@@ -65,7 +65,7 @@ mod episode;
 mod search;
 
 pub(crate) use episode::{
-    anchor_sources, current_anchors, day_title, episode_from_row, flush_memory, kind_code, set_user_anchor, Anchors,
+    anchor_sources, is_short_move, current_anchors, day_title, episode_from_row, flush_memory, kind_code, reindex_day, set_user_anchor, Anchors,
     ANCHOR_RADIUS_M, EP_COLS, SCHEMA_V3,
 };
 pub(crate) use search::{concepts, expand_terms, match_expr, search as search_hits, squash, SINGLE_OK};

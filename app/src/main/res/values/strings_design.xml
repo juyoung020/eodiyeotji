@@ -24,8 +24,8 @@
     <!-- 아직 머무는 곳 표시 -->
     <string name="entry_here">지금 여기</string>
     <string name="entry_now">지금</string>
-    <!-- 항목 시각 열 아래 칸: 끝난 시각. 예: ~ 09:32 -->
-    <string name="entry_until">~ %1$s</string>
+    <!-- 항목 시각 열 아래 칸: 끝난 시각. 위 칸 시작 시각과 이어 읽히게 "09:18 / –09:32" (시각 열이 좁아 두 줄로 나눈다) -->
+    <string name="entry_until">–%1$s</string>
 
     <!-- 하루 태그 알약. 예: #여행 -->
     <string name="day_tag">#%1$s</string>
