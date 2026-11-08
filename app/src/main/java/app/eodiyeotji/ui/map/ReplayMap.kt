@@ -27,7 +27,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.doOnLayout
 import app.eodiyeotji.core.MapBoundsLatLon
 import app.eodiyeotji.core.ReplayScene
-import app.eodiyeotji.core.RouteTheme
+import app.eodiyeotji.core.SkyPhase
 import kotlinx.coroutines.delay
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -71,7 +71,8 @@ val ReplaySunsetLand = Color(0xFFF1CDAE)
 /** 작은 지도 · 끝 화면 지도 기울기, 비행 기울기. */
 private const val OVERVIEW_PITCH = 50.0
 private const val OVERVIEW_BEARING = -18.0
-private const val FLIGHT_PITCH = 60.0
+/** 비행은 더 눕혀 지평선이 보이게 (하늘은 화면이 그 위에 얹는다). */
+private const val FLIGHT_PITCH = 66.0
 
 /** 비행: 앞 곳에서 구간 첫 장면으로 내려가는 시간, 도착하면 그곳을 살짝 돌아보는 시간. */
 private const val DESCEND_MS = 600
@@ -88,8 +89,8 @@ private const val EMPTY = """{"type":"FeatureCollection","features":[]}"""
  * [orbit]이면 천천히 돈다 (끝 화면). 지나온 길([done])과 지금 구간([leg])을 그린다.
  */
 @Composable
-fun ReplayMap(bounds: MapBoundsLatLon?, done: String, leg: String?, modifier: Modifier = Modifier, orbit: Boolean = false) {
-    val ready = rememberReplayMap() ?: run {
+fun ReplayMap(bounds: MapBoundsLatLon?, done: String, leg: String?, modifier: Modifier = Modifier, orbit: Boolean = false, sky: SkyPhase = SkyPhase.GOLDEN) {
+    val ready = rememberReplayMap(sky) ?: run {
         Box(modifier.background(ReplaySunsetLand))
         return
     }
@@ -130,8 +131,9 @@ fun ReplayFlightMap(
     paused: Boolean,
     onArrive: () -> Unit,
     modifier: Modifier = Modifier,
+    sky: SkyPhase = SkyPhase.GOLDEN,
 ) {
-    val ready = rememberReplayMap() ?: run {
+    val ready = rememberReplayMap(sky) ?: run {
         Box(modifier.background(ReplaySunsetLand))
         return
     }
@@ -189,7 +191,7 @@ fun ReplayFlightMap(
                     val end = frames.last()
                     // 도착: 조금 내려와 들른 곳을 옆으로 돌아본다 (사진이 그 위로 천천히 덮인다)
                     m.easeCamera(
-                        CameraUpdateFactory.newCameraPosition(arrival(scene.stop.lat, scene.stop.lon, end.bearing + 25.0, (end.zoom + 1.0).coerceAtMost(16.0))),
+                        CameraUpdateFactory.newCameraPosition(arrival(scene.stop.lat, scene.stop.lon, end.bearing + 30.0, (end.zoom + 1.4).coerceAtMost(16.5))),
                         ARRIVE_MS,
                         true,
                     )
@@ -244,7 +246,7 @@ private fun arrival(lat: Double, lon: Double, bearing: Double, zoom: Double): Ca
 
 /** 지도 하나 + 노을 3D 스타일 + 금빛 길 레이어. 지도 엔진 준비 전(미리보기 포함)에는 null. */
 @Composable
-private fun rememberReplayMap(): Pair<MapView, ReplayMapController>? {
+private fun rememberReplayMap(sky: SkyPhase): Pair<MapView, ReplayMapController>? {
     val inPreview = LocalInspectionMode.current
     val context = LocalContext.current
     val options by produceState<MapLibreMapOptions?>(initialValue = null) {
@@ -253,12 +255,21 @@ private fun rememberReplayMap(): Pair<MapView, ReplayMapController>? {
     val opts = options ?: return null
     val mapView = rememberMapViewWithLifecycle(context, opts, ReplaySunsetLand.toArgb())
     val controller = remember(mapView) { ReplayMapController(mapView) }
-    LaunchedEffect(controller) { controller.setStyle(replayStyle(context.applicationContext)) }
+    LaunchedEffect(controller, sky) { controller.setStyle(replayStyle(context.applicationContext, sky)) }
+    // 지금 곳 · 차 빛이 숨 쉬듯 커졌다 작아진다 (12fps, 레이어 2개 값만 바꾼다)
+    LaunchedEffect(controller) {
+        val start = System.nanoTime()
+        while (true) {
+            val sec = (System.nanoTime() - start) / 1e9
+            controller.pulse((0.5 + 0.5 * kotlin.math.sin(sec * 2.0 * Math.PI / 1.8)).toFloat())
+            delay(83)
+        }
+    }
     return mapView to controller
 }
 
-private suspend fun replayStyle(context: Context): String =
-    runCatching { ScenicMapStyle.build(context, RouteTheme.SUNSET, EMPTY) }.getOrElse { MapStyleSource.fallbackJson(ReplaySunsetLand.toArgb()) }
+private suspend fun replayStyle(context: Context, sky: SkyPhase): String =
+    runCatching { ScenicMapStyle.build(context, sky, EMPTY) }.getOrElse { MapStyleSource.fallbackJson(ReplaySunsetLand.toArgb()) }
 
 /** 레이아웃이 끝난 뒤 [block]의 값 (카메라 맞추기는 지도 크기가 있어야 한다). */
 private suspend fun <T> awaitLayout(view: MapView, block: () -> T): T? {
@@ -287,6 +298,7 @@ private class ReplayMapController(mapView: MapView) {
         mapView.addOnDidFailLoadingMapListener { msg -> Log.w(TAG, "스타일 불러오기 실패: $msg") }
         mapView.getMapAsync { m ->
             m.uiSettings.setAllGesturesEnabled(false)
+            runCatching { m.setMaxPitchPreference(70.0) } // 비행 66°: 지평선이 보이게
             map = m
             pendingStyle?.let { setStyle(it) }
         }
@@ -303,6 +315,7 @@ private class ReplayMapController(mapView: MapView) {
         styleJson = json
         doneSrc = null
         legSrc = null
+        style = null
         m.setStyle(Style.Builder().fromJson(json)) { s -> onStyle(s) }
     }
 
@@ -313,12 +326,23 @@ private class ReplayMapController(mapView: MapView) {
         legSrc?.setGeoJson(leg)
     }
 
+    private var style: Style? = null
+
+    /** 숨쉬기 [k] 0~1: 지금 곳의 빛 고리와 차 둘레 빛을 키우고 줄인다. */
+    fun pulse(k: Float) {
+        val s = style ?: return
+        val isNow = eq(get("now"), literal(true))
+        (s.getLayer("$DONE-stop-glow") as? CircleLayer)?.setProperties(circleRadius(switchCase(isNow, literal(26f + 18f * k), literal(16f))))
+        (s.getLayer("$LEG-car-halo") as? CircleLayer)?.setProperties(circleRadius(34f + 14f * k), circleOpacity(0.35f + 0.3f * k))
+    }
+
     fun setLeg(l: String) {
         leg = l
         legSrc?.setGeoJson(l)
     }
 
     private fun onStyle(s: Style) {
+        style = s
         doneSrc = GeoJsonSource(DONE, done).also { s.addSource(it) }
         legSrc = GeoJsonSource(LEG, leg).also { s.addSource(it) }
         val round = arrayOf(lineJoin(Property.LINE_JOIN_ROUND), lineCap(Property.LINE_CAP_ROUND))

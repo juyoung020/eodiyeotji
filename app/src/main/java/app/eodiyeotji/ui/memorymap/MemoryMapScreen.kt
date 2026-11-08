@@ -55,6 +55,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
 import app.eodiyeotji.core.MemoryMap
+import app.eodiyeotji.core.SkyPhase
 import app.eodiyeotji.ui.map.MapLibreNative
 import app.eodiyeotji.ui.map.rememberMapViewWithLifecycle
 import app.eodiyeotji.ui.recap.Load
@@ -64,6 +65,8 @@ import app.eodiyeotji.ui.theme.EodiTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlin.math.PI
+import kotlin.math.sin
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLngBounds
@@ -71,7 +74,9 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.FillExtrusionLayer
 import org.maplibre.android.style.layers.LineLayer
 
@@ -80,25 +85,39 @@ private val NightSky = Color(0xFF070D1C)
 private val Gold = Color(0xFFFFD58A)
 private val Moon = Color(0xFFF3EEDF)
 
-/** 전체 그리기 시간을 달 수로 나눈다 (한 달 0.3~0.7초). */
-private const val DRAW_TOTAL_MS = 6_500L
+/** 전체 그리기 시간을 달 수로 나눈다 (한 달 0.5~1.1초, 그동안 혜성 꼬리가 그 달의 길을 따라 그려진다). */
+private const val DRAW_TOTAL_MS = 9_000L
 private const val CAPTION_FADE_MS = 1_800
 
 /** 달마다 넓히는 레이어 (filter m <= k). */
-private val ShownLayers = listOf("route-haze", "route-glow", "route-core", "visit-halo", "visit-star", "visit-pillar")
-private const val FRESH_LAYER = "route-fresh"
+private val ShownLayers = listOf("route-haze", "route-glow", "route-core", "visit-halo", "visit-star", "visit-pillar", "city-lights")
+/** 지금 그리는 달의 혜성 (line-gradient, 앱이 머리 위치를 프레임마다 옮긴다). */
+private const val COMET_CORE = "route-fresh"
+private const val COMET_GLOW = "route-comet-glow"
+/** 혜성 꼬리 길이 (경로 길이 비율) · 그라데이션 칸 수 · 갱신 간격 (30fps). */
+private const val COMET_TAIL = 0.35f
+private const val COMET_STOPS = 24
+private const val COMET_FRAME_MS = 33L
+/** 별 숨쉬기 · 바닷가 반짝임 갱신 간격 (12fps면 충분히 부드럽고 GPU를 덜 쓴다). */
+private const val PULSE_FRAME_MS = 83L
+/** 시작: 한국 전체를 위에서 내려다보는 높은 밤하늘 → 비스듬히 내려앉는 시간. */
+private const val KOREA_LAT = 36.2
+private const val KOREA_LON = 127.8
+private const val KOREA_ZOOM = 5.6
+private const val DESCEND_MS = 2_600
 
 /** 3D 카메라: 그리는 동안 기울기 · 도는 각도, 마지막에 달린 길 전체로 물러나는 시간. */
-private const val REVEAL_PITCH = 58.0
+private const val REVEAL_PITCH = 66.0
+private const val MAX_PITCH = 70.0
 private const val REVEAL_BEARING_FROM = -35.0
 private const val REVEAL_BEARING_TO = 35.0
 private const val FLY_OUT_MS = 3_800
-private const val END_PITCH = 40.0
+private const val END_PITCH = 55.0
 /** 끝 장면: 달린 길 범위 둘레 여백 (화면의 15%). 빈 바다 대신 길이 화면을 채운다. */
 private const val END_PAD_FRACTION = 0.15f
-/** 다 그린 뒤 숨 쉬듯 좌우로 천천히 (±10°, 한쪽 6초). */
-private const val BREATHE_DEG = 10.0
-private const val BREATHE_MS = 6_000
+/** 다 그린 뒤 천천히 한 방향으로 돈다 (8초에 15°, 한 바퀴 3분 남짓 — 멀미 없이 살아 있는 느낌만). */
+private const val ORBIT_DEG = 15.0
+private const val ORBIT_MS = 8_000
 
 /**
  * 기억 지도 (요약 화면 · 날짜 목록 위를 덮는 전체 화면). 1년 동안 달린 모든 길을 밤하늘 3D 지도(산 음영 · 건물 · 빛기둥) 위에
@@ -162,7 +181,13 @@ private fun MemoryMapStage(data: MemoryMap) {
     Box(Modifier.fillMaxSize().onSizeChanged { viewSize = it }) {
         if (opts != null) {
             val mapView = rememberMapViewWithLifecycle(context, opts, NightSky.toArgb())
-            LaunchedEffect(mapView) { mapView.getMapAsync { m -> map = m } }
+            LaunchedEffect(mapView) {
+                mapView.getMapAsync { m ->
+                    // 60°보다 더 눕혀 지평선이 보이게 (그 위는 CinematicSky가 하늘로 덮는다)
+                    runCatching { m.setMaxPitchPreference(MAX_PITCH) }
+                    map = m
+                }
+            }
             val m = map
             val json = styleJson
             LaunchedEffect(m, json) {
@@ -171,6 +196,8 @@ private fun MemoryMapStage(data: MemoryMap) {
             val description = stringResource(R.string.memory_map_description)
             AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize().semantics { contentDescription = description })
         }
+        // 지평선 위 밤하늘 · 반짝이는 별 · 비네트 (지도 위에 얹는 Canvas 한 장)
+        CinematicSky(SkyPhase.NIGHT, stars = true, skyFraction = 0.3f)
 
         // 그리기: 카메라는 기울어진 채 조금 가까이서 시작해 천천히 돌며 전체 범위로 물러나고, 달은 하나씩 켠다.
         // 다 그리면 달린 길 전체로 물러난 뒤 한 줄을 띄우고, 숨 쉬듯 좌우로 천천히 돈다.
@@ -179,21 +206,28 @@ private fun MemoryMapStage(data: MemoryMap) {
         LaunchedEffect(s, playKey) {
             if (s == null || m == null) return@LaunchedEffect
             captionShown = false
-            val stepMs = (DRAW_TOTAL_MS / total.coerceAtLeast(1)).coerceIn(300L, 700L)
+            val stepMs = monthMs(total)
             val revealMs = (stepMs * total + 1_000).toInt()
             data.bounds?.let { b ->
                 val bb = LatLngBounds.from(b.maxLat, b.maxLon, b.minLat, b.minLon)
                 val pad = intArrayOf(120, 200, 120, 260)
-                val from = m.getCameraForLatLngBounds(bb, pad, REVEAL_BEARING_FROM, REVEAL_PITCH)
-                val to = m.getCameraForLatLngBounds(bb, pad, REVEAL_BEARING_TO, REVEAL_PITCH)
+                // 기울기째로 맞추면 먼 쪽까지 계산해 길이 아주 작아진다 → 위에서 맞춘 줌에 기울기만 더한다
+                val from = m.getCameraForLatLngBounds(bb, pad, REVEAL_BEARING_FROM, 0.0)?.let { CameraPosition.Builder(it).tilt(REVEAL_PITCH).build() }
+                val to = m.getCameraForLatLngBounds(bb, pad, REVEAL_BEARING_TO, 0.0)?.let { CameraPosition.Builder(it).tilt(REVEAL_PITCH).build() }
                 if (from != null && to != null) {
                     m.cancelTransitions()
-                    m.moveCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(from).zoom(from.zoom + 1.0).build()))
+                    // 별이 뜬 높은 하늘에서 한국 전체를 내려다보다가, 기울어지며 달린 곳으로 내려앉는다
+                    step = -1
+                    m.moveCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder().target(LatLng(KOREA_LAT, KOREA_LON)).zoom(KOREA_ZOOM).tilt(0.0).bearing(0.0).build()))
+                    delay(700)
+                    val near = CameraPosition.Builder(from).zoom(from.zoom + 0.8).build()
+                    m.animateCamera(CameraUpdateFactory.newCameraPosition(near), DESCEND_MS)
+                    delay(DESCEND_MS.toLong())
                     m.easeCamera(CameraUpdateFactory.newCameraPosition(to), revealMs, true)
                 }
             }
             step = -1
-            delay(600)
+            delay(300)
             for (k in 0 until total) {
                 step = k
                 delay(stepMs)
@@ -211,11 +245,12 @@ private fun MemoryMapStage(data: MemoryMap) {
             captionShown = true
             delay(600L)
             try {
-                var side = 1.0
+                // 별자리처럼 켜진 곳들을 두고 천천히 한 방향으로 돈다 (등속이라 이음매가 없다)
+                var bearing = end.bearing
                 while (true) {
-                    m.easeCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(end).bearing(side * BREATHE_DEG).build()), BREATHE_MS, true)
-                    delay(BREATHE_MS.toLong())
-                    side = -side
+                    bearing += ORBIT_DEG
+                    m.easeCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(end).bearing(bearing).build()), ORBIT_MS, false)
+                    delay(ORBIT_MS.toLong())
                 }
             } finally {
                 m.cancelTransitions()
@@ -223,7 +258,8 @@ private fun MemoryMapStage(data: MemoryMap) {
         }
         LaunchedEffect(s, step) {
             if (s == null) return@LaunchedEffect
-            val shown = Expression.lte(Expression.get("m"), Expression.literal(step.coerceAtMost(total)))
+            // 지나간 달은 켜 두고, 지금 달은 혜성이 그린다 (다 그리면 전부 켠다)
+            val shown = Expression.lt(Expression.get("m"), Expression.literal(if (step < 0) -1 else step.coerceAtMost(total)))
             ShownLayers.forEach { id ->
                 when (val l = s.getLayer(id)) {
                     is LineLayer -> l.setFilter(shown)
@@ -232,7 +268,41 @@ private fun MemoryMapStage(data: MemoryMap) {
                     else -> Unit
                 }
             }
-            (s.getLayer(FRESH_LAYER) as? LineLayer)?.setFilter(Expression.eq(Expression.get("m"), Expression.literal(if (done) -1 else step)))
+            val core = s.getLayer(COMET_CORE) as? LineLayer
+            val glow = s.getLayer(COMET_GLOW) as? LineLayer
+            val fresh = Expression.eq(Expression.get("m"), Expression.literal(if (done || step < 0) -1 else step))
+            core?.setFilter(fresh)
+            glow?.setFilter(fresh)
+            if (step !in 0 until total) return@LaunchedEffect
+            // 혜성: 머리가 길의 처음(0)에서 끝(1)까지 달리고, 꼬리 뒤로는 금빛 길이 남는다
+            val stepMs = monthMs(total)
+            val start = System.nanoTime()
+            while (true) {
+                val t = ((System.nanoTime() - start) / 1_000_000f / stepMs).coerceAtMost(1f)
+                val head = t * 1.05f
+                core?.setProperties(PropertyFactory.lineGradient(cometGradient(head, core = true)))
+                glow?.setProperties(PropertyFactory.lineGradient(cometGradient(head, core = false)))
+                if (t >= 1f) break
+                delay(COMET_FRAME_MS)
+            }
+        }
+        // 들른 곳 별빛 숨쉬기 · 바닷가 반짝임: 화면이 열려 있는 동안 아주 천천히 (12fps)
+        LaunchedEffect(s) {
+            if (s == null) return@LaunchedEffect
+            val halo = s.getLayer("visit-halo") as? CircleLayer
+            val coast = s.getLayer("coast-glow") as? LineLayer
+            val start = System.nanoTime()
+            while (true) {
+                val sec = (System.nanoTime() - start) / 1e9
+                val breath = (0.5 + 0.5 * sin(sec * 2.0 * PI / 2.8)).toFloat()
+                halo?.setProperties(
+                    PropertyFactory.circleOpacity(
+                        Expression.product(Expression.literal(0.45f + 0.55f * breath), Expression.sum(Expression.literal(0.12f), Expression.product(Expression.literal(0.5f), Expression.get("w")))),
+                    ),
+                )
+                coast?.setProperties(PropertyFactory.lineOpacity(0.35f + 0.3f * (0.5f + 0.5f * sin(sec * 2.0 * PI / 4.5).toFloat())))
+                delay(PULSE_FRAME_MS)
+            }
         }
 
         // 지금 그리는 달
@@ -287,4 +357,29 @@ private suspend fun buildStyle(context: Context, data: MemoryMap): String = with
         .replace("\"__ROUTES__\"", data.routesGeojson)
         .replace("\"__VISITS__\"", data.visitsGeojson)
         .replace("\"__PILLARS__\"", data.pillarsGeojson)
+}
+
+private fun monthMs(total: Int): Long = (DRAW_TOTAL_MS / total.coerceAtLeast(1)).coerceIn(500L, 1_100L)
+
+/**
+ * 혜성 그라데이션 (line-progress 0~1): 머리[head] 앞은 투명, 머리는 흰빛, 꼬리로 갈수록 금빛, 그 뒤로는 남는 금빛 길.
+ * [core]가 아니면 넓게 번지는 빛 (꼬리 뒤는 옅게).
+ */
+private fun cometGradient(head: Float, core: Boolean): Expression {
+    val trail = if (core) 0.85f else 0.18f
+    val stops = Array(COMET_STOPS + 1) { i ->
+        val x = i.toFloat() / COMET_STOPS
+        val behind = head - x
+        val c = when {
+            behind < 0f -> Expression.rgba(255f, 214f, 140f, 0f)
+            behind < COMET_TAIL -> {
+                val k = 1f - behind / COMET_TAIL // 머리 1 → 꼬리 끝 0
+                Expression.rgba(255f, 196f + 59f * k, 110f + 140f * k * k, trail + (1f - trail) * k * k)
+            }
+            core -> Expression.rgba(255f, 222f, 160f, trail)
+            else -> Expression.rgba(255f, 180f, 70f, trail)
+        }
+        Expression.stop(x, c)
+    }
+    return Expression.interpolate(Expression.linear(), Expression.lineProgress(), *stops)
 }

@@ -20,7 +20,7 @@
       "maxzoom": 13,
       "attribution": "Terrain Tiles (Mapzen · AWS Open Data)"
     },
-    "route": { "type": "geojson", "data": "__ROUTE_GEOJSON__" }
+    "route": { "type": "geojson", "data": "__ROUTE_GEOJSON__", "lineMetrics": true }
   },
   "layers": [
     { "id": "background", "type": "background", "paint": { "background-color": "{{land}}" } },
@@ -38,14 +38,40 @@
       "type": "hillshade",
       "source": "dem",
       "paint": {
-        "hillshade-exaggeration": 0.55,
+        "hillshade-exaggeration": 0.8,
         "hillshade-shadow-color": "{{hillShadow}}",
         "hillshade-highlight-color": "{{hillHighlight}}",
         "hillshade-accent-color": "{{hillAccent}}",
         "hillshade-illumination-direction": 300
       }
     },
+    {
+      "id": "hills-rim",
+      "type": "hillshade",
+      "source": "dem",
+      "maxzoom": 15,
+      "paint": {
+        "hillshade-exaggeration": 0.45,
+        "hillshade-shadow-color": "rgba(0,0,0,0)",
+        "hillshade-highlight-color": "{{hillRim}}",
+        "hillshade-accent-color": "rgba(0,0,0,0)",
+        "hillshade-illumination-direction": 120,
+        "hillshade-illumination-anchor": "map"
+      }
+    },
     { "id": "water", "type": "fill", "source": "ofm", "source-layer": "water", "paint": { "fill-color": ["interpolate", ["linear"], ["zoom"], 6, "{{waterDeep}}", 13, "{{water}}"] } },
+    {
+      "id": "coast-glow",
+      "type": "line",
+      "source": "ofm",
+      "source-layer": "water",
+      "paint": {
+        "line-color": "{{coast}}",
+        "line-opacity": 0.6,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 6, 1.5, 14, 6],
+        "line-blur": ["interpolate", ["linear"], ["zoom"], 6, 1.5, 14, 5]
+      }
+    },
     {
       "id": "waterway",
       "type": "line",
@@ -109,11 +135,11 @@
         "fill-extrusion-color": [
           "interpolate", ["linear"], ["coalesce", ["get", "render_height"], 8],
           0, "{{buildingLow}}",
-          40, "{{buildingMid}}",
-          150, "{{buildingHigh}}"
+          25, "{{buildingMid}}",
+          90, "{{buildingHigh}}"
         ],
-        "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 13, 0, 13.6, ["coalesce", ["get", "render_height"], 8]],
-        "fill-extrusion-base": ["interpolate", ["linear"], ["zoom"], 13, 0, 13.6, ["coalesce", ["get", "render_min_height"], 0]],
+        "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 13, 0, 13.6, ["*", 1.3, ["coalesce", ["get", "render_height"], 8]]],
+        "fill-extrusion-base": ["interpolate", ["linear"], ["zoom"], 13, 0, 13.6, ["*", 1.3, ["coalesce", ["get", "render_min_height"], 0]]],
         "fill-extrusion-opacity": 0.9,
         "fill-extrusion-vertical-gradient": true
       }

@@ -56,6 +56,30 @@ pub struct ReplayScene {
     pub leg_frames: Vec<String>,
     /// 이 구간을 따라가는 3D 카메라 비행 ([LEG_FLIGHT_FRAMES]장면, 앞을 보는 방향 · 구간 길이에 맞춘 높이). 구간이 없으면 빈 목록
     pub leg_flight: Vec<FlightFrame>,
+    /// 도착 시각의 하늘 (지도 색 · 하늘 그라데이션을 고른다)
+    pub sky: SkyPhase,
+}
+
+/// 하늘 색 때 (현지 시각 기준). 새벽 05:00~, 낮 07:00~, 노을 16:30~, 푸른 시간 18:30~, 밤 19:30~05:00.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum SkyPhase {
+    Dawn,
+    Day,
+    Golden,
+    Blue,
+    Night,
+}
+
+/// 현지 시각 → 하늘 때.
+pub(crate) fn sky_phase(t_ms: i64, tz_minutes: i32) -> SkyPhase {
+    let min = (t_ms + tz_minutes as i64 * 60_000).rem_euclid(DAY_MS) / 60_000;
+    match min {
+        300..=419 => SkyPhase::Dawn,
+        420..=989 => SkyPhase::Day,
+        990..=1109 => SkyPhase::Golden,
+        1110..=1169 => SkyPhase::Blue,
+        _ => SkyPhase::Night,
+    }
 }
 
 /// 하루 다시 보기.
@@ -84,6 +108,8 @@ pub struct DayReplay {
     pub distance_m: f64,
     /// 코스 안내에 쓸 그날 대표 에피소드 (없으면 None)
     pub episode_id: Option<i64>,
+    /// 하루 전체 장면(시작 · 끝 화면)의 하늘 = 마지막 들른 곳의 때 (들른 곳이 없으면 노을)
+    pub sky: SkyPhase,
 }
 
 #[uniffi::export]
@@ -192,6 +218,7 @@ pub(crate) fn build_replay(d: &DayDetail, tz_minutes: i32, today: i64, ep: Optio
             done_geojson,
             leg_frames,
             leg_flight,
+            sky: sky_phase(s.arrive_ms, tz_minutes),
         });
     }
     let all: Vec<Vec<(f64, f64)>> = d.trips.iter().map(trip_points).filter(|p| p.len() >= 2).collect();
@@ -214,6 +241,7 @@ pub(crate) fn build_replay(d: &DayDetail, tz_minutes: i32, today: i64, ep: Optio
         [first, ..] if short => format!("그날, {}부터 {}곳에 들렀어요", first.stop.name, scenes.len()),
         _ => format!("그날, 우리는 {}를 달렸어요", distance_text(distance_m)),
     };
+    let scenes_sky = scenes.last().map(|s| s.sky).unwrap_or(SkyPhase::Golden);
     DayReplay {
         day: d.day.clone(),
         date_text,
@@ -228,6 +256,7 @@ pub(crate) fn build_replay(d: &DayDetail, tz_minutes: i32, today: i64, ep: Optio
         stats_line: stats.join(" · "),
         distance_m,
         episode_id: ep.map(|e| e.id),
+        sky: scenes_sky,
     }
 }
 

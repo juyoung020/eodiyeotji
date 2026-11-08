@@ -39,6 +39,8 @@ import app.eodiyeotji.R
 import app.eodiyeotji.core.FlightFrame
 import app.eodiyeotji.core.RouteCameraSpec
 import app.eodiyeotji.core.RouteTheme
+import app.eodiyeotji.core.SkyPhase
+import app.eodiyeotji.ui.memorymap.CinematicSky
 import kotlin.math.floor
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -85,13 +87,14 @@ fun ScenicRouteMap(
         Box(modifier.background(bg).semantics { this.contentDescription = contentDescription })
         return
     }
-    ScenicMapContent(style, camera, frames, flying, flightMs, onFlightEnd, options, bg, modifier.semantics { this.contentDescription = contentDescription })
+    ScenicMapContent(style, theme, camera, frames, flying, flightMs, onFlightEnd, options, bg, modifier.semantics { this.contentDescription = contentDescription })
 }
 
 @SuppressLint("ClickableViewAccessibility") // 터치는 지도에 그대로 넘기고 비행만 멈춘다
 @Composable
 private fun ScenicMapContent(
     style: String?,
+    theme: RouteTheme,
     camera: RouteCameraSpec?,
     frames: List<FlightFrame>,
     flying: Boolean,
@@ -173,6 +176,13 @@ private fun ScenicMapContent(
     }
     Box(modifier) {
         AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
+        // 기울어진 지도 지평선 위 하늘 · 지평선 빛 · 비네트 (때 색, 밤이면 별)
+        val sky = when (theme) {
+            RouteTheme.DAY -> SkyPhase.DAY
+            RouteTheme.SUNSET -> SkyPhase.GOLDEN
+            RouteTheme.NIGHT -> SkyPhase.NIGHT
+        }
+        CinematicSky(sky, skyFraction = 0.26f)
         Text(
             stringResource(R.string.drive_map_attribution),
             style = AttributionStyle,
@@ -208,7 +218,7 @@ internal fun frameAt(frames: List<FlightFrame>, t: Float, pitch: Double = FLIGHT
         .build()
 }
 
-private const val FLIGHT_PITCH = 60.0
+private const val FLIGHT_PITCH = 64.0
 
 /** 스타일을 불러오는 동안 보일 바탕색 (때와 같은 색이라 깜빡이지 않게). */
 internal fun loadingColor(theme: RouteTheme): Color = when (theme) {

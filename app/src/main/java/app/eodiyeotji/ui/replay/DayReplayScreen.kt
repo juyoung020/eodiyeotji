@@ -71,6 +71,7 @@ import app.eodiyeotji.core.ReplayScene
 import app.eodiyeotji.ui.agent.AgentIcons
 import app.eodiyeotji.ui.map.ReplayFlightMap
 import app.eodiyeotji.ui.map.ReplayMap
+import app.eodiyeotji.ui.memorymap.CinematicSky
 import app.eodiyeotji.ui.place.PhotoLoadingPlaceholder
 import app.eodiyeotji.ui.place.PlaceThumbnail
 import app.eodiyeotji.ui.theme.EodiIcons
@@ -146,15 +147,6 @@ private fun Center(text: String) {
     }
 }
 
-/** 비행 장면 하늘 쪽 노을빛 안개 (지도 위쪽, 먼 곳이 따뜻하게 흐려 보이게). */
-private val SunsetHaze = Brush.verticalGradient(
-    0f to Color(0xD9FF9A5C),
-    0.22f to Color(0x66FFB880),
-    0.45f to Color.Transparent,
-    0.8f to Color.Transparent,
-    1f to Color(0x8C2A1410),
-)
-
 /**
  * 재생기: 0 = 시작 화면, 1..n = 들른 곳 장면, n+1 = 끝 화면. 들른 곳 장면은 앞 곳에서 그곳까지 노을빛 3D 지도 위를 길 따라
  * 날아간 뒤(전체 화면, [FLIGHT_MS]) 사진으로 넘어간다. 누르면 멈춤/다시 재생, 옆으로 밀거나 화살표로 이전 · 다음.
@@ -200,7 +192,7 @@ private fun Player(r: DayReplay, onClose: () -> Unit, onNavigate: () -> Unit) {
         if (step == last) {
             EndScreen(r, wide, onNavigate = onNavigate, onAgain = { paused = false; go(0) }, onClose = onClose)
         } else {
-            // 바탕: 전체 화면 3D 비행 지도 (MapView 하나를 장면 내내 쓴다) + 노을빛 하늘 안개
+            // 바탕: 전체 화면 3D 비행 지도 (MapView 하나를 장면 내내 쓴다, 그날 하늘 때의 색) + 장면 시각의 하늘 · 지평선 빛 · 비네트
             ReplayFlightMap(
                 bounds = r.bounds,
                 scene = scene,
@@ -208,8 +200,9 @@ private fun Player(r: DayReplay, onClose: () -> Unit, onNavigate: () -> Unit) {
                 paused = paused,
                 onArrive = { arrived = true },
                 modifier = Modifier.fillMaxSize(),
+                sky = r.sky,
             )
-            Box(Modifier.fillMaxSize().background(SunsetHaze))
+            Crossfade(targetState = scene?.sky ?: r.sky, animationSpec = tween(FLIGHT_MS.toInt() / 2), label = "replay-sky") { CinematicSky(it) }
             // 위: 시작 화면 · 사진 장면 (비행 중에는 비워 지도가 보인다, -1)
             Crossfade(targetState = if (step > 0 && !arrived) -1 else step, animationSpec = tween(FADE_MS), label = "replay-scene") { s ->
                 when {
@@ -241,6 +234,7 @@ private fun Player(r: DayReplay, onClose: () -> Unit, onNavigate: () -> Unit) {
                 bounds = r.bounds,
                 done = scene?.doneGeojson ?: EMPTY,
                 leg = scene?.legFrames?.lastOrNull(),
+                sky = r.sky,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(top = 104.dp, end = 32.dp)
@@ -380,7 +374,7 @@ private fun EndScreen(r: DayReplay, wide: Boolean, onNavigate: () -> Unit, onAga
             }
         }
     }
-    val map: @Composable (Modifier) -> Unit = { m -> ReplayMap(r.bounds, r.finalGeojson, null, m.clip(RoundedCornerShape(28.dp)), orbit = true) }
+    val map: @Composable (Modifier) -> Unit = { m -> ReplayMap(r.bounds, r.finalGeojson, null, m.clip(RoundedCornerShape(28.dp)), orbit = true, sky = r.sky) }
     if (wide) {
         Row(Modifier.fillMaxSize().padding(56.dp), verticalAlignment = Alignment.CenterVertically) {
             text(Modifier.weight(1f))

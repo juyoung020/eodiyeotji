@@ -2,6 +2,7 @@ package app.eodiyeotji.core
 
 import androidx.compose.runtime.Immutable
 import app.eodiyeotji.core.rust.DayReplay as RDayReplay
+import app.eodiyeotji.core.rust.SkyPhase as RSkyPhase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -24,7 +25,12 @@ data class ReplayScene(
     val legFrames: List<String>,
     /** 이 구간을 따라가는 3D 카메라 비행 (구간이 없으면 빈 목록) */
     val legFlight: List<FlightFrame>,
+    /** 도착 시각의 하늘 때 (Rust가 현지 시각으로 정한다) */
+    val sky: SkyPhase,
 )
+
+/** 하늘 때: 3D 지도 색 · 하늘 그라데이션을 고른다. */
+enum class SkyPhase { DAWN, DAY, GOLDEN, BLUE, NIGHT }
 
 @Immutable
 data class DayReplay(
@@ -45,6 +51,8 @@ data class DayReplay(
     val statsLine: String,
     val distanceM: Double,
     val episodeId: Long?,
+    /** 시작 · 끝 화면 하늘 (마지막 들른 곳의 때) */
+    val sky: SkyPhase,
 )
 
 /** 그날 다시 보기 재료. */
@@ -54,8 +62,16 @@ suspend fun EodiCore.dayReplay(day: String, nowMs: Long = System.currentTimeMill
 
 private fun RDayReplay.toModel() = DayReplay(
     day, dateText, yearsAgo.toInt(), stamp, title, subtitle,
-    scenes.map { ReplayScene(it.stop.toModel(), it.order.toInt(), it.timeText, it.stayText, it.doneGeojson, it.legFrames, it.legFlight.map { f -> FlightFrame(f.lat, f.lon, f.bearing, f.zoom) }) },
+    scenes.map { ReplayScene(it.stop.toModel(), it.order.toInt(), it.timeText, it.stayText, it.doneGeojson, it.legFrames, it.legFlight.map { f -> FlightFrame(f.lat, f.lon, f.bearing, f.zoom) }, it.sky.toModel()) },
     finalGeojson,
     bounds?.let { MapBoundsLatLon(it.minLat, it.minLon, it.maxLat, it.maxLon) },
-    summaryLine, statsLine, distanceM, episodeId,
+    summaryLine, statsLine, distanceM, episodeId, sky.toModel(),
 )
+
+private fun RSkyPhase.toModel() = when (this) {
+    RSkyPhase.DAWN -> SkyPhase.DAWN
+    RSkyPhase.DAY -> SkyPhase.DAY
+    RSkyPhase.GOLDEN -> SkyPhase.GOLDEN
+    RSkyPhase.BLUE -> SkyPhase.BLUE
+    RSkyPhase.NIGHT -> SkyPhase.NIGHT
+}

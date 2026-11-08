@@ -187,3 +187,15 @@ fn a_short_day_ends_on_the_stops_not_the_distance() {
     let r = build_replay(&d, KST, days_from_civil(2026, 11, 6), None);
     assert_eq!(r.summary_line, "그날, 광장시장에 들렀어요");
 }
+
+#[test]
+fn sky_phase_follows_local_clock() {
+    let kst = 540;
+    let at = |h: i64, m: i64| (h * 60 + m - kst as i64) * 60_000;
+    assert_eq!(sky_phase(at(5, 30), kst), SkyPhase::Dawn);
+    assert_eq!(sky_phase(at(12, 0), kst), SkyPhase::Day);
+    assert_eq!(sky_phase(at(17, 10), kst), SkyPhase::Golden);
+    assert_eq!(sky_phase(at(18, 45), kst), SkyPhase::Blue);
+    assert_eq!(sky_phase(at(22, 0), kst), SkyPhase::Night);
+    assert_eq!(sky_phase(at(2, 0), kst), SkyPhase::Night);
+}
