@@ -11,8 +11,6 @@ import app.eodiyeotji.core.rust.RecapPlace as RRecapPlace
 import app.eodiyeotji.core.rust.RecapRegion as RRecapRegion
 import app.eodiyeotji.core.rust.RecapTotals as RRecapTotals
 import app.eodiyeotji.core.rust.YearRecap as RYearRecap
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 /*
  * 회상 · 요약 입구 (core-rs/src/recap.rs). 고르기 · 횟수 제한 · 숫자 · 안내 문장은 Rust가 하고, 여기서는 옮겨 담기만 한다.
@@ -123,35 +121,35 @@ data class YearRecap(
 )
 
 /** "N년 전 오늘" (1~10년 전 같은 날에 나들이 · 여행이 없으면 null). */
-suspend fun EodiCore.onThisDay(nowMs: Long = System.currentTimeMillis()): OnThisDay? = withContext(Dispatchers.IO) {
+suspend fun EodiCore.onThisDay(nowMs: Long = System.currentTimeMillis()): OnThisDay? = coreCall("onThisDay") {
     rust.onThisDay(nowMs)?.toModel()
 }
 
 /** 오늘은 "N년 전 오늘" 카드를 닫는다. */
-suspend fun EodiCore.dismissOnThisDay(nowMs: Long = System.currentTimeMillis()) = withContext(Dispatchers.IO) { rust.dismissOnThisDay(nowMs) }
+suspend fun EodiCore.dismissOnThisDay(nowMs: Long = System.currentTimeMillis()) = coreCall("dismissOnThisDay") { rust.dismissOnThisDay(nowMs) }
 
 /** 오늘 "N년 전 오늘"을 읽었다. */
 /** 첫 화면 기억 지도 소개 카드를 띄울까 (기록 30일 이상 · 아직 안 닫음, Rust가 정한다). */
-suspend fun EodiCore.memoryMapIntro(nowMs: Long = System.currentTimeMillis()): Boolean = withContext(Dispatchers.IO) { rust.memoryMapIntro(nowMs) }
+suspend fun EodiCore.memoryMapIntro(nowMs: Long = System.currentTimeMillis()): Boolean = coreCall("memoryMapIntro") { rust.memoryMapIntro(nowMs) }
 
 /** 기억 지도 소개 카드를 닫는다 (다시 나오지 않는다). */
-suspend fun EodiCore.dismissMemoryMapIntro() = withContext(Dispatchers.IO) { rust.dismissMemoryMapIntro() }
+suspend fun EodiCore.dismissMemoryMapIntro() = coreCall("dismissMemoryMapIntro") { rust.dismissMemoryMapIntro() }
 
-suspend fun EodiCore.markOnThisDaySpoken(nowMs: Long = System.currentTimeMillis()) = withContext(Dispatchers.IO) { rust.markOnThisDaySpoken(nowMs) }
+suspend fun EodiCore.markOnThisDaySpoken(nowMs: Long = System.currentTimeMillis()) = coreCall("markOnThisDaySpoken") { rust.markOnThisDaySpoken(nowMs) }
 
 /** 위치 묶음 근처의 회상 하나 (횟수 제한 포함, 세지는 않는다). */
-suspend fun EodiCore.recallNear(points: List<LatLon>, nowMs: Long = System.currentTimeMillis()): Recall? = withContext(Dispatchers.IO) {
+suspend fun EodiCore.recallNear(points: List<LatLon>, nowMs: Long = System.currentTimeMillis()): Recall? = coreCall("recallNear") {
     rust.recallNear(points.map { RGeoPoint(it.lat, it.lon) }, nowMs)?.toModel()
 }
 
 /** 회상을 보여 줬다 (횟수에 센다). */
-suspend fun EodiCore.markRecallShown(key: String, nowMs: Long = System.currentTimeMillis()) = withContext(Dispatchers.IO) { rust.markRecallShown(key, nowMs) }
+suspend fun EodiCore.markRecallShown(key: String, nowMs: Long = System.currentTimeMillis()) = coreCall("markRecallShown") { rust.markRecallShown(key, nowMs) }
 
-suspend fun EodiCore.monthRecap(year: Int, month: Int, nowMs: Long = System.currentTimeMillis()): MonthRecap = withContext(Dispatchers.IO) {
+suspend fun EodiCore.monthRecap(year: Int, month: Int, nowMs: Long = System.currentTimeMillis()): MonthRecap = coreCall("monthRecap") {
     rust.monthRecap(year, month.toUInt(), nowMs).toModel()
 }
 
-suspend fun EodiCore.yearRecap(year: Int, nowMs: Long = System.currentTimeMillis()): YearRecap = withContext(Dispatchers.IO) {
+suspend fun EodiCore.yearRecap(year: Int, nowMs: Long = System.currentTimeMillis()): YearRecap = coreCall("yearRecap") {
     rust.yearRecap(year, nowMs).toModel()
 }
 

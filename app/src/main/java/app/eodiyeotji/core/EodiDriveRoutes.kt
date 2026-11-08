@@ -9,8 +9,6 @@ import app.eodiyeotji.core.rust.DriveTripCandidate as RDriveTripCandidate
 import app.eodiyeotji.core.rust.GeoPoint as RGeoPoint
 import app.eodiyeotji.core.rust.RouteTheme as RRouteTheme
 import app.eodiyeotji.core.rust.driveBestTimeOptions
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 /*
  * 커뮤니티 > 드라이브 코스 = 차에서 즐기는 경치 길 하나 (들를 곳 없음, core-rs/src/community/drive.rs).
@@ -89,46 +87,46 @@ data class DriveTripCandidate(
 /** 3D 미리보기 기울기(도) — Rust `PREVIEW_PITCH`와 같다. */
 const val ROUTE_PREVIEW_PITCH = 60.0
 
-suspend fun EodiCore.driveRoutes(sort: DriveRouteSort, from: LatLon?, limit: Int = 100): List<DriveRouteItem> = withContext(Dispatchers.IO) {
+suspend fun EodiCore.driveRoutes(sort: DriveRouteSort, from: LatLon?, limit: Int = 100): List<DriveRouteItem> = coreCall("driveRoutes") {
     rust.driveRoutes(sort.toR(), from?.let { RGeoPoint(it.lat, it.lon) }, limit.toUInt()).map { it.toItem() }
 }
 
-suspend fun EodiCore.driveRoute(id: String): DriveRoute = withContext(Dispatchers.IO) { rust.driveRoute(id).toModel() }
+suspend fun EodiCore.driveRoute(id: String): DriveRoute = coreCall("driveRoute") { rust.driveRoute(id).toModel() }
 
-suspend fun EodiCore.toggleDriveRouteHeart(id: String): Int = withContext(Dispatchers.IO) { rust.toggleDriveRouteHeart(id).toInt() }
+suspend fun EodiCore.toggleDriveRouteHeart(id: String): Int = coreCall("toggleDriveRouteHeart") { rust.toggleDriveRouteHeart(id).toInt() }
 
-suspend fun EodiCore.driveRouteMap(id: String): DriveRouteMapData = withContext(Dispatchers.IO) {
+suspend fun EodiCore.driveRouteMap(id: String): DriveRouteMapData = coreCall("driveRouteMap") {
     val m = rust.driveRouteMap(id)
     DriveRouteMapData(m.routeId, m.geojson, MapBoundsLatLon(m.bounds.minLat, m.bounds.minLon, m.bounds.maxLat, m.bounds.maxLon))
 }
 
 /** 길 방향을 따라 보는 카메라. 크기는 지도 칸의 논리 픽셀(dp). */
 suspend fun EodiCore.driveRouteCamera(id: String, widthDp: Float, heightDp: Float, paddingDp: Float, pitch: Double = ROUTE_PREVIEW_PITCH): RouteCameraSpec =
-    withContext(Dispatchers.IO) {
+    coreCall("driveRouteCamera") {
         val c = rust.driveRouteCamera(id, widthDp.toDouble(), heightDp.toDouble(), paddingDp.toDouble(), pitch)
         RouteCameraSpec(c.lat, c.lon, c.zoom, c.bearing, c.pitch)
     }
 
-suspend fun EodiCore.driveRouteFlight(id: String, frames: Int = 0): List<FlightFrame> = withContext(Dispatchers.IO) {
+suspend fun EodiCore.driveRouteFlight(id: String, frames: Int = 0): List<FlightFrame> = coreCall("driveRouteFlight") {
     rust.driveRouteFlight(id, frames.toUInt()).map { FlightFrame(it.lat, it.lon, it.bearing, it.zoom) }
 }
 
 /** 안내 구간: ① 길 시작점까지 ② 도착하면 끝점까지 (둘 다 경유지 없음). */
-suspend fun EodiCore.driveRouteLegs(id: String): List<CourseLeg> = withContext(Dispatchers.IO) {
+suspend fun EodiCore.driveRouteLegs(id: String): List<CourseLeg> = coreCall("driveRouteLegs") {
     rust.driveRouteLegs(id).map { l -> CourseLeg(l.waypoints.map { it.toModel() }, l.destination.toModel()) }
 }
 
-suspend fun EodiCore.driveShareCandidates(days: Int = 30): List<DriveTripCandidate> = withContext(Dispatchers.IO) {
+suspend fun EodiCore.driveShareCandidates(days: Int = 30): List<DriveTripCandidate> = coreCall("driveShareCandidates") {
     rust.driveShareCandidates(days.toUInt()).map { it.toModel() }
 }
 
 suspend fun EodiCore.shareDriveRoute(tripStartMs: Long, title: String, body: String, bestTime: BestTime, weather: String?): DriveRoute =
-    withContext(Dispatchers.IO) {
+    coreCall("shareDriveRoute") {
         rust.shareDriveRoute(tripStartMs, title, body, bestTime.toR(), weather, System.currentTimeMillis()).toModel()
     }
 
 /** 드라이브 코스를 올릴 때 고를 수 있는 "언제" (Rust가 정한 순서). */
-suspend fun bestTimeOptions(): List<BestTime> = withContext(Dispatchers.Default) { driveBestTimeOptions().map { it.toModel() } }
+suspend fun bestTimeOptions(): List<BestTime> = coreCall("bestTimeOptions") { driveBestTimeOptions().map { it.toModel() } }
 
 // ---- 옮겨 담기 ----
 

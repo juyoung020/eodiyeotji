@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 /** 목록 불러오기 상태 (게시판·코스·리뷰 공통). */
@@ -119,11 +120,13 @@ class CourseViewModel @Inject constructor(
         _state.update { it.copy(detail = CourseDetail(course)) }
         val id = course.post.id
         viewModelScope.launch {
-            val map = runCatching { core.courseMap(id) }.onFailure { Log.w(TAG, "코스 지도 실패 $id", it) }.getOrNull()
-            val legs = runCatching { core.courseLegs(id) }.getOrDefault(emptyList())
-            val reviews = runCatching { core.courseStopReviews(id) }.onFailure { Log.w(TAG, "들른 곳 리뷰 실패 $id", it) }.getOrDefault(emptyList())
+            // 지도 · 구간 · 들른 곳 리뷰 · 쿠폰은 서로 상관없다 → Rust 읽기 연결에서 동시에
+            val mapJob = async { runCatching { core.courseMap(id) }.onFailure { Log.w(TAG, "코스 지도 실패 $id", it) }.getOrNull() }
+            val legsJob = async { runCatching { core.courseLegs(id) }.getOrDefault(emptyList()) }
+            val reviewsJob = async { runCatching { core.courseStopReviews(id) }.onFailure { Log.w(TAG, "들른 곳 리뷰 실패 $id", it) }.getOrDefault(emptyList()) }
             // 검색 결과에서 열면 쿠폰이 아직 안 붙어 있다 → 이 코스만 Rust에 묻는다
             val offers = if (course.offers.placeCount > 0) course.offers else runCatching { core.courseOffers(listOf(course.post.stops)) }.getOrNull()?.firstOrNull()
+            val (map, legs, reviews) = Triple(mapJob.await(), legsJob.await(), reviewsJob.await())
             _state.update { s ->
                 if (s.detail?.course?.post?.id == id) {
                     s.copy(detail = s.detail.copy(map = map, legs = legs, stopReviews = reviews, course = s.detail.course.copy(offers = offers ?: s.detail.course.offers)))

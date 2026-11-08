@@ -8,8 +8,6 @@ import app.eodiyeotji.core.rust.SearchRow as RSearchRow
 import app.eodiyeotji.core.rust.SearchRowKind as RSearchRowKind
 import app.eodiyeotji.core.rust.SearchScope as RSearchScope
 import java.time.LocalDate
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 /*
  * 검색 화면 입구 (core-rs/src/search_ui.rs). 말 풀기 · 날짜 말 · 묶기 · 순위 · 날짜 글은 Rust가 하고, 여기서는 옮겨 담기만 한다.
@@ -71,7 +69,7 @@ data class SearchChip(val label: String, val text: String, val kind: SearchChipK
 data class SearchSuggestions(val recent: List<String> = emptyList(), val chips: List<SearchChip> = emptyList())
 
 /** 친 말로 찾기 (1년치도 수 ms). */
-suspend fun EodiCore.searchTyped(text: String, scope: SearchScope, filter: SearchFilter): SearchAnswer = withContext(Dispatchers.IO) {
+suspend fun EodiCore.searchTyped(text: String, scope: SearchScope, filter: SearchFilter): SearchAnswer = coreCall("searchTyped") {
     val a = rust.searchTyped(text, scope.toR(), filter.toR(), System.currentTimeMillis())
     SearchAnswer(
         text = a.text,
@@ -96,7 +94,7 @@ suspend fun EodiCore.searchTyped(text: String, scope: SearchScope, filter: Searc
 }
 
 /** 아무것도 치지 않았을 때 보일 최근 검색어 · 추천 칩. */
-suspend fun EodiCore.searchSuggestions(): SearchSuggestions = withContext(Dispatchers.IO) {
+suspend fun EodiCore.searchSuggestions(): SearchSuggestions = coreCall("searchSuggestions") {
     val s = rust.searchSuggestions()
     SearchSuggestions(
         recent = s.recent,
@@ -114,9 +112,9 @@ suspend fun EodiCore.searchSuggestions(): SearchSuggestions = withContext(Dispat
     )
 }
 
-suspend fun EodiCore.rememberSearch(text: String) = withContext(Dispatchers.IO) { rust.rememberSearch(text, System.currentTimeMillis()) }
-suspend fun EodiCore.forgetSearch(text: String) = withContext(Dispatchers.IO) { rust.forgetSearch(text) }
-suspend fun EodiCore.clearRecentSearches() = withContext(Dispatchers.IO) { rust.clearRecentSearches() }
+suspend fun EodiCore.rememberSearch(text: String) = coreCall("rememberSearch") { rust.rememberSearch(text, System.currentTimeMillis()) }
+suspend fun EodiCore.forgetSearch(text: String) = coreCall("forgetSearch") { rust.forgetSearch(text) }
+suspend fun EodiCore.clearRecentSearches() = coreCall("clearRecentSearches") { rust.clearRecentSearches() }
 
 private fun SearchScope.toR() = when (this) {
     SearchScope.RECORDS -> RSearchScope.RECORDS

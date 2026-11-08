@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 /** 고른 드라이브 코스의 상세 (3D 지도 스타일·카메라·비행 장면·안내 구간은 뒤따라 채운다). */
@@ -116,11 +117,13 @@ class DriveRouteViewModel @Inject constructor(
         _state.update { it.copy(detail = DriveRouteDetail(item)) }
         val id = item.route.id
         viewModelScope.launch {
+            // 지도 · 비행 장면 · 구간은 서로 상관없다 → 동시에
+            val framesJob = async { runCatching { core.driveRouteFlight(id) }.getOrDefault(emptyList()) }
+            val legsJob = async { runCatching { core.driveRouteLegs(id) }.getOrDefault(emptyList()) }
             val style = runCatching { ScenicMapStyle.build(context, item.route.theme, core.driveRouteMap(id).geojson) }
                 .onFailure { Log.w(TAG, "3D 지도 실패 $id", it) }
                 .getOrNull()
-            val frames = runCatching { core.driveRouteFlight(id) }.getOrDefault(emptyList())
-            val legs = runCatching { core.driveRouteLegs(id) }.getOrDefault(emptyList())
+            val (frames, legs) = framesJob.await() to legsJob.await()
             updateDetail(id) { it.copy(style = style, frames = frames, legs = legs) }
         }
     }

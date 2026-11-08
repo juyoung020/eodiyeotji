@@ -20,7 +20,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.withContext
 import app.eodiyeotji.core.rust.DayDetail as RDayDetail
 import app.eodiyeotji.core.rust.DayEntry as RDayEntry
 import app.eodiyeotji.core.rust.DaySummary as RDaySummary
@@ -76,7 +75,7 @@ class EodiCore @Inject constructor(
     /** 기록이 바뀔 때마다(ingest·주행 신호) 한 번씩 알린다. 타임라인 화면이 이걸 보고 다시 읽는다. */
     val changes: SharedFlow<Unit> = _changes.asSharedFlow()
 
-    suspend fun selfCheck(): CoreStatus = withContext(Dispatchers.Default) {
+    suspend fun selfCheck(): CoreStatus = coreCall("selfCheck") {
         val c = coreSelfCheck()
         CoreStatus(
             version = c.version,
@@ -87,7 +86,7 @@ class EodiCore @Inject constructor(
     }
 
     /** 위치 묶음 저장. 반환: 실제 저장된 점 수. */
-    suspend fun ingest(fixes: List<LocationFix>): Int = withContext(Dispatchers.IO) {
+    suspend fun ingest(fixes: List<LocationFix>): Int = coreCall("ingest") {
         val stored = store.ingest(fixes.map { GeoFix(it.lat, it.lon, it.tMs, it.accuracyM) }).toInt()
         _changes.tryEmit(Unit)
         stored
@@ -96,18 +95,18 @@ class EodiCore @Inject constructor(
     suspend fun markDriveStart(tMs: Long) = driveEvent(DriveEvent.START, tMs)
     suspend fun markDriveEnd(tMs: Long) = driveEvent(DriveEvent.END, tMs)
 
-    private suspend fun driveEvent(e: DriveEvent, tMs: Long) = withContext(Dispatchers.IO) {
+    private suspend fun driveEvent(e: DriveEvent, tMs: Long) = coreCall("driveEvent") {
         store.markDriveEvent(e, tMs)
         _changes.tryEmit(Unit)
     }
 
     /** 기록이 있는 날, 최신순. */
-    suspend fun daySummaries(limit: Int = 400): List<DaySummary> = withContext(Dispatchers.IO) {
+    suspend fun daySummaries(limit: Int = 400): List<DaySummary> = coreCall("daySummaries") {
         store.daySummaries(limit.toUInt()).map { it.toModel() }
     }
 
     /** 하루 상세 ("YYYY-MM-DD"). */
-    suspend fun dayDetail(day: String): DayDetail = withContext(Dispatchers.IO) {
+    suspend fun dayDetail(day: String): DayDetail = coreCall("dayDetail") {
         store.dayDetail(day).toModel()
     }
 
@@ -115,7 +114,7 @@ class EodiCore @Inject constructor(
      * 하루치 지도 데이터. [DayMapData.geojson]은 MapLibre GeoJsonSource에 그대로 넣는다
      * (주행 LineString·머문 곳 Point, properties.kind = "trip"|"stay", properties.key = 타임라인 항목 키).
      */
-    suspend fun dayMap(day: String): DayMapData = withContext(Dispatchers.IO) {
+    suspend fun dayMap(day: String): DayMapData = coreCall("dayMap") {
         val m = store.dayMap(day)
         DayMapData(
             day = m.day,
@@ -128,23 +127,23 @@ class EodiCore @Inject constructor(
     // ---- 장소 이름 (core-rs/src/places.rs) ----
 
     /** 이름이 필요한 지점 (최신순, 가까운 지점은 Rust가 하나로 묶어 준다). */
-    suspend fun pendingPlaces(limit: Int = 20): List<PlaceQuery> = withContext(Dispatchers.IO) {
+    suspend fun pendingPlaces(limit: Int = 20): List<PlaceQuery> = coreCall("pendingPlaces") {
         store.pendingPlaces(limit.toUInt()).map { PlaceQuery(it.id, it.lat, it.lon, it.isStay) }
     }
 
     /** 찾은 이름 저장. 더 높은 출처(Navi > Kakao > Osm) 이름이 이미 있으면 Rust가 무시한다. */
-    suspend fun setPlaceName(id: Long, label: PlaceLabel) = withContext(Dispatchers.IO) {
+    suspend fun setPlaceName(id: Long, label: PlaceLabel) = coreCall("setPlaceName") {
         store.setPlaceName(RPlaceName(id, label.toRust()))
         _changes.tryEmit(Unit)
     }
 
     /** 이름을 못 찾음 (네트워크 없음·결과 없음). [retryAfterMs] 뒤에 다시 pendingPlaces에 나온다. */
-    suspend fun markPlaceUnresolved(id: Long, retryAfterMs: Long) = withContext(Dispatchers.IO) {
+    suspend fun markPlaceUnresolved(id: Long, retryAfterMs: Long) = coreCall("markPlaceUnresolved") {
         store.markPlaceUnresolved(id, retryAfterMs)
     }
 
     /** 차량 내비 목적지·경유지 힌트. Rust가 가까운 머문 곳·도착 지점의 이름으로 쓴다 (출처 Navi). */
-    suspend fun addNaviHint(hint: NaviHint) = withContext(Dispatchers.IO) {
+    suspend fun addNaviHint(hint: NaviHint) = coreCall("addNaviHint") {
         store.addNaviHint(
             RNaviPlaceHint(hint.name, hint.lat, hint.lon, hint.tMs, if (hint.isWaypoint) RNaviHintKind.WAYPOINT else RNaviHintKind.DESTINATION, hint.address)
         )
@@ -154,38 +153,38 @@ class EodiCore @Inject constructor(
     // ---- 기억: 에피소드·AI 라벨·검색·코스 (core-rs/src/memory.rs, docs/70_기억_검색_설계.md) ----
 
     /** 집·회사 위치 (내비 즐겨찾기 HOME/OFFICE). 모르면 null → Rust가 기록에서 추정. */
-    suspend fun setHomeOffice(home: LatLon?, office: LatLon?) = withContext(Dispatchers.IO) {
+    suspend fun setHomeOffice(home: LatLon?, office: LatLon?) = coreCall("setHomeOffice") {
         store.setHomeOffice(home?.let { RGeoPoint(it.lat, it.lon) }, office?.let { RGeoPoint(it.lat, it.lon) })
     }
 
     /** LLM 라벨링이 필요한 날 (최신순). */
-    suspend fun pendingDayEnrichments(limit: Int = 5): List<DayFacts> = withContext(Dispatchers.IO) {
+    suspend fun pendingDayEnrichments(limit: Int = 5): List<DayFacts> = coreCall("pendingDayEnrichments") {
         store.pendingDayEnrichments(limit.toUInt()).map { it.toModel() }
     }
 
-    suspend fun setDayEnrichment(e: DayEnrichment) = withContext(Dispatchers.IO) {
+    suspend fun setDayEnrichment(e: DayEnrichment) = coreCall("setDayEnrichment") {
         store.setDayEnrichment(
             RDayEnrichment(e.day, e.title, e.summary, e.tags, e.episodes.map { REpisodeLabel(it.episodeId, it.title, it.tags) })
         )
         _changes.tryEmit(Unit)
     }
 
-    suspend fun markDayEnrichmentFailed(day: String, retryAfterMs: Long) = withContext(Dispatchers.IO) {
+    suspend fun markDayEnrichmentFailed(day: String, retryAfterMs: Long) = coreCall("markDayEnrichmentFailed") {
         store.markDayEnrichmentFailed(day, retryAfterMs)
     }
 
-    suspend fun episodesForDay(day: String): List<Episode> = withContext(Dispatchers.IO) {
+    suspend fun episodesForDay(day: String): List<Episode> = coreCall("episodesForDay") {
         store.episodesForDay(day).map { it.toModel() }
     }
 
     /** 기억 검색 (기기 안). */
-    suspend fun searchMemories(q: MemoryQuery): List<MemoryHit> = withContext(Dispatchers.IO) {
+    suspend fun searchMemories(q: MemoryQuery): List<MemoryHit> = coreCall("searchMemories") {
         store.searchMemories(RMemoryQuery(q.terms, q.fromMs, q.toMs, q.kinds.map { it.toRust() }, q.limit.toUInt()))
             .map { MemoryHit(it.episode.toModel(), it.dayTitle, it.score, it.bestStop?.toModel()) }
     }
 
     /** 코스 다시 달리기 경로 (optimize면 from에서 가장 짧은 순서). 내비 경유지 2개 제한에 맞춘 구간 포함. */
-    suspend fun courseRoute(episodeId: Long, from: LatLon?, optimize: Boolean): CourseRoute = withContext(Dispatchers.Default) {
+    suspend fun courseRoute(episodeId: Long, from: LatLon?, optimize: Boolean): CourseRoute = coreCall("courseRoute") {
         val r = store.courseRoute(episodeId, from?.let { RGeoPoint(it.lat, it.lon) }, optimize)
         CourseRoute(
             stops = r.stops.map { it.toModel() },
@@ -195,11 +194,11 @@ class EodiCore @Inject constructor(
     }
 
     /** 시연용 1년치 기록 만들기 (디버그 빌드에서만 부른다). */
-    suspend fun seedDemoData(todayMs: Long = System.currentTimeMillis()): Int = withContext(Dispatchers.IO) {
+    suspend fun seedDemoData(todayMs: Long = System.currentTimeMillis()): Int = coreCall("seedDemoData") {
         store.seedDemoData(todayMs).toInt().also { _changes.tryEmit(Unit) }
     }
 
-    suspend fun fixCount(): Long = withContext(Dispatchers.IO) { store.fixCount().toLong() }
+    suspend fun fixCount(): Long = coreCall("fixCount") { store.fixCount().toLong() }
 
     /**
      * 들른 곳 대표 사진 (구글 Places). 기기에 저장해 둔 것(30일 이내)이 있으면 그것을, 없으면 [fetch]로
@@ -211,9 +210,9 @@ class EodiCore @Inject constructor(
         fetch: suspend (query: String) -> String,
     ): PlacePhotos {
         val key = placePhotoKey(name, lat, lon)
-        withContext(Dispatchers.IO) { store.cachedPlacePhotos(key, System.currentTimeMillis()) }?.let { return it.toModel() }
+        coreCall("placePhotos") { store.cachedPlacePhotos(key, System.currentTimeMillis()) }?.let { return it.toModel() }
         val json = fetch(placePhotoQuery(name, address))
-        return withContext(Dispatchers.IO) {
+        return coreCall("placePhotos") {
             val parsed = parseGooglePlacePhotos(json)
             store.savePlacePhotos(key, parsed, System.currentTimeMillis())
             parsed.toModel()
@@ -225,30 +224,30 @@ class EodiCore @Inject constructor(
 
 /** 커뮤니티 코스 피드. [near]가 있으면 그 근처 [radiusKm] 안만. */
 suspend fun EodiCore.communityCourses(sort: CommunitySort, near: LatLon? = null, radiusKm: Double = 30.0, limit: Int = 50): List<CoursePost> =
-    withContext(Dispatchers.IO) { rust.communityCourses(sort.toRust(), near?.let { RNearFilter(RGeoPoint(it.lat, it.lon), radiusKm) }, limit.toUInt()).map { it.toModel() } }
+    coreCall("communityCourses") { rust.communityCourses(sort.toRust(), near?.let { RNearFilter(RGeoPoint(it.lat, it.lon), radiusKm) }, limit.toUInt()).map { it.toModel() } }
 
 /** 여행 리뷰 피드. */
 suspend fun EodiCore.placeReviews(sort: CommunitySort, near: LatLon? = null, radiusKm: Double = 30.0, limit: Int = 50): List<PlaceReview> =
-    withContext(Dispatchers.IO) { rust.placeReviews(sort.toRust(), near?.let { RNearFilter(RGeoPoint(it.lat, it.lon), radiusKm) }, limit.toUInt()).map { it.toModel() } }
+    coreCall("placeReviews") { rust.placeReviews(sort.toRust(), near?.let { RNearFilter(RGeoPoint(it.lat, it.lon), radiusKm) }, limit.toUInt()).map { it.toModel() } }
 
 /** 인기 장소 순위. */
 suspend fun EodiCore.popularPlaces(near: LatLon? = null, radiusKm: Double = 30.0, limit: Int = 30): List<PopularPlace> =
-    withContext(Dispatchers.IO) {
+    coreCall("popularPlaces") {
         rust.popularPlaces(near?.let { RNearFilter(RGeoPoint(it.lat, it.lon), radiusKm) }, limit.toUInt())
             .map { PopularPlace(it.place.toModel(), it.hearts.toInt(), it.reviewCount.toInt(), it.avgRating, it.topKeyword) }
     }
 
 /** 하트 누르기/취소 → 바뀐 하트 수. */
-suspend fun EodiCore.toggleCourseHeart(id: String): Int = withContext(Dispatchers.IO) { rust.toggleCourseHeart(id).toInt() }
-suspend fun EodiCore.toggleReviewHeart(id: String): Int = withContext(Dispatchers.IO) { rust.toggleReviewHeart(id).toInt() }
+suspend fun EodiCore.toggleCourseHeart(id: String): Int = coreCall("toggleCourseHeart") { rust.toggleCourseHeart(id).toInt() }
+suspend fun EodiCore.toggleReviewHeart(id: String): Int = coreCall("toggleReviewHeart") { rust.toggleReviewHeart(id).toInt() }
 
 /** 내 나들이·여행 에피소드를 커뮤니티에 코스로 공유. */
 suspend fun EodiCore.shareCourse(episodeId: Long, title: String, body: String): CoursePost =
-    withContext(Dispatchers.IO) { rust.shareCourse(episodeId, title, body, System.currentTimeMillis()).toModel() }
+    coreCall("shareCourse") { rust.shareCourse(episodeId, title, body, System.currentTimeMillis()).toModel() }
 
 /** 들른 곳 리뷰 쓰기. */
 suspend fun EodiCore.addPlaceReview(place: StopFact, rating: Int, text: String): PlaceReview =
-    withContext(Dispatchers.IO) {
+    coreCall("addPlaceReview") {
         rust.addPlaceReview(
             RStopFact(place.name, place.category, place.address, place.arriveMs, place.leaveMs, place.lat, place.lon, place.firstVisit),
             rating.coerceIn(1, 5).toUByte(), text, System.currentTimeMillis(),
@@ -256,7 +255,7 @@ suspend fun EodiCore.addPlaceReview(place: StopFact, rating: Int, text: String):
     }
 
 /** 시연용 커뮤니티 데이터 (디버그 빌드에서만). */
-suspend fun EodiCore.seedCommunityDemo(): Int = withContext(Dispatchers.IO) { rust.seedCommunityDemo(System.currentTimeMillis()).toInt() }
+suspend fun EodiCore.seedCommunityDemo(): Int = coreCall("seedCommunityDemo") { rust.seedCommunityDemo(System.currentTimeMillis()).toInt() }
 
 enum class CommunitySort { POPULAR, RECENT }
 

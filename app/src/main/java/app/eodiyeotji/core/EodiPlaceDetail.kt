@@ -1,8 +1,6 @@
 package app.eodiyeotji.core
 
 import app.eodiyeotji.core.rust.StopFact as RStopFact
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 /*
  * 장소 상세 창 입구 (core-rs/src/place_detail.rs). 같은 곳 고르기 · 리뷰 정렬 · 별점 평균 · 내 방문 · 쿠폰은 모두 Rust가
@@ -37,7 +35,7 @@ data class PlaceDetail(
 /** 키워드 하나의 수. [ratio] = 수 / 맨 위 키워드 수 (막대 길이 0~1). */
 data class KeywordCount(val keyword: String, val count: Int, val ratio: Float)
 
-suspend fun EodiCore.placeDetail(place: StopFact): PlaceDetail = withContext(Dispatchers.IO) {
+suspend fun EodiCore.placeDetail(place: StopFact): PlaceDetail = coreCall("placeDetail") {
     val d = rust.placeDetail(RStopFact(place.name, place.category, place.address, place.arriveMs, place.leaveMs, place.lat, place.lon, place.firstVisit))
     PlaceDetail(
         place = d.place.toModel(),

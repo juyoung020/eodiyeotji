@@ -10,8 +10,6 @@ import app.eodiyeotji.core.rust.PlaceCard as RPlaceCard
 import app.eodiyeotji.core.rust.PlaceSpot as RPlaceSpot
 import app.eodiyeotji.core.rust.SpotKind as RSpotKind
 import app.eodiyeotji.core.rust.rankPlaceCandidates
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 /*
  * 기록 고치기 · 장소 저장 입구 (core-rs/src/edits.rs, saved.rs). 무엇을 숨기고 지우고 다시 계산할지,
@@ -66,18 +64,18 @@ data class HiddenRecord(
 /** 이름 후보 (카카오 근처 검색 한 건과 거리). */
 data class PlaceCandidate(val label: PlaceLabel, val distanceM: Double)
 
-suspend fun EodiCore.placeCard(spot: PlaceSpot): PlaceCard? = withContext(Dispatchers.IO) { rust.placeCard(spot.toR())?.toModel() }
+suspend fun EodiCore.placeCard(spot: PlaceSpot): PlaceCard? = coreCall("placeCard") { rust.placeCard(spot.toR())?.toModel() }
 
 suspend fun EodiCore.setPlaceSaved(id: Long, saved: Boolean) = edit { rust.setPlaceSaved(id, saved, System.currentTimeMillis()) }
 
-suspend fun EodiCore.savedPlaces(): List<PlaceCard> = withContext(Dispatchers.IO) { rust.savedPlaces().map { it.toModel() } }
+suspend fun EodiCore.savedPlaces(): List<PlaceCard> = coreCall("savedPlaces") { rust.savedPlaces().map { it.toModel() } }
 
 suspend fun EodiCore.frequentPlaces(limit: Int = 30): List<PlaceCard> =
-    withContext(Dispatchers.IO) { rust.frequentPlaces(limit.toUInt(), System.currentTimeMillis()).map { it.toModel() } }
+    coreCall("frequentPlaces") { rust.frequentPlaces(limit.toUInt(), System.currentTimeMillis()).map { it.toModel() } }
 
 /** 좌표마다 저장한 곳인지 (검색 결과의 ♥). */
 suspend fun EodiCore.placesSavedAt(points: List<LatLon>): List<Boolean> =
-    withContext(Dispatchers.IO) { rust.placesSavedAt(points.map { RGeoPoint(it.lat, it.lon) }) }
+    coreCall("placesSavedAt") { rust.placesSavedAt(points.map { RGeoPoint(it.lat, it.lon) }) }
 
 /** 이름 고치기 (사용자 이름이 모든 출처보다 우선, 그 장소의 모든 방문에 보인다). 분류 · 주소가 비면 원래 값. */
 suspend fun EodiCore.renamePlace(id: Long, name: String, category: String = "", address: String = "") =
@@ -86,7 +84,7 @@ suspend fun EodiCore.renamePlace(id: Long, name: String, category: String = "", 
 suspend fun EodiCore.setMyAnchor(role: AnchorRole, at: LatLon?) =
     edit { rust.setMyAnchor(role.toR(), at?.let { RGeoPoint(it.lat, it.lon) }) }
 
-suspend fun EodiCore.homeOffice(): HomeOffice = withContext(Dispatchers.IO) {
+suspend fun EodiCore.homeOffice(): HomeOffice = coreCall("homeOffice") {
     val h = rust.homeOffice()
     HomeOffice(h.home?.toModel(), h.office?.toModel())
 }
@@ -101,7 +99,7 @@ suspend fun EodiCore.setDayTitle(day: String, title: String) = edit { rust.setDa
 suspend fun EodiCore.deleteDay(day: String) = edit { rust.deleteDay(day, System.currentTimeMillis()) }
 suspend fun EodiCore.restoreHidden(id: Long) = edit { rust.restoreHidden(id) }
 
-suspend fun EodiCore.hiddenRecords(): List<HiddenRecord> = withContext(Dispatchers.IO) {
+suspend fun EodiCore.hiddenRecords(): List<HiddenRecord> = coreCall("hiddenRecords") {
     rust.hiddenRecords().map {
         HiddenRecord(
             it.id,
@@ -116,12 +114,12 @@ suspend fun EodiCore.hiddenRecords(): List<HiddenRecord> = withContext(Dispatche
 }
 
 /** 이름 후보를 거리순으로 (같은 이름은 하나). 순위는 Rust. */
-suspend fun rankCandidates(cands: List<PlaceCandidate>, limit: Int): List<PlaceLabel> = withContext(Dispatchers.Default) {
+suspend fun rankCandidates(cands: List<PlaceCandidate>, limit: Int): List<PlaceLabel> = coreCall("rankCandidates") {
     rankPlaceCandidates(cands.map { RPlaceCandidate(it.label.toRust(), it.distanceM) }, limit.toUInt()).map { it.toModel() }
 }
 
 /** 기록을 바꾸는 호출: IO 스레드에서 하고, 타임라인 · 검색이 다시 읽게 알린다. */
-private suspend fun EodiCore.edit(block: () -> Unit) = withContext(Dispatchers.IO) {
+private suspend fun EodiCore.edit(block: () -> Unit) = coreCall("edit") {
     block()
     notifyChanged()
 }

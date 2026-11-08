@@ -15,8 +15,6 @@ import app.eodiyeotji.core.rust.parseOpenMeteoWeather
 import app.eodiyeotji.core.rust.reviewKeywordLimit as rustReviewKeywordLimit
 import app.eodiyeotji.core.rust.reviewKeywordOptions as rustReviewKeywordOptions
 import app.eodiyeotji.place.PlatformHttp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 /*
@@ -66,10 +64,10 @@ data class BoardComment(
 // ---- 여행 코스 후기 ----
 
 suspend fun EodiCore.driveCourses(sort: CommunitySort, near: LatLon? = null, radiusKm: Double = 30.0, limit: Int = 100): List<DriveCourse> =
-    withContext(Dispatchers.IO) { rust.communityCourses(sort.toR(), near.toNear(radiusKm), limit.toUInt()).map { it.toDrive() }.withOffers() }
+    coreCall("driveCourses") { rust.communityCourses(sort.toR(), near.toNear(radiusKm), limit.toUInt()).map { it.toDrive() }.withOffers() }
 
 /** 코스 지도 (들른 곳 핀, 하루 지도와 같은 GeoJSON 모양). */
-suspend fun EodiCore.courseMap(postId: String): DayMapData = withContext(Dispatchers.IO) {
+suspend fun EodiCore.courseMap(postId: String): DayMapData = coreCall("courseMap") {
     val m = rust.courseMap(postId)
     DayMapData(
         day = m.day,
@@ -80,27 +78,27 @@ suspend fun EodiCore.courseMap(postId: String): DayMapData = withContext(Dispatc
 }
 
 /** 내비 구간 (경유지 ≤ 2 + 목적지). */
-suspend fun EodiCore.courseLegs(postId: String): List<CourseLeg> = withContext(Dispatchers.IO) {
+suspend fun EodiCore.courseLegs(postId: String): List<CourseLeg> = coreCall("courseLegs") {
     rust.courseLegs(postId).map { l -> CourseLeg(l.waypoints.map { it.toModel() }, l.destination.toModel()) }
 }
 
 /** 차가 마지막으로 있던 곳 ("내 근처" 기준). */
-suspend fun EodiCore.lastKnownPosition(): LatLon? = withContext(Dispatchers.IO) { rust.lastKnownPosition()?.let { LatLon(it.lat, it.lon) } }
+suspend fun EodiCore.lastKnownPosition(): LatLon? = coreCall("lastKnownPosition") { rust.lastKnownPosition()?.let { LatLon(it.lat, it.lon) } }
 
 // ---- 내 기록에서 올리기 ----
 
 suspend fun EodiCore.shareCandidates(limit: Int = 30): List<SharePreview> =
-    withContext(Dispatchers.IO) { rust.shareCandidates(limit.toUInt()).map { it.toModel() } }
+    coreCall("shareCandidates") { rust.shareCandidates(limit.toUInt()).map { it.toModel() } }
 
 /** 그날 코스로 올릴 수 있는 나들이·여행 (타임라인 하루 상세의 "커뮤니티에 올리기"). */
 suspend fun EodiCore.shareCandidatesOn(day: String): List<SharePreview> =
-    withContext(Dispatchers.IO) { rust.shareCandidatesOn(day).map { it.toModel() } }
+    coreCall("shareCandidatesOn") { rust.shareCandidatesOn(day).map { it.toModel() } }
 
-suspend fun EodiCore.sharePreview(episodeId: Long): SharePreview = withContext(Dispatchers.IO) { rust.sharePreview(episodeId).toModel() }
+suspend fun EodiCore.sharePreview(episodeId: Long): SharePreview = coreCall("sharePreview") { rust.sharePreview(episodeId).toModel() }
 
 /** 코스 올리기. [excludedArriveMs] = 미리보기에서 체크를 푼 곳의 도착 시각. 날씨는 [weatherFor]로 미리 받아 넘긴다. */
 suspend fun EodiCore.shareCourseWith(episodeId: Long, title: String, body: String, excludedArriveMs: List<Long>, weather: String?): DriveCourse =
-    withContext(Dispatchers.IO) {
+    coreCall("shareCourseWith") {
         rust.shareCourseWith(episodeId, title, body, excludedArriveMs, weather, System.currentTimeMillis()).toDrive()
     }
 
@@ -113,24 +111,24 @@ suspend fun EodiCore.weatherFor(trip: DriveTripCandidate): String? = fetchWeathe
 // ---- 여행 리뷰 ----
 
 suspend fun EodiCore.travelReviews(sort: CommunitySort, near: LatLon? = null, radiusKm: Double = 30.0, limit: Int = 100): List<TravelReview> =
-    withContext(Dispatchers.IO) { rust.placeReviews(sort.toR(), near.toNear(radiusKm), limit.toUInt()).map { it.toTravel() }.withOffers() }
+    coreCall("travelReviews") { rust.placeReviews(sort.toR(), near.toNear(radiusKm), limit.toUInt()).map { it.toTravel() }.withOffers() }
 
 /** 여행 코스 후기의 들른 곳마다 리뷰 요약 (들른 곳 순서대로, 고르기는 Rust `course_stop_reviews`). */
-suspend fun EodiCore.courseStopReviews(postId: String): List<StopReviews> = withContext(Dispatchers.IO) {
+suspend fun EodiCore.courseStopReviews(postId: String): List<StopReviews> = coreCall("courseStopReviews") {
     rust.courseStopReviews(postId).map { StopReviews(it.avgRating, it.reviewCount.toInt(), it.pick?.toTravel(), it.byAuthor) }
 }
 
 suspend fun EodiCore.reviewsOfPlace(place: StopFact, sort: CommunitySort, limit: Int = 50): List<TravelReview> =
-    withContext(Dispatchers.IO) { rust.reviewsOfPlace(place.toR(), sort.toR(), limit.toUInt()).map { it.toTravel() }.withOffers() }
+    coreCall("reviewsOfPlace") { rust.reviewsOfPlace(place.toR(), sort.toR(), limit.toUInt()).map { it.toTravel() }.withOffers() }
 
 /** 리뷰 쓸 수 있는 곳: 최근 실제로 머문 곳 (이름 있는 곳, 최신순). */
 suspend fun EodiCore.reviewCandidates(limit: Int = 30): List<StopFact> =
-    withContext(Dispatchers.IO) { rust.reviewCandidates(limit.toUInt()).map { it.toModel() } }
+    coreCall("reviewCandidates") { rust.reviewCandidates(limit.toUInt()).map { it.toModel() } }
 
 /** 들른 날 날씨 (못 받으면 null). */
 suspend fun EodiCore.visitWeather(place: StopFact): String? {
     val t = if (place.arriveMs > 0) place.arriveMs else System.currentTimeMillis()
-    val req = withContext(Dispatchers.IO) { rust.visitWeatherRequest(place.lat, place.lon, t) }
+    val req = coreCall("visitWeather") { rust.visitWeatherRequest(place.lat, place.lon, t) }
     return fetchWeather(req.url, req.day)
 }
 
@@ -145,7 +143,7 @@ suspend fun EodiCore.writePlaceReview(
     keywords: List<String>,
     withWhom: WithWhom?,
     weather: String?,
-): TravelReview = withContext(Dispatchers.IO) {
+): TravelReview = coreCall("writePlaceReview") {
     rust.writePlaceReview(
         place.toR(), rating.coerceIn(1, 5).toUByte(), text, keywords, withWhom?.toR(), weather, System.currentTimeMillis(),
     ).toTravel()
@@ -154,29 +152,29 @@ suspend fun EodiCore.writePlaceReview(
 /** 리뷰 쓰기에서 고를 수 있는 키워드(정해진 순서)와 한 리뷰에 고를 수 있는 수. */
 data class ReviewKeywordOptions(val keywords: List<String>, val limit: Int)
 
-suspend fun EodiCore.reviewKeywordOptions(): ReviewKeywordOptions = withContext(Dispatchers.Default) {
+suspend fun EodiCore.reviewKeywordOptions(): ReviewKeywordOptions = coreCall("reviewKeywordOptions") {
     ReviewKeywordOptions(rustReviewKeywordOptions(), rustReviewKeywordLimit().toInt())
 }
 
 // ---- 게시판 ----
 
 suspend fun EodiCore.boardPosts(sort: CommunitySort, limit: Int = 100): List<BoardPost> =
-    withContext(Dispatchers.IO) { rust.boardPosts(sort.toR(), limit.toUInt()).map { it.toModel() } }
+    coreCall("boardPosts") { rust.boardPosts(sort.toR(), limit.toUInt()).map { it.toModel() } }
 
-suspend fun EodiCore.boardPost(id: String): BoardPost? = withContext(Dispatchers.IO) { rust.boardPost(id)?.toModel() }
+suspend fun EodiCore.boardPost(id: String): BoardPost? = coreCall("boardPost") { rust.boardPost(id)?.toModel() }
 
 suspend fun EodiCore.boardComments(postId: String): List<BoardComment> =
-    withContext(Dispatchers.IO) { rust.boardComments(postId).map { it.toModel() } }
+    coreCall("boardComments") { rust.boardComments(postId).map { it.toModel() } }
 
 suspend fun EodiCore.addBoardPost(title: String, body: String, tags: List<String>): BoardPost =
-    withContext(Dispatchers.IO) { rust.addBoardPost(title, body, tags, System.currentTimeMillis()).toModel() }
+    coreCall("addBoardPost") { rust.addBoardPost(title, body, tags, System.currentTimeMillis()).toModel() }
 
 suspend fun EodiCore.addBoardComment(postId: String, body: String): BoardComment =
-    withContext(Dispatchers.IO) { rust.addBoardComment(postId, body, System.currentTimeMillis()).toModel() }
+    coreCall("addBoardComment") { rust.addBoardComment(postId, body, System.currentTimeMillis()).toModel() }
 
-suspend fun EodiCore.toggleBoardPostHeart(id: String): Int = withContext(Dispatchers.IO) { rust.toggleBoardPostHeart(id).toInt() }
+suspend fun EodiCore.toggleBoardPostHeart(id: String): Int = coreCall("toggleBoardPostHeart") { rust.toggleBoardPostHeart(id).toInt() }
 
-suspend fun EodiCore.toggleBoardCommentHeart(id: String): Int = withContext(Dispatchers.IO) { rust.toggleBoardCommentHeart(id).toInt() }
+suspend fun EodiCore.toggleBoardCommentHeart(id: String): Int = coreCall("toggleBoardCommentHeart") { rust.toggleBoardCommentHeart(id).toInt() }
 
 // ---- 내부 ----
 
@@ -187,7 +185,7 @@ private const val WEATHER_WAIT_MS = 4_000L
 private suspend fun fetchWeather(url: String, day: String): String? {
     if (url.isBlank()) return null
     return withTimeoutOrNull(WEATHER_WAIT_MS) {
-        withContext(Dispatchers.IO) {
+        coreCall("fetchWeather") {
             runCatching { parseOpenMeteoWeather(PlatformHttp.get(url, emptyMap()), day) }
                 .onFailure { Log.w(WEATHER_TAG, "날씨 못 받음: ${it.message}") }
                 .getOrNull()

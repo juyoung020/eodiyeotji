@@ -9,8 +9,6 @@ import app.eodiyeotji.core.rust.PartnerOffer as RPartnerOffer
 import app.eodiyeotji.core.rust.StopFact as RStopFact
 import app.eodiyeotji.core.rust.courseOffers as rustCourseOffers
 import app.eodiyeotji.core.rust.offersForPlaces as rustOffersForPlaces
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 /*
  * 제휴 혜택 · 할인 쿠폰 입구 (core-rs/src/offers.rs). 어느 장소 · 코스에 어떤 쿠폰이 붙는지(이름 · 거리 맞추기)는 Rust가 정한다.
@@ -51,18 +49,18 @@ data class ClaimedCoupon(val offer: PartnerOffer, val code: String, val claimedM
 
 /** 장소마다 붙는 쿠폰 (넘긴 순서대로). */
 suspend fun EodiCore.offersForPlaces(places: List<OfferPlace>): List<List<PartnerOffer>> =
-    if (places.isEmpty()) emptyList() else withContext(Dispatchers.Default) { offersForPlacesNow(places) }
+    if (places.isEmpty()) emptyList() else coreCall("offersForPlaces") { offersForPlacesNow(places) }
 
 /** 코스마다 들른 곳의 쿠폰 (넘긴 순서대로). */
 suspend fun EodiCore.courseOffers(courses: List<List<StopFact>>): List<CourseOffers> =
-    if (courses.isEmpty()) emptyList() else withContext(Dispatchers.Default) { courseOffersNow(courses) }
+    if (courses.isEmpty()) emptyList() else coreCall("courseOffers") { courseOffersNow(courses) }
 
 /** 쿠폰 받기 (이미 받았으면 처음 받은 것 그대로). */
 suspend fun EodiCore.claimOffer(offerId: String): ClaimedCoupon =
-    withContext(Dispatchers.IO) { rust.claimOffer(offerId, System.currentTimeMillis()).toModel() }
+    coreCall("claimOffer") { rust.claimOffer(offerId, System.currentTimeMillis()).toModel() }
 
 /** 쿠폰함: 받은 쿠폰 (최근에 받은 것부터). */
-suspend fun EodiCore.claimedCoupons(): List<ClaimedCoupon> = withContext(Dispatchers.IO) { rust.claimedCoupons().map { it.toModel() } }
+suspend fun EodiCore.claimedCoupons(): List<ClaimedCoupon> = coreCall("claimedCoupons") { rust.claimedCoupons().map { it.toModel() } }
 
 /**
  * 이미 UI 스레드 밖(Rust 에이전트 콜백 · Default)에 있을 때 쓰는 묶음 호출. 계산 없이 바로 끝난다 (시연 쿠폰 수십 개).

@@ -33,6 +33,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 enum class PlacesTab { SAVED, FREQUENT, COUPONS, SETTINGS }
@@ -101,10 +103,14 @@ class PlacesViewModel @Inject constructor(
 
     private suspend fun load() {
         try {
-            val saved = core.savedPlaces()
-            val frequent = core.frequentPlaces()
-            val ho = core.homeOffice()
-            val hidden = core.hiddenRecords()
+            // 서로 상관없는 네 조회는 Rust 읽기 연결에서 동시에 돈다
+            val (saved, frequent, ho, hidden) = coroutineScope {
+                val saved = async { core.savedPlaces() }
+                val frequent = async { core.frequentPlaces() }
+                val ho = async { core.homeOffice() }
+                val hidden = async { core.hiddenRecords() }
+                Loaded4(saved.await(), frequent.await(), ho.await(), hidden.await())
+            }
             val offers = loadOffers(saved + frequent)
             _state.update { it.copy(loaded = true, saved = saved, frequent = frequent, homeOffice = ho, hidden = hidden, offers = offers) }
         } catch (e: CancellationException) {
@@ -151,3 +157,5 @@ class PlacesViewModel @Inject constructor(
         const val NOTICE_MS = 2_500L
     }
 }
+
+private data class Loaded4<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
