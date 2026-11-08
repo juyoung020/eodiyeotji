@@ -2,7 +2,7 @@
   "version": 8,
   "name": "eodi-scenic-3d",
   "metadata": {
-    "comment": "드라이브 코스 3D 미리보기 스타일 (ui/map/ScenicMapStyle.kt가 읽는다). OpenFreeMap 벡터 타일(online-underlay.json과 같은 소스, OpenMapTiles 스키마) + 건물 3D(fill-extrusion, render_height) + 산 음영(AWS Terrain Tiles terrarium raster-dem 위 hillshade). {{이름}} 자리는 때(낮·노을·밤) 색으로 바뀌고, __ROUTE_GEOJSON__ 자리에 Rust drive_route_map GeoJSON(길·시작·끝·풍경 글자)이 그대로 들어간다. MapLibre Native 13은 3D 지형(terrain)을 지원하지 않아 산은 음영으로만 그린다."
+    "comment": "드라이브 코스 3D 미리보기 스타일 (ui/map/ScenicMapStyle.kt가 읽는다). OpenFreeMap 벡터 타일(online-underlay.json과 같은 소스, OpenMapTiles 스키마) + 건물 3D(fill-extrusion, render_height) + 산 음영(AWS Terrain Tiles terrarium raster-dem 위 hillshade). {{이름}} 자리는 때(낮·노을·밤) 색으로 바뀌고, __ROUTE_GEOJSON__ 자리에 Rust drive_route_map GeoJSON(길·시작·끝·풍경 글자)이 그대로 들어간다. MapLibre Native 13은 3D 지형(terrain)을 지원하지 않아 산은 음영으로만 그린다. 산 음영 타일(256px)은 tileSize 512로 한 단계 낮은 줌을 받는다: 산 음영이 3D 비행 프레임 시간의 대부분이라 타일 수를 4분의 1로 줄인다 (가까이 날 때는 어차피 maxzoom 13 타일이라 같고, 먼 곳만 결이 조금 부드럽다)."
   },
   "glyphs": "asset://map/fonts/{fontstack}/{range}.pbf",
   "light": { "anchor": "viewport", "color": "{{light}}", "intensity": 0.4, "position": [1.2, 210, 35] },
@@ -16,7 +16,7 @@
       "type": "raster-dem",
       "tiles": ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
       "encoding": "terrarium",
-      "tileSize": 256,
+      "tileSize": 512,
       "maxzoom": 13,
       "attribution": "Terrain Tiles (Mapzen · AWS Open Data)"
     },

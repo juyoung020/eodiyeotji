@@ -1,23 +1,22 @@
 package app.eodiyeotji.ui.memorymap
 
 import androidx.compose.runtime.State
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameMillis
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import app.eodiyeotji.core.SkyPhase
 import kotlin.math.PI
@@ -26,59 +25,78 @@ import kotlin.math.sin
 /**
  * 3D 지도 위에 얹는 하늘 (MapLibre Native 13에는 sky 레이어가 없다): 기울어진 지도의 지평선 위를 하늘 그라데이션으로 덮고,
  * 지평선에 빛 띠(노을 · 도시 불빛)를 번지게, 가장자리는 비네트로 어둡게 한다. [stars]면 윗부분에 반짝이는 별.
- * 색은 Rust가 정한 때([SkyPhase], 도착 시각 기준)로 고른다. 한 장의 Canvas라 지도 프레임에 부담이 없다.
+ * 색은 Rust가 정한 때([SkyPhase], 도착 시각 기준)로 고른다. 바뀌지 않는 칸은 한 번만 그려 지도 프레임에 부담이 없다.
  */
 @Composable
 fun CinematicSky(phase: SkyPhase, modifier: Modifier = Modifier, stars: Boolean = phase == SkyPhase.NIGHT || phase == SkyPhase.BLUE, skyFraction: Float = 0.34f) {
     val p = remember(phase) { skyPalette(phase) }
     val field = remember { starField() }
-    // 반짝임 값은 Canvas 그리기 안에서만 읽는다 → 매 프레임 다시 그리기만 하고 재구성은 하지 않는다
+    // 반짝임 값은 Canvas 그리기 안에서만 읽는다 → 다시 그리기만 하고 재구성은 하지 않는다.
+    // 별은 4초에 1~3번 천천히 깜빡여 초당 15번만 바꿔도 똑같이 보인다 → 60fps로 창 전체를 다시 그리지 않아 3D 지도에 GPU를 넘긴다.
     val twinkle: State<Float>? = if (stars) {
-        rememberInfiniteTransition(label = "stars").animateFloat(
-            0f, 1f, infiniteRepeatable(tween(TWINKLE_MS, easing = LinearEasing), RepeatMode.Restart), label = "twinkle",
-        )
+        produceState(0f) {
+            val start = withFrameMillis { it }
+            while (true) {
+                value = (withFrameMillis { it } - start) % TWINKLE_MS / TWINKLE_MS.toFloat()
+                delay(TWINKLE_FRAME_MS)
+            }
+        }
     } else null
-    Canvas(modifier.fillMaxSize()) {
-        val h = size.height
-        val sky = h * skyFraction
-        // 하늘: 위는 짙게 → 지평선 쪽으로 밝아지다 → 지평선 빛 띠 → 지도 쪽으로 투명
-        drawRect(
-            Brush.verticalGradient(
-                0f to p.zenith,
-                0.55f to p.mid,
-                0.85f to p.horizon,
-                1f to p.horizon.copy(alpha = 0f),
-                startY = 0f,
-                endY = sky * 1.35f,
-            ),
-        )
-        // 지평선 빛: 가운데가 밝은 띠 (위아래로 부드럽게 사라진다) + 가운데 번짐
-        val band = h * 0.14f
-        drawRect(
-            Brush.verticalGradient(0f to Color.Transparent, 0.5f to p.glow, 1f to Color.Transparent, startY = sky - band, endY = sky + band),
-            topLeft = Offset(0f, sky - band),
-            size = Size(size.width, band * 2f),
-        )
-        drawCircle(
-            Brush.radialGradient(0f to p.glow, 1f to Color.Transparent, center = Offset(size.width * 0.5f, sky), radius = band * 2.2f),
-            radius = band * 2.2f,
-            center = Offset(size.width * 0.5f, sky),
-        )
-        if (twinkle != null) drawStars(field, twinkle.value, sky * 0.9f, p.star)
-        // 아래 안개 + 네 귀퉁이 비네트
-        drawRect(Brush.verticalGradient(0.7f to Color.Transparent, 1f to p.floor))
-        drawRect(
-            Brush.radialGradient(
-                0.55f to Color.Transparent,
-                1f to Color.Black.copy(alpha = p.vignette),
-                center = Offset(size.width / 2f, h / 2f),
-                radius = maxOf(size.width, h) * 0.75f,
-            ),
-        )
+    // 하늘·빛 띠·비네트는 한 번 그려 둔 그림을 그대로 쓰고(바뀌지 않는다), 매 프레임은 별만 다시 그린다.
+    // 별은 원래대로 하늘과 비네트 사이에 놓인다 (별 칸은 비네트 아래 같은 자리, 비네트는 맨 위 칸이 덮는다).
+    Box(modifier.fillMaxSize()) {
+        Canvas(Modifier.fillMaxSize().graphicsLayer()) { drawSky(p, skyFraction) }
+        if (twinkle != null) {
+            Canvas(Modifier.fillMaxSize()) { drawStars(field, twinkle.value, size.height * skyFraction * 0.9f, p.star) }
+        }
+        Canvas(Modifier.fillMaxSize().graphicsLayer()) { drawVignette(p) }
     }
 }
 
+private fun DrawScope.drawSky(p: SkyPalette, skyFraction: Float) {
+    val h = size.height
+    val sky = h * skyFraction
+    // 하늘: 위는 짙게 → 지평선 쪽으로 밝아지다 → 지평선 빛 띠 → 지도 쪽으로 투명
+    drawRect(
+        Brush.verticalGradient(
+            0f to p.zenith,
+            0.55f to p.mid,
+            0.85f to p.horizon,
+            1f to p.horizon.copy(alpha = 0f),
+            startY = 0f,
+            endY = sky * 1.35f,
+        ),
+    )
+    // 지평선 빛: 가운데가 밝은 띠 (위아래로 부드럽게 사라진다) + 가운데 번짐
+    val band = h * 0.14f
+    drawRect(
+        Brush.verticalGradient(0f to Color.Transparent, 0.5f to p.glow, 1f to Color.Transparent, startY = sky - band, endY = sky + band),
+        topLeft = Offset(0f, sky - band),
+        size = Size(size.width, band * 2f),
+    )
+    drawCircle(
+        Brush.radialGradient(0f to p.glow, 1f to Color.Transparent, center = Offset(size.width * 0.5f, sky), radius = band * 2.2f),
+        radius = band * 2.2f,
+        center = Offset(size.width * 0.5f, sky),
+    )
+}
+
+private fun DrawScope.drawVignette(p: SkyPalette) {
+    val h = size.height
+    // 아래 안개 + 네 귀퉁이 비네트
+    drawRect(Brush.verticalGradient(0.7f to Color.Transparent, 1f to p.floor))
+    drawRect(
+        Brush.radialGradient(
+            0.55f to Color.Transparent,
+            1f to Color.Black.copy(alpha = p.vignette),
+            center = Offset(size.width / 2f, h / 2f),
+            radius = maxOf(size.width, h) * 0.75f,
+        ),
+    )
+}
+
 private const val TWINKLE_MS = 4_000
+private const val TWINKLE_FRAME_MS = 66L
 private const val STAR_COUNT = 90
 
 @Immutable

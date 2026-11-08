@@ -105,7 +105,7 @@ private fun ScenicMapContent(
     modifier: Modifier,
 ) {
     val context = LocalContext.current
-    val mapView = rememberMapViewWithLifecycle(context, baseOptions, bg.toArgb(), tiltAndRotate = true)
+    val mapView = rememberMapViewWithLifecycle(context, baseOptions, bg.toArgb(), tiltAndRotate = true, label = "scenic")
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
     LaunchedEffect(mapView) { mapView.getMapAsync { m -> map = m } }
     val m = map

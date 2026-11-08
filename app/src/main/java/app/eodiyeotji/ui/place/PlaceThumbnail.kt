@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -19,7 +21,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import app.eodiyeotji.core.PlacePhoto
-import coil.compose.SubcomposeAsyncImage
+import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
 import dagger.hilt.android.EntryPointAccessors
 
 /** 사진 찾기 상태: 아직 묻는 중 / 사진 없음 / 첫 사진. */
@@ -53,14 +56,28 @@ fun PlaceThumbnail(
     when (val t = thumb) {
         Thumb.Loading -> Box(modifier) { loading() }
         Thumb.None -> Box(modifier) { fallback() }
-        is Thumb.Found -> SubcomposeAsyncImage(
-            model = repo.imageRequest(t.photo),
-            contentDescription = name,
-            contentScale = ContentScale.Crop,
-            loading = { loading() },
-            error = { fallback() },
-            modifier = modifier,
-        )
+        // SubcomposeAsyncImage는 칸마다 하위 구성을 따로 돌려 목록 스크롤이 무거워진다 → AsyncImage + 상태에 따라 자리만 얹는다
+        is Thumb.Found -> Box(modifier) {
+            var phase by remember(t) { mutableIntStateOf(PHASE_LOADING) }
+            val request = remember(t) { repo.imageRequest(t.photo) }
+            AsyncImage(
+                model = request,
+                contentDescription = name,
+                contentScale = ContentScale.Crop,
+                onState = { st ->
+                    phase = when (st) {
+                        is AsyncImagePainter.State.Success -> PHASE_DONE
+                        is AsyncImagePainter.State.Error -> PHASE_ERROR
+                        else -> PHASE_LOADING
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+            when (phase) {
+                PHASE_LOADING -> loading()
+                PHASE_ERROR -> fallback()
+            }
+        }
     }
 }
 
@@ -78,3 +95,6 @@ fun PhotoLoadingPlaceholder(color: Color, modifier: Modifier = Modifier) {
 }
 
 private const val PULSE_MS = 700
+private const val PHASE_LOADING = 0
+private const val PHASE_DONE = 1
+private const val PHASE_ERROR = 2

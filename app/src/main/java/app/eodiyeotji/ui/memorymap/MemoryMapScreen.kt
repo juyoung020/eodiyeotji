@@ -57,6 +57,7 @@ import app.eodiyeotji.R
 import app.eodiyeotji.core.MemoryMap
 import app.eodiyeotji.core.SkyPhase
 import app.eodiyeotji.ui.map.MapLibreNative
+import app.eodiyeotji.ui.map.awaitFullyRendered
 import app.eodiyeotji.ui.map.rememberMapViewWithLifecycle
 import app.eodiyeotji.ui.recap.Load
 import app.eodiyeotji.ui.recap.RecapViewModel
@@ -72,6 +73,7 @@ import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
+import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.geometry.LatLng
@@ -105,6 +107,7 @@ private const val KOREA_LAT = 36.2
 private const val KOREA_LON = 127.8
 private const val KOREA_ZOOM = 5.6
 private const val DESCEND_MS = 2_600
+private val KoreaCamera = CameraPosition.Builder().target(LatLng(KOREA_LAT, KOREA_LON)).zoom(KOREA_ZOOM).tilt(0.0).bearing(0.0).build()
 
 /** 3D 카메라: 그리는 동안 기울기 · 도는 각도, 마지막에 달린 길 전체로 물러나는 시간. */
 private const val REVEAL_PITCH = 66.0
@@ -176,12 +179,15 @@ private fun MemoryMapStage(data: MemoryMap) {
     // 달린 길 전체로 물러나기까지 끝나면 한 줄을 띄운다
     var captionShown by remember(data) { mutableStateOf(false) }
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
+    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
 
     val opts = options
     Box(Modifier.fillMaxSize().onSizeChanged { viewSize = it }) {
         if (opts != null) {
-            val mapView = rememberMapViewWithLifecycle(context, opts, NightSky.toArgb())
+            // 처음부터 한국 전체를 본다 → 스타일이 뜨는 동안 첫 장면 타일을 같이 받는다 (서울 타일을 헛받지 않는다)
+            val mapView = rememberMapViewWithLifecycle(context, opts, NightSky.toArgb(), initialCamera = KoreaCamera, label = "memory")
             LaunchedEffect(mapView) {
+                mapViewRef = mapView
                 mapView.getMapAsync { m ->
                     // 60°보다 더 눕혀 지평선이 보이게 (그 위는 CinematicSky가 하늘로 덮는다)
                     runCatching { m.setMaxPitchPreference(MAX_PITCH) }
@@ -218,8 +224,11 @@ private fun MemoryMapStage(data: MemoryMap) {
                     m.cancelTransitions()
                     // 별이 뜬 높은 하늘에서 한국 전체를 내려다보다가, 기울어지며 달린 곳으로 내려앉는다
                     step = -1
-                    m.moveCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder().target(LatLng(KOREA_LAT, KOREA_LON)).zoom(KOREA_ZOOM).tilt(0.0).bearing(0.0).build()))
-                    delay(700)
+                    m.moveCamera(CameraUpdateFactory.newCameraPosition(KoreaCamera))
+                    // 첫 장면 타일이 다 그려진 뒤 내려앉는다 (빈 산·바다 위에서 출발하지 않게). 네트워크가 느려도 2초면 출발.
+                    val t0 = System.nanoTime()
+                    mapViewRef?.awaitFullyRendered(2_000)
+                    delay((700 - (System.nanoTime() - t0) / 1_000_000).coerceAtLeast(0))
                     val near = CameraPosition.Builder(from).zoom(from.zoom + 0.8).build()
                     m.animateCamera(CameraUpdateFactory.newCameraPosition(near), DESCEND_MS)
                     delay(DESCEND_MS.toLong())
@@ -295,11 +304,9 @@ private fun MemoryMapStage(data: MemoryMap) {
             while (true) {
                 val sec = (System.nanoTime() - start) / 1e9
                 val breath = (0.5 + 0.5 * sin(sec * 2.0 * PI / 2.8)).toFloat()
-                halo?.setProperties(
-                    PropertyFactory.circleOpacity(
-                        Expression.product(Expression.literal(0.45f + 0.55f * breath), Expression.sum(Expression.literal(0.12f), Expression.product(Expression.literal(0.5f), Expression.get("w")))),
-                    ),
-                )
+                // 숨쉬기는 색의 투명도(상수)로 준다. 곳마다 다른 밝기(w)는 스타일의 circle-opacity에 그대로 두고 둘이 곱해진다.
+                // 곳마다 다른 식(data-driven)을 프레임마다 바꾸면 MapLibre가 그 소스 타일을 통째로 다시 만든다 (초당 12번).
+                halo?.setProperties(PropertyFactory.circleColor(Expression.rgba(255f, 181f, 71f, 0.45f + 0.55f * breath)))
                 coast?.setProperties(PropertyFactory.lineOpacity(0.35f + 0.3f * (0.5f + 0.5f * sin(sec * 2.0 * PI / 4.5).toFloat())))
                 delay(PULSE_FRAME_MS)
             }
