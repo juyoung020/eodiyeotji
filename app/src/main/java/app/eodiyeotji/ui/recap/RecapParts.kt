@@ -61,7 +61,6 @@ import app.eodiyeotji.core.OnThisDay
 import app.eodiyeotji.core.RecapDay
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.recap.RecallCenter
-import app.eodiyeotji.ui.agent.AgentIcons
 import app.eodiyeotji.ui.common.distanceText
 import app.eodiyeotji.ui.agent.memoryDateText
 import app.eodiyeotji.ui.place.PhotoLoadingPlaceholder
@@ -166,7 +165,7 @@ fun OnThisDayCard(
                     Modifier.size(64.dp).clip(CircleShape).background(c.surfaceHigh).clickable(role = Role.Button, onClick = onDismiss),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(AgentIcons.Close, contentDescription = stringResource(R.string.recap_dismiss), tint = c.textSecondary, modifier = Modifier.size(32.dp))
+                    Icon(EodiIcons.Close, contentDescription = stringResource(R.string.recap_dismiss), tint = c.textSecondary, modifier = Modifier.size(32.dp))
                 }
             }
             Text(otd.title, style = EodiTheme.type.title, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -215,7 +214,7 @@ fun OnThisDayCard(
                     colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = c.onAccent),
                     modifier = Modifier.weight(1f).heightIn(min = 76.dp),
                 ) {
-                    Icon(AgentIcons.Navigate, contentDescription = null, modifier = Modifier.size(30.dp))
+                    Icon(EodiIcons.Navi, contentDescription = null, modifier = Modifier.size(30.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.recap_navigate), style = EodiTheme.type.label, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
@@ -288,7 +287,7 @@ fun RecallDrivingCard(modifier: Modifier = Modifier) {
                 .clickable(role = Role.Button, onClick = center::dismissCard),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(AgentIcons.Close, contentDescription = stringResource(R.string.recap_recall_close), tint = Color.White, modifier = Modifier.size(36.dp))
+            Icon(EodiIcons.Close, contentDescription = stringResource(R.string.recap_recall_close), tint = Color.White, modifier = Modifier.size(36.dp))
         }
         // 그날로 돌아가기: 정차 중에만 (주행 중에는 큰 사진 화면을 열지 않는다)
         if (!driving) {

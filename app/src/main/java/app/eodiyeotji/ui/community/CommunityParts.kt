@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.community
 
+import app.eodiyeotji.ui.theme.EodiIcons
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -151,8 +152,6 @@ object CommunityIcons {
         }
     }
 
-    val Check: ImageVector by lazy { icon("Check") { stroke(2.8f) { moveTo(5f, 12.5f); lineTo(10f, 17.5f); lineTo(19f, 7f) } } }
-    val Close: ImageVector by lazy { icon("Close") { stroke(2.6f) { moveTo(6f, 6f); lineTo(18f, 18f); moveTo(18f, 6f); lineTo(6f, 18f) } } }
 
     /** 길 (굽은 도로) */
     val Road: ImageVector by lazy {
@@ -316,7 +315,7 @@ fun TogglePill(text: String, on: Boolean, onToggle: () -> Unit, modifier: Modifi
     ) {
         Row(Modifier.padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
             if (on) {
-                Icon(CommunityIcons.Check, null, Modifier.size(24.dp))
+                Icon(EodiIcons.Check, null, Modifier.size(24.dp))
                 Spacer(Modifier.width(8.dp))
             }
             Text(text, style = EodiTheme.type.label, maxLines = 1)
@@ -434,7 +433,7 @@ fun StopPhotoBox(
         .semantics { if (name.isNotBlank()) contentDescription = description }
     val fallback: @Composable () -> Unit = {
         Box(Modifier.fillMaxSize().background(c.staySoft), contentAlignment = Alignment.Center) {
-            Icon(app.eodiyeotji.ui.theme.EodiIcons.Pin, null, tint = c.stay.copy(alpha = 0.7f), modifier = Modifier.size(iconSize))
+            Icon(EodiIcons.Pin, null, tint = c.stay.copy(alpha = 0.7f), modifier = Modifier.size(iconSize))
         }
     }
     Box(box) {

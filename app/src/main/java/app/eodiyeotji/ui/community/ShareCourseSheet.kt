@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.community
 
+import app.eodiyeotji.ui.theme.EodiIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -154,7 +155,7 @@ fun ShareCourseSheet(episodeId: Long, onDone: (DriveCourse?) -> Unit, viewModel:
         val p = state.preview
         when {
             state.error != null -> CenterMessage(stringResource(R.string.community_failed, state.error ?: ""), Modifier.heightIn(max = 400.dp)) {
-                SecondaryPill(stringResource(R.string.community_close), CommunityIcons.Close, { onDone(null) })
+                SecondaryPill(stringResource(R.string.community_close), EodiIcons.Close, { onDone(null) })
             }
             p == null || state.episodeId != episodeId -> Box(Modifier.fillMaxWidth().height(360.dp)) { LoadingBox() }
             else -> ShareSheetBody(
@@ -185,7 +186,7 @@ private fun ShareSheetBody(
     Column(Modifier.verticalScroll(rememberScrollState()).padding(32.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.share_sheet_title), style = type.title, modifier = Modifier.weight(1f))
-            RoundIconButton(CommunityIcons.Close, stringResource(R.string.community_close), onClose)
+            RoundIconButton(EodiIcons.Close, stringResource(R.string.community_close), onClose)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             VisitLine(Visit(preview.day, preview.season, state.weather), Modifier.weight(1f, fill = false))
@@ -229,7 +230,7 @@ private fun ShareSheetBody(
                                 .background(if (on) c.accent else c.surface, CircleShape),
                             contentAlignment = Alignment.Center,
                         ) {
-                            if (on) Icon(CommunityIcons.Check, null, tint = c.onAccent, modifier = Modifier.size(28.dp))
+                            if (on) Icon(EodiIcons.Check, null, tint = c.onAccent, modifier = Modifier.size(28.dp))
                         }
                     }
                     Spacer(Modifier.height(6.dp))
@@ -266,7 +267,7 @@ private fun PrivacyNote(text: String) {
         Modifier.fillMaxWidth().background(c.hereSoft, RoundedCornerShape(EodiTheme.space.radiusS)).padding(horizontal = 18.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(CommunityIcons.Check, null, tint = c.here, modifier = Modifier.size(26.dp))
+        Icon(EodiIcons.Check, null, tint = c.here, modifier = Modifier.size(26.dp))
         Spacer(Modifier.width(12.dp))
         Text(text, style = EodiTheme.type.label, color = c.textPrimary)
     }
@@ -307,7 +308,7 @@ fun ShareEpisodePicker(onPick: (Long) -> Unit, onDismiss: () -> Unit, viewModel:
         Column(Modifier.padding(32.dp).heightIn(max = 1000.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.share_pick_title), style = EodiTheme.type.title, modifier = Modifier.weight(1f))
-                RoundIconButton(CommunityIcons.Close, stringResource(R.string.community_close), onDismiss)
+                RoundIconButton(EodiIcons.Close, stringResource(R.string.community_close), onDismiss)
             }
             Spacer(Modifier.height(16.dp))
             when (val l = state.list) {

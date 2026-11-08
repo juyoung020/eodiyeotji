@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.agent
 
+import app.eodiyeotji.ui.theme.EodiIcons
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -93,7 +94,7 @@ fun BoxScope.SpokenCaption(viewModel: SpokenCaptionViewModel = hiltViewModel()) 
                     modifier = Modifier.heightIn(min = EodiTheme.space.touch),
                 ) {
                     Row(Modifier.padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(AgentIcons.Close, contentDescription = null, modifier = Modifier.size(26.dp))
+                        Icon(EodiIcons.Close, contentDescription = null, modifier = Modifier.size(26.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(stringResource(R.string.agent_voice_stop_speaking), style = EodiTheme.type.label, fontWeight = FontWeight.SemiBold)
                     }

@@ -257,7 +257,7 @@ private fun WritePostSheet(posting: Boolean, onPost: (String, String, String) ->
         Column(Modifier.verticalScroll(rememberScrollState()).padding(32.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.board_write_title), style = type.title, modifier = Modifier.weight(1f))
-                RoundIconButton(CommunityIcons.Close, stringResource(R.string.community_close), onDismiss)
+                RoundIconButton(EodiIcons.Close, stringResource(R.string.community_close), onDismiss)
             }
             OutlinedTextField(
                 value = title,

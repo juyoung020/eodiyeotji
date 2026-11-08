@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.agent
 
+import app.eodiyeotji.ui.theme.EodiIcons
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.draw.drawBehind
 import android.Manifest
@@ -128,7 +129,7 @@ fun AgentEntryButton(onClick: () -> Unit, modifier: Modifier = Modifier, driving
             modifier = Modifier.padding(start = 24.dp, end = if (mic) 12.dp else 28.dp, top = 12.dp, bottom = 12.dp),
         ) {
             // 반짝임은 기억 금색 (AI가 기억을 찾아 준다는 표시)
-            Icon(AgentIcons.Sparkle, contentDescription = null, tint = EodiTheme.colors.memoryInk, modifier = Modifier.size(32.dp))
+            Icon(EodiIcons.Sparkle, contentDescription = null, tint = EodiTheme.colors.memoryInk, modifier = Modifier.size(32.dp))
             Spacer(Modifier.width(14.dp))
             Text(
                 stringResource(label),
@@ -369,7 +370,7 @@ private fun CompactAskBar(question: String?, onAsk: (String) -> Unit, onVoiceReq
                 Text(stringResource(R.string.agent_field_hint), style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
             },
             leadingIcon = {
-                Icon(AgentIcons.Sparkle, contentDescription = null, tint = EodiTheme.colors.memoryInk, modifier = Modifier.padding(start = 8.dp).size(30.dp))
+                Icon(EodiIcons.Sparkle, contentDescription = null, tint = EodiTheme.colors.memoryInk, modifier = Modifier.padding(start = 8.dp).size(30.dp))
             },
             trailingIcon = if (text.isNotBlank()) {
                 { RoundIconButton(AgentIcons.Send, stringResource(R.string.agent_send), onClick = submit, filled = false) }
@@ -434,7 +435,7 @@ private fun QuestionBar(
             },
             leadingIcon = {
                 Icon(
-                    AgentIcons.Sparkle,
+                    EodiIcons.Sparkle,
                     contentDescription = null,
                     tint = EodiTheme.colors.memoryInk,
                     modifier = Modifier.padding(start = 12.dp).size(32.dp),
@@ -461,7 +462,7 @@ private fun QuestionBar(
         )
         if (onClose != null) {
             IconButton(onClick = onClose, modifier = Modifier.size(AgentTouchMin)) {
-                Icon(AgentIcons.Close, contentDescription = stringResource(R.string.agent_close), modifier = Modifier.size(32.dp))
+                Icon(EodiIcons.Close, contentDescription = stringResource(R.string.agent_close), modifier = Modifier.size(32.dp))
             }
         }
     }
@@ -531,7 +532,7 @@ private fun EmptyState(onAsk: (String) -> Unit, modifier: Modifier = Modifier) {
                     modifier = Modifier.heightIn(min = AgentTouchMin),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 22.dp, end = 28.dp, top = 18.dp, bottom = 18.dp)) {
-                        Icon(AgentIcons.Sparkle, contentDescription = null, tint = EodiTheme.colors.memoryInk, modifier = Modifier.size(26.dp))
+                        Icon(EodiIcons.Sparkle, contentDescription = null, tint = EodiTheme.colors.memoryInk, modifier = Modifier.size(26.dp))
                         Spacer(Modifier.width(10.dp))
                         Text(q, style = MaterialTheme.typography.titleLarge)
                     }
@@ -649,7 +650,7 @@ private fun ActionBlock(turn: AgentTurn, onConfirm: (AgentEvent.ActionProposal) 
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 if (showOnlyHere && onlyHereQuestion != null) {
                     SecondaryAction(
-                        icon = AgentIcons.Pin,
+                        icon = EodiIcons.Pin,
                         label = stringResource(R.string.agent_only_here),
                         detail = selectedStop.name,
                         onClick = { onAsk(onlyHereQuestion) },
@@ -658,7 +659,7 @@ private fun ActionBlock(turn: AgentTurn, onConfirm: (AgentEvent.ActionProposal) 
                 }
                 if (showOtherDays) {
                     SecondaryAction(
-                        icon = AgentIcons.Calendar,
+                        icon = EodiIcons.Calendar,
                         label = stringResource(R.string.agent_other_days),
                         detail = null,
                         onClick = { onAsk(otherDaysQuestion) },
@@ -676,7 +677,7 @@ private fun ProposalButton(p: AgentEvent.ActionProposal, primary: Boolean, runni
         if (running) {
             CircularProgressIndicator(strokeWidth = 3.dp, color = if (primary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(32.dp))
         } else {
-            Icon(if (primary) AgentIcons.Navigate else AgentIcons.Fast, contentDescription = null, modifier = Modifier.size(32.dp))
+            Icon(if (primary) EodiIcons.Navi else AgentIcons.Fast, contentDescription = null, modifier = Modifier.size(32.dp))
         }
         Spacer(Modifier.width(20.dp))
         Column(Modifier.weight(1f)) {
@@ -729,7 +730,7 @@ private fun ActionStatus(action: ActionState, large: Boolean = false) {
     Surface(shape = RoundedCornerShape(20.dp), color = container, contentColor = content, modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 24.dp, vertical = if (large) 24.dp else 18.dp)) {
             if (action is ActionState.Done) {
-                Icon(AgentIcons.Check, contentDescription = null, modifier = Modifier.size(if (large) 44.dp else 30.dp))
+                Icon(EodiIcons.Check, contentDescription = null, modifier = Modifier.size(if (large) 44.dp else 30.dp))
                 Spacer(Modifier.width(16.dp))
             }
             Text(text, style = if (large) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
@@ -837,7 +838,7 @@ private fun DrivingAgent(
                         BigButton(
                             // 답을 못 받았으면 같은 자리 큰 버튼이 "다시 묻기" (한 번 누르면 된다)
                             label = stringResource(if (failed) R.string.agent_retry else R.string.agent_navigate),
-                            icon = if (failed) null else AgentIcons.Navigate,
+                            icon = if (failed) null else EodiIcons.Navi,
                             primary = true,
                             enabled = failed || (proposal != null && !running && turn.action !is ActionState.Done),
                             onClick = { if (failed) onRetry() else proposal?.let(onConfirm) },
@@ -845,7 +846,7 @@ private fun DrivingAgent(
                         )
                         BigButton(
                             label = stringResource(R.string.agent_cancel),
-                            icon = AgentIcons.Close,
+                            icon = EodiIcons.Close,
                             primary = false,
                             enabled = true,
                             onClick = onClear,

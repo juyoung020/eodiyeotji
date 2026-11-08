@@ -228,7 +228,7 @@ private fun PlaceCardView(card: PlaceCard, offers: List<PartnerOffer>, onHeart: 
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 PrimaryPill(stringResource(R.string.edit_navigate), EodiIcons.Navi, onNavigate, Modifier.weight(1f))
-                if (onRecords != null) SecondaryPill(stringResource(R.string.places_records), app.eodiyeotji.ui.agent.AgentIcons.Calendar, onRecords, Modifier.weight(1f))
+                if (onRecords != null) SecondaryPill(stringResource(R.string.places_records), EodiIcons.Calendar, onRecords, Modifier.weight(1f))
             }
         }
     }

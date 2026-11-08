@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.offers
 
+import app.eodiyeotji.ui.theme.EodiIcons
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -288,7 +289,7 @@ private fun ClaimedCode(mine: ClaimedCoupon) {
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(app.eodiyeotji.ui.community.CommunityIcons.Check, null, tint = c.here, modifier = Modifier.size(26.dp))
+            Icon(EodiIcons.Check, null, tint = c.here, modifier = Modifier.size(26.dp))
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.coupon_claimed), style = type.label, fontWeight = FontWeight.Bold, color = c.here)
             Spacer(Modifier.width(16.dp))

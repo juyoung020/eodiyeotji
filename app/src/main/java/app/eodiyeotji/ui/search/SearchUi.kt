@@ -158,17 +158,6 @@ object SearchIcons {
         }
     }
 
-    /** 지도 (접힌 지도) */
-    val Map: ImageVector by lazy {
-        icon("Map") {
-            stroke {
-                moveTo(3.5f, 6.5f); lineTo(9f, 4.5f); lineTo(15f, 6.5f); lineTo(20.5f, 4.5f)
-                lineTo(20.5f, 17.5f); lineTo(15f, 19.5f); lineTo(9f, 17.5f); lineTo(3.5f, 19.5f); close()
-                moveTo(9f, 4.5f); lineTo(9f, 17.5f)
-                moveTo(15f, 6.5f); lineTo(15f, 19.5f)
-            }
-        }
-    }
 }
 
 // =====================================================================================
@@ -256,7 +245,7 @@ fun SearchField(
                         },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(CommunityIcons.Close, stringResource(R.string.search_clear), tint = c.textTertiary, modifier = Modifier.size(28.dp))
+                        Icon(EodiIcons.Close, stringResource(R.string.search_clear), tint = c.textTertiary, modifier = Modifier.size(28.dp))
                     }
                 }
                 Surface(
@@ -502,7 +491,7 @@ private fun MetaLine(dateLabel: String?, total: Int, elapsedMicros: Long) {
     val c = EodiTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, top = 4.dp)) {
         if (dateLabel != null) {
-            Icon(AgentIcons.Calendar, null, tint = c.accent, modifier = Modifier.size(26.dp))
+            Icon(EodiIcons.Calendar, null, tint = c.accent, modifier = Modifier.size(26.dp))
             Spacer(Modifier.width(10.dp))
             Text(stringResource(R.string.search_date_range, dateLabel), style = EodiTheme.type.label, color = c.accent, maxLines = 1)
             Spacer(Modifier.width(20.dp))
@@ -560,7 +549,7 @@ private fun ResultCard(
             )
             if (r.dateLine.isNotBlank()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(AgentIcons.Calendar, null, tint = c.textTertiary, modifier = Modifier.size(22.dp))
+                    Icon(EodiIcons.Calendar, null, tint = c.textTertiary, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(r.dateLine, style = EodiTheme.type.meta, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -577,8 +566,8 @@ private fun ResultCard(
                         { onHeart(r) },
                     )
                 }
-                if (canMap) SecondaryPill(stringResource(R.string.search_map), SearchIcons.Map, { onMap(r) })
-                if (canNavi) PrimaryPill(stringResource(R.string.search_navigate), AgentIcons.Navigate, { onNavigate(r) })
+                if (canMap) SecondaryPill(stringResource(R.string.search_map), EodiIcons.Map, { onMap(r) })
+                if (canNavi) PrimaryPill(stringResource(R.string.search_navigate), EodiIcons.Navi, { onNavigate(r) })
             }
         }
     }
@@ -655,11 +644,11 @@ private fun ResultRow(
             }
             if (canMap) {
                 Spacer(Modifier.width(8.dp))
-                RowAction(SearchIcons.Map, stringResource(R.string.search_map), filled = false) { onMap(r) }
+                RowAction(EodiIcons.Map, stringResource(R.string.search_map), filled = false) { onMap(r) }
             }
             if (canNavi) {
                 Spacer(Modifier.width(8.dp))
-                RowAction(AgentIcons.Navigate, stringResource(R.string.search_navigate), filled = true) { onNavigate(r) }
+                RowAction(EodiIcons.Navi, stringResource(R.string.search_navigate), filled = true) { onNavigate(r) }
             }
         }
     }
@@ -677,7 +666,7 @@ private fun RowPicture(r: SearchRow) {
         val icon = when (r.kind) {
             SearchRowKind.POST -> CommunityIcons.Chat
             SearchRowKind.COURSE -> CommunityIcons.Road
-            SearchRowKind.DAY -> AgentIcons.Calendar
+            SearchRowKind.DAY -> EodiIcons.Calendar
             else -> EodiIcons.Pin
         }
         Icon(icon, null, tint = if (p != null) c.stay.copy(alpha = 0.7f) else c.textTertiary, modifier = Modifier.size(36.dp))
@@ -750,7 +739,7 @@ private fun AskAiCard(ai: AskAi, primary: Boolean, onAsk: (String) -> Unit) {
                 .padding(horizontal = 24.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(AgentIcons.Sparkle, null, tint = c.memoryInk, modifier = Modifier.size(28.dp))
+            Icon(EodiIcons.Sparkle, null, tint = c.memoryInk, modifier = Modifier.size(28.dp))
             Spacer(Modifier.width(12.dp))
             Text(
                 stringResource(R.string.search_ask_ai_more, ai.text),
@@ -832,7 +821,7 @@ private fun RecentChip(text: String, onPick: () -> Unit, onRemove: () -> Unit) {
                 Modifier.size(64.dp).clip(CircleShape).clickable(role = Role.Button, onClickLabel = removeLabel, onClick = onRemove),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(CommunityIcons.Close, removeLabel, tint = c.textTertiary, modifier = Modifier.size(22.dp))
+                Icon(EodiIcons.Close, removeLabel, tint = c.textTertiary, modifier = Modifier.size(22.dp))
             }
         }
     }
@@ -842,7 +831,7 @@ private fun RecentChip(text: String, onPick: () -> Unit, onRemove: () -> Unit) {
 private fun SuggestionChip(chip: SearchChip, onClick: () -> Unit) {
     val c = EodiTheme.colors
     val icon = when (chip.kind) {
-        SearchChipKind.DATE -> AgentIcons.Calendar
+        SearchChipKind.DATE -> EodiIcons.Calendar
         SearchChipKind.PLACE -> EodiIcons.Pin
         SearchChipKind.KEYWORD -> SearchIcons.Search
     }

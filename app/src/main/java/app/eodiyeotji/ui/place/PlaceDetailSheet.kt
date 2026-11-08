@@ -59,7 +59,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
 import app.eodiyeotji.core.PlaceDetail
 import app.eodiyeotji.core.StopFact
-import app.eodiyeotji.ui.agent.AgentIcons
 import app.eodiyeotji.ui.community.CommunityIcons
 import app.eodiyeotji.ui.community.LocalOverlayPresenter
 import app.eodiyeotji.ui.community.Notice
@@ -260,7 +259,7 @@ private fun PlaceDetailContent(opened: StopFact, s: PlaceDetailUiState, vm: Plac
         }
         // 닫기는 사진 위에 늘 떠 있다
         RoundIconButton(
-            CommunityIcons.Close,
+            EodiIcons.Close,
             stringResource(R.string.community_close),
             vm::close,
             Modifier.align(Alignment.TopEnd).padding(if (compact) 28.dp else 20.dp),
@@ -342,7 +341,7 @@ fun HalfStars(halves: Int, modifier: Modifier = Modifier, size: Dp = 24.dp) {
 private fun ActionRow(d: PlaceDetail?, vm: PlaceDetailViewModel) {
     val c = EodiTheme.colors
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
-        ActionTile(AgentIcons.Navigate, stringResource(R.string.place_detail_navigate), vm::navigate, Modifier.weight(1f), primary = true)
+        ActionTile(EodiIcons.Navi, stringResource(R.string.place_detail_navigate), vm::navigate, Modifier.weight(1f), primary = true)
         val saved = d?.saved == true
         ActionTile(
             if (saved) CommunityIcons.HeartFilled else CommunityIcons.Heart,
@@ -412,7 +411,7 @@ private fun VisitsLine(d: PlaceDetail, modifier: Modifier) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(48.dp).background(c.surface, CircleShape), contentAlignment = Alignment.Center) {
-            Icon(AgentIcons.Calendar, null, tint = c.accent, modifier = Modifier.size(28.dp))
+            Icon(EodiIcons.Calendar, null, tint = c.accent, modifier = Modifier.size(28.dp))
         }
         Spacer(Modifier.width(16.dp))
         Text(

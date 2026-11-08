@@ -225,7 +225,7 @@ internal fun WriteReviewSheet(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                RoundIconButton(CommunityIcons.Close, stringResource(R.string.community_close), onClose)
+                RoundIconButton(EodiIcons.Close, stringResource(R.string.community_close), onClose)
             }
             Spacer(Modifier.height(20.dp))
             if (place == null) {
@@ -266,7 +266,7 @@ internal fun WriteReviewSheet(
                     d.error?.let { Text(stringResource(R.string.community_failed, it), style = EodiTheme.type.caption, color = c.error) }
                     PrimaryPill(
                         stringResource(if (d.submitting) R.string.share_submitting else R.string.review_submit),
-                        CommunityIcons.Check,
+                        EodiIcons.Check,
                         onSubmit,
                         Modifier.fillMaxWidth(),
                         enabled = !d.submitting,

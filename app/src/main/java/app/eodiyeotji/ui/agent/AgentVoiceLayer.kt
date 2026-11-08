@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.agent
 
+import app.eodiyeotji.ui.theme.EodiIcons
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
@@ -147,7 +148,7 @@ private fun ListeningCard(voice: VoiceUi, driving: Boolean, onMic: () -> Unit, o
                 Spacer(Modifier.height(2.dp))
             }
             IconButton(onClick = onCancel, modifier = Modifier.size(AgentTouchMin)) {
-                Icon(AgentIcons.Close, contentDescription = stringResource(R.string.agent_voice_cancel), modifier = Modifier.size(36.dp))
+                Icon(EodiIcons.Close, contentDescription = stringResource(R.string.agent_voice_cancel), modifier = Modifier.size(36.dp))
             }
         }
     }

@@ -114,7 +114,7 @@ private fun BannerCard(p: CourseProgress, interactive: Boolean, onNext: () -> Un
     ) {
         Row(Modifier.padding(start = 24.dp, end = 16.dp, top = 16.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(64.dp).background(if (p.failed) c.error else c.accent, CircleShape), contentAlignment = Alignment.Center) {
-                Icon(if (p.finished) CommunityIcons.Check else EodiIcons.Navi, null, tint = c.onAccent, modifier = Modifier.size(32.dp))
+                Icon(if (p.finished) EodiIcons.Check else EodiIcons.Navi, null, tint = c.onAccent, modifier = Modifier.size(32.dp))
             }
             Spacer(Modifier.width(20.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -166,7 +166,7 @@ private fun CompactBannerCard(p: CourseProgress, onNext: () -> Unit, onRetry: ()
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(56.dp).background(if (p.failed) c.error else c.accent, CircleShape), contentAlignment = Alignment.Center) {
-                    Icon(if (p.finished) CommunityIcons.Check else EodiIcons.Navi, null, tint = c.onAccent, modifier = Modifier.size(30.dp))
+                    Icon(if (p.finished) EodiIcons.Check else EodiIcons.Navi, null, tint = c.onAccent, modifier = Modifier.size(30.dp))
                 }
                 Spacer(Modifier.width(18.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {

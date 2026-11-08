@@ -31,7 +31,6 @@ import androidx.compose.ui.unit.dp
 import app.eodiyeotji.R
 import app.eodiyeotji.phone.MapApp
 import app.eodiyeotji.phone.NoMapAppRequest
-import app.eodiyeotji.ui.community.CommunityIcons
 import app.eodiyeotji.ui.community.PrimaryPill
 import app.eodiyeotji.ui.community.RoundIconButton
 import app.eodiyeotji.ui.community.SecondaryPill
@@ -57,7 +56,7 @@ fun PhoneSettingsSheet(
         Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 32.dp, end = 32.dp, top = 12.dp, bottom = 32.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.settings_title), style = type.title, modifier = Modifier.weight(1f).semantics { heading() })
-                RoundIconButton(CommunityIcons.Close, stringResource(R.string.settings_close), onClose)
+                RoundIconButton(EodiIcons.Close, stringResource(R.string.settings_close), onClose)
             }
             Spacer(Modifier.size(24.dp))
             SectionTitle(stringResource(R.string.settings_map_app))
@@ -131,7 +130,7 @@ private fun MapAppRow(label: String, note: String?, selected: Boolean, onClick: 
             Modifier.size(40.dp).background(if (selected) c.accent else c.surface, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            if (selected) Icon(CommunityIcons.Check, null, tint = c.onAccent, modifier = Modifier.size(26.dp))
+            if (selected) Icon(EodiIcons.Check, null, tint = c.onAccent, modifier = Modifier.size(26.dp))
         }
     }
 }

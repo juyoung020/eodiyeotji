@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.review
 
+import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.community.StopPhotoBox
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.aspectRatio
@@ -441,7 +442,7 @@ private fun SelectChip(text: String, on: Boolean, enabled: Boolean, onClick: () 
     ) {
         Row(Modifier.padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically) {
             if (on) {
-                Icon(CommunityIcons.Check, null, Modifier.size(24.dp))
+                Icon(EodiIcons.Check, null, Modifier.size(24.dp))
                 Spacer(Modifier.width(8.dp))
             }
             Text(text, style = EodiTheme.type.label, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, maxLines = 1)

@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.agent
 
+import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.common.agoText
 import app.eodiyeotji.ui.common.durationText
 import app.eodiyeotji.ui.common.distanceText
@@ -94,7 +95,7 @@ internal fun RecommendationCard(
                 Text(sub, style = EodiTheme.type.meta, color = c.textSecondary, maxLines = 1)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(AgentIcons.Calendar, null, tint = c.textTertiary, modifier = Modifier.size(22.dp))
+                Icon(EodiIcons.Calendar, null, tint = c.textTertiary, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
                     memoryDateText(facts.day),
@@ -137,7 +138,7 @@ internal fun OtherDayRow(rec: RecommendationUi, today: LocalDate, onAsk: (String
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.size(56.dp).background(MaterialTheme.colorScheme.secondaryContainer, CircleShape),
             ) {
-                Icon(AgentIcons.Calendar, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(28.dp))
+                Icon(EodiIcons.Calendar, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(28.dp))
             }
             Spacer(Modifier.width(20.dp))
             Column(Modifier.weight(1f)) {

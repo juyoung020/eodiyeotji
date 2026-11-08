@@ -186,7 +186,7 @@ private fun MenuHeader(target: EditTarget, card: PlaceCard?, onClose: () -> Unit
             if (sub.isNotBlank()) Text(sub, style = type.meta, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.width(16.dp))
-        RoundIconButton(CommunityIcons.Close, stringResource(R.string.edit_close), onClose)
+        RoundIconButton(EodiIcons.Close, stringResource(R.string.edit_close), onClose)
     }
 }
 
@@ -270,7 +270,7 @@ private fun DayTitleSheet(day: String, current: String, onSave: (String) -> Unit
         Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 32.dp, end = 32.dp, top = 28.dp, bottom = 28.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.day_title_title), style = type.title, modifier = Modifier.weight(1f).semantics { heading() })
-                RoundIconButton(CommunityIcons.Close, stringResource(R.string.edit_cancel), onCancel)
+                RoundIconButton(EodiIcons.Close, stringResource(R.string.edit_cancel), onCancel)
             }
             Spacer(Modifier.height(20.dp))
             TextField(
@@ -293,7 +293,7 @@ private fun DayTitleSheet(day: String, current: String, onSave: (String) -> Unit
             Spacer(Modifier.height(12.dp))
             Text(stringResource(R.string.day_title_note), style = type.caption, color = c.textTertiary)
             Spacer(Modifier.height(20.dp))
-            PrimaryPill(stringResource(R.string.day_title_save), CommunityIcons.Check, { onSave(text) }, Modifier.fillMaxWidth())
+            PrimaryPill(stringResource(R.string.day_title_save), EodiIcons.Check, { onSave(text) }, Modifier.fillMaxWidth())
         }
     }
 }
@@ -312,7 +312,7 @@ private fun RenameSheet(r: RenameState, onSave: (String, PlaceLabel?) -> Unit, o
         Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 32.dp, end = 32.dp, top = 28.dp, bottom = 28.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.rename_title), style = type.title, modifier = Modifier.weight(1f).semantics { heading() })
-                RoundIconButton(CommunityIcons.Close, stringResource(R.string.edit_cancel), onCancel)
+                RoundIconButton(EodiIcons.Close, stringResource(R.string.edit_cancel), onCancel)
             }
             Spacer(Modifier.height(20.dp))
             TextField(
@@ -335,7 +335,7 @@ private fun RenameSheet(r: RenameState, onSave: (String, PlaceLabel?) -> Unit, o
             Spacer(Modifier.height(12.dp))
             Text(stringResource(R.string.rename_note), style = type.caption, color = c.textTertiary)
             Spacer(Modifier.height(20.dp))
-            PrimaryPill(stringResource(R.string.rename_save), CommunityIcons.Check, { onSave(text, null) }, Modifier.fillMaxWidth(), enabled = text.isNotBlank())
+            PrimaryPill(stringResource(R.string.rename_save), EodiIcons.Check, { onSave(text, null) }, Modifier.fillMaxWidth(), enabled = text.isNotBlank())
             Spacer(Modifier.height(28.dp))
             Text(stringResource(R.string.rename_candidates), style = type.eyebrow, color = c.textTertiary, modifier = Modifier.semantics { heading() })
             Spacer(Modifier.height(12.dp))
