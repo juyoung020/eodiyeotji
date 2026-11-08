@@ -1,5 +1,17 @@
 package app.eodiyeotji.ui.recap
 
+import androidx.compose.ui.graphics.graphicsLayer
+
+import androidx.compose.ui.graphics.Brush
+
+import androidx.compose.runtime.LaunchedEffect
+
+import androidx.compose.animation.core.tween
+
+import androidx.compose.animation.core.LinearEasing
+
+import androidx.compose.animation.core.Animatable
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -202,7 +214,8 @@ interface RecallEntryPoint {
 }
 
 /**
- * 운전 중 지나가며 떠오른 기억 (차 주행 화면, 에이전트 처음 화면 위에 작게). 사진 한 장 · 금색 도장 · 이름 · 한 줄.
+ * 운전 중 지나가며 떠오른 기억 (차 주행 화면, 마이크 위 큰 카드). 그날 사진이 카드를 가득 채우고, 아래쪽 어두운 그라데이션 위에
+ * 금색 도장("1년 전 가을") · 그곳 이름 · 읽어 주는 한 줄 · 그날 제목. 사진은 천천히 다가온다 (기억이 떠오르듯).
  * 회상이 없으면 아무것도 그리지 않는다. 몇 분 뒤 또는 주행이 끝나면 저절로 사라진다 (`RecallCenter`).
  */
 @Composable
@@ -212,21 +225,47 @@ fun RecallDrivingCard(modifier: Modifier = Modifier) {
     val recall by center.current.collectAsStateWithLifecycle()
     val r = recall ?: return
     val c = EodiTheme.colors
-    Surface(shape = RoundedCornerShape(28.dp), color = c.surfaceHigh, modifier = modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(20.dp)) {
-            PhotoTile(r.place, Modifier.size(120.dp), showName = false)
-            Spacer(Modifier.width(24.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                MemoryStamp(r.whenText, large = true)
-                Text(r.line, style = EodiTheme.type.bodyStrong, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    val shape = RoundedCornerShape(32.dp)
+    // 사진이 1.0 → 1.08배로 천천히 다가온다 (이 회상이 떠 있는 동안 한 번)
+    val zoom = remember(r.key) { Animatable(1f) }
+    LaunchedEffect(r.key) { zoom.animateTo(1.08f, tween(durationMillis = 9_000, easing = LinearEasing)) }
+    Box(modifier.fillMaxWidth().clip(shape).background(c.staySoft, shape)) {
+        PlaceThumbnail(
+            r.place.name, r.place.address, r.place.lat, r.place.lon,
+            modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = zoom.value; scaleY = zoom.value },
+            fallback = {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(EodiIcons.Pin, contentDescription = null, tint = c.stay, modifier = Modifier.size(64.dp))
+                }
+            },
+            loading = { PhotoLoadingPlaceholder(c.surfaceHigh) },
+        )
+        Column(
+            Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f))))
+                .padding(start = 36.dp, end = 36.dp, top = 72.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            MemoryStamp(r.whenText, large = true)
+            Text(r.place.name, style = EodiTheme.type.title, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(r.line, style = EodiTheme.type.bodyStrong, color = Color.White.copy(alpha = 0.92f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (r.dayTitle.isNotBlank()) {
+                Text(r.dayTitle, style = EodiTheme.type.meta, color = Color.White.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Spacer(Modifier.width(16.dp))
-            Box(
-                Modifier.size(76.dp).clip(CircleShape).background(c.surface).clickable(role = Role.Button, onClick = center::dismissCard),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(AgentIcons.Close, contentDescription = stringResource(R.string.recap_recall_close), tint = c.textSecondary, modifier = Modifier.size(36.dp))
-            }
+        }
+        Box(
+            Modifier
+                .align(Alignment.TopEnd)
+                .padding(20.dp)
+                .size(76.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.35f))
+                .clickable(role = Role.Button, onClick = center::dismissCard),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(AgentIcons.Close, contentDescription = stringResource(R.string.recap_recall_close), tint = Color.White, modifier = Modifier.size(36.dp))
         }
     }
 }

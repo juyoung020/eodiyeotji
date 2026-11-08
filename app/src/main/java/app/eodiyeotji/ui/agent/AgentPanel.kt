@@ -790,8 +790,8 @@ private fun DrivingAgent(
                     // 지금 이 주행을 알아서 기록하고 있다는 표시 (누를 수 없는 작은 점 + 글)
                     RecordingStatusChip(interactive = false)
                     Spacer(Modifier.height(16.dp))
-                    // 지나가며 떠오른 기억이 있으면 마이크 위에 작게 (ui/recap, 없으면 그리지 않는다)
-                    RecallDrivingCard()
+                    // 지나가며 떠오른 기억이 있으면 마이크 위에 큰 사진 카드로 (화면 위쪽 절반, ui/recap, 없으면 그리지 않는다)
+                    RecallDrivingCard(Modifier.weight(1.3f))
                     DrivingPrompt(onVoiceRequest, Modifier.weight(1f).fillMaxWidth())
                     if (onClose != null) {
                         BigButton(stringResource(R.string.agent_close), null, primary = false, enabled = true, onClick = onClose, modifier = Modifier.fillMaxWidth())
