@@ -112,8 +112,8 @@ fun PlacesRoute(
                 val body = Modifier.fillMaxSize().padding(horizontal = space.page)
                 when {
                     !s.loaded -> LoadingBox(body)
-                    s.tab == PlacesTab.SAVED -> CardGrid(s.saved, s.offers, compact, R.string.places_saved_empty, viewModel, onOpenRecords, body)
-                    s.tab == PlacesTab.FREQUENT -> CardGrid(s.frequent, s.offers, compact, R.string.places_frequent_empty, viewModel, onOpenRecords, body)
+                    s.tab == PlacesTab.SAVED -> CardGrid(s.saved, s.offers, compact, R.string.places_saved_empty, R.string.places_saved_empty_title, viewModel, onOpenRecords, body)
+                    s.tab == PlacesTab.FREQUENT -> CardGrid(s.frequent, s.offers, compact, R.string.places_frequent_empty, R.string.places_frequent_empty_title, viewModel, onOpenRecords, body)
                     s.tab == PlacesTab.COUPONS -> CouponWallet(compact, body)
                     else -> SettingsPane(s, viewModel, compact, body)
                 }
@@ -156,12 +156,13 @@ private fun CardGrid(
     offers: Map<Long, List<PartnerOffer>>,
     compact: Boolean,
     empty: Int,
+    emptyTitle: Int,
     vm: PlacesViewModel,
     onOpenRecords: (String) -> Unit,
     modifier: Modifier,
 ) {
     if (cards.isEmpty()) {
-        CenterMessage(stringResource(empty), modifier)
+        CenterMessage(stringResource(empty), modifier, icon = CommunityIcons.Heart, title = stringResource(emptyTitle), tint = EodiTheme.colors.heart)
         return
     }
     LazyVerticalGrid(
@@ -251,7 +252,17 @@ private fun SettingsPane(s: PlacesUiState, vm: PlacesViewModel, compact: Boolean
         full("anchor-hint") { Text(stringResource(R.string.anchor_hint), style = EodiTheme.type.caption, color = c.textTertiary, modifier = Modifier.padding(start = 4.dp)) }
         full("hidden-h") { Box(Modifier.padding(top = 20.dp)) { SectionTitle(stringResource(R.string.hidden_section), Modifier.padding(start = 4.dp, bottom = 4.dp)) } }
         if (s.hidden.isEmpty()) {
-            full("hidden-empty") { Text(stringResource(R.string.hidden_empty), style = EodiTheme.type.body, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp)) }
+            full("hidden-empty") {
+                // 빈 칸도 행 모양으로 (위 집 · 회사 행과 같은 판 위에 흐린 글) → 구역이 비어 있다는 것이 줄 맞춰 보인다
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 104.dp).background(c.surfaceHigh, RoundedCornerShape(EodiTheme.space.radiusM)).padding(horizontal = 24.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(EodiIcons.Check, null, tint = c.here, modifier = Modifier.size(28.dp))
+                    Spacer(Modifier.width(16.dp))
+                    Text(stringResource(R.string.hidden_empty), style = EodiTheme.type.body, color = c.textSecondary)
+                }
+            }
         } else {
             items(s.hidden, key = { "h${it.id}" }) { r -> HiddenRow(r, compact, onRestore = { vm.restore(r) }) }
         }

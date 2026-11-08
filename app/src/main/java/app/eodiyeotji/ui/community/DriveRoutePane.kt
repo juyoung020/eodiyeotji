@@ -100,7 +100,7 @@ fun DriveRoutePane(viewModel: DriveRouteViewModel = hiltViewModel()) {
                 is Load.Failed -> ErrorState(stringResource(R.string.community_failed, l.message), viewModel::reload)
                 is Load.Loaded ->
                     if (l.items.isEmpty()) {
-                        CenterMessage(stringResource(R.string.drive_empty))
+                        CenterMessage(stringResource(R.string.drive_empty), icon = CommunityIcons.Road)
                     } else {
                         DriveRouteGrid(l.items, onOpen = viewModel::open, onHeart = viewModel::toggleHeart)
                     }

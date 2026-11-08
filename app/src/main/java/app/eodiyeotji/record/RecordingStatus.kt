@@ -202,17 +202,27 @@ fun RecordingStatusChip(
     ) {
         Row(
             Modifier
-                .background(if (warn) c.staySoft else if (interactive) c.surface else c.surfaceHigh, CircleShape)
-                .padding(start = 16.dp, end = 20.dp, top = 10.dp, bottom = 10.dp),
+                .background(if (warn) c.staySoft else if (interactive) c.surface else c.accentSoft, CircleShape)
+                .padding(
+                    start = if (interactive) 16.dp else 24.dp,
+                    end = if (interactive) 20.dp else 30.dp,
+                    top = if (interactive) 10.dp else 16.dp,
+                    bottom = if (interactive) 10.dp else 16.dp,
+                ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            StatusDot(headline)
-            Spacer(Modifier.width(10.dp))
+            StatusDot(headline, if (interactive) 14.dp else 20.dp)
+            Spacer(Modifier.width(if (interactive) 10.dp else 14.dp))
             Text(
                 label,
-                style = if (interactive) EodiTheme.type.caption else EodiTheme.type.label,
-                fontWeight = if (warn) FontWeight.Bold else FontWeight.SemiBold,
-                color = if (warn) c.textPrimary else c.textSecondary,
+                // 주행 중 표시는 팔 길이에서 한눈에 (28sp 굵게, 파란 글자)
+                style = if (interactive) EodiTheme.type.caption else EodiTheme.type.bodyStrong,
+                fontWeight = if (warn || !interactive) FontWeight.Bold else FontWeight.SemiBold,
+                color = when {
+                    warn -> c.textPrimary
+                    !interactive -> c.accent
+                    else -> c.textSecondary
+                },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -225,7 +235,7 @@ fun RecordingStatusChip(
 
 /** 상태 점: 기록 중 = 파랑(길 색)이 숨 쉼, 대기 = 초록(지금), 경고 = 코랄. */
 @Composable
-private fun StatusDot(headline: StatusHeadline) {
+private fun StatusDot(headline: StatusHeadline, size: androidx.compose.ui.unit.Dp = 14.dp) {
     val c = EodiTheme.colors
     val color = when {
         headline == StatusHeadline.DRIVING -> c.accent
@@ -239,9 +249,9 @@ private fun StatusDot(headline: StatusHeadline) {
             animationSpec = infiniteRepeatable(tween(PULSE_MS, easing = FastOutSlowInEasing), RepeatMode.Reverse),
             label = "rec-dot",
         )
-        Box(Modifier.size(14.dp).alpha(pulse).background(color, CircleShape))
+        Box(Modifier.size(size).alpha(pulse).background(color, CircleShape))
     } else {
-        Box(Modifier.size(14.dp).background(color, CircleShape))
+        Box(Modifier.size(size).background(color, CircleShape))
     }
 }
 

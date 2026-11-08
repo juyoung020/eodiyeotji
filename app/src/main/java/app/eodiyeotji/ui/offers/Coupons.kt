@@ -315,7 +315,7 @@ fun CouponWallet(compact: Boolean, modifier: Modifier = Modifier) {
         return
     }
     if (claimed.isEmpty()) {
-        CenterMessage(stringResource(R.string.coupon_wallet_empty), modifier)
+        CenterMessage(stringResource(R.string.coupon_wallet_empty), modifier, icon = CouponIcons.Ticket, title = stringResource(R.string.coupon_wallet_empty_title), tint = EodiTheme.colors.coupon)
         return
     }
     LazyVerticalGrid(

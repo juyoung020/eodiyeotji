@@ -12,14 +12,16 @@ import kotlin.math.roundToInt
 
 // 모든 화면이 같이 쓰는 표시 형식. 같은 거리·시간·"얼마 전"은 어느 화면에서나 같은 글자로 보인다.
 
-/** 1km 미만은 "850m", 그 이상은 소수 한 자리 "12.0km". */
+/** 1km 미만은 "850m", 100km 미만은 소수 한 자리 "12.0km", 그 이상은 정수에 천 단위 쉼표 "4,090km" (큰 수는 소수점이 읽기만 방해). */
 @Composable
 @ReadOnlyComposable
 fun distanceText(meters: Double): String =
     if (meters < 1000.0) {
         stringResource(R.string.timeline_m, meters.roundToInt())
-    } else {
+    } else if (meters < 100_000.0) {
         stringResource(R.string.timeline_km, String.format(Locale.ROOT, "%.1f", meters / 1000.0))
+    } else {
+        stringResource(R.string.timeline_km, String.format(Locale.ROOT, "%,d", (meters / 1000.0).roundToInt()))
     }
 
 /** "32분", "2시간", "1시간 20분", 1분이 안 되면 "1분 미만". */

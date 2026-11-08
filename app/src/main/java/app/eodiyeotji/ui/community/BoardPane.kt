@@ -70,9 +70,9 @@ fun BoardPane(viewModel: BoardViewModel = hiltViewModel()) {
                 is Load.Failed -> ErrorState(stringResource(R.string.community_failed, l.message), viewModel::reload)
                 is Load.Loaded ->
                     if (l.items.isEmpty()) {
-                        CenterMessage(stringResource(R.string.board_empty))
+                        CenterMessage(stringResource(R.string.board_empty), icon = CommunityIcons.Chat)
                     } else {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopStart) {
                             LazyColumn(
                                 Modifier.widthIn(max = ReadWidth).fillMaxSize(),
                                 state = rememberTopListState(l.items.first().id),

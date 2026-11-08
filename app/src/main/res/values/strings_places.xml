@@ -81,7 +81,9 @@
     <string name="places_tab_saved">저장한 곳</string>
     <string name="places_tab_frequent">자주 가는 곳</string>
     <string name="places_tab_settings">집 · 회사 · 숨긴 기록</string>
-    <string name="places_saved_empty">아직 저장한 곳이 없어요.\n타임라인에서 머문 곳의 ⋯ 를 눌러 ♥ 저장해 보세요.</string>
+    <string name="places_saved_empty_title">아직 저장한 곳이 없어요</string>
+    <string name="places_saved_empty">타임라인에서 머문 곳의 ⋯ 를 눌러 ♥ 저장해 보세요.</string>
+    <string name="places_frequent_empty_title">자주 가는 곳이 아직 없어요</string>
     <string name="places_frequent_empty">두 번 이상 들른 곳이 생기면 여기에 보여요.</string>
     <string name="places_visits">%1$d번 다녀옴</string>
     <string name="places_last_visit">마지막 %1$s</string>
