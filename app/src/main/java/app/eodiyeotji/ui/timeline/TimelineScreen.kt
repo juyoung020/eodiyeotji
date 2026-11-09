@@ -892,8 +892,12 @@ private fun DetailHeader(summary: DaySummary?, today: LocalDate, onBack: (() -> 
                 }
                 if (onShare != null && onBack == null) {
                     Spacer(Modifier.width(16.dp))
-                    SecondaryPill(stringResource(R.string.timeline_share), CommunityIcons.Upload, onShare)
+                    // 옆에 공유 버튼까지 있어 짧게 ("올리기") — 제목이 잘리지 않게
+                    SecondaryPill(stringResource(R.string.timeline_share_short), CommunityIcons.Upload, onShare)
                 }
+                // 카드로 공유 (차: 연결된 휴대폰으로 → 카톡)
+                Spacer(Modifier.width(16.dp))
+                ShareImageButton(ShareTarget.Day(summary.day), style = ShareButtonStyle.ICON)
                 LocalTimelineEdits.current?.let { edits ->
                     Spacer(Modifier.width(16.dp))
                     MoreButton(stringResource(R.string.edit_more_day), { edits.onDay(summary) })

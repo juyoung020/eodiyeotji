@@ -111,6 +111,7 @@ fun PhoneApp(shell: PhoneShellViewModel = hiltViewModel()) {
             LocalPhoneSheetHost provides sheets,
         ) {
             Box(Modifier.fillMaxSize().background(EodiTheme.colors.background)) {
+                if (prefs.onboarded) PhoneHandoffHost()
                 when {
                     !prefs.loaded -> Unit
                     !prefs.onboarded -> PhoneOnboarding(

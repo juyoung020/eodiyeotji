@@ -12,6 +12,7 @@ pub mod drivedetect;
 pub mod edits;
 pub mod ffi;
 pub mod geo;
+pub mod handoff;
 pub mod lastfix;
 pub mod mapdata;
 pub mod memmap;
