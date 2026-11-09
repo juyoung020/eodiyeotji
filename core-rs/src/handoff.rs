@@ -126,6 +126,15 @@ pub fn open(key: &str, msg: &str) -> Result<String, CoreError> {
     String::from_utf8(open_raw(&key_bytes(key)?, msg)?).map_err(|_| invalid("글자 형식"))
 }
 
+/// 바이트 잠그기 · 열기 (기록 동기화 묶음, `sync.rs`).
+pub fn seal_bytes(key: &str, data: &[u8]) -> Result<String, CoreError> {
+    seal_raw(&key_bytes(key)?, data)
+}
+
+pub fn open_bytes(key: &str, msg: &str) -> Result<Vec<u8>, CoreError> {
+    open_raw(&key_bytes(key)?, msg)
+}
+
 /// 공유 카드 잠그기.
 pub fn seal_card(key: &str, card: &ShareCard) -> Result<String, CoreError> {
     let json = serde_json::to_string(card).map_err(|_| invalid("카드 묶기 실패"))?;
@@ -239,6 +248,8 @@ mod tests {
         let other = new_pairing().unwrap();
         assert!(open_card(&other.key, &m).is_err(), "다른 키로는 열리지 않는다");
         assert!(open(&p.key, "zz").is_err());
+        let b = seal_bytes(&p.key, &[0, 159, 255]).unwrap();
+        assert_eq!(open_bytes(&p.key, &b).unwrap(), vec![0, 159, 255]);
     }
 
     #[test]

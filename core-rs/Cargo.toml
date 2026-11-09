@@ -23,6 +23,8 @@ sha2 = "0.10"
 getrandom = "0.2"
 base64 = "0.22"
 qrcode = { version = "0.14", default-features = false }
+# 차 → 폰 기록 동기화 묶음 압축 (src/sync.rs)
+miniz_oxide = "0.8"
 
 [features]
 # Kotlin 바인딩 생성기(호스트에서만 실행). 앱에 들어가는 .so에는 포함되지 않는다.

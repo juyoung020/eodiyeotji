@@ -235,3 +235,13 @@ pub fn handoff_open_card(key: String, msg: String) -> Result<crate::share::Share
 pub fn qr_matrix(text: String) -> Result<crate::handoff::QrMatrix, crate::store::CoreError> {
     crate::handoff::qr_matrix(&text)
 }
+
+#[uniffi::export]
+pub fn handoff_seal_bytes(key: String, data: Vec<u8>) -> Result<String, crate::store::CoreError> {
+    crate::handoff::seal_bytes(&key, &data)
+}
+
+#[uniffi::export]
+pub fn handoff_open_bytes(key: String, msg: String) -> Result<Vec<u8>, crate::store::CoreError> {
+    crate::handoff::open_bytes(&key, &msg)
+}

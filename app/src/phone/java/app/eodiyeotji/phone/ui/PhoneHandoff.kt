@@ -96,6 +96,7 @@ fun PhoneHandoffHost() {
     val repo = deps.handoff()
     val link by repo.link.collectAsState()
     var inbox by remember { mutableStateOf<List<RShareCard>>(emptyList()) }
+    val scope = rememberCoroutineScope()
 
     // QR로 열렸으면 연결 (처음 열 때의 intent + 이미 떠 있을 때 새로 온 intent)
     var pairUri by remember { mutableStateOf((context as? Activity)?.intent?.data) }
@@ -116,12 +117,11 @@ fun PhoneHandoffHost() {
     LaunchedEffect(link) {
         if (link == null) return@LaunchedEffect
         while (true) {
-            val got = repo.pollCards()
-            if (got.isNotEmpty()) {
-                inbox = inbox + got
-                got.forEach { notify(context, it) }
+            repo.listen { card ->
+                notify(context, card)
+                scope.launch { inbox = inbox + card }
             }
-            delay(POLL_MS)
+            delay(RETRY_MS)
         }
     }
     inbox.firstOrNull()?.let { card ->
@@ -273,4 +273,4 @@ private fun notify(context: Context, card: RShareCard) {
 }
 
 private const val CHANNEL = "handoff"
-private const val POLL_MS = 3_000L
+private const val RETRY_MS = 5_000L

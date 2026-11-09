@@ -27,6 +27,7 @@ pub mod saved;
 pub mod search_ui;
 pub mod share;
 pub mod store;
+pub mod sync;
 pub mod trip;
 #[cfg(test)]
 mod perf_tests;

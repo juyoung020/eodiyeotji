@@ -191,3 +191,23 @@ private fun QrBox(text: String) {
         }
     }
 }
+
+/**
+ * 차 판: 휴대폰이 연결돼 있으면 기록을 폰으로 계속 맞춘다 (처음 연결 직후 · 앱이 떠 있는 동안 [SYNC_EVERY_MS]마다).
+ * 보낼 새 기록이 없으면 아무것도 보내지 않는다 (handoff.HandoffRepository.syncNow).
+ */
+@Composable
+fun HandoffSyncLoop() {
+    val context = LocalContext.current
+    val handoff = remember(context) { EntryPointAccessors.fromApplication(context.applicationContext, ShareEntryPoint::class.java).handoff() }
+    val link by handoff.link.collectAsState()
+    LaunchedEffect(link) {
+        if (link == null) return@LaunchedEffect
+        while (true) {
+            handoff.syncNow()
+            kotlinx.coroutines.delay(SYNC_EVERY_MS)
+        }
+    }
+}
+
+private const val SYNC_EVERY_MS = 5 * 60_000L
