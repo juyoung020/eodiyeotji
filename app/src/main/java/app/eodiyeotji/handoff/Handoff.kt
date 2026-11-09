@@ -17,6 +17,9 @@ import app.eodiyeotji.core.rust.handoffSeal
 import app.eodiyeotji.core.rust.handoffSealBytes
 import app.eodiyeotji.core.rust.handoffSealCard
 import app.eodiyeotji.core.rust.handoffSealPairing
+import app.eodiyeotji.core.rust.ParkedCar
+import app.eodiyeotji.core.rust.parkedFromJson
+import app.eodiyeotji.core.rust.handoffSealParked
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -103,6 +106,20 @@ class HandoffRepository @Inject constructor(
             .isSuccess
     }
 
+    /** 차: 주차한 자리를 폰으로 보낸다 (P에 들어갈 때). 연결이 없거나 실패하면 false. */
+    suspend fun sendParked(car: ParkedCar): Boolean = withContext(Dispatchers.IO) {
+        val l = _link.value ?: return@withContext false
+        runCatching { Ntfy.publish(l.topic, handoffSealParked(l.key, car), title = "어디였지", tags = "parking") }
+            .onFailure { Log.w(TAG, "주차 위치 보내기 실패", it) }
+            .isSuccess
+    }
+
+    /** 차: 다시 출발했음을 폰에 알린다 (폰은 받아 둔 주차 위치를 지운다). */
+    suspend fun sendMoving(tMs: Long): Boolean = withContext(Dispatchers.IO) {
+        val l = _link.value ?: return@withContext false
+        runCatching { Ntfy.publish(l.topic, handoffSeal(l.key, MOVING + tMs)) }.isSuccess
+    }
+
     /**
      * 차 → 폰 기록 동기화 (core-rs/src/sync.rs). 지난번 보낸 시각 뒤의 원본을 묶음으로 보낸다.
      * 폰이 받으면 "ack:시각"을 돌려준다. 중계 서버는 글을 12시간(첨부는 3시간)만 두므로, 보낸 지 한참 됐는데
@@ -166,20 +183,36 @@ class HandoffRepository @Inject constructor(
      * 폰: 차가 보내는 것을 열어 둔 연결 하나로 계속 받는다 (연결이 끊기면 돌아온다 → 부르는 쪽이 잠시 뒤 다시 부른다).
      * 기록 동기화 묶음은 바로 저장하고 받았다고 차에 알리며, 공유 카드는 [onCard]로 넘긴다.
      */
-    suspend fun listen(onCard: (RShareCard) -> Unit) = withContext(Dispatchers.IO) {
+    suspend fun listen(
+        onCard: (RShareCard) -> Unit,
+        onParked: (ParkedCar) -> Unit = {},
+        onMoving: (Long) -> Unit = {},
+    ) = withContext(Dispatchers.IO) {
         val l = _link.value ?: return@withContext
         val since = prefs.getString(K_SINCE, null) ?: "12h"
         runCatching {
             Ntfy.stream(l.topic, since) { m ->
                 prefs.edit().putString(K_SINCE, m.id).apply()
-                handle(l, m)?.let(onCard)
+                handle(l, m, onParked, onMoving)?.let(onCard)
             }
         }.onFailure { Log.i(TAG, "받기 연결 끊김: ${it.message}") }
     }
 
-    private fun handle(l: HandoffLink, m: Ntfy.Msg): RShareCard? {
+    private fun handle(l: HandoffLink, m: Ntfy.Msg, onParked: (ParkedCar) -> Unit, onMoving: (Long) -> Unit): RShareCard? {
         val body = runCatching { m.body() }.getOrNull() ?: return null
         val bytes = runCatching { handoffOpenBytes(l.key, body) }.getOrNull() ?: return null
+        // 짧은 글: 주차 위치 · 다시 출발 (한 번 연 글을 그대로 본다)
+        if (bytes.size < 4096 && bytes.isNotEmpty() && bytes[0] != SYNC_MARK) {
+            val text = bytes.toString(Charsets.UTF_8)
+            if (text.startsWith(PARK)) {
+                parkedFromJson(text.removePrefix(PARK))?.let(onParked)
+                return null
+            }
+            if (text.startsWith(MOVING)) {
+                text.removePrefix(MOVING).toLongOrNull()?.let(onMoving)
+                return null
+            }
+        }
         if (bytes.isNotEmpty() && bytes[0] == SYNC_MARK) {
             if (bytes.size < 17) return null
             val bb = java.nio.ByteBuffer.wrap(bytes, 1, 16).order(java.nio.ByteOrder.LITTLE_ENDIAN)
@@ -209,6 +242,8 @@ class HandoffRepository @Inject constructor(
         const val K_SINCE = "since"
         const val HELLO = "hello:"
         const val ACK = "ack:"
+        const val MOVING = "moving:"
+        const val PARK = "park:"
         const val K_SYNC_SENT = "sync_sent"
         const val K_SYNC_ACK = "sync_ack"
         const val K_SYNC_AT = "sync_at"

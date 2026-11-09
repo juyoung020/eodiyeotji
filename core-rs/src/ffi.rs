@@ -245,3 +245,39 @@ pub fn handoff_seal_bytes(key: String, data: Vec<u8>) -> Result<String, crate::s
 pub fn handoff_open_bytes(key: String, msg: String) -> Result<Vec<u8>, crate::store::CoreError> {
     crate::handoff::open_bytes(&key, &msg)
 }
+
+// ---------- 주차 위치 · 걸어서 찾아가기 (parking.rs) ----------
+
+/// 지금 위치 · 보는 방향(모르면 음수)에서 목표까지 걷는 방향과 거리.
+#[uniffi::export]
+pub fn walk_guide(from_lat: f64, from_lon: f64, heading_deg: f64, to_lat: f64, to_lon: f64) -> crate::parking::WalkGuide {
+    crate::parking::walk_guide(from_lat, from_lon, heading_deg, to_lat, to_lon)
+}
+
+/// 차 → 폰: 주차 위치 잠그기.
+#[uniffi::export]
+pub fn handoff_seal_parked(key: String, car: crate::parking::ParkedCar) -> Result<String, crate::store::CoreError> {
+    crate::parking::seal_parked(key, car)
+}
+
+/// 폰: 받은 글이 주차 위치면 연다 (아니면 None).
+#[uniffi::export]
+pub fn handoff_open_parked(key: String, msg: String) -> Option<crate::parking::ParkedCar> {
+    crate::parking::open_parked(key, msg)
+}
+
+#[uniffi::export]
+pub fn parked_to_json(car: crate::parking::ParkedCar) -> String {
+    crate::parking::to_json(car)
+}
+
+#[uniffi::export]
+pub fn parked_from_json(json: String) -> Option<crate::parking::ParkedCar> {
+    crate::parking::from_json(json)
+}
+
+/// 둘 중 늦게 주차한 쪽 (차에서 받은 것 · 폰이 직접 기록한 것).
+#[uniffi::export]
+pub fn parked_latest(a: Option<crate::parking::ParkedCar>, b: Option<crate::parking::ParkedCar>) -> Option<crate::parking::ParkedCar> {
+    crate::parking::latest(a, b)
+}

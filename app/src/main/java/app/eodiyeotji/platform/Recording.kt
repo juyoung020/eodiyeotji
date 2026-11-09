@@ -103,3 +103,20 @@ interface PlatformEntryPoint {
 
 fun Context.recordingPlatform(): RecordingPlatform =
     EntryPointAccessors.fromApplication(applicationContext, PlatformEntryPoint::class.java).recordingPlatform()
+
+/**
+ * 차 안에 탄 인원 (좌석 센서). 차는 Pleos Vehicle SDK `Seat.getCurrentSeatOccupancy`, 폰은 알 수 없어 null.
+ * 누구인지는 모른다 — 몇 명이 앉았는지만 센다.
+ */
+interface CabinSource {
+    /** 지금 앉아 있는 좌석 수. 센서가 없거나 읽지 못하면 null. */
+    suspend fun occupants(): Int?
+}
+
+/** 배터리(전기차) 또는 연료 잔량 (%). */
+data class EnergyLevel(val pct: Double, val ev: Boolean)
+
+/** 배터리 · 연료 잔량. 차는 Pleos Vehicle SDK, 폰은 알 수 없어 null. */
+interface EnergySource {
+    suspend fun level(): EnergyLevel?
+}

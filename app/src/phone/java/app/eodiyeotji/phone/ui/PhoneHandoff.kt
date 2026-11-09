@@ -77,6 +77,7 @@ import kotlinx.coroutines.launch
 internal interface PhoneHandoffEntryPoint {
     fun handoff(): HandoffRepository
     fun photos(): PlacePhotoRepository
+    fun parking(): app.eodiyeotji.phone.PhoneParking
 }
 
 @Composable
@@ -117,10 +118,17 @@ fun PhoneHandoffHost() {
     LaunchedEffect(link) {
         if (link == null) return@LaunchedEffect
         while (true) {
-            repo.listen { card ->
-                notify(context, card)
-                scope.launch { inbox = inbox + card }
-            }
+            repo.listen(
+                onCard = { card ->
+                    notify(context, card)
+                    scope.launch { inbox = inbox + card }
+                },
+                onParked = { car ->
+                    deps.parking().onReceived(car)
+                    notifyParked(context, car)
+                },
+                onMoving = { t -> deps.parking().onMoving(t) },
+            )
             delay(RETRY_MS)
         }
     }
@@ -272,5 +280,34 @@ private fun notify(context: Context, card: RShareCard) {
     nm.notify(card.day.hashCode() xor card.title.hashCode(), n)
 }
 
+/** 차가 P에 들어가며 보낸 주차 위치: "주차했어요 · 경포해변 공영주차장" + 가려던 곳이 있으면 "초당할머니순두부까지 걸어서 5분". */
+private fun notifyParked(context: Context, car: app.eodiyeotji.core.rust.ParkedCar) {
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+    val nm = context.getSystemService(NotificationManager::class.java) ?: return
+    nm.createNotificationChannel(NotificationChannel(CHANNEL, context.getString(R.string.handoff_channel), NotificationManager.IMPORTANCE_HIGH))
+    val open = PendingIntent.getActivity(
+        context,
+        1,
+        Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+    val body = if (car.destName.isNotBlank()) {
+        val g = app.eodiyeotji.core.rust.walkGuide(car.lat, car.lon, -1.0, car.destLat, car.destLon)
+        "${car.destName}까지 걸어서 ${g.minutes}분 · 눌러서 길 보기"
+    } else {
+        "돌아올 때 눌러서 내 차 찾기"
+    }
+    val n = NotificationCompat.Builder(context, CHANNEL)
+        .setSmallIcon(R.drawable.ic_notification)
+        .setContentTitle("주차했어요 · ${car.name.ifBlank { "주차 위치 저장" }}")
+        .setContentText(body)
+        .setContentIntent(open)
+        .setAutoCancel(true)
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .build()
+    nm.notify(PARK_NOTIFICATION_ID, n)
+}
+
+private const val PARK_NOTIFICATION_ID = 7301
 private const val CHANNEL = "handoff"
 private const val RETRY_MS = 5_000L

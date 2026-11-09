@@ -6,10 +6,12 @@
 uniffi::setup_scaffolding!();
 
 pub mod agent;
+pub mod cabin;
 pub mod community;
 pub mod course;
 pub mod drivedetect;
 pub mod edits;
+pub mod energy;
 pub mod ffi;
 pub mod geo;
 pub mod handoff;
@@ -19,6 +21,7 @@ pub mod memmap;
 pub mod memory;
 pub mod nav;
 pub mod offers;
+pub mod parking;
 pub mod photos;
 pub mod place_detail;
 pub mod places;

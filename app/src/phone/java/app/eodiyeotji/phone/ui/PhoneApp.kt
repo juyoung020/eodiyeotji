@@ -104,6 +104,7 @@ enum class PhoneTab { RECORDS, ASK, COMMUNITY }
 fun PhoneApp(shell: PhoneShellViewModel = hiltViewModel()) {
     PhoneScale {
         val prefs by shell.prefs.collectAsStateWithLifecycle()
+        val navigating by shell.navigating.collectAsStateWithLifecycle()
         // 시트(OverlayCard 자리)는 폰에서 아래에서 올라온다
         val sheets = remember { PhoneSheetHostState() }
         CompositionLocalProvider(
@@ -128,7 +129,8 @@ fun PhoneApp(shell: PhoneShellViewModel = hiltViewModel()) {
                 // 장소 상세 창(별점 · 리뷰)은 어느 탭에서든 아래 시트로 뜬다
                 PlaceDetailHost()
                 // 앱이 소리 내어 읽는 말 (답 · 회상)을 위쪽에 자막으로
-                SpokenCaption()
+                // 길 안내 중에는 위쪽 다음 안내 배너를 가리지 않게 아래 막대 바로 위에
+                SpokenCaption(bottomInset = if (navigating) 120.dp else null)
                 // 시트는 맨 위에 (아래 탭 · 운전 중 띠까지 덮는다)
                 PhoneSheetHost(sheets)
             }
@@ -157,6 +159,8 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
     val passenger by shell.passenger.collectAsStateWithLifecycle()
     val permissions by shell.permissions.collectAsStateWithLifecycle()
     val nav by shell.nav.collectAsStateWithLifecycle()
+    val parked by shell.parked.collectAsStateWithLifecycle()
+    var walk by remember { mutableStateOf<WalkTarget?>(null) }
     val guideProgress by guide.progress.collectAsStateWithLifecycle()
     LifecycleResumeEffect(Unit) {
         shell.refreshPermissions()
@@ -298,10 +302,15 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
                                 RoundIconButton(PhoneIcons.Tune, stringResource(R.string.phone_settings), { settingsOpen = true }, containerColor = EodiTheme.colors.surface, contentColor = EodiTheme.colors.textSecondary, iconSize = 36.dp)
                             }
                         },
-                        headerBanner = if (!permissions.location) {
-                            { PermissionWarning(onFix = shell::openAppSettings) }
-                        } else {
-                            null
+                        headerBanner = when {
+                            !permissions.location -> {
+                                { PermissionWarning(onFix = shell::openAppSettings) }
+                            }
+                            // 차를 세워 둔 동안: 내 차 카드 (가게까지 걷기 · 내 차 찾기)
+                            parked != null && !moving -> {
+                                { parked?.let { ParkedCarCard(it, onWalk = { t -> walk = t }, onDismiss = shell::dismissParked) } }
+                            }
+                            else -> null
                         },
                     )
                     PhoneTab.ASK -> AgentPanel(onClose = null, viewModel = agent, compact = true)
@@ -339,6 +348,8 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
     }
     // 앱 안 길 안내: 모든 화면 위에 꽉 차게
     nav?.let { PhoneNavScreen(it, onEnd = shell::endNav, onNext = shell::nextStop) }
+    // 걸어서 찾아가기: 가게까지 · 내 차로
+    walk?.let { PhoneWalkScreen(it, onClose = { walk = null }, onFoundCar = shell::dismissParked) }
 }
 
 /**

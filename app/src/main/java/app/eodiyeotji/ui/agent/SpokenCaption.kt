@@ -54,9 +54,10 @@ class SpokenCaptionViewModel @Inject constructor(private val tts: SpeechOutput) 
 /**
  * 읽는 말 자막: 앱이 말하는 동안 화면 위쪽 가운데에 스피커 + 읽는 글(3줄까지) + [멈춤].
  * 소리를 못 듣는 때(시끄러운 차 안 · 소리 끈 영상)에도 무엇을 말하는지 보이게 한다. 모든 화면 위에 하나만 둔다 (AppRoot · PhoneApp).
+ * [bottomInset]을 주면 아래쪽에 띄운다 — 길 안내 중에는 위쪽 다음 안내 배너를 가리지 않게 아래 막대 바로 위로.
  */
 @Composable
-fun BoxScope.SpokenCaption(viewModel: SpokenCaptionViewModel = hiltViewModel()) {
+fun BoxScope.SpokenCaption(bottomInset: androidx.compose.ui.unit.Dp? = null, viewModel: SpokenCaptionViewModel = hiltViewModel()) {
     val text by viewModel.text.collectAsStateWithLifecycle()
     // 사라지는 동안에도 마지막 글을 그대로 보여 준다
     var shown by remember { mutableStateOf("") }
@@ -65,7 +66,11 @@ fun BoxScope.SpokenCaption(viewModel: SpokenCaptionViewModel = hiltViewModel()) 
         visible = text != null,
         enter = fadeIn(),
         exit = fadeOut(),
-        modifier = Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(top = 16.dp, start = 24.dp, end = 24.dp),
+        modifier = if (bottomInset != null) {
+            Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = bottomInset, start = 24.dp, end = 24.dp)
+        } else {
+            Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(top = 16.dp, start = 24.dp, end = 24.dp)
+        },
     ) {
         Surface(
             shape = RoundedCornerShape(28.dp),

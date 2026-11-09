@@ -80,6 +80,12 @@ class PhoneNavigator @Inject constructor(
     /** 안내 화면 상태 (안내 중이 아니면 null). */
     val ui: StateFlow<NavUi?> = _ui.asStateFlow()
 
+    init {
+        // 화면 밖(잠금 · 다른 앱)에서도 다음 안내가 보이게 알림을 같이 고친다
+        val notice = PhoneNavNotice(context)
+        scope.launch { _ui.collect { notice.show(it) } }
+    }
+
     override fun eventsAvailable(): Boolean = true
 
     override fun events(refresh: Flow<Unit>): Flow<NaviEvent> = _events.asSharedFlow()
@@ -176,6 +182,7 @@ class PhoneNavigator @Inject constructor(
 
     /** 지금 목적지 도착: 남은 곳이 있으면 다음 곳을 걸어 두고 기다린다. */
     private fun arrive(target: RouteStop) {
+        buzz()
         val rest = course.drop(1)
         course = rest
         if (rest.isNotEmpty()) {
@@ -188,6 +195,19 @@ class PhoneNavigator @Inject constructor(
             _ui.value = _ui.value?.copy(arrivedAt = target.name, next = null)
             speech.speak("${target.name}에 도착했어요.")
             _events.tryEmit(NaviEvent.DestinationArrived(target.name, target.address))
+        }
+    }
+
+    /** 도착 진동 (짧게 두 번): 폰을 주머니에 넣고 있어도 도착을 안다. */
+    private fun buzz() {
+        runCatching {
+            val pattern = longArrayOf(0, 120, 90, 160)
+            if (android.os.Build.VERSION.SDK_INT >= 31) {
+                context.getSystemService(android.os.VibratorManager::class.java)?.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                context.getSystemService(android.os.Vibrator::class.java)
+            }?.vibrate(android.os.VibrationEffect.createWaveform(pattern, -1))
         }
     }
 

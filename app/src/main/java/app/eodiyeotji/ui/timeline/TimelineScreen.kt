@@ -938,7 +938,7 @@ private fun TagRow(tags: List<String>) {
     }
 }
 
-/** 하루 통계 4칸: 주행 · 머문 곳 · 거리 · 운전 시간. 값은 크게, 이름은 작게. */
+/** 하루 통계 4칸: 주행 · 머문 곳 · 거리 · 운전 시간 (+ 좌석 센서가 있으면 탑승 인원). 값은 크게, 이름은 작게. */
 @Composable
 private fun StatRow(s: DaySummary) {
     val c = EodiTheme.colors
@@ -956,6 +956,21 @@ private fun StatRow(s: DaySummary) {
         StatCell(distanceText(s.distanceM), stringResource(R.string.stat_distance_label), null)
         StatDivider()
         StatCell(durationText(s.driveMillis), stringResource(R.string.stat_drive_label), null)
+        // 좌석 센서로 센 탑승 인원 (차만, 모르면 칸 없음)
+        if (s.people > 0) {
+            StatDivider()
+            StatCell(stringResource(R.string.stat_people_value, s.people), stringResource(R.string.stat_people_label), null)
+        }
+        // 배터리 · 연료 (차만): 쓴 양 %p, 충전 · 주유했으면 이름 줄에 횟수
+        s.energy?.let { e ->
+            StatDivider()
+            val label = if (e.refills > 0) {
+                stringResource(if (e.ev) R.string.stat_energy_ev_charged else R.string.stat_energy_fuel_filled, e.refills)
+            } else {
+                stringResource(if (e.ev) R.string.stat_energy_ev_label else R.string.stat_energy_fuel_label)
+            }
+            StatCell(stringResource(R.string.stat_energy_value, kotlin.math.round(e.usedPct).toInt()), label, null)
+        }
     }
 }
 

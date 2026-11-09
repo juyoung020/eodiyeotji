@@ -97,6 +97,8 @@ pub(super) struct FakeBackend {
     /// 이미 라벨이 붙은 날 (날짜, 제목) — 예전 제목 점검용
     pub labeled: Mutex<Vec<(String, String)>>,
     pub requeued: Mutex<Vec<String>>,
+    /// 좌석 센서 인원 (기억 id, 인원)
+    pub people: Vec<(i64, u32)>,
 }
 
 impl FakeBackend {
@@ -130,6 +132,10 @@ impl MemoryBackend for FakeBackend {
     }
     fn episodes_for_day(&self, day: String) -> Result<Vec<Episode>, CoreError> {
         Ok(self.eps.iter().filter(|e| e.facts.day == day).cloned().collect())
+    }
+    fn people_between(&self, from_ms: i64, _to_ms: i64) -> Option<u32> {
+        let id = self.eps.iter().find(|e| e.facts.start_ms == from_ms)?.facts.id;
+        self.people.iter().find(|(i, _)| *i == id).map(|(_, n)| *n)
     }
     fn course_route(&self, id: i64, _from: Option<GeoPoint>, optimize: bool) -> Result<CourseRoute, CoreError> {
         self.course_calls.lock().unwrap().push((id, optimize));
@@ -468,6 +474,23 @@ fn sse_text_tool_chunks_reasoning_and_leaks() {
 }
 
 // ---------------------------------------------------------------- 빠른 길
+
+#[test]
+fn people_words_use_seat_sensor_without_llm() {
+    let server = fake_server(vec![sse_text(&["쓰이면 안 된다"])], 200);
+    // 강릉 바다(12)는 혼자, 을왕리 바다(50)는 3명이 탔다
+    let backend = Arc::new(FakeBackend { eps: episodes(), people: vec![(12, 1), (50, 3)], ..Default::default() });
+    let agent = server.agent(backend.clone(), AgentOptions::default());
+    let r = ask(&agent, "엄마랑 갔던 바다 어디였지?", ctx(true));
+    assert!(server.bodies().is_empty(), "좌석 인원으로 골랐으니 LLM을 부르지 않는다");
+    assert_eq!(r.events()[0], Ev::Rec(50, false));
+    assert_eq!(r.done().source, AnswerSource::FastPath);
+
+    let r2 = ask(&agent, "혼자 갔던 바다 어디였지?", ctx(true));
+    assert_eq!(r2.events()[0], Ev::Rec(12, false));
+    assert!(server.bodies().is_empty());
+    assert_eq!(words::parse("혼자 갔던 바다").people, Some(crate::cabin::PeopleWant::Alone));
+}
 
 #[test]
 fn fast_path_answers_without_llm_with_card_answer_and_proposal() {

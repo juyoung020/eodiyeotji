@@ -47,6 +47,7 @@ class ReplayViewModel @Inject constructor(
     private val photos: PlacePhotoRepository,
     private val guide: CourseGuide,
     driving: DrivingStatePort,
+    private val mood: app.eodiyeotji.platform.MoodLight,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ReplayUiState())
@@ -71,6 +72,8 @@ class ReplayViewModel @Inject constructor(
             try {
                 val r = core.dayReplay(day)
                 _state.update { if (it.day == day) it.copy(replay = r) else it }
+                // 무드등을 그날 하늘빛으로 (정차 중에만 열리는 화면, 닫으면 되돌린다)
+                launch { runCatching { mood.tint(moodColor(r.sky)) } }
                 prefetchPhotos(r)
             } catch (e: CancellationException) {
                 throw e
@@ -102,6 +105,17 @@ class ReplayViewModel @Inject constructor(
     fun close() {
         loadJob?.cancel()
         _state.update { ReplayUiState(driving = it.driving) }
+        restoreMood()
+    }
+
+    override fun onCleared() {
+        restoreMood()
+        super.onCleared()
+    }
+
+    /** 무드등을 원래 색으로 (화면이 사라져도 끝까지 하도록 앱 범위에서). */
+    private fun restoreMood() {
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { runCatching { mood.restore() } }
     }
 
     /** "그 코스로 안내": 그날 대표 에피소드를 내비 구간으로 나눠(Rust) 코스 안내로 넘긴다. */
@@ -135,4 +149,13 @@ class ReplayViewModel @Inject constructor(
         const val TAG = "EodiReplay"
         const val NOTE_MS = 2_500L
     }
+}
+
+/** 그날 하늘빛 → 무드등 색 (지도 하늘 그라데이션 `Atmosphere.skyPalette`의 지평선 빛과 같은 계열). */
+private fun moodColor(sky: app.eodiyeotji.core.SkyPhase): Int = when (sky) {
+    app.eodiyeotji.core.SkyPhase.DAWN -> 0xFFF6B49A.toInt()
+    app.eodiyeotji.core.SkyPhase.DAY -> 0xFF7FB6E8.toInt()
+    app.eodiyeotji.core.SkyPhase.GOLDEN -> 0xFFFFA05A.toInt()
+    app.eodiyeotji.core.SkyPhase.BLUE -> 0xFF4A62C8.toInt()
+    app.eodiyeotji.core.SkyPhase.NIGHT -> 0xFFFFB25A.toInt()
 }
