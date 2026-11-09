@@ -76,6 +76,7 @@ class RecordingService : LifecycleService() {
     @Inject lateinit var platform: RecordingPlatform
     @Inject lateinit var monitor: RecordingMonitor
     @Inject lateinit var recall: RecallCenter
+    @Inject lateinit var handoff: app.eodiyeotji.handoff.HandoffRepository
 
     private var running = false
     private var foregroundOk = false
@@ -147,6 +148,7 @@ class RecordingService : LifecycleService() {
                 session = lifecycleScope.startCollecting()
                 if (naviAvailable) naviSession = lifecycleScope.startNavi()
                 recall.onDriveStart()
+                if (SENDS_PARKING) lifecycleScope.launch(Dispatchers.IO) { handoff.sendMoving(edge.tMs) }
             } else if (!edge.active && current != null) {
                 current.cancelAndJoin() // 위치 수신 중지 + 남은 묶음 저장까지 끝난 뒤 돌아온다
                 session = null
@@ -158,6 +160,10 @@ class RecordingService : LifecycleService() {
                 naviSession = null
                 lastFix = null
                 recall.onDriveEnd()
+                // 차: 주차한 자리를 연결된 폰으로 ("내 차 어디였지" · 차에서 내려 가게까지 걸어서)
+                if (SENDS_PARKING) lifecycleScope.launch(Dispatchers.IO) {
+                    safely("parkedCar") { core.parkedCar() }?.let { handoff.sendParked(it) }
+                }
             }
         }
     }
@@ -264,5 +270,7 @@ class RecordingService : LifecycleService() {
         private const val NOTIFICATION_ID = 1001
         private const val BATCH_SIZE = 30
         private const val FLUSH_INTERVAL_MS = 10_000L
+        /** 주차 위치를 폰으로 보내는 쪽은 차 판뿐 (폰 판은 자기 기록으로 바로 안다). */
+        private val SENDS_PARKING = BuildConfig.FLAVOR == "car"
     }
 }

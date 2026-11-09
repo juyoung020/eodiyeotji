@@ -157,6 +157,8 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
     val passenger by shell.passenger.collectAsStateWithLifecycle()
     val permissions by shell.permissions.collectAsStateWithLifecycle()
     val nav by shell.nav.collectAsStateWithLifecycle()
+    val parked by shell.parked.collectAsStateWithLifecycle()
+    var walk by remember { mutableStateOf<WalkTarget?>(null) }
     val guideProgress by guide.progress.collectAsStateWithLifecycle()
     LifecycleResumeEffect(Unit) {
         shell.refreshPermissions()
@@ -298,10 +300,15 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
                                 RoundIconButton(PhoneIcons.Tune, stringResource(R.string.phone_settings), { settingsOpen = true }, containerColor = EodiTheme.colors.surface, contentColor = EodiTheme.colors.textSecondary, iconSize = 36.dp)
                             }
                         },
-                        headerBanner = if (!permissions.location) {
-                            { PermissionWarning(onFix = shell::openAppSettings) }
-                        } else {
-                            null
+                        headerBanner = when {
+                            !permissions.location -> {
+                                { PermissionWarning(onFix = shell::openAppSettings) }
+                            }
+                            // 차를 세워 둔 동안: 내 차 카드 (가게까지 걷기 · 내 차 찾기)
+                            parked != null && !moving -> {
+                                { parked?.let { ParkedCarCard(it, onWalk = { t -> walk = t }, onDismiss = shell::dismissParked) } }
+                            }
+                            else -> null
                         },
                     )
                     PhoneTab.ASK -> AgentPanel(onClose = null, viewModel = agent, compact = true)
@@ -339,6 +346,8 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
     }
     // 앱 안 길 안내: 모든 화면 위에 꽉 차게
     nav?.let { PhoneNavScreen(it, onEnd = shell::endNav, onNext = shell::nextStop) }
+    // 걸어서 찾아가기: 가게까지 · 내 차로
+    walk?.let { PhoneWalkScreen(it, onClose = { walk = null }, onFoundCar = shell::dismissParked) }
 }
 
 /**

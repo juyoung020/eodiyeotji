@@ -19,6 +19,7 @@ pub mod memmap;
 pub mod memory;
 pub mod nav;
 pub mod offers;
+pub mod parking;
 pub mod photos;
 pub mod place_detail;
 pub mod places;

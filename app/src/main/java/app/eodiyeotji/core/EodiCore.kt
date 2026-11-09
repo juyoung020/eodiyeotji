@@ -100,6 +100,9 @@ class EodiCore @Inject constructor(
         _changes.tryEmit(Unit)
     }
 
+    /** 지금 주차 중이면 주차한 자리 (+ 이번에 가려던 곳). 달리는 중이면 null. */
+    suspend fun parkedCar(): app.eodiyeotji.core.rust.ParkedCar? = coreCall("parkedCar") { store.parkedCar() }
+
     /** 기록이 있는 날, 최신순. */
     suspend fun daySummaries(limit: Int = 400): List<DaySummary> = coreCall("daySummaries") {
         store.daySummaries(limit.toUInt()).map { it.toModel() }

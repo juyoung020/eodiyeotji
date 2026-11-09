@@ -43,7 +43,14 @@ class PhoneShellViewModel @Inject constructor(
     private val settings: PhoneSettings,
     private val navigator: PhoneNavigator,
     private val driving: PhoneDrivingStatePort,
+    private val parking: app.eodiyeotji.phone.PhoneParking,
 ) : ViewModel() {
+    /** 내 차 주차 위치 (없으면 null). */
+    val parked: StateFlow<app.eodiyeotji.core.rust.ParkedCar?> = parking.car
+
+    /** "찾았어요": 주차 카드를 감춘다. */
+    fun dismissParked() = parking.dismiss()
+
     val prefs: StateFlow<PhonePrefs> = settings.prefs
     val moving: StateFlow<Boolean> = driving.moving
     val passenger: StateFlow<Boolean> = driving.passenger
