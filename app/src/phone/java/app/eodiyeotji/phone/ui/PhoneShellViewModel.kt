@@ -23,6 +23,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /** 기록에 쓰는 권한이 지금 허용돼 있는지 (설정 화면 · 기록 화면 경고 줄). */
@@ -56,6 +58,11 @@ class PhoneShellViewModel @Inject constructor(
     val passenger: StateFlow<Boolean> = driving.passenger
     /** 앱 안 길 안내 (안내 중이 아니면 null). */
     val nav: StateFlow<app.eodiyeotji.phone.NavUi?> = navigator.ui
+
+    /** 길 안내 화면이 떠 있는지 (읽는 말 자막 자리를 아래로 옮긴다). */
+    val navigating: StateFlow<Boolean> = navigator.ui
+        .map { it != null }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
 
     fun endNav() = navigator.stop()
     fun nextStop() = navigator.next()

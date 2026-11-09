@@ -13,6 +13,8 @@
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <!-- 포그라운드 서비스 종류 location (Android 14+). normal -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- 길 안내 도착 진동 -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- 기록 중임을 알리는 상시 알림 (Android 13+). dangerous → 첫 실행에 같이 묻는다 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- 배터리 최적화에서 빼 달라고 한 번에 묻는 창(기록 상태 시트의 "최적화에서 빼기"). 폰이 오래 쉰 앱을 멈추면 주행을 놓치므로. normal -->
