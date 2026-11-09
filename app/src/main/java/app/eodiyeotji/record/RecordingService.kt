@@ -77,9 +77,13 @@ class RecordingService : LifecycleService() {
     @Inject lateinit var monitor: RecordingMonitor
     @Inject lateinit var recall: RecallCenter
     @Inject lateinit var handoff: app.eodiyeotji.handoff.HandoffRepository
+    @Inject lateinit var cabin: app.eodiyeotji.platform.CabinSource
 
     private var running = false
     private var foregroundOk = false
+
+    /** 주행 중 탑승 인원을 읽는 작업. */
+    private var cabinJob: Job? = null
 
     /** 주행 중 마지막 위치. 내비 도착 이벤트에 좌표가 없을 때 대신 쓴다. */
     @Volatile private var lastFix: LocationFix? = null
@@ -130,6 +134,7 @@ class RecordingService : LifecycleService() {
                     monitor.set(RecordingPhase.DRIVING)
                     session = lifecycleScope.startCollecting()
                     if (naviAvailable) naviSession = lifecycleScope.startNavi()
+                    cabinJob = lifecycleScope.startCabin()
                 } else {
                     safely("markDriveEnd(복구)") { core.markDriveEnd(open.lastFixMs) }
                     journal.close()
@@ -147,11 +152,14 @@ class RecordingService : LifecycleService() {
                 if (edge.backlog.isNotEmpty()) flush(edge.backlog.toMutableList(), "감지 전")
                 session = lifecycleScope.startCollecting()
                 if (naviAvailable) naviSession = lifecycleScope.startNavi()
+                cabinJob = lifecycleScope.startCabin()
                 recall.onDriveStart()
                 if (SENDS_PARKING) lifecycleScope.launch(Dispatchers.IO) { handoff.sendMoving(edge.tMs) }
             } else if (!edge.active && current != null) {
                 current.cancelAndJoin() // 위치 수신 중지 + 남은 묶음 저장까지 끝난 뒤 돌아온다
                 session = null
+                cabinJob?.cancel()
+                cabinJob = null
                 safely("markDriveEnd") { core.markDriveEnd(edge.tMs) }
                 journal.close()
                 monitor.set(RecordingPhase.WAITING)
@@ -171,6 +179,20 @@ class RecordingService : LifecycleService() {
     override fun onDestroy() {
         monitor.set(RecordingPhase.OFF)
         super.onDestroy()
+    }
+
+    /**
+     * 주행 중 탑승 인원: 출발하고 다들 앉은 뒤(20초) 한 번, 그 뒤 10분마다 (휴게소에서 타고 내림).
+     * 좌석 센서가 없으면(폰) 아무것도 남기지 않는다. 몇 명인지만 남는다.
+     */
+    private fun CoroutineScope.startCabin(): Job = launch(Dispatchers.Default) {
+        delay(CABIN_FIRST_MS)
+        while (true) {
+            val n = cabin.occupants() ?: return@launch
+            if (BuildConfig.DEBUG) Log.d(TAG, "탑승 인원 $n")
+            safely("setDrivePeople") { core.setDrivePeople(System.currentTimeMillis(), n) }
+            delay(CABIN_EVERY_MS)
+        }
     }
 
     /** 주행 중에만 도는 내비 듣기. 힌트는 받는 즉시 Rust에 넘긴다 (드물게 오므로 묶지 않는다). */
@@ -270,6 +292,8 @@ class RecordingService : LifecycleService() {
         private const val NOTIFICATION_ID = 1001
         private const val BATCH_SIZE = 30
         private const val FLUSH_INTERVAL_MS = 10_000L
+        private const val CABIN_FIRST_MS = 20_000L
+        private const val CABIN_EVERY_MS = 10 * 60_000L
         /** 주차 위치를 폰으로 보내는 쪽은 차 판뿐 (폰 판은 자기 기록으로 바로 안다). */
         private val SENDS_PARKING = BuildConfig.FLAVOR == "car"
     }

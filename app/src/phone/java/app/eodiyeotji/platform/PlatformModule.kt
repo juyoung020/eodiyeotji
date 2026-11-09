@@ -46,6 +46,7 @@ abstract class PlatformModule {
     @Binds abstract fun speechOutput(impl: PhoneSpeechOutput): SpeechOutput
     @Binds abstract fun drivingState(impl: PhoneDrivingStatePort): DrivingStatePort
     @Binds abstract fun recording(impl: PhoneRecordingPlatform): RecordingPlatform
+    @Binds abstract fun cabin(impl: PhoneCabin): CabinSource
 }
 
 /**
@@ -144,4 +145,10 @@ class PhoneRecordingPlatform @Inject constructor(
             "앱을 열지 않아도 출발하면 자동으로 기록하려면 위치 권한을 \"항상 허용\"으로 바꿔 주세요.\n" +
                 "서 있을 때는 전력을 적게 쓰는 위치만 가끔 확인하고, 기록은 기기 안에만 저장돼요."
     }
+}
+
+/** 폰은 좌석 센서가 없다 → 탑승 인원을 모른다. */
+@Singleton
+class PhoneCabin @Inject constructor() : CabinSource {
+    override suspend fun occupants(): Int? = null
 }

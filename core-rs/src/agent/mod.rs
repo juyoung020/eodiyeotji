@@ -186,6 +186,10 @@ pub trait MemoryBackend: Send + Sync {
     fn recommend_drive_routes(&self, from: GeoPoint, radius_km: f64, k: u32) -> Result<Vec<DriveRouteRecommendation>, CoreError>;
     /// 전국 인기순 드라이브 길 [k]개. [from]이 있으면 거리도 (없으면 `distance_km` -1 = 모름).
     fn popular_drive_routes(&self, from: Option<GeoPoint>, k: u32) -> Result<Vec<DriveRouteRecommendation>, CoreError>;
+    /// `[from_ms, to_ms]` 동안 가장 많이 탄 인원 (좌석 센서, 모르면 None).
+    fn people_between(&self, _from_ms: i64, _to_ms: i64) -> Option<u32> {
+        None
+    }
 }
 
 impl MemoryBackend for EodiStore {
@@ -215,6 +219,9 @@ impl MemoryBackend for EodiStore {
     }
     fn popular_drive_routes(&self, from: Option<GeoPoint>, k: u32) -> Result<Vec<DriveRouteRecommendation>, CoreError> {
         Ok(EodiStore::drive_routes(self, DriveRouteSort::Popular, from, k)?.into_iter().filter(|r| !r.route.mine).collect())
+    }
+    fn people_between(&self, from_ms: i64, to_ms: i64) -> Option<u32> {
+        EodiStore::people_between(self, from_ms, to_ms).ok().flatten()
     }
 }
 

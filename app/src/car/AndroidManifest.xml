@@ -22,6 +22,8 @@
     <uses-permission android:name="pleos.car.permission.STT_SERVICE" />
     <!-- 운전 중 답 읽어 주기(Pleos TextToSpeech): 화면을 보지 않아도 짧은 답을 듣게 하기 위해 -->
     <uses-permission android:name="pleos.car.permission.TTS_SERVICE" />
+    <!-- 탑승 인원(Pleos Vehicle Seat 탑승 여부): "가족이랑 간 바다"처럼 누구와 갔는지로 기억을 찾기 위해. 몇 명인지만 센다. normal -->
+    <uses-permission android:name="pleos.car.permission.CAR_SEATS" />
 
     <application>
         <activity android:name=".MainActivity">

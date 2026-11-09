@@ -66,6 +66,9 @@ const PEOPLE: &[&str] = &[
     "언니", "오빠", "할머니", "할아버지", "여자친구", "남자친구", "여친", "남친", "동료", "회사사람들", "어머니", "아버지",
 ];
 
+/// 혼자 갔다는 말 (좌석 센서로 운전자만 탄 때를 고른다).
+const ALONE: &[&str] = &["혼자", "혼자서", "나혼자"];
+
 /// 앞 대화를 가리키는 말 (LLM이 대화를 보고 풀어야 한다).
 const REFERENCE: &[&str] = &["거기", "그때", "아까", "방금", "말고", "다른", "그곳", "거기서", "그날", "저번에", "그거"];
 
@@ -89,6 +92,8 @@ pub struct Parsed {
     pub terms: Vec<String>,
     pub has_people: bool,
     pub has_reference: bool,
+    /// 사람 말이 바라는 동행 (좌석 센서 인원으로 거른다, `cabin.rs`)
+    pub people: Option<crate::cabin::PeopleWant>,
 }
 
 pub fn parse(utterance: &str) -> Parsed {
@@ -101,6 +106,12 @@ pub fn parse(utterance: &str) -> Parsed {
         }
         if PEOPLE.contains(&stem.as_str()) || PEOPLE.contains(&w.as_str()) {
             p.has_people = true;
+            p.people = Some(crate::cabin::PeopleWant::Together);
+            continue;
+        }
+        if ALONE.contains(&stem.as_str()) || ALONE.contains(&w.as_str()) {
+            p.has_people = true;
+            p.people = Some(crate::cabin::PeopleWant::Alone);
             continue;
         }
         if is_noise(&w) || is_noise(&stem) {

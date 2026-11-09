@@ -121,6 +121,7 @@ dependencies {
     "carImplementation"(libs.pleos.navihelper)
     "carImplementation"(libs.pleos.stt)
     "carImplementation"(libs.pleos.tts)
+    "carImplementation"(libs.pleos.vehicle)
     implementation(libs.maplibre.android)
     implementation(libs.coil.compose)
 

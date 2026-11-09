@@ -193,7 +193,7 @@ fn v7_database_gets_coupon_table() {
     let store = db.open();
     let v: i32 = store.lock().unwrap().pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
     assert_eq!(v, SCHEMA_VERSION);
-    assert_eq!(SCHEMA_VERSION, 12);
+    assert_eq!(SCHEMA_VERSION, 13);
     store.claim_offer("o-sheep".into(), 1).unwrap();
     assert_eq!(store.claimed_coupons().unwrap().len(), 1);
 }

@@ -56,7 +56,7 @@ use crate::places::{self, PlaceLabel, REF_END, REF_START, REF_STAY};
 use crate::trip::{self, DriveMark, MarkKind, Segmenter, Stay, TripConfig};
 
 /// DB 구조 버전 (`PRAGMA user_version`). 구조를 바꾸면 올리고 `migrate`에 단계를 추가한다.
-pub(crate) const SCHEMA_VERSION: i32 = 12;
+pub(crate) const SCHEMA_VERSION: i32 = 13;
 /// 이보다 정확도가 나쁜(m) 점은 버린다.
 pub const MAX_ACCURACY_M: f32 = 100.0;
 /// 지도에 넘길 경로의 단순화 허용 오차(m).
@@ -398,7 +398,11 @@ fn migrate(conn: &mut Connection) -> Result<(), CoreError> {
         // 출발 시각으로 주행을 찾는 조회(기억 지도 · 기록 지우기)가 표 전체를 훑지 않게
         tx.execute_batch("CREATE INDEX IF NOT EXISTS trip_start ON trip (start_ms);")?;
     }
-    // 다음 버전은 여기에: if version < 13 { ... }
+    if version < 13 {
+        // 탑승 인원 (좌석 센서, cabin.rs)
+        tx.execute_batch(crate::cabin::SCHEMA_V13)?;
+    }
+    // 다음 버전은 여기에: if version < 14 { ... }
     tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     tx.commit()?;
     Ok(())

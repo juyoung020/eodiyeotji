@@ -14,6 +14,7 @@
 //! - 위치 점: 시내 1초, 고속도로(직선 30km 넘는 구간) 4초 간격, 도로처럼 휘는 길 + GPS 흔들림 2m. 주행마다 시작·끝 신호.
 //!   2026-11-06 기준 1년치 약 39만 점, 주행 745개 (PC 릴리즈 빌드 0.3초, 디버그 1초).
 //! - 장소 이름: 카카오처럼 이름·분류·지번 주소를 붙인다 (출처 Kakao).
+//! - 탑승 인원(좌석 센서 흉내): 여행(강릉 · 부산 · 설악산) 4명, 주말 2명, 평일 혼자. 주행마다 출발 20초 뒤 한 번.
 //! - LLM 라벨: 30일보다 오래된 날 중 라벨링이 필요한 날은 시나리오 제목·이야기·태그를 미리 넣는다 (시연 첫 실행에
 //!   LLM을 수십 번 부르지 않도록). 최근 30일과 1년 전 강릉 날은 비워 두어 앱이 실제로 라벨링하는 모습을 보인다.
 //!
@@ -424,6 +425,10 @@ struct Gen<'a> {
     labels: BTreeMap<i64, Label>,
     trips: u32,
     outing_uses: Vec<u32>,
+    /// 지금 만드는 하루에 탄 인원 (좌석 센서 흉내): 여행 = 가족 4명, 주말 = 2명, 평일 = 혼자
+    people_now: u32,
+    /// (읽은 시각, 인원) — 주행마다 출발 20초 뒤 한 번
+    people: Vec<(i64, u32)>,
 }
 
 impl Gen<'_> {
@@ -497,6 +502,7 @@ impl Gen<'_> {
         }
         self.events.push((t0, KIND_START));
         self.events.push((t, KIND_END));
+        self.people.push((t0 + 20_000, self.people_now));
         self.trips += 1;
         t
     }
@@ -663,6 +669,8 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
         labels: BTreeMap::new(),
         trips: 0,
         outing_uses: vec![0; OUTINGS.len()],
+        people_now: 1,
+        people: Vec::new(),
     };
     let busan = p.busan.filter(|&b| free(b, b + 2));
     let seorak = p.seorak.filter(|&s| free(s, s + 1));
@@ -672,13 +680,20 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
             d += 1;
             continue;
         }
+        g.people_now = match weekday_index(d) {
+            0 | 6 => 2,
+            _ => 1,
+        };
         if d == p.gangneung {
+            g.people_now = 4;
             g.gangneung(d);
         } else if Some(d) == busan {
+            g.people_now = 4;
             g.busan(d);
             d += 3;
             continue;
         } else if Some(d) == seorak {
+            g.people_now = 4;
             g.seorak(d);
             d += 2;
             continue;
@@ -693,6 +708,7 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
     }
     let made = g.trips;
     let (fixes, events, labels) = (std::mem::take(&mut g.fixes), std::mem::take(&mut g.events), std::mem::take(&mut g.labels));
+    let people = std::mem::take(&mut g.people);
 
     let mut conn = store.lock()?;
     {
@@ -705,6 +721,10 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
             let mut st = tx.prepare("INSERT OR IGNORE INTO drive_event (t_ms, kind) VALUES (?1, ?2)")?;
             for &(t, k) in &events {
                 st.execute([t, k])?;
+            }
+            let mut st = tx.prepare("INSERT OR IGNORE INTO drive_people (t_ms, people) VALUES (?1, ?2)")?;
+            for &(t, n) in &people {
+                st.execute(params![t, n as i64])?;
             }
         }
         if let (Some(lo), Some(hi)) = (fixes.first(), fixes.last()) {
