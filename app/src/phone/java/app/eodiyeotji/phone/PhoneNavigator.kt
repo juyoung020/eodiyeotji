@@ -80,6 +80,12 @@ class PhoneNavigator @Inject constructor(
     /** 안내 화면 상태 (안내 중이 아니면 null). */
     val ui: StateFlow<NavUi?> = _ui.asStateFlow()
 
+    init {
+        // 화면 밖(잠금 · 다른 앱)에서도 다음 안내가 보이게 알림을 같이 고친다
+        val notice = PhoneNavNotice(context)
+        scope.launch { _ui.collect { notice.show(it) } }
+    }
+
     override fun eventsAvailable(): Boolean = true
 
     override fun events(refresh: Flow<Unit>): Flow<NaviEvent> = _events.asSharedFlow()
