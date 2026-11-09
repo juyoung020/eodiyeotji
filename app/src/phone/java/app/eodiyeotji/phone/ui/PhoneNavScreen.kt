@@ -193,11 +193,7 @@ private fun NavMap(nav: NavUi, modifier: Modifier) {
                 // 들를 곳: 지금 목적지는 파랑, 다음 곳들은 회색
                 s.addLayer(CircleLayer("nav-stops", SRC_STOPS).withProperties(
                     PropertyFactory.circleRadius(11f),
-                    PropertyFactory.circleColor(org.maplibre.android.style.expressions.Expression.match(
-                        org.maplibre.android.style.expressions.Expression.get("now"),
-                        org.maplibre.android.style.expressions.Expression.literal("#9AA3B2"),
-                        org.maplibre.android.style.expressions.Expression.stop(true, "#0B5CFF"),
-                    )),
+                    PropertyFactory.circleColor(org.maplibre.android.style.expressions.Expression.switchCase(org.maplibre.android.style.expressions.Expression.get("now"), org.maplibre.android.style.expressions.Expression.color(android.graphics.Color.rgb(11, 92, 255)), org.maplibre.android.style.expressions.Expression.color(android.graphics.Color.rgb(154, 163, 178)))),
                     PropertyFactory.circleStrokeColor("#FFFFFF"), PropertyFactory.circleStrokeWidth(4f),
                 ))
                 s.addLayer(CircleLayer("nav-me-halo", SRC_ME).withProperties(
