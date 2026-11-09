@@ -52,6 +52,10 @@ data class NavUi(
     val arrivedAt: String? = null,
     /** 다음에 안내할 곳 이름 (버튼을 누르면 시작) */
     val next: String? = null,
+    /** 지금 목적지 다음의 코스 길 (지도에 흐리게, 아직 안내하지 않는 길) */
+    val upcoming: List<GeoPoint> = emptyList(),
+    /** 남은 코스 장소 (맨 앞 = 지금 목적지) */
+    val stops: List<GeoPoint> = emptyList(),
 )
 
 /**
@@ -139,7 +143,8 @@ class PhoneNavigator @Inject constructor(
         course = stops
         legIndex = index
         val target = stops.first()
-        _ui.value = NavUi(title = target.name)
+        _ui.value = NavUi(title = target.name, stops = stops.map { GeoPoint(it.lat, it.lon) })
+        if (stops.size > 1) scope.launch { upcomingPath(stops)?.let { p -> _ui.value = _ui.value?.copy(upcoming = p) } }
         job = scope.launch {
             var session = route(listOf(target), first = true) ?: return@launch
             _events.tryEmit(NaviEvent.RouteStarted(target.name))
@@ -160,6 +165,13 @@ class PhoneNavigator @Inject constructor(
                 false
             }
         }
+    }
+
+    /** 지금 목적지 → 남은 곳들 길 (보여 주기만): 실패하면 장소끼리 곧은 선. */
+    private suspend fun upcomingPath(stops: List<RouteStop>): List<GeoPoint>? = withContext(Dispatchers.IO) {
+        val pts = stops.map { GeoPoint(it.lat, it.lon) }
+        val url = navDirectionsUrl(pts.first(), pts.drop(1))
+        runCatching { NavSession(PlatformHttp.get(url, kakaoHeaders())).route().points }.getOrNull() ?: pts
     }
 
     /** 지금 목적지 도착: 남은 곳이 있으면 다음 곳을 걸어 두고 기다린다. */

@@ -24,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -173,6 +174,13 @@ private fun NavMap(nav: NavUi, modifier: Modifier) {
             m.uiSettings.isAttributionEnabled = false
             m.setStyle(Style.Builder().fromJson(json)) { s ->
                 s.addSource(GeoJsonSource(SRC_ROUTE))
+                s.addSource(GeoJsonSource(SRC_NEXT))
+                s.addSource(GeoJsonSource(SRC_STOPS))
+                // 다음 코스 길: 아직 안내하지 않으므로 회색 점선 (경로선 아래)
+                s.addLayer(LineLayer("nav-next", SRC_NEXT).withProperties(
+                    PropertyFactory.lineColor("#9AA3B2"), PropertyFactory.lineWidth(7f), PropertyFactory.lineOpacity(0.85f),
+                    PropertyFactory.lineDasharray(arrayOf(1.2f, 1.4f)), PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                ))
                 s.addSource(GeoJsonSource(SRC_ME))
                 s.addLayer(LineLayer("nav-route-casing", SRC_ROUTE).withProperties(
                     PropertyFactory.lineColor("#FFFFFF"), PropertyFactory.lineWidth(14f),
@@ -181,6 +189,16 @@ private fun NavMap(nav: NavUi, modifier: Modifier) {
                 s.addLayer(LineLayer("nav-route", SRC_ROUTE).withProperties(
                     PropertyFactory.lineColor("#0B5CFF"), PropertyFactory.lineWidth(9f),
                     PropertyFactory.lineCap(Property.LINE_CAP_ROUND), PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                ))
+                // 들를 곳: 지금 목적지는 파랑, 다음 곳들은 회색
+                s.addLayer(CircleLayer("nav-stops", SRC_STOPS).withProperties(
+                    PropertyFactory.circleRadius(11f),
+                    PropertyFactory.circleColor(org.maplibre.android.style.expressions.Expression.match(
+                        org.maplibre.android.style.expressions.Expression.get("now"),
+                        org.maplibre.android.style.expressions.Expression.literal("#9AA3B2"),
+                        org.maplibre.android.style.expressions.Expression.stop(true, "#0B5CFF"),
+                    )),
+                    PropertyFactory.circleStrokeColor("#FFFFFF"), PropertyFactory.circleStrokeWidth(4f),
                 ))
                 s.addLayer(CircleLayer("nav-me-halo", SRC_ME).withProperties(
                     PropertyFactory.circleRadius(22f), PropertyFactory.circleColor("#0B5CFF"), PropertyFactory.circleOpacity(0.18f),
@@ -199,18 +217,46 @@ private fun NavMap(nav: NavUi, modifier: Modifier) {
         val r = nav.route ?: return@LaunchedEffect
         (s.getSource(SRC_ROUTE) as? GeoJsonSource)?.setGeoJson(Feature.fromGeometry(r.line()))
     }
-    // 내 위치를 따라가는 카메라 (진행 방향 위로, 기울여서)
+    LaunchedEffect(style, nav.upcoming, nav.stops) {
+        val s = style ?: return@LaunchedEffect
+        (s.getSource(SRC_NEXT) as? GeoJsonSource)?.setGeoJson(
+            org.maplibre.geojson.FeatureCollection.fromFeatures(if (nav.upcoming.size >= 2) listOf(Feature.fromGeometry(LineString.fromLngLats(nav.upcoming.map { Point.fromLngLat(it.lon, it.lat) }))) else emptyList()),
+        )
+        (s.getSource(SRC_STOPS) as? GeoJsonSource)?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(
+            nav.stops.mapIndexed { i, p -> Feature.fromGeometry(Point.fromLngLat(p.lon, p.lat)).also { it.addBooleanProperty("now", i == 0) } },
+        ))
+    }
+    // 내 위치를 따라가는 카메라 (진행 방향 위로, 기울여서).
+    // 위치는 1초에 한 번 오므로, 이전 위치에서 새 위치까지 매 프레임 같은 속도로 이어 움직여 끊김 없이 보이게 한다.
+    var shown by remember { mutableStateOf<Triple<Double, Double, Double>?>(null) }
     LaunchedEffect(style, nav.progress) {
         val s = style ?: return@LaunchedEffect
         val m = map ?: return@LaunchedEffect
         val p = nav.progress ?: return@LaunchedEffect
-        (s.getSource(SRC_ME) as? GeoJsonSource)?.setGeoJson(Point.fromLngLat(p.snapped.lon, p.snapped.lat))
-        val cam = CameraPosition.Builder().target(LatLng(p.snapped.lat, p.snapped.lon)).zoom(16.6).tilt(55.0).bearing(p.bearingDeg)
-            .padding(0.0, 420.0, 0.0, 0.0).build()
-        m.animateCamera(CameraUpdateFactory.newCameraPosition(cam), 900)
+        val to = Triple(p.snapped.lat, p.snapped.lon, p.bearingDeg)
+        val from = shown ?: to
+        val src = s.getSource(SRC_ME) as? GeoJsonSource
+        val turn = ((to.third - from.third + 540.0) % 360.0) - 180.0
+        val start = withFrameNanos { it }
+        while (true) {
+            val now = withFrameNanos { it }
+            val t = ((now - start) / FOLLOW_NS.toDouble()).coerceAtMost(1.0)
+            val lat = from.first + (to.first - from.first) * t
+            val lon = from.second + (to.second - from.second) * t
+            val brg = from.third + turn * t
+            shown = Triple(lat, lon, brg)
+            src?.setGeoJson(Point.fromLngLat(lon, lat))
+            m.moveCamera(CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder().target(LatLng(lat, lon)).zoom(16.6).tilt(55.0).bearing(brg).padding(0.0, 420.0, 0.0, 0.0).build(),
+            ))
+            if (t >= 1.0) break
+        }
     }
     AndroidView(factory = { mapView }, modifier = modifier)
 }
+
+/** 위치 사이를 이어 움직이는 시간: 위치가 오는 간격(1초)과 같게 해서 멈춤 없이 이어지게 한다. */
+private const val FOLLOW_NS = 1_000_000_000L
 
 private fun NavRoute.line(): LineString = LineString.fromLngLats(points.map { Point.fromLngLat(it.lon, it.lat) })
 
@@ -238,6 +284,8 @@ private fun minutes(s: Double): String {
 
 private const val SRC_ROUTE = "nav-route-src"
 private const val SRC_ME = "nav-me-src"
+private const val SRC_NEXT = "nav-next-src"
+private const val SRC_STOPS = "nav-stops-src"
 
 /** 위쪽 화살표 (돌려서 좌·우회전을 나타낸다). 24 격자, 굵은 선. */
 private val TurnArrow: ImageVector by lazy {
