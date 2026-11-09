@@ -48,6 +48,10 @@ data class NavUi(
     val loading: Boolean = true,
     val error: String? = null,
     val rerouting: Boolean = false,
+    /** 방금 도착한 곳 (다음 안내를 기다리는 중) */
+    val arrivedAt: String? = null,
+    /** 다음에 안내할 곳 이름 (버튼을 누르면 시작) */
+    val next: String? = null,
 )
 
 /**
@@ -55,7 +59,8 @@ data class NavUi(
  * - 경로: 카카오모빌리티 길찾기 (출발 = 지금 위치, 경유지 포함). 키는 카카오 로컬 API와 같은 REST 키.
  * - 진행 · 다음 안내 · 음성 시점 · 경로 이탈은 Rust `nav.rs`([NavSession])가 위치마다 계산한다.
  * - 음성은 폰 TTS([SpeechOutput]), 화면은 [ui]를 보는 안내 화면(phone/ui/PhoneNavScreen.kt).
- * - 도착 · 경유지 통과를 [events]로 알린다 → 코스 안내가 다음 구간으로 알아서 넘어간다.
+ * - 코스는 한 번에 한 곳씩 안내한다: 지금 목적지에 도착해야 다음 곳이 열리고, 사람이 "다음 곳 안내"를 눌러야 시작한다
+ *   (식당 · 카페에서 얼마나 머물지 모르므로). 도착은 [events]로 알린다.
  */
 @Singleton
 class PhoneNavigator @Inject constructor(
@@ -79,7 +84,15 @@ class PhoneNavigator @Inject constructor(
         requestRouteWithWaypoints(RouteStop(name, lat, lon, address), emptyList())
 
     override suspend fun requestRouteWithWaypoints(destination: RouteStop, waypoints: List<RouteStop>): Boolean {
-        start(waypoints + destination)
+        val stops = waypoints + destination
+        val u = _ui.value
+        // 도착해서 쉬는 중에 코스의 다음 구간이 오면 바로 떠나지 않고 다음 곳으로 걸어 둔다
+        if (u?.arrivedAt != null && u.next == null) {
+            course = stops
+            _ui.value = u.copy(next = stops.first().name)
+        } else {
+            start(stops)
+        }
         return true
     }
 
@@ -105,41 +118,64 @@ class PhoneNavigator @Inject constructor(
     fun stop(cancelled: Boolean = true) {
         job?.cancel()
         job = null
+        course = emptyList()
         _ui.value = null
         speech.stop()
         if (cancelled) _events.tryEmit(NaviEvent.RouteCancelled)
     }
 
-    private fun start(stops: List<RouteStop>) {
+    /** 도착한 뒤 "다음 곳 안내": 걸어 둔 다음 곳부터 다시 안내한다. */
+    fun next() {
+        if (course.isNotEmpty()) start(course, index = legIndex)
+    }
+
+    /** 남은 코스 (맨 앞 = 지금 목적지) */
+    private var course: List<RouteStop> = emptyList()
+    private var legIndex = 0
+
+    private fun start(stops: List<RouteStop>, index: Int = 0) {
         if (stops.isEmpty()) return
         job?.cancel()
-        val dest = stops.last()
-        _ui.value = NavUi(title = dest.name)
+        course = stops
+        legIndex = index
+        val target = stops.first()
+        _ui.value = NavUi(title = target.name)
         job = scope.launch {
-            var remaining = stops
-            var session = route(remaining, first = true) ?: return@launch
-            _events.tryEmit(NaviEvent.RouteStarted(remaining.first().name))
-            _events.tryEmit(NaviEvent.Destination(dest.poi()))
-            _events.tryEmit(NaviEvent.Waypoints(remaining.dropLast(1).map { it.poi() }))
-            location.updates().collect { fix ->
+            var session = route(listOf(target), first = true) ?: return@launch
+            _events.tryEmit(NaviEvent.RouteStarted(target.name))
+            _events.tryEmit(NaviEvent.Destination(target.poi()))
+            location.updates().first { fix ->
                 val p = session.update(fix.lat, fix.lon)
                 _ui.value = _ui.value?.copy(progress = p, me = GeoPoint(fix.lat, fix.lon), rerouting = false)
                 p.say?.let { speech.speak(it) }
-                p.passedWaypoint?.let { i ->
-                    val w = remaining.getOrNull(0)
-                    _events.tryEmit(NaviEvent.WaypointArrived(i.toInt(), w?.name.orEmpty(), w?.address.orEmpty()))
-                    if (remaining.size > 1) remaining = remaining.drop(1)
-                }
                 if (p.arrived) {
-                    _events.tryEmit(NaviEvent.DestinationArrived(dest.name, dest.address))
-                    return@collect
+                    arrive(target)
+                    return@first true
                 }
                 if (p.reroute) {
                     _ui.value = _ui.value?.copy(rerouting = true)
                     speech.speak("경로를 다시 찾습니다")
-                    route(remaining, first = false, from = fix)?.let { session = it }
+                    route(listOf(target), first = false, from = fix)?.let { session = it }
                 }
+                false
             }
+        }
+    }
+
+    /** 지금 목적지 도착: 남은 곳이 있으면 다음 곳을 걸어 두고 기다린다. */
+    private fun arrive(target: RouteStop) {
+        val rest = course.drop(1)
+        course = rest
+        if (rest.isNotEmpty()) {
+            _events.tryEmit(NaviEvent.WaypointArrived(legIndex, target.name, target.address))
+            legIndex++
+            _ui.value = _ui.value?.copy(arrivedAt = target.name, next = rest.first().name)
+            speech.speak("${target.name}에 도착했어요. 다음은 ${rest.first().name}이에요. 출발할 때 다음 곳 안내를 눌러 주세요.")
+        } else {
+            legIndex = 0
+            _ui.value = _ui.value?.copy(arrivedAt = target.name, next = null)
+            speech.speak("${target.name}에 도착했어요.")
+            _events.tryEmit(NaviEvent.DestinationArrived(target.name, target.address))
         }
     }
 

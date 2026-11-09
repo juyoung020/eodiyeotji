@@ -73,7 +73,7 @@ private val NavDark = Color(0xFF0E1726)
  * 아래 = 도착 예정 시각 · 남은 시간 · 거리 · 종료. 경로 계산 · 진행은 [app.eodiyeotji.phone.PhoneNavigator].
  */
 @Composable
-fun PhoneNavScreen(nav: NavUi, onEnd: () -> Unit) {
+fun PhoneNavScreen(nav: NavUi, onEnd: () -> Unit, onNext: () -> Unit) {
     BackHandler(onBack = onEnd)
     Box(Modifier.fillMaxSize().background(NavDark)) {
         NavMap(nav, Modifier.fillMaxSize())
@@ -82,7 +82,7 @@ fun PhoneNavScreen(nav: NavUi, onEnd: () -> Unit) {
                 nav.error != null -> Banner(EodiIcons.Close, nav.error, nav.title, null)
                 nav.loading || nav.route == null -> Banner(null, "경로를 찾는 중", nav.title, null, busy = true)
                 nav.rerouting -> Banner(null, "경로를 다시 찾는 중", nav.title, null, busy = true)
-                nav.progress?.arrived == true -> Banner(null, "도착했어요", nav.title, null)
+                nav.arrivedAt != null -> Banner(EodiIcons.Check, "${nav.arrivedAt} 도착", nav.next?.let { "다음 · $it" } ?: "코스 끝", null)
                 else -> {
                     val p = nav.progress
                     val step = p?.nextStep?.toInt()?.let { nav.route.steps.getOrNull(it) }
@@ -90,7 +90,7 @@ fun PhoneNavScreen(nav: NavUi, onEnd: () -> Unit) {
                 }
             }
         }
-        BottomBar(nav, onEnd, Modifier.align(Alignment.BottomCenter))
+        BottomBar(nav, onEnd, onNext, Modifier.align(Alignment.BottomCenter))
     }
 }
 
@@ -116,7 +116,7 @@ private fun Banner(icon: ImageVector?, text: String, sub: String, meters: Double
 }
 
 @Composable
-private fun BottomBar(nav: NavUi, onEnd: () -> Unit, modifier: Modifier) {
+private fun BottomBar(nav: NavUi, onEnd: () -> Unit, onNext: () -> Unit, modifier: Modifier) {
     val p = nav.progress
     val c = EodiTheme.colors
     Row(
@@ -126,7 +126,10 @@ private fun BottomBar(nav: NavUi, onEnd: () -> Unit, modifier: Modifier) {
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Column(Modifier.weight(1f)) {
-            if (p != null && !p.arrived) {
+            if (nav.arrivedAt != null && nav.next != null) {
+                Text(nav.next, style = EodiTheme.type.title, color = c.textPrimary, maxLines = 1)
+                Text("머무는 동안 기다릴게요", style = EodiTheme.type.meta, color = c.textSecondary)
+            } else if (p != null && !p.arrived) {
                 val eta = LocalTime.now().plusSeconds(p.remainingS.toLong()).format(DateTimeFormatter.ofPattern("a h:mm"))
                 Text("$eta 도착", style = EodiTheme.type.title, color = c.textPrimary)
                 Text("${minutes(p.remainingS)} · ${distance(p.remainingM)}", style = EodiTheme.type.meta, color = c.textSecondary)
@@ -134,7 +137,14 @@ private fun BottomBar(nav: NavUi, onEnd: () -> Unit, modifier: Modifier) {
                 Text(nav.title, style = EodiTheme.type.title, color = c.textPrimary, maxLines = 1)
             }
         }
-        if (p?.arrived == true || nav.error != null) PrimaryPill("닫기", null, onEnd) else SecondaryPill("안내 종료", EodiIcons.Close, onEnd)
+        when {
+            nav.arrivedAt != null && nav.next != null -> {
+                SecondaryPill("끝내기", null, onEnd)
+                PrimaryPill("다음 곳 안내", EodiIcons.Navi, onNext)
+            }
+            nav.arrivedAt != null || nav.error != null -> PrimaryPill("닫기", null, onEnd)
+            else -> SecondaryPill("안내 종료", EodiIcons.Close, onEnd)
+        }
     }
 }
 

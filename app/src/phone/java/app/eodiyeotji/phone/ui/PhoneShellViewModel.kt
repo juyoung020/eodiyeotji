@@ -51,6 +51,7 @@ class PhoneShellViewModel @Inject constructor(
     val nav: StateFlow<app.eodiyeotji.phone.NavUi?> = navigator.ui
 
     fun endNav() = navigator.stop()
+    fun nextStop() = navigator.next()
 
     private val _permissions = MutableStateFlow(PhonePermissions())
     val permissions: StateFlow<PhonePermissions> = _permissions.asStateFlow()

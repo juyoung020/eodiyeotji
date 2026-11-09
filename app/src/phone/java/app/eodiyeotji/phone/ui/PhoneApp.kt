@@ -338,7 +338,7 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
         )
     }
     // 앱 안 길 안내: 모든 화면 위에 꽉 차게
-    nav?.let { PhoneNavScreen(it, onEnd = shell::endNav) }
+    nav?.let { PhoneNavScreen(it, onEnd = shell::endNav, onNext = shell::nextStop) }
 }
 
 /**
