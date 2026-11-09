@@ -12,6 +12,7 @@ pub mod drivedetect;
 pub mod edits;
 pub mod ffi;
 pub mod geo;
+pub mod handoff;
 pub mod lastfix;
 pub mod mapdata;
 pub mod memmap;
@@ -26,6 +27,7 @@ pub mod saved;
 pub mod search_ui;
 pub mod share;
 pub mod store;
+pub mod sync;
 pub mod trip;
 #[cfg(test)]
 mod perf_tests;

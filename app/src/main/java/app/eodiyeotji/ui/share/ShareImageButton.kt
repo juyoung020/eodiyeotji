@@ -34,11 +34,14 @@ enum class ShareButtonStyle { PILL, ICON }
 /**
  * "카드로 공유" 버튼: 누르면 [target]의 공유 카드(Rust가 만든 내용 + 들른 곳 사진)를 이미지로 그려 공유 시트를 띄운다.
  * 카카오톡은 폰의 공유 시트에 나온다. 보낼 글은 클립보드에도 넣는다 (카톡이 글을 버릴 때 붙여 넣게).
- * 차 판에서는 아무것도 그리지 않는다 ([ComposableImageShare.supported]) — 차에는 공유 시트·메신저가 없다.
+ * 차 판에는 공유 시트·메신저가 없으므로 연결된 폰으로 카드를 보낸다 ([CarHandoffButton]) → 폰 알림에서 카톡으로.
  */
 @Composable
 fun ShareImageButton(target: ShareTarget, modifier: Modifier = Modifier, style: ShareButtonStyle = ShareButtonStyle.PILL) {
-    if (!ComposableImageShare.supported) return
+    if (!ComposableImageShare.supported) {
+        CarHandoffButton(target, modifier, style)
+        return
+    }
     val context = LocalContext.current
     val sharer = rememberImageSharer()
     if (!sharer.available) return

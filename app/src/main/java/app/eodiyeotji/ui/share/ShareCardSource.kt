@@ -74,16 +74,19 @@ const val SKETCH_ASPECT = 320f / 150f
 /** 카드에 넣는 사진 수 (첫 장은 크게, 나머지는 작게). */
 const val CARD_PHOTOS = 3
 
-suspend fun EodiCore.shareCard(target: ShareTarget): ShareCardData = withContext(Dispatchers.IO) {
+suspend fun EodiCore.shareCard(target: ShareTarget): ShareCardData = shareCardRaw(target).toModel()
+
+/** Rust 카드 그대로 (차 → 폰으로 보낼 때 묶어 보낸다). */
+suspend fun EodiCore.shareCardRaw(target: ShareTarget): RShareCard = withContext(Dispatchers.IO) {
     val a = SKETCH_ASPECT.toDouble()
     when (target) {
         is ShareTarget.Day -> rust.shareCardDay(target.day, a)
         is ShareTarget.Episode -> rust.shareCardEpisode(target.episodeId, a)
         is ShareTarget.Course -> rust.shareCardCourse(target.postId, a)
-    }.toModel()
+    }
 }
 
-private fun RShareCard.toModel() = ShareCardData(
+internal fun RShareCard.toModel() = ShareCardData(
     kind = when (kind) {
         RShareKind.DAY -> ShareCardKind.DAY
         RShareKind.EPISODE -> ShareCardKind.EPISODE
@@ -110,6 +113,7 @@ private fun RShareCard.toModel() = ShareCardData(
 internal interface ShareEntryPoint {
     fun core(): EodiCore
     fun photos(): PlacePhotoRepository
+    fun handoff(): app.eodiyeotji.handoff.HandoffRepository
 }
 
 /**

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 폰(어느 차에서나 혼자 쓰는) 판에만 들어가는 것. -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- GPS가 없는 기기에도 설치는 된다 (네트워크 위치로 덜 정확하게 기록) -->
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
@@ -30,6 +31,16 @@
     </queries>
 
     <application>
+        <!-- 차 화면의 연결 QR(eodiyeotji://pair?c=코드)을 폰 카메라로 비추면 앱이 열려 바로 연결 (phone/ui/PhoneHandoff.kt) -->
+        <activity android:name=".MainActivity" tools:node="merge">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="eodiyeotji" android:host="pair" />
+            </intent-filter>
+        </activity>
+
         <!-- 자동 기록: 위치로 주행을 감지해(Rust drivedetect) 위치를 모아 Rust 코어에 저장 -->
         <service
             android:name=".record.RecordingService"

@@ -184,3 +184,64 @@ mod tests {
         assert!(!out.edges[0].active);
     }
 }
+
+// ---------- 차 → 폰 넘기기 (handoff.rs) ----------
+
+/// 새 페어링 (차).
+#[uniffi::export]
+pub fn handoff_new_pairing() -> Result<crate::handoff::HandoffPairing, crate::store::CoreError> {
+    crate::handoff::new_pairing()
+}
+
+/// 코드로 페어링 글을 주고받는 주제 이름.
+#[uniffi::export]
+pub fn handoff_pair_topic(code: String) -> String {
+    crate::handoff::pair_topic(&code)
+}
+
+#[uniffi::export]
+pub fn handoff_seal_pairing(pairing: crate::handoff::HandoffPairing) -> Result<String, crate::store::CoreError> {
+    crate::handoff::seal_pairing(&pairing)
+}
+
+/// 폰: 입력한 코드로 페어링 글을 연다 (틀리면 None).
+#[uniffi::export]
+pub fn handoff_open_pairing(code: String, msg: String) -> Option<crate::handoff::HandoffPairing> {
+    crate::handoff::open_pairing(&code, &msg)
+}
+
+#[uniffi::export]
+pub fn handoff_seal(key: String, text: String) -> Result<String, crate::store::CoreError> {
+    crate::handoff::seal(&key, &text)
+}
+
+#[uniffi::export]
+pub fn handoff_open(key: String, msg: String) -> Result<String, crate::store::CoreError> {
+    crate::handoff::open(&key, &msg)
+}
+
+#[uniffi::export]
+pub fn handoff_seal_card(key: String, card: crate::share::ShareCard) -> Result<String, crate::store::CoreError> {
+    crate::handoff::seal_card(&key, &card)
+}
+
+#[uniffi::export]
+pub fn handoff_open_card(key: String, msg: String) -> Result<crate::share::ShareCard, crate::store::CoreError> {
+    crate::handoff::open_card(&key, &msg)
+}
+
+/// 글 → QR 칸 (페어링 화면).
+#[uniffi::export]
+pub fn qr_matrix(text: String) -> Result<crate::handoff::QrMatrix, crate::store::CoreError> {
+    crate::handoff::qr_matrix(&text)
+}
+
+#[uniffi::export]
+pub fn handoff_seal_bytes(key: String, data: Vec<u8>) -> Result<String, crate::store::CoreError> {
+    crate::handoff::seal_bytes(&key, &data)
+}
+
+#[uniffi::export]
+pub fn handoff_open_bytes(key: String, msg: String) -> Result<Vec<u8>, crate::store::CoreError> {
+    crate::handoff::open_bytes(&key, &msg)
+}

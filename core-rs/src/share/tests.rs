@@ -133,7 +133,9 @@ fn card_hides_stops_near_home_renumbers_and_trims_the_route() {
     assert_eq!(card.weather.as_deref(), Some("맑음 · 14°C"));
     assert_eq!(card.date_text, "2025년 11월 6일 목요일");
     assert_eq!(card.season, "가을 · 단풍철");
-    assert_eq!(card.share_text, "11월 6일 가을 강릉 바다와 순두부 나들이 · 바다 카페 → 순두부집 #어디였지");
+    assert_eq!(card.share_text, format!("11월 6일 가을 강릉 바다와 순두부 나들이 · 바다 카페 → 순두부집 #어디였지
+경로 보기 ▶ {}", card.route_url));
+    assert!(card.route_url.starts_with("https://map.kakao.com/link/by/car/"), "들른 곳 둘을 잇는 카카오맵 경로");
 }
 
 #[test]
@@ -218,7 +220,8 @@ fn demo_gangneung_day_episode_and_course_cards() {
     }
     let total: usize = day.lines.iter().map(|l| l.points.len()).sum();
     assert!(total < 800, "줄인 점 수 {total}");
-    assert!(day.share_text.starts_with("11월 6일 ") && day.share_text.ends_with(" #어디였지"), "{}", day.share_text);
+    assert!(day.share_text.starts_with("11월 6일 ") && day.share_text.contains(" #어디였지
+경로 보기 ▶ https://map.kakao.com/"), "{}", day.share_text);
     assert!(day.share_text.contains("경포해변"), "{}", day.share_text);
 
     println!("{} / {} / {:?} / 숨김 {} / 선 {} / {}", day.title, day.date_text, day.weather, day.hidden_count, day.lines.len(), day.share_text);

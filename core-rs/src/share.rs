@@ -38,7 +38,7 @@ const TEXT_STOPS: usize = 3;
 const BRAND_TAG: &str = "#어디였지";
 
 /// 무엇을 공유하나.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum, serde::Serialize, serde::Deserialize)]
 pub enum ShareKind {
     /// 하루 전체
     Day,
@@ -49,20 +49,20 @@ pub enum ShareKind {
 }
 
 /// 길 그림 위 한 점. x는 왼쪽 0 → 오른쪽 1, y는 위 0 → 아래 1 (북쪽이 위). 그림 칸 비율에 맞춰 이미 늘려 둔 값이다.
-#[derive(Debug, Clone, Copy, PartialEq, uniffi::Record)]
+#[derive(Debug, Clone, Copy, PartialEq, uniffi::Record, serde::Serialize, serde::Deserialize)]
 pub struct SketchPoint {
     pub x: f32,
     pub y: f32,
 }
 
 /// 끊기지 않은 선 하나 (주행 하나, 또는 집·회사 근처에서 끊긴 조각).
-#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, uniffi::Record, serde::Serialize, serde::Deserialize)]
 pub struct SketchLine {
     pub points: Vec<SketchPoint>,
 }
 
 /// 카드에 올라가는 들른 곳 하나.
-#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, uniffi::Record, serde::Serialize, serde::Deserialize)]
 pub struct ShareStop {
     /// 카드 안 순서 (1부터, 뺀 곳을 건너뛰고 다시 매긴 번호)
     pub order: u32,
@@ -77,7 +77,7 @@ pub struct ShareStop {
 }
 
 /// 공유 이미지 카드 한 장의 내용.
-#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, uniffi::Record, serde::Serialize, serde::Deserialize)]
 pub struct ShareCard {
     pub kind: ShareKind,
     /// 큰 제목 (AI 하루 제목 → 에피소드 제목 → 규칙 라벨)
@@ -103,8 +103,11 @@ pub struct ShareCard {
     pub duration_ms: i64,
     /// 집·회사 근처라 뺀 들른 곳 수
     pub hidden_count: u32,
-    /// 카드와 같이 보낼 짧은 글
+    /// 카드와 같이 보낼 짧은 글 (끝 줄에 [route_url])
     pub share_text: String,
+    /// 받는 사람이 누르면 카카오맵에서 들른 곳을 순서대로 잇는 운전 경로가 열리는 링크 (들른 곳이 없으면 빈 문자열)
+    #[serde(default)]
+    pub route_url: String,
 }
 
 #[uniffi::export]
@@ -259,7 +262,12 @@ impl RawCard {
             })
             .collect();
         let season = season_label(self.day.clone());
-        let share_text = share_text(&self.day, &season, &self.title, &stops, distance_m);
+        let route_url = crate::handoff::kakao_route_url(&stops);
+        let mut share_text = share_text(&self.day, &season, &self.title, &stops, distance_m);
+        if !route_url.is_empty() {
+            share_text.push_str("\n경로 보기 ▶ ");
+            share_text.push_str(&route_url);
+        }
         ShareCard {
             kind: self.kind,
             date_text: date_text(&self.day),
@@ -275,6 +283,7 @@ impl RawCard {
             duration_ms: self.duration_ms.max(0),
             hidden_count: hidden,
             share_text,
+            route_url,
         }
     }
 }
