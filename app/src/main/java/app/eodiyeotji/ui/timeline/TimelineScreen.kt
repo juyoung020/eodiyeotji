@@ -961,6 +961,16 @@ private fun StatRow(s: DaySummary) {
             StatDivider()
             StatCell(stringResource(R.string.stat_people_value, s.people), stringResource(R.string.stat_people_label), null)
         }
+        // 배터리 · 연료 (차만): 쓴 양 %p, 충전 · 주유했으면 이름 줄에 횟수
+        s.energy?.let { e ->
+            StatDivider()
+            val label = if (e.refills > 0) {
+                stringResource(if (e.ev) R.string.stat_energy_ev_charged else R.string.stat_energy_fuel_filled, e.refills)
+            } else {
+                stringResource(if (e.ev) R.string.stat_energy_ev_label else R.string.stat_energy_fuel_label)
+            }
+            StatCell(stringResource(R.string.stat_energy_value, kotlin.math.round(e.usedPct).toInt()), label, null)
+        }
     }
 }
 

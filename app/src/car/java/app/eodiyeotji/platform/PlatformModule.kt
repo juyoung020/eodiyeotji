@@ -31,6 +31,7 @@ abstract class PlatformModule {
     @Binds abstract fun drivingState(impl: CarDrivingStatePort): DrivingStatePort
     @Binds abstract fun recording(impl: CarRecordingPlatform): RecordingPlatform
     @Binds abstract fun cabin(impl: app.eodiyeotji.pleos.PleosCabin): CabinSource
+    @Binds abstract fun energy(impl: app.eodiyeotji.pleos.PleosEnergy): EnergySource
 }
 
 /** 차: Pleos 차량 위치 권한 하나만 묻는다 (Pleos 위치 서비스가 없는 환경에서는 묻지 않는다). 서비스 종류는 specialUse. */

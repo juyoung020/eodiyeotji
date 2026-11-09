@@ -24,6 +24,8 @@
     <uses-permission android:name="pleos.car.permission.TTS_SERVICE" />
     <!-- 탑승 인원(Pleos Vehicle Seat 탑승 여부): "가족이랑 간 바다"처럼 누구와 갔는지로 기억을 찾기 위해. 몇 명인지만 센다. normal -->
     <uses-permission android:name="pleos.car.permission.CAR_SEATS" />
+    <!-- 배터리 · 연료 잔량(Pleos Vehicle EvBattery · Fuel): 하루에 얼마나 썼고 언제 충전했는지 기록 (업무 운행기록부). normal -->
+    <uses-permission android:name="pleos.car.permission.CAR_ENERGY" />
 
     <application>
         <activity android:name=".MainActivity">

@@ -106,6 +106,9 @@ class EodiCore @Inject constructor(
     /** 지금 탄 인원 기록 (좌석 센서, 주행 중). */
     suspend fun setDrivePeople(tMs: Long, people: Int) = coreCall("setDrivePeople") { store.setDrivePeople(tMs, people.toUInt()) }
 
+    /** 배터리 · 연료 잔량 기록 (출발 · 도착 때). */
+    suspend fun setDriveEnergy(tMs: Long, pct: Double, ev: Boolean) = coreCall("setDriveEnergy") { store.setDriveEnergy(tMs, pct, ev) }
+
     /** 그 하루 가장 많이 탄 인원 (모르면 0). */
     suspend fun dayPeople(day: String): Int = coreCall("dayPeople") { store.dayPeople(day).toInt() }
 
@@ -118,7 +121,8 @@ class EodiCore @Inject constructor(
     suspend fun dayDetail(day: String): DayDetail = coreCall("dayDetail") {
         val d = store.dayDetail(day).toModel()
         val people = store.dayPeople(day).toInt()
-        if (people > 0) d.copy(summary = d.summary.copy(people = people)) else d
+        val e = store.dayEnergy(day)
+        d.copy(summary = d.summary.copy(people = people, energy = if (e.known) DayEnergyUse(e.ev, e.usedPct, e.refills.toInt()) else null))
     }
 
     /**
@@ -378,7 +382,12 @@ data class DaySummary(
     val replayable: Boolean = false,
     /** 그날 가장 많이 탄 인원 (좌석 센서, 하루 상세에서만 채운다). 모르면 0. */
     val people: Int = 0,
+    /** 그날 쓴 배터리 · 연료 (하루 상세에서만, 모르면 null). */
+    val energy: DayEnergyUse? = null,
 )
+
+/** 하루에 쓴 배터리(전기차) 또는 연료: 쓴 양 %p, 충전 · 주유 횟수. */
+data class DayEnergyUse(val ev: Boolean, val usedPct: Double, val refills: Int)
 
 /** 들른 곳 사진 한 장 ([name] = 구글 사진 리소스 이름, [author] = 올린 사람 — 사진과 함께 보여 준다). */
 data class PlacePhoto(val name: String, val widthPx: Int, val heightPx: Int, val author: String)

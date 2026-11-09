@@ -1,12 +1,9 @@
 package app.eodiyeotji.pleos
 
-import ai.pleos.playground.vehicle.Vehicle
 import ai.pleos.playground.vehicle.api.model.area.SeatArea
 import ai.pleos.playground.vehicle.constant.area.SeatValue
-import android.content.Context
 import android.util.Log
 import app.eodiyeotji.platform.CabinSource
-import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
@@ -24,15 +21,13 @@ import kotlinx.coroutines.withTimeoutOrNull
  * 운전석(ROW_1_LEFT)을 기준으로 값의 방향을 맞춘다 (아래 설명).
  */
 @Singleton
-class PleosCabin @Inject constructor(@ApplicationContext private val context: Context) : CabinSource {
+class PleosCabin @Inject constructor(private val sdk: PleosVehicle) : CabinSource {
     private val lock = Mutex()
-    private var vehicle: Vehicle? = null
     private var areas: List<SeatArea>? = null
 
     override suspend fun occupants(): Int? = withContext(Dispatchers.IO) {
         lock.withLock {
-            val v = vehicle ?: runCatching { Vehicle(context.applicationContext).also { it.initialize() } }
-                .onFailure { Log.w(TAG, "Vehicle SDK 시작 실패", it) }.getOrNull()?.also { vehicle = it } ?: return@withLock null
+            val v = sdk.get() ?: return@withLock null
             val seat = runCatching { v.getSeat() }.getOrNull() ?: return@withLock null
             val supported = areas ?: withTimeoutOrNull(TIMEOUT_MS) {
                 suspendCancellableCoroutine { c ->

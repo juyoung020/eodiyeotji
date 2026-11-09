@@ -56,7 +56,7 @@ use crate::places::{self, PlaceLabel, REF_END, REF_START, REF_STAY};
 use crate::trip::{self, DriveMark, MarkKind, Segmenter, Stay, TripConfig};
 
 /// DB 구조 버전 (`PRAGMA user_version`). 구조를 바꾸면 올리고 `migrate`에 단계를 추가한다.
-pub(crate) const SCHEMA_VERSION: i32 = 13;
+pub(crate) const SCHEMA_VERSION: i32 = 14;
 /// 이보다 정확도가 나쁜(m) 점은 버린다.
 pub const MAX_ACCURACY_M: f32 = 100.0;
 /// 지도에 넘길 경로의 단순화 허용 오차(m).
@@ -402,7 +402,11 @@ fn migrate(conn: &mut Connection) -> Result<(), CoreError> {
         // 탑승 인원 (좌석 센서, cabin.rs)
         tx.execute_batch(crate::cabin::SCHEMA_V13)?;
     }
-    // 다음 버전은 여기에: if version < 14 { ... }
+    if version < 14 {
+        // 배터리 · 연료 잔량 (energy.rs)
+        tx.execute_batch(crate::energy::SCHEMA_V14)?;
+    }
+    // 다음 버전은 여기에: if version < 15 { ... }
     tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     tx.commit()?;
     Ok(())

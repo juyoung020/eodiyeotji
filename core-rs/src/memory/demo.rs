@@ -14,6 +14,7 @@
 //! - 위치 점: 시내 1초, 고속도로(직선 30km 넘는 구간) 4초 간격, 도로처럼 휘는 길 + GPS 흔들림 2m. 주행마다 시작·끝 신호.
 //!   2026-11-06 기준 1년치 약 39만 점, 주행 745개 (PC 릴리즈 빌드 0.3초, 디버그 1초).
 //! - 장소 이름: 카카오처럼 이름·분류·지번 주소를 붙인다 (출처 Kakao).
+//! - 배터리(전기차 흉내): 1km에 0.22%p, 30% 아래면 그날 아침 전에 90%로 충전. 주행마다 출발 · 도착 잔량.
 //! - 탑승 인원(좌석 센서 흉내): 여행(강릉 · 부산 · 설악산) 4명, 주말 2명, 평일 혼자. 주행마다 출발 20초 뒤 한 번.
 //! - LLM 라벨: 30일보다 오래된 날 중 라벨링이 필요한 날은 시나리오 제목·이야기·태그를 미리 넣는다 (시연 첫 실행에
 //!   LLM을 수십 번 부르지 않도록). 최근 30일과 1년 전 강릉 날은 비워 두어 앱이 실제로 라벨링하는 모습을 보인다.
@@ -33,6 +34,8 @@ use crate::places::{self, PlaceLabel, PlaceSource};
 use crate::store::{days_from_civil, format_day, mark_dirty, CoreError, EodiStore, KIND_END, KIND_START};
 
 const MIN: i64 = 60_000;
+/// 시연 전기차가 1km에 쓰는 배터리 (%p): 77kWh · 약 6km/kWh
+const SOC_PER_KM: f64 = 0.22;
 
 /// 장소 (이름, 분류, 지번 주소, 위도, 경도).
 type Poi = (&'static str, &'static str, &'static str, f64, f64);
@@ -429,6 +432,10 @@ struct Gen<'a> {
     people_now: u32,
     /// (읽은 시각, 인원) — 주행마다 출발 20초 뒤 한 번
     people: Vec<(i64, u32)>,
+    /// 전기차 배터리 잔량 (%) 흉내: 1km에 0.22%p, 30% 아래로 내려가면 그날 밤 집에서 90%까지 충전
+    soc: f64,
+    /// (읽은 시각, 잔량) — 주행마다 출발 · 도착 한 번씩
+    energy: Vec<(i64, f64)>,
 }
 
 impl Gen<'_> {
@@ -503,6 +510,9 @@ impl Gen<'_> {
         self.events.push((t0, KIND_START));
         self.events.push((t, KIND_END));
         self.people.push((t0 + 20_000, self.people_now));
+        self.energy.push((t0, (self.soc * 10.0).round() / 10.0));
+        self.soc = (self.soc - total / 1000.0 * SOC_PER_KM).max(3.0);
+        self.energy.push((t, (self.soc * 10.0).round() / 10.0));
         self.trips += 1;
         t
     }
@@ -671,6 +681,8 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
         outing_uses: vec![0; OUTINGS.len()],
         people_now: 1,
         people: Vec::new(),
+        soc: 82.0,
+        energy: Vec::new(),
     };
     let busan = p.busan.filter(|&b| free(b, b + 2));
     let seorak = p.seorak.filter(|&s| free(s, s + 1));
@@ -679,6 +691,9 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
         if !free(d, d) {
             d += 1;
             continue;
+        }
+        if g.soc < 30.0 {
+            g.soc = 90.0; // 전날 밤 집에서 충전
         }
         g.people_now = match weekday_index(d) {
             0 | 6 => 2,
@@ -709,6 +724,7 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
     let made = g.trips;
     let (fixes, events, labels) = (std::mem::take(&mut g.fixes), std::mem::take(&mut g.events), std::mem::take(&mut g.labels));
     let people = std::mem::take(&mut g.people);
+    let energy = std::mem::take(&mut g.energy);
 
     let mut conn = store.lock()?;
     {
@@ -725,6 +741,10 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
             let mut st = tx.prepare("INSERT OR IGNORE INTO drive_people (t_ms, people) VALUES (?1, ?2)")?;
             for &(t, n) in &people {
                 st.execute(params![t, n as i64])?;
+            }
+            let mut st = tx.prepare("INSERT OR IGNORE INTO drive_energy (t_ms, pct, ev) VALUES (?1, ?2, 1)")?;
+            for &(t, pct) in &energy {
+                st.execute(params![t, pct])?;
             }
         }
         if let (Some(lo), Some(hi)) = (fixes.first(), fixes.last()) {

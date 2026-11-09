@@ -11,6 +11,7 @@ pub mod community;
 pub mod course;
 pub mod drivedetect;
 pub mod edits;
+pub mod energy;
 pub mod ffi;
 pub mod geo;
 pub mod handoff;

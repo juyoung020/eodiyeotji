@@ -112,3 +112,11 @@ interface CabinSource {
     /** 지금 앉아 있는 좌석 수. 센서가 없거나 읽지 못하면 null. */
     suspend fun occupants(): Int?
 }
+
+/** 배터리(전기차) 또는 연료 잔량 (%). */
+data class EnergyLevel(val pct: Double, val ev: Boolean)
+
+/** 배터리 · 연료 잔량. 차는 Pleos Vehicle SDK, 폰은 알 수 없어 null. */
+interface EnergySource {
+    suspend fun level(): EnergyLevel?
+}

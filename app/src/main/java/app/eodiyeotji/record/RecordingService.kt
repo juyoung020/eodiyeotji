@@ -78,6 +78,7 @@ class RecordingService : LifecycleService() {
     @Inject lateinit var recall: RecallCenter
     @Inject lateinit var handoff: app.eodiyeotji.handoff.HandoffRepository
     @Inject lateinit var cabin: app.eodiyeotji.platform.CabinSource
+    @Inject lateinit var energy: app.eodiyeotji.platform.EnergySource
 
     private var running = false
     private var foregroundOk = false
@@ -153,6 +154,7 @@ class RecordingService : LifecycleService() {
                 session = lifecycleScope.startCollecting()
                 if (naviAvailable) naviSession = lifecycleScope.startNavi()
                 cabinJob = lifecycleScope.startCabin()
+                lifecycleScope.launch(Dispatchers.IO) { recordEnergy(edge.tMs) }
                 recall.onDriveStart()
                 if (SENDS_PARKING) lifecycleScope.launch(Dispatchers.IO) { handoff.sendMoving(edge.tMs) }
             } else if (!edge.active && current != null) {
@@ -168,6 +170,7 @@ class RecordingService : LifecycleService() {
                 naviSession = null
                 lastFix = null
                 recall.onDriveEnd()
+                lifecycleScope.launch(Dispatchers.IO) { recordEnergy(edge.tMs) }
                 // 차: 주차한 자리를 연결된 폰으로 ("내 차 어디였지" · 차에서 내려 가게까지 걸어서)
                 if (SENDS_PARKING) lifecycleScope.launch(Dispatchers.IO) {
                     safely("parkedCar") { core.parkedCar() }?.let { handoff.sendParked(it) }
@@ -193,6 +196,13 @@ class RecordingService : LifecycleService() {
             safely("setDrivePeople") { core.setDrivePeople(System.currentTimeMillis(), n) }
             delay(CABIN_EVERY_MS)
         }
+    }
+
+    /** 출발 · 도착 때 배터리 · 연료 잔량 (모르면(폰) 건너뛴다). */
+    private suspend fun recordEnergy(tMs: Long) {
+        val e = energy.level() ?: return
+        if (BuildConfig.DEBUG) Log.d(TAG, "잔량 ${e.pct}% (${if (e.ev) "배터리" else "연료"})")
+        safely("setDriveEnergy") { core.setDriveEnergy(tMs, e.pct, e.ev) }
     }
 
     /** 주행 중에만 도는 내비 듣기. 힌트는 받는 즉시 Rust에 넘긴다 (드물게 오므로 묶지 않는다). */
