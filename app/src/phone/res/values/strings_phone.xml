@@ -1,38 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   폰 판 문구. 앞쪽은 src/main 문구를 폰에 맞게 덮어쓴 것(같은 이름 → 폰 판에서만 이 값이 쓰인다),
-  뒤쪽은 폰 화면에만 있는 문구. 폰은 차량 내비가 없고 길 안내를 설치된 지도 앱으로 넘기므로 "내비" 대신 "지도 앱"이라고 쓴다.
+  뒤쪽은 폰 화면에만 있는 문구. 폰은 차량 내비 대신 앱 안에서 직접 길 안내를 한다(phone/PhoneNavigator.kt).
 -->
 <resources>
     <!-- ===== src/main 문구 덮어쓰기 ===== -->
     <string name="tagline">폰이 기억하는 나의 모든 길</string>
     <string name="timeline_empty_body">차를 타고 출발하면 폰이 알아서 이동을 기록해요.\n따로 누를 버튼은 없어요. 도착하면 여기에 날짜별로 정리돼요.</string>
 
-    <string name="guide_failed">지도 앱을 열지 못했어요</string>
-    <string name="guide_retry">다시 열기</string>
+    <string name="guide_failed">경로를 찾지 못했어요</string>
+    <string name="guide_retry">다시 찾기</string>
     <string name="guide_stop">끝내기</string>
-    <string name="guide_place_hint">지도 앱에서 돌아오면 여기서 안내를 끝낼 수 있어요</string>
+    <string name="guide_place_hint">안내 화면에서 “안내 종료”를 누르면 이 화면으로 돌아와요</string>
 
-    <string name="agent_empty_body">지난 기록에서 찾아 드려요. 그날 코스를 지도 앱으로 바로 안내할 수도 있어요.</string>
-    <string name="agent_voice_follow_up_hint">“응”이라고 하면 지도 앱으로 안내해요</string>
-    <string name="agent_action_running">지도 앱을 여는 중…</string>
-    <string name="agent_action_done">지도 앱으로 안내를 넘겼어요</string>
-    <string name="agent_started_line">\n지도 앱으로 안내를 넘겼어요.</string>
-    <string name="agent_start_failed_line">\n지도 앱을 열지 못했어요.</string>
-    <string name="agent_send_failed">지도 앱을 열지 못했어요.</string>
-    <string name="agent_proposal_course">이 코스, 지도 앱으로 안내</string>
-    <string name="agent_proposal_shared">‘%1$s’ 코스, 지도 앱으로 안내</string>
-    <string name="agent_proposal_place">%1$s, 지도 앱으로 안내</string>
-    <string name="agent_proposal_search">지도 앱에서 찾기</string>
+    <string name="agent_empty_body">지난 기록에서 찾아 드려요. 그날 코스로 바로 길 안내도 해요.</string>
+    <string name="agent_voice_follow_up_hint">“응”이라고 하면 바로 안내를 시작해요</string>
+    <string name="agent_action_running">경로를 찾는 중…</string>
+    <string name="agent_action_done">길 안내를 시작했어요</string>
+    <string name="agent_started_line">\n길 안내를 시작했어요.</string>
+    <string name="agent_start_failed_line">
+경로를 찾지 못했어요.</string>
+    <string name="agent_send_failed">경로를 찾지 못했어요.</string>
+    <string name="agent_proposal_course">이 코스로 안내</string>
+    <string name="agent_proposal_shared">‘%1$s’ 코스로 안내</string>
+    <string name="agent_proposal_place">%1$s로 안내</string>
+    <string name="agent_proposal_search">가까운 곳 찾아 안내</string>
 
-    <string name="course_navigate">지도 앱으로 안내</string>
-    <string name="course_navigate_next">다음 구간 지도 앱으로 (%1$d/%2$d)</string>
-    <string name="course_navigate_again">마지막 구간 다시 열기</string>
-    <string name="course_navi_auto">%1$d/%2$d 구간 안내 중 · 도착하면 아래 카드의 \'다음 구간\'을 눌러 주세요</string>
-    <string name="course_navi_legs_hint">%1$d구간 코스 · 지도 앱에는 경유지를 2곳씩 나눠 보내요. 구간이 끝나면 \'다음 구간\'을 눌러 주세요</string>
-    <string name="course_navi_failed">지도 앱을 열지 못했어요</string>
-    <string name="place_detail_navi_ok">지도 앱으로 넘겼어요</string>
-    <string name="place_detail_navi_fail">지도 앱을 열지 못했어요</string>
+    <string name="course_navigate">이 코스로 안내</string>
+    <string name="course_navigate_next">다음 구간 안내 (%1$d/%2$d)</string>
+    <string name="course_navigate_again">마지막 구간 다시 안내</string>
+    <string name="course_navi_auto">%1$d/%2$d 구간 안내 중 · 도착하면 다음 구간을 이어서 안내해요</string>
+    <string name="course_navi_legs_hint">%1$d구간 코스 · 도착하면 다음 구간을 자동으로 이어서 안내해요</string>
+    <string name="course_navi_failed">경로를 찾지 못했어요</string>
+    <string name="place_detail_navi_ok">길 안내를 시작했어요</string>
+    <string name="place_detail_navi_fail">경로를 찾지 못했어요</string>
 
     <!-- ===== 폰 화면에만 있는 문구 (src/phone) ===== -->
     <string name="phone_tab_ask">물어보기</string>
@@ -64,14 +65,6 @@
 
     <!-- 설정 시트 -->
     <string name="settings_title">설정</string>
-    <string name="settings_map_app">길 안내를 넘길 지도 앱</string>
-    <string name="settings_map_auto">자동</string>
-    <string name="settings_map_naver">네이버 지도</string>
-    <string name="settings_map_kakao">카카오맵</string>
-    <string name="settings_map_tmap">티맵</string>
-    <string name="settings_map_google">구글 지도</string>
-    <string name="settings_map_not_installed">설치 안 됨</string>
-    <string name="settings_map_hint">경유지가 있는 코스는 네이버 지도·구글 지도만 받아요. 고른 앱이 받을 수 없으면 다음 앱으로 넘겨요.</string>
     <string name="settings_permissions">기록 권한</string>
     <string name="settings_perm_location">위치</string>
     <string name="settings_perm_background">항상 허용 (앱을 닫아도 기록)</string>
@@ -83,10 +76,4 @@
     <string name="phone_no_permission">위치 권한이 없어 기록하지 않고 있어요</string>
     <string name="phone_no_permission_action">켜기</string>
 
-    <!-- 지도 앱이 없을 때 -->
-    <string name="nomap_title">지도 앱이 없어요</string>
-    <string name="nomap_body">길 안내(%1$s)는 설치된 지도 앱으로 넘겨요. 지금은 열 수 있는 지도 앱이 없어서 구글 지도 웹으로 열 수 있어요.</string>
-    <string name="nomap_web">구글 지도 웹으로 열기</string>
-    <string name="nomap_install">네이버 지도 설치하기</string>
-    <string name="nomap_close">닫기</string>
 </resources>

@@ -156,7 +156,7 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
     val moving by shell.moving.collectAsStateWithLifecycle()
     val passenger by shell.passenger.collectAsStateWithLifecycle()
     val permissions by shell.permissions.collectAsStateWithLifecycle()
-    val noMap by shell.noMapApp.collectAsStateWithLifecycle()
+    val nav by shell.nav.collectAsStateWithLifecycle()
     val guideProgress by guide.progress.collectAsStateWithLifecycle()
     LifecycleResumeEffect(Unit) {
         shell.refreshPermissions()
@@ -331,26 +331,14 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
     }
 
     if (settingsOpen) {
-        val prefs by shell.prefs.collectAsStateWithLifecycle()
-        val installed by shell.installed.collectAsStateWithLifecycle()
-        LaunchedEffect(Unit) { shell.refreshInstalled() }
         PhoneSettingsSheet(
-            mapApp = prefs.mapApp,
-            installed = installed,
             permissions = permissions,
-            onMapApp = shell::setMapApp,
             onOpenSystemSettings = shell::openAppSettings,
             onClose = { settingsOpen = false },
         )
     }
-    noMap?.let { req ->
-        NoMapAppSheet(
-            request = req,
-            onWeb = { shell.answerNoMapApp(openWeb = true) },
-            onInstall = shell::installMapApp,
-            onClose = { shell.answerNoMapApp(openWeb = false) },
-        )
-    }
+    // 앱 안 길 안내: 모든 화면 위에 꽉 차게
+    nav?.let { PhoneNavScreen(it, onEnd = shell::endNav, onNext = shell::nextStop) }
 }
 
 /**
