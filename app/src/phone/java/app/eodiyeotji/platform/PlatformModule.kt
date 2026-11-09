@@ -48,6 +48,7 @@ abstract class PlatformModule {
     @Binds abstract fun recording(impl: PhoneRecordingPlatform): RecordingPlatform
     @Binds abstract fun cabin(impl: PhoneCabin): CabinSource
     @Binds abstract fun energy(impl: PhoneCabin): EnergySource
+    @Binds abstract fun moodLight(impl: PhoneCabin): MoodLight
 }
 
 /**
@@ -148,9 +149,11 @@ class PhoneRecordingPlatform @Inject constructor(
     }
 }
 
-/** 폰은 좌석 센서 · 차 배터리를 모른다. */
+/** 폰은 좌석 센서 · 차 배터리 · 무드등이 없다. */
 @Singleton
-class PhoneCabin @Inject constructor() : CabinSource, EnergySource {
+class PhoneCabin @Inject constructor() : CabinSource, EnergySource, MoodLight {
     override suspend fun occupants(): Int? = null
     override suspend fun level(): EnergyLevel? = null
+    override suspend fun tint(argb: Int) = Unit
+    override suspend fun restore() = Unit
 }
