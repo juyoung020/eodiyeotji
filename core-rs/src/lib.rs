@@ -17,6 +17,7 @@ pub mod lastfix;
 pub mod mapdata;
 pub mod memmap;
 pub mod memory;
+pub mod nav;
 pub mod offers;
 pub mod photos;
 pub mod place_detail;

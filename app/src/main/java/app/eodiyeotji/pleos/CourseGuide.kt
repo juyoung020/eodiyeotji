@@ -63,7 +63,7 @@ data class CourseProgress(
  * - 에이전트 코스: 첫 구간은 AgentBridge가 이미 보냈다. 남은 구간([AgentBridge.pendingLegs])이 생기면 여기서
  *   이어받고, 도착할 때마다 [AgentBridge.continueCourse]를 부른다.
  * - 도착 이벤트가 안 오는 경우(내비에서 안내를 끈 경우 등)를 위해 [skipToNextLeg]로 손으로 넘길 수도 있다.
- *   폰은 지도 앱이 도착을 알려 주지 않으므로([Navigator.eventsAvailable] false) 늘 이렇게 넘긴다.
+ *   폰은 앱 안 길 안내(phone/PhoneNavigator.kt)가 도착을 알려 주므로 차와 똑같이 자동으로 넘어간다.
  * - 장소 하나 "길안내"([startPlace], 에이전트의 장소 안내 포함)도 같은 카드로 보여 준다 (구간 1개짜리).
  * - 내비가 앱 화면을 덮으므로 빠져나올 길을 둔다: 내비에서 "안내 종료"를 누르면(onRouteCancelled) 카드를 닫고
  *   우리 앱을 앞으로 다시 불러 원래 보던 화면으로 돌아온다. 우리 카드의 "안내 종료"는 내비 안내까지 끈다([stop]).

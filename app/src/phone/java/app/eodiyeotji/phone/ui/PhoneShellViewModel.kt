@@ -11,8 +11,6 @@ import androidx.compose.runtime.Immutable
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import app.eodiyeotji.phone.MapApp
-import app.eodiyeotji.phone.NoMapAppRequest
 import app.eodiyeotji.phone.PhoneNavigator
 import app.eodiyeotji.phone.PhonePrefs
 import app.eodiyeotji.phone.PhoneSettings
@@ -37,7 +35,7 @@ data class PhonePermissions(
 
 /**
  * 폰 화면 뼈대(아래 탭 · 운전 중 띠 · 설정 · 지도 앱 없음 시트)가 보는 것을 한곳에 모은다.
- * 계산은 없다: 설정 값, 주행·동승자 상태, 지도 앱 물음을 그대로 넘기고 버튼을 이어 줄 뿐이다.
+ * 계산은 없다: 설정 값, 주행·동승자 상태, 길 안내 상태를 그대로 넘기고 버튼을 이어 줄 뿐이다.
  */
 @HiltViewModel
 class PhoneShellViewModel @Inject constructor(
@@ -49,27 +47,16 @@ class PhoneShellViewModel @Inject constructor(
     val prefs: StateFlow<PhonePrefs> = settings.prefs
     val moving: StateFlow<Boolean> = driving.moving
     val passenger: StateFlow<Boolean> = driving.passenger
-    val noMapApp: StateFlow<NoMapAppRequest?> = navigator.noMapApp
+    /** 앱 안 길 안내 (안내 중이 아니면 null). */
+    val nav: StateFlow<app.eodiyeotji.phone.NavUi?> = navigator.ui
+
+    fun endNav() = navigator.stop()
 
     private val _permissions = MutableStateFlow(PhonePermissions())
     val permissions: StateFlow<PhonePermissions> = _permissions.asStateFlow()
 
-    private val _installed = MutableStateFlow<Set<MapApp>?>(null)
-
-    /** 설치된 지도 앱 (설정 시트를 열 때 읽는다, 읽기 전 null). */
-    val installed: StateFlow<Set<MapApp>?> = _installed.asStateFlow()
-
-    init {
-        navigator.attachUi()
-    }
-
-    override fun onCleared() {
-        navigator.detachUi()
-    }
 
     fun setPassenger(value: Boolean) = driving.setPassenger(value)
-
-    fun setMapApp(app: MapApp) = settings.setMapApp(app)
 
     fun markBackgroundAsked() = settings.markBackgroundAsked()
 
@@ -81,17 +68,6 @@ class PhoneShellViewModel @Inject constructor(
     /** 권한이 있으면 기록 서비스를 켠다 (여러 번 불러도 하나만 돈다). */
     fun startRecording() {
         viewModelScope.launch(Dispatchers.IO) { RecordingController.ensureStarted(context) }
-    }
-
-    fun answerNoMapApp(openWeb: Boolean) = navigator.answerNoMapApp(openWeb)
-
-    fun installMapApp() {
-        navigator.answerNoMapApp(openWeb = false)
-        navigator.openStore(MapApp.NAVER)
-    }
-
-    fun refreshInstalled() {
-        viewModelScope.launch { _installed.value = navigator.installedApps() }
     }
 
     /** 화면으로 돌아올 때마다 권한을 다시 읽는다 (설정 앱에서 바꾸고 돌아올 수 있다). */

@@ -42,5 +42,5 @@
     <string name="handoff_inbox_eyebrow">내 차에서 보냄</string>
     <string name="handoff_inbox_meta">%1$s · 들른 곳 %2$d곳</string>
     <string name="handoff_inbox_route">경로 보기</string>
-    <string name="handoff_inbox_route_hint">받는 사람은 함께 가는 링크를 누르면 이 길이 지도 앱에서 바로 열려요</string>
+    <string name="handoff_inbox_route_hint">받는 사람은 함께 가는 링크를 누르면 이 길이 바로 열려요</string>
 </resources>
