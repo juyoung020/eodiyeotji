@@ -21,7 +21,7 @@
 
 use std::collections::HashMap;
 
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 
 use crate::geo::{haversine_m, Point};
 use crate::memory::{Episode, EpisodeKind};
@@ -141,7 +141,23 @@ impl EodiStore {
                     [home, office].iter().flatten().all(|a| haversine_m(*a, p) > BIZ_MIN_KM * 1000.0)
                 };
                 let hour = ((f.start_ms / 60_000 + self.tz_offset_minutes as i64).rem_euclid(1440)) / 60;
-                let auto = f.stops.iter().any(away) && (WORK_FROM_H..WORK_TO_H).contains(&hour);
+                // 출장은 집이나 회사에서 떠난다 (여행지에서 시작한 주행은 출장이 아니다)
+                let from_base = || -> Result<bool, CoreError> {
+                    let conn = self.snapshot()?;
+                    let p: Option<(f64, f64)> = conn
+                        .query_row("SELECT lat, lon FROM fix WHERE t_ms >= ?1 AND t_ms <= ?2 ORDER BY t_ms LIMIT 1", [f.start_ms, f.end_ms], |r| {
+                            Ok((r.get(0)?, r.get(1)?))
+                        })
+                        .optional()?;
+                    let anchors: Vec<Point> = [home, office].into_iter().flatten().collect();
+                    Ok(match p {
+                        Some((lat, lon)) if !anchors.is_empty() => {
+                            anchors.iter().any(|a| haversine_m(*a, Point { lat, lon }) <= BIZ_MIN_KM * 1000.0)
+                        }
+                        _ => true,
+                    })
+                };
+                let auto = f.stops.iter().any(away) && (WORK_FROM_H..WORK_TO_H).contains(&hour) && from_base()?;
                 if mark != Some(true) && !auto {
                     continue;
                 }
@@ -306,6 +322,27 @@ mod tests {
         let end = t + (n - 1) * 10_000;
         s.mark_drive_event(DriveEvent::End, end).unwrap();
         end
+    }
+
+    #[test]
+    fn drive_that_starts_away_from_home_and_office_is_not_a_business_trip() {
+        let path = std::env::temp_dir().join(format!("eodi-biz-away-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let s = EodiStore::open(path.to_string_lossy().into_owned(), 540).unwrap();
+        let (home, office) = ((37.5530, 127.0335), (37.5672, 126.9844));
+        s.set_home_office(Some(GeoPoint { lat: home.0, lon: home.1 }), Some(GeoPoint { lat: office.0, lon: office.1 })).unwrap();
+        // 2026-11-05(목) 10:00: 여행 중인 강릉 숙소 → 경포호 (1시간 머묾) → 숙소
+        let (hotel, lake) = ((37.7950, 128.9080), (37.7960, 128.8990));
+        let t = 1_794_013_200_000 - 2 * 86_400_000;
+        let arrive = drive(&s, t, hotel, lake, 60);
+        s.ingest(stay(arrive + 30_000, 120, lake)).unwrap();
+        drive(&s, arrive + 3_600_000 + 60_000, lake, hotel, 60);
+        assert!(s.biz_trips("2026-11".into()).unwrap().trips.is_empty());
+        // 직접 출장으로 정하면 들어간다
+        s.set_biz_mark("2026-11-05".into(), Some(true)).unwrap();
+        assert!(!s.biz_trips("2026-11".into()).unwrap().trips.is_empty());
+        drop(s);
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

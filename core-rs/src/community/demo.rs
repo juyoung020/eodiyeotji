@@ -663,6 +663,7 @@ pub(super) fn seed(store: &EodiStore, now_ms: i64) -> Result<u32, CoreError> {
     let seeded: Option<i64> = conn.query_row("SELECT value FROM meta WHERE key = 'community_seeded'", [], |r| r.get(0)).optional()?;
     if seeded.is_some() {
         refresh_review_details(&conn)?;
+        refresh_review_days(store, &conn)?;
         refresh_trip_posts(&conn)?;
         // 버전 10 전에 시연을 넣은 기기: 드라이브 코스(경치 길)만 더 넣는다
         return super::drive_demo::seed(store, &conn, now_ms);
@@ -718,8 +719,8 @@ pub(super) fn seed(store: &EodiStore, now_ms: i64) -> Result<u32, CoreError> {
         for (i, &(name, author, rating, text, days_ago, hearts, keywords, with_whom, tod, stay, nth)) in REVIEWS.iter().enumerate() {
             let Some(p) = poi(name) else { continue };
             let created = now_ms - days_ago * DAY_MS - (1 + (i as i64 * 53) % 11) * HOUR;
-            // 다녀온 날 = 올린 날 하루 전, 시각은 다녀온 때에 맞춘다
-            let visited = store.local_day(created) - 1;
+            // 다녀온 날은 글에 맞춘 계절 (review_visit_day), 시각은 다녀온 때에 맞춘다
+            let visited = review_visit_day(store.local_day(created), text, i);
             let visit = store.day_start_ms(visited) + visit_hour(tod) * HOUR;
             let day = format_day(visited);
             n += st.execute(params![
@@ -793,6 +794,60 @@ pub(super) fn refresh_trip_posts(conn: &rusqlite::Connection) -> Result<u32, Cor
 }
 
 /// 다녀온 때 → 시연 리뷰의 다녀온 시각(시).
+/// 시연 리뷰를 다녀온 날 (일 수). 리뷰는 다녀오고 한참 뒤에도 올리니, 글에 계절 단서가 있으면 그 계절로,
+/// 없으면 차례대로 봄 · 여름 · 겨울 · 가을에 흩는다 (지역 리포트의 "언제 오나요"가 한 계절로 쏠리지 않게).
+/// 늘 올린 날보다 앞이고 1년 안이다.
+pub(super) fn review_visit_day(created_day: i64, text: &str, i: usize) -> i64 {
+    const KEEP: &[&str] = &["단풍", "가을", "10월", "11월", "바닷바람"];
+    const SUMMER: &[&str] = &["물놀이", "해수욕", "샤워", "모래놀이", "계곡", "더위"];
+    const WINTER: &[&str] = &["겨울", "설경", "스키", "눈이"];
+    const SPRING: &[&str] = &["벚꽃", "봄", "꽃길"];
+    const CYCLE: [Option<i64>; 8] = [None, Some(4), Some(7), Some(1), None, Some(5), Some(8), Some(2)];
+    let has = |ws: &[&str]| ws.iter().any(|w| text.contains(w));
+    let month = if has(KEEP) {
+        None
+    } else if has(SUMMER) {
+        Some(7 + (i as i64 % 2))
+    } else if has(WINTER) {
+        Some(1 + (i as i64 % 2))
+    } else if has(SPRING) {
+        Some(4)
+    } else {
+        CYCLE[i % CYCLE.len()]
+    };
+    let Some(m) = month else { return created_day - 1 };
+    let (y, _, _) = crate::agent::dates::civil_from_days(created_day);
+    let d = 3 + (i as u32 * 7) % 24;
+    let mut day = crate::agent::dates::days_from_civil(y, m as u32, d);
+    if day >= created_day {
+        day = crate::agent::dates::days_from_civil(y - 1, m as u32, d);
+    }
+    day
+}
+
+/// 이미 넣은 시연 리뷰의 다녀온 날 · 날씨를 [review_visit_day]로 고친다 (한 번만).
+fn refresh_review_days(store: &EodiStore, conn: &rusqlite::Connection) -> Result<u32, CoreError> {
+    let done: Option<i64> = conn.query_row("SELECT value FROM meta WHERE key = 'community_review_days_v1'", [], |r| r.get(0)).optional()?;
+    if done.is_some() {
+        return Ok(0);
+    }
+    let mut n = 0u32;
+    {
+        let mut get = conn.prepare("SELECT created_ms FROM place_review WHERE id = ?1 AND mine = 0 AND name = ?2 AND author = ?3")?;
+        let mut put = conn.prepare("UPDATE place_review SET visited_day = ?2, visit_ms = ?3, weather = ?4 WHERE id = ?1")?;
+        for (i, &(name, author, _, text, _, _, _, _, tod, _, _)) in REVIEWS.iter().enumerate() {
+            let id = format!("r{:03}", i + 1);
+            let Some(created) = get.query_row(params![id, name, author], |r| r.get::<_, i64>(0)).optional()? else { continue };
+            let visited = review_visit_day(store.local_day(created), text, i);
+            let day = format_day(visited);
+            let visit = store.day_start_ms(visited) + visit_hour(tod) * HOUR;
+            n += put.execute(params![id, day, visit, demo_weather(&day, i + 3)])? as u32;
+        }
+    }
+    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('community_review_days_v1', 1)", [])?;
+    Ok(n)
+}
+
 fn visit_hour(t: TimeOfDay) -> i64 {
     match t {
         TimeOfDay::Morning => 8,

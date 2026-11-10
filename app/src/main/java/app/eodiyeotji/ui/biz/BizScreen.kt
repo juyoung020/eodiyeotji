@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -45,7 +47,6 @@ import app.eodiyeotji.ui.community.CenterMessage
 import app.eodiyeotji.ui.community.LoadingBox
 import app.eodiyeotji.ui.community.RoundIconButton
 import app.eodiyeotji.ui.community.SecondaryPill
-import app.eodiyeotji.ui.community.StopPhotoBox
 import app.eodiyeotji.ui.recap.Load
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
@@ -143,11 +144,17 @@ private fun Tile(value: String, label: String, modifier: Modifier, accent: Boole
 @Composable
 private fun TripCard(t: BizTrip, onOpenDay: () -> Unit, onNotBiz: () -> Unit) {
     val c = EodiTheme.colors
-    val first = t.stops.firstOrNull()
     Surface(shape = RoundedCornerShape(28.dp), color = c.surface, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(width = 200.dp, height = 136.dp)) {
-                StopPhotoBox(first?.name.orEmpty(), first?.address.orEmpty(), first?.lat ?: 0.0, first?.lon ?: 0.0, null, Modifier.fillMaxSize(), radius = 20.dp)
+            // 날짜 칸 (회사 · 연구소는 장소 사진이 엉뚱한 경우가 많아 사진 대신 날짜로)
+            val dd = java.time.LocalDate.parse(t.day)
+            Column(
+                Modifier.size(120.dp).clip(RoundedCornerShape(24.dp)).background(c.accentSoft),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text("${dd.dayOfMonth}", style = EodiTheme.type.title, fontWeight = FontWeight.Bold, color = c.accent)
+                Text(t.weekday, style = EodiTheme.type.meta, color = c.accent)
             }
             Spacer(Modifier.width(24.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {

@@ -16,8 +16,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -86,18 +84,22 @@ import dagger.hilt.components.SingletonComponent
 fun RecapListTop(viewModel: RecapViewModel, onOpenDay: (String) -> Unit, modifier: Modifier = Modifier, onOpenBiz: (() -> Unit)? = null) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        // 입구는 글자 길이만큼 (잘리지 않게), 넘치면 옆으로 넘겨 본다
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-            EntryPill(stringResource(R.string.recap_month_entry, state.today.monthValue), gold = true) {
-                viewModel.openRecap(RecapMode.MONTH)
-            }
-            EntryPill(stringResource(R.string.recap_year_entry), gold = false) {
-                viewModel.openRecap(RecapMode.YEAR)
-            }
-            if (!state.driving) {
-                EntryPill(stringResource(R.string.memory_map_entry), gold = true) { viewModel.openMemoryMap() }
+        // 입구: 한 줄에 두 개씩 같은 너비로 (네 개가 한 줄이면 잘린다)
+        val month = stringResource(R.string.recap_month_entry, state.today.monthValue)
+        val year = stringResource(R.string.recap_year_entry)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            EntryPill(month, gold = true, modifier = Modifier.weight(1f)) { viewModel.openRecap(RecapMode.MONTH) }
+            EntryPill(year, gold = false, modifier = Modifier.weight(1f)) { viewModel.openRecap(RecapMode.YEAR) }
+        }
+        if (!state.driving) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                EntryPill(stringResource(R.string.memory_map_entry), gold = true, modifier = Modifier.weight(1f)) { viewModel.openMemoryMap() }
                 // 출장 관리 (평일 업무 출장 · 경비 · 정산서)
-                if (onOpenBiz != null) EntryPill(stringResource(R.string.biz_entry), gold = false, onClick = onOpenBiz)
+                if (onOpenBiz != null) {
+                    EntryPill(stringResource(R.string.biz_entry), gold = false, modifier = Modifier.weight(1f), onClick = onOpenBiz)
+                } else {
+                    Spacer(Modifier.weight(1f))
+                }
             }
         }
         if (state.memoryMapIntro && !state.driving) {

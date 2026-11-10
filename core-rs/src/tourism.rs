@@ -303,12 +303,15 @@ fn ideas(r: &TourismReport) -> Vec<String> {
     if let Some(p) = r.top_places.iter().find(|p| !p.has_offer && (p.review_count > 0 || p.course_count > 1)) {
         let rating = if p.review_count > 0 { format!(" · 별점 {:.1}", p.avg_rating) } else { String::new() };
         out.push(format!(
-            "{}은(는) 코스 {}개 · 리뷰 {}개{}로 인기인데 제휴 쿠폰이 없어요 → 첫 제휴 대상",
-            p.name, p.course_count, p.review_count, rating
+            "{}{} 코스 {}개 · 리뷰 {}개{}로 인기인데 제휴 쿠폰이 없어요 → 첫 제휴 대상",
+            p.name,
+            if batchim(&p.name) { "은" } else { "는" },
+            p.course_count, p.review_count, rating
         ));
     }
     if let Some(k) = r.keywords.first() {
-        out.push(format!("리뷰에서 '{k}'을(를) 가장 많이 골라요 → 지역 홍보 문구 · 추천 카드 제목에 써요"));
+        let eul = if batchim(k) { "을" } else { "를" };
+        out.push(format!("리뷰에서 '{k}'{eul} 가장 많이 골라요 → 지역 홍보 문구 · 추천 카드 제목에 써요"));
     }
     out
 }
@@ -322,6 +325,12 @@ fn short_name(region: &str) -> String {
         Some(sgg) => format!("{a} {sgg}"),
         None => a.to_string(),
     }
+}
+
+
+/// 마지막 글자에 받침이 있나 (한글이 아니면 받침 없음으로 본다) — 은/는 · 을/를 고르기.
+fn batchim(word: &str) -> bool {
+    word.chars().last().is_some_and(|c| ('가'..='힣').contains(&c) && !(c as u32 - 0xAC00).is_multiple_of(28))
 }
 
 #[cfg(test)]
@@ -356,10 +365,18 @@ mod tests {
                 assert!(p.has_offer);
             }
             assert!(r.offer_count > 0);
+            // 시연 리뷰는 여러 계절에 흩어져 있다
+            assert!(r.seasons.iter().filter(|x| x.count > 0).count() >= 3, "{:?}", r.seasons);
+            assert!(r.ideas.iter().all(|i| !i.contains("(는)") && !i.contains("(를)")), "{:?}", r.ideas);
         }
         assert_eq!(s.tourism_report("없는 지역".into()).unwrap().course_count, 0);
         drop(s);
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn particles_follow_the_last_syllable() {
+        assert!(batchim("경포해변") && !batchim("안목해변 카페거리") && !batchim("음식이 맛있어요") && !batchim("ABC"));
     }
 
     #[test]
