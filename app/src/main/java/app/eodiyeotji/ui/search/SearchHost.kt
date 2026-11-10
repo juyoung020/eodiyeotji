@@ -106,12 +106,12 @@ fun rememberSearchSlot(
 fun CommunityTab.searchScope(): SearchScope = when (this) {
     CommunityTab.BOARD -> SearchScope.BOARD
     CommunityTab.COURSES -> SearchScope.COURSES
-    CommunityTab.REVIEWS -> SearchScope.REVIEWS
+    CommunityTab.REVIEWS, CommunityTab.REGION -> SearchScope.REVIEWS
 }
 
 /** 커뮤니티 하위 탭의 검색 칸 안내 글. */
 fun CommunityTab.searchHint(): Int = when (this) {
     CommunityTab.BOARD -> app.eodiyeotji.R.string.search_hint_board
     CommunityTab.COURSES -> app.eodiyeotji.R.string.search_hint_courses
-    CommunityTab.REVIEWS -> app.eodiyeotji.R.string.search_hint_reviews
+    CommunityTab.REVIEWS, CommunityTab.REGION -> app.eodiyeotji.R.string.search_hint_reviews
 }

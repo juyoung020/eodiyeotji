@@ -32,7 +32,7 @@ import app.eodiyeotji.ui.review.ReviewPane
 import app.eodiyeotji.ui.search.SearchSlot
 import app.eodiyeotji.ui.theme.EodiTheme
 
-enum class CommunityTab { BOARD, COURSES, REVIEWS }
+enum class CommunityTab { BOARD, COURSES, REVIEWS, REGION }
 
 /** 이 폭 이상이면 머리 한 줄에 제목 · 하위 탭 · 동작 버튼을 다 둔다 (좁으면 하위 탭이 둘째 줄). */
 private val OneLineHeader = 1400.dp
@@ -65,6 +65,7 @@ fun CommunityRoute(
             CommunityTab.BOARD -> hiltViewModel<BoardViewModel>().state.collectAsStateWithLifecycle().value.thread != null
             // 여행 리뷰 피드에서 연 여행 코스 후기 상세
             CommunityTab.REVIEWS -> hiltViewModel<CourseViewModel>().state.collectAsStateWithLifecycle().value.detail != null
+            CommunityTab.REGION -> false
         }
     }
     val c = EodiTheme.colors
@@ -78,6 +79,7 @@ fun CommunityRoute(
                             CommunityTab.BOARD to stringResource(R.string.community_tab_board),
                             CommunityTab.COURSES to stringResource(R.string.community_tab_courses),
                             CommunityTab.REVIEWS to stringResource(R.string.community_tab_reviews),
+                            CommunityTab.REGION to stringResource(R.string.community_tab_region),
                         ),
                         selected = tab,
                         onSelect = selectTab,
@@ -135,6 +137,7 @@ fun CommunityRoute(
                             CommunityTab.BOARD -> BoardPane()
                             CommunityTab.COURSES -> DriveRoutePane()
                             CommunityTab.REVIEWS -> ReviewPane()
+                            CommunityTab.REGION -> RegionReportPane()
                         }
                     }
                 }

@@ -120,6 +120,12 @@ class EodiCore @Inject constructor(
     fun logbookCsv(book: app.eodiyeotji.core.rust.Logbook): String =
         app.eodiyeotji.core.rust.logbookCsv(book, java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000)
 
+    /** 코스 · 리뷰가 있는 지역 (활동 많은 순, `tourism.rs`). */
+    suspend fun tourismRegions(): List<app.eodiyeotji.core.rust.RegionActivity> = coreCall("tourismRegions") { store.tourismRegions() }
+
+    /** 지역("강원 강릉시") 관광 제휴 리포트. */
+    suspend fun tourismReport(region: String): app.eodiyeotji.core.rust.TourismReport = coreCall("tourismReport") { store.tourismReport(region) }
+
     /** 그 달("YYYY-MM") 출장 (평일 업무 시간에 집 · 회사에서 멀리 다녀온 나들이, `biztrip.rs`). */
     suspend fun bizTrips(month: String): app.eodiyeotji.core.rust.BizMonth = coreCall("bizTrips") { store.bizTrips(month) }
 

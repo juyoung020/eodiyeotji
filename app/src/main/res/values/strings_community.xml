@@ -9,6 +9,26 @@
     <string name="community_tab_board">게시판</string>
     <string name="community_tab_courses">드라이브 코스</string>
     <string name="community_tab_reviews">여행 리뷰</string>
+    <string name="community_tab_region">지역 리포트</string>
+    <string name="region_failed">지역 리포트를 불러오지 못했어요.</string>
+    <string name="region_empty">아직 코스 · 리뷰가 올라온 지역이 없어요.</string>
+    <string name="region_row">코스 %1$d · 리뷰 %2$d · ♥ %3$s</string>
+    <string name="region_report_title">%1$s 관광 리포트</string>
+    <string name="region_report_hint">어디였지 이용자가 직접 올린 코스 후기 · 장소 리뷰로 만든 지역 데이터예요. 개인 이동 기록은 들어가지 않아요.</string>
+    <string name="region_kpi_courses">코스 후기</string>
+    <string name="region_kpi_reviews">장소 리뷰</string>
+    <string name="region_kpi_people">참여한 사람</string>
+    <string name="region_kpi_hearts">하트</string>
+    <string name="region_kpi_rating">평균 별점</string>
+    <string name="region_kpi_offers">제휴 쿠폰</string>
+    <string name="region_ideas">제휴 제안</string>
+    <string name="region_seasons">언제 오나요 (다녀온 계절)</string>
+    <string name="region_top_courses">인기 코스</string>
+    <string name="region_top_places">인기 장소</string>
+    <string name="region_keywords">리뷰에서 많이 고른 말</string>
+    <string name="region_place_line">코스 %1$d · 리뷰 %2$d</string>
+    <string name="region_offer_yes">제휴 중</string>
+    <string name="region_offer_no">제휴 없음</string>
 
     <!-- 공통 -->
     <string name="community_sort_popular">인기순</string>
