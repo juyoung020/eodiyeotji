@@ -75,5 +75,11 @@
     <string name="settings_close">닫기</string>
     <string name="phone_no_permission">위치 권한이 없어 기록하지 않고 있어요</string>
     <string name="phone_no_permission_action">켜기</string>
+    <string name="logbook_title">업무용 운행기록부</string>
+    <string name="logbook_hint">주행마다 출발 · 도착과 계기판 거리를 국세청 양식 칸에 맞춰 엑셀(CSV)로 내보내요. 일반 업무용 칸은 직접 표시해 주세요.</string>
+    <string name="logbook_month">%1$d년 %2$d월</string>
+    <string name="logbook_summary">주행 %1$d번 · %2$dkm (출퇴근 %3$dkm)</string>
+    <string name="logbook_export">내보내기</string>
+    <string name="logbook_subject">운행기록부 %1$s</string>
 
 </resources>

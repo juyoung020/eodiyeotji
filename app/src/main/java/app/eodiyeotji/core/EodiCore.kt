@@ -113,6 +113,13 @@ class EodiCore @Inject constructor(
     suspend fun setDriveReading(tMs: Long, kind: app.eodiyeotji.core.rust.ReadingKind, value: Double) =
         coreCall("setDriveReading") { store.setDriveReading(tMs, kind, value) }
 
+    /** 그 달("YYYY-MM") 업무용 운행기록부. */
+    suspend fun logbook(month: String): app.eodiyeotji.core.rust.Logbook = coreCall("logbook") { store.logbook(month) }
+
+    /** 운행기록부 → 엑셀용 CSV 글 (UTF-8 BOM). */
+    fun logbookCsv(book: app.eodiyeotji.core.rust.Logbook): String =
+        app.eodiyeotji.core.rust.logbookCsv(book, java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000)
+
     /** 그 하루 가장 많이 탄 인원 (모르면 0). */
     suspend fun dayPeople(day: String): Int = coreCall("dayPeople") { store.dayPeople(day).toInt() }
 

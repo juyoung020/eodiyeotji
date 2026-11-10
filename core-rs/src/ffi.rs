@@ -248,6 +248,12 @@ pub fn handoff_open_bytes(key: String, msg: String) -> Result<Vec<u8>, crate::st
 
 // ---------- 주차 위치 · 걸어서 찾아가기 (parking.rs) ----------
 
+/// 운행기록부를 엑셀용 CSV 글로 (`logbook.rs`).
+#[uniffi::export]
+pub fn logbook_csv(book: crate::logbook::Logbook, tz_offset_minutes: i32) -> String {
+    crate::logbook::logbook_csv(&book, tz_offset_minutes)
+}
+
 /// 지금 위치 · 보는 방향(모르면 음수)에서 목표까지 걷는 방향과 거리.
 #[uniffi::export]
 pub fn walk_guide(from_lat: f64, from_lon: f64, heading_deg: f64, to_lat: f64, to_lon: f64) -> crate::parking::WalkGuide {

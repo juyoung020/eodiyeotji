@@ -58,6 +58,9 @@ fun PhoneSettingsSheet(
             CarLinkSection()
 
             Spacer(Modifier.size(32.dp))
+            LogbookSection()
+
+            Spacer(Modifier.size(32.dp))
             SectionTitle(stringResource(R.string.settings_permissions), Modifier.padding(start = 4.dp, bottom = 12.dp))
             Column(
                 Modifier.clip(RoundedCornerShape(EodiTheme.space.radiusM)).background(c.surfaceHigh).padding(vertical = 8.dp),
