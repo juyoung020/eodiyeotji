@@ -17,7 +17,7 @@ use super::llm::{LlmError, Params};
 use super::tools::{self, Ctx};
 use super::words::{self, Answer};
 use super::{prompts, AgentContext, AgentDone, AgentListener, AgentTiming, AnswerSource, MemoryAgent, NavProposal, Session};
-use crate::memory::{MemoryHit, MemoryQuery};
+use crate::memory::{EpisodeKind, MemoryHit, MemoryQuery};
 
 pub const MAX_TOOL_ROUNDS: usize = 4;
 pub const MAX_STRIKES: usize = 3;
@@ -145,10 +145,31 @@ impl MemoryAgent {
         // 추천 코스 이야기 중의 규칙 밖 후속 말("그 중에 제일 짧은 걸로")은 기억 검색 없이 LLM이 목록을 보고 푼다.
         // 날짜 말이나 "갔던·였지" 같은 지난 일 말이 있으면 기억 질문이다.
         let course_follow_up = s.course_topic && !s.courses.list.is_empty() && range.is_none() && !courses::is_past(u);
-        if self.opts.fast_path && !course_follow_up && (!parsed.terms.is_empty() || range.is_some()) {
+        let mut rain_resolved = false;
+        if self.opts.fast_path && !course_follow_up && (!parsed.terms.is_empty() || range.is_some() || parsed.rain) {
             let (from_ms, to_ms) = range.map(|r| r.to_ms(tz)).map_or((None, None), |(a, b)| (Some(a), Some(b)));
-            let q = MemoryQuery { terms: parsed.terms.clone(), from_ms, to_ms, kinds: vec![], limit: 5 };
+            // "비 오던 날": 와이퍼 기록으로 거르므로 넉넉히 받아 둔다 (낱말이 없으면 출퇴근은 빼고 최신순)
+            let (limit, kinds) = if parsed.rain {
+                (80, if parsed.terms.is_empty() { vec![EpisodeKind::Errand, EpisodeKind::Outing, EpisodeKind::Trip] } else { vec![] })
+            } else {
+                (5, vec![])
+            };
+            let q = MemoryQuery { terms: parsed.terms.clone(), from_ms, to_ms, kinds, limit };
             fast_hits = self.backend.search_memories(q).unwrap_or_default();
+            if parsed.rain {
+                let wet: Vec<MemoryHit> = fast_hits
+                    .iter()
+                    .filter(|h| self.backend.rain_between(h.episode.facts.start_ms, h.episode.facts.end_ms) == Some(true))
+                    .take(5)
+                    .cloned()
+                    .collect();
+                if !wet.is_empty() {
+                    fast_hits = wet;
+                    rain_resolved = true;
+                } else {
+                    fast_hits.truncate(5);
+                }
+            }
             // "엄마랑 · 가족이랑 · 혼자": 좌석 센서로 그때 탄 인원이 맞는 기억만 남긴다 (맞는 게 하나도 없으면 그대로 LLM에게)
             if let Some(want) = parsed.people {
                 let fits: Vec<bool> =
@@ -175,7 +196,7 @@ impl MemoryAgent {
             [a, b, ..] => a.score > b.score,
         };
         let only_short_terms = !parsed.terms.is_empty() && parsed.terms.iter().all(|w| w.chars().count() < 2);
-        let confident = clear_top && (!parsed.has_people || people_resolved) && !parsed.has_reference && !only_short_terms && (!parsed.terms.is_empty() || narrow_date);
+        let confident = clear_top && (!parsed.has_people || people_resolved) && (!parsed.rain || rain_resolved) && !parsed.has_reference && !only_short_terms && (!parsed.terms.is_empty() || narrow_date);
         let llm_usable = self.llm.is_some() && !self.server_down();
 
         if confident && !(self.opts.llm_when_confident && llm_usable) {

@@ -52,6 +52,8 @@ class PhoneShellViewModel @Inject constructor(
 
     /** "찾았어요": 주차 카드를 감춘다. */
     fun dismissParked() = parking.dismiss()
+    val parkedMemo: StateFlow<String> = parking.memo
+    fun setParkedMemo(text: String) = parking.setMemo(text)
 
     val prefs: StateFlow<PhonePrefs> = settings.prefs
     val moving: StateFlow<Boolean> = driving.moving

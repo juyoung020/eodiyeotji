@@ -113,6 +113,7 @@ private fun BannerCard(p: CourseProgress, interactive: Boolean, onNext: () -> Un
                 if (!detail.isNullOrBlank()) {
                     Text(detail, style = EodiTheme.type.body, color = c.onInkMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
+                if (!p.finished) p.rangeNote?.let { RangeNote(it) }
             }
             if (!interactive) return@Row
             Spacer(Modifier.width(16.dp))
@@ -158,6 +159,7 @@ private fun CompactBannerCard(p: CourseProgress, onNext: () -> Unit, onRetry: ()
                     if (!detail.isNullOrBlank()) {
                         Text(detail, style = EodiTheme.type.body, color = c.onInkMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
+                    if (!p.finished) p.rangeNote?.let { RangeNote(it) }
                     if (!p.finished && !p.failed && p.hasNextLeg) {
                         Text(stringResource(R.string.guide_manual_hint), style = EodiTheme.type.caption, color = c.onInkMuted, maxLines = 2)
                     }
@@ -217,5 +219,16 @@ private fun BannerButton(text: String, icon: ImageVector?, primary: Boolean, onC
             }
             Text(text, style = EodiTheme.type.label, fontWeight = FontWeight.Bold, maxLines = 1)
         }
+    }
+}
+
+/** 남은 주행 가능 거리가 모자라거나 빠듯할 때 (충전 · 주유 안내). */
+@Composable
+private fun RangeNote(text: String) {
+    val c = EodiTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(10.dp).background(c.star, CircleShape))
+        Spacer(Modifier.width(8.dp))
+        Text(text, style = EodiTheme.type.caption, color = c.onInk, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }

@@ -436,6 +436,12 @@ struct Gen<'a> {
     soc: f64,
     /// (읽은 시각, 잔량) — 주행마다 출발 · 도착 한 번씩
     energy: Vec<(i64, f64)>,
+    /// 주행거리계 (km) 흉내: GPS 거리보다 2% 길게 오른다
+    odo: f64,
+    /// 오늘 비가 오는가 (와이퍼 흉내): 강릉 당일치기 날 + 날짜로 정한 약 12%의 날
+    rain_now: bool,
+    /// (읽은 시각, 계기 코드, 값) — 주행마다 출발 · 도착 주행거리계, 비 오는 날은 와이퍼
+    readings: Vec<(i64, i64, f64)>,
 }
 
 impl Gen<'_> {
@@ -513,6 +519,13 @@ impl Gen<'_> {
         self.energy.push((t0, (self.soc * 10.0).round() / 10.0));
         self.soc = (self.soc - total / 1000.0 * SOC_PER_KM).max(3.0);
         self.energy.push((t, (self.soc * 10.0).round() / 10.0));
+        let odo = crate::readings::ReadingKind::Odometer.code();
+        self.readings.push((t0, odo, (self.odo * 10.0).round() / 10.0));
+        self.odo += total / 1000.0 * 1.02;
+        self.readings.push((t, odo, (self.odo * 10.0).round() / 10.0));
+        if self.rain_now {
+            self.readings.push((t0 + 60_000, crate::readings::ReadingKind::Rain.code(), 1.0));
+        }
         self.trips += 1;
         t
     }
@@ -683,6 +696,9 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
         people: Vec::new(),
         soc: 82.0,
         energy: Vec::new(),
+        odo: 18_240.0,
+        rain_now: false,
+        readings: Vec::new(),
     };
     let busan = p.busan.filter(|&b| free(b, b + 2));
     let seorak = p.seorak.filter(|&s| free(s, s + 1));
@@ -695,6 +711,7 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
         if g.soc < 30.0 {
             g.soc = 90.0; // 전날 밤 집에서 충전
         }
+        g.rain_now = d == p.gangneung || (d as u64).wrapping_mul(2_654_435_761) % 100 < 12;
         g.people_now = match weekday_index(d) {
             0 | 6 => 2,
             _ => 1,
@@ -725,6 +742,7 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
     let (fixes, events, labels) = (std::mem::take(&mut g.fixes), std::mem::take(&mut g.events), std::mem::take(&mut g.labels));
     let people = std::mem::take(&mut g.people);
     let energy = std::mem::take(&mut g.energy);
+    let readings = std::mem::take(&mut g.readings);
 
     let mut conn = store.lock()?;
     {
@@ -745,6 +763,10 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
             let mut st = tx.prepare("INSERT OR IGNORE INTO drive_energy (t_ms, pct, ev) VALUES (?1, ?2, 1)")?;
             for &(t, pct) in &energy {
                 st.execute(params![t, pct])?;
+            }
+            let mut st = tx.prepare("INSERT OR IGNORE INTO drive_reading (t_ms, kind, value) VALUES (?1, ?2, ?3)")?;
+            for &(t, k, v) in &readings {
+                st.execute(params![t, k, v])?;
             }
         }
         if let (Some(lo), Some(hi)) = (fixes.first(), fixes.last()) {

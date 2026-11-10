@@ -99,6 +99,8 @@ pub(super) struct FakeBackend {
     pub requeued: Mutex<Vec<String>>,
     /// 좌석 센서 인원 (기억 id, 인원)
     pub people: Vec<(i64, u32)>,
+    /// 와이퍼가 돈 기억 id (비 온 날)
+    pub rain: Vec<i64>,
 }
 
 impl FakeBackend {
@@ -136,6 +138,10 @@ impl MemoryBackend for FakeBackend {
     fn people_between(&self, from_ms: i64, _to_ms: i64) -> Option<u32> {
         let id = self.eps.iter().find(|e| e.facts.start_ms == from_ms)?.facts.id;
         self.people.iter().find(|(i, _)| *i == id).map(|(_, n)| *n)
+    }
+    fn rain_between(&self, from_ms: i64, _to_ms: i64) -> Option<bool> {
+        let id = self.eps.iter().find(|e| e.facts.start_ms == from_ms)?.facts.id;
+        Some(self.rain.contains(&id))
     }
     fn course_route(&self, id: i64, _from: Option<GeoPoint>, optimize: bool) -> Result<CourseRoute, CoreError> {
         self.course_calls.lock().unwrap().push((id, optimize));
@@ -490,6 +496,21 @@ fn people_words_use_seat_sensor_without_llm() {
     assert_eq!(r2.events()[0], Ev::Rec(12, false));
     assert!(server.bodies().is_empty());
     assert_eq!(words::parse("혼자 갔던 바다").people, Some(crate::cabin::PeopleWant::Alone));
+}
+
+#[test]
+fn rain_words_use_wiper_record_without_llm() {
+    let server = fake_server(vec![sse_text(&["쓰이면 안 된다"])], 200);
+    // 을왕리 바다(50)에 간 날만 비가 왔다
+    let backend = Arc::new(FakeBackend { eps: episodes(), rain: vec![50], ..Default::default() });
+    let agent = server.agent(backend.clone(), AgentOptions::default());
+    let r = ask(&agent, "비 오던 날 갔던 바다 어디였지?", ctx(true));
+    assert!(server.bodies().is_empty(), "와이퍼 기록으로 골랐으니 LLM을 부르지 않는다");
+    assert_eq!(r.events()[0], Ev::Rec(50, false));
+    assert_eq!(backend.queries.lock().unwrap()[0].terms, vec!["바다"]);
+    let p = words::parse("빗길에 달렸던 곳");
+    assert!(p.rain && !p.terms.iter().any(|t| t.starts_with('빗')));
+    assert!(!words::parse("비빔밥 먹은 곳").rain);
 }
 
 #[test]

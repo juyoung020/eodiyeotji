@@ -971,6 +971,11 @@ private fun StatRow(s: DaySummary) {
             }
             StatCell(stringResource(R.string.stat_energy_value, kotlin.math.round(e.usedPct).toInt()), label, null)
         }
+        // 비 온 날 (차 와이퍼 기록)
+        if (s.rain) {
+            StatDivider()
+            StatCell(stringResource(R.string.stat_rain_value), stringResource(R.string.stat_rain_label), null)
+        }
     }
 }
 
@@ -978,7 +983,7 @@ private fun StatRow(s: DaySummary) {
 private fun androidx.compose.foundation.layout.RowScope.StatCell(value: String, label: String, dot: Color?) {
     val c = EodiTheme.colors
     Column(
-        Modifier.weight(1f).padding(horizontal = 12.dp).semantics(mergeDescendants = true) {},
+        Modifier.weight(1f).padding(horizontal = 6.dp).semantics(mergeDescendants = true) {},
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(value, style = EodiTheme.type.titleSmall, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)

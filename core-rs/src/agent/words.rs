@@ -69,6 +69,11 @@ const PEOPLE: &[&str] = &[
 /// 혼자 갔다는 말 (좌석 센서로 운전자만 탄 때를 고른다).
 const ALONE: &[&str] = &["혼자", "혼자서", "나혼자"];
 
+/// 비 온 날 말 (차 와이퍼 기록으로 그날 비가 왔는지 거른다, `readings.rs`).
+fn is_rain(w: &str, stem: &str) -> bool {
+    stem == "비" || ["비오", "비올", "비내", "빗길", "빗속", "우중"].iter().any(|p| w.starts_with(p))
+}
+
 /// 앞 대화를 가리키는 말 (LLM이 대화를 보고 풀어야 한다).
 const REFERENCE: &[&str] = &["거기", "그때", "아까", "방금", "말고", "다른", "그곳", "거기서", "그날", "저번에", "그거"];
 
@@ -94,6 +99,8 @@ pub struct Parsed {
     pub has_reference: bool,
     /// 사람 말이 바라는 동행 (좌석 센서 인원으로 거른다, `cabin.rs`)
     pub people: Option<crate::cabin::PeopleWant>,
+    /// "비 오던 날 · 빗길": 와이퍼가 돈 때만
+    pub rain: bool,
 }
 
 pub fn parse(utterance: &str) -> Parsed {
@@ -112,6 +119,10 @@ pub fn parse(utterance: &str) -> Parsed {
         if ALONE.contains(&stem.as_str()) || ALONE.contains(&w.as_str()) {
             p.has_people = true;
             p.people = Some(crate::cabin::PeopleWant::Alone);
+            continue;
+        }
+        if is_rain(&w, &stem) {
+            p.rain = true;
             continue;
         }
         if is_noise(&w) || is_noise(&stem) {

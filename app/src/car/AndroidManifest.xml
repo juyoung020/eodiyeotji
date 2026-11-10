@@ -26,6 +26,9 @@
     <uses-permission android:name="pleos.car.permission.CAR_SEATS" />
     <!-- 배터리 · 연료 잔량(Pleos Vehicle EvBattery · Fuel): 하루에 얼마나 썼고 언제 충전했는지 기록 (업무 운행기록부). normal -->
     <uses-permission android:name="pleos.car.permission.CAR_ENERGY" />
+    <!-- 주행거리계 (운행기록부) · 와이퍼 (비 온 날) -->
+    <uses-permission android:name="pleos.car.permission.CAR_DRIVE" />
+    <uses-permission android:name="pleos.car.permission.CAR_WINDOWS" />
     <!-- 무드등(Pleos Vehicle Light 앰비언트 색): 정차 중 "그날로 돌아가기"를 보는 동안만 그날 하늘빛으로, 닫으면 원래 색.
          읽기 CAR_LIGHTS, 바꾸기 CONTROL_CAR_LIGHTS (둘 다 normal, 바꾸기는 앱마켓 심사에서 용도를 따로 본다) -->
     <uses-permission android:name="pleos.car.permission.CAR_LIGHTS" />
