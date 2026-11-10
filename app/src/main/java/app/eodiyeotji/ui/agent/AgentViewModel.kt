@@ -70,6 +70,10 @@ data class AgentTurn(
     val phase: AnswerPhase = AnswerPhase.Thinking,
     val recommendations: List<RecommendationUi> = emptyList(),
     val proposals: List<AgentEvent.ActionProposal> = emptyList(),
+    /** 기억 후보 (흐릿한 질문의 답, 번호 = 자리 + 1). 둘 이상이면 후보 칸에 나란히 보이고 [recommendations]는 고른 후보 하나다. */
+    val candidates: List<MemoryHit> = emptyList(),
+    /** 지금 자세히 보이는 후보 자리 ([candidates] 안). */
+    val candidateFocus: Int = 0,
     /** 첫 추천 카드에서 고른 곳 ("여기만 가기" 대상). */
     val selectedStop: Int = 0,
     val action: ActionState = ActionState.Idle,
@@ -331,6 +335,46 @@ class AgentViewModel @Inject constructor(
         updateTurn(id) { it.copy(selectedStop = index) }
     }
 
+    /**
+     * 후보 칸에서 후보를 눌렀다: 새 질문 없이 그 자리에서 자세한 카드를 바꾸고, Rust에 알려 안내 버튼을 그 후보로 바꾼다.
+     * 이어서 말하는 "다른 거"·"응"도 이 후보 기준이 된다.
+     */
+    fun selectCandidate(index: Int) {
+        val t = turn.value ?: return
+        val hit = t.candidates.getOrNull(index) ?: return
+        if (index == t.candidateFocus || t.action is ActionState.Running) return
+        val id = t.id
+        val rec = RecommendationUi(hit, null)
+        updateTurn(id) {
+            it.copy(
+                candidateFocus = index,
+                recommendations = listOf(rec),
+                proposals = emptyList(),
+                action = ActionState.Idle,
+                selectedStop = rec.stops.indexOfFirst { s -> s.name == hit.bestStop?.name }.coerceAtLeast(0),
+            )
+        }
+        loadMap(id, hit.episode.facts.day)
+        viewModelScope.launch(Dispatchers.Default) {
+            val here = try {
+                core.lastKnownLocation()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+            val picked = agent.selectCandidate(hit.episode.facts.id, AgentContext(System.currentTimeMillis(), here, driving.isDriving.value)) ?: return@launch
+            updateTurn(id) { cur ->
+                if (cur.candidateFocus != index) return@updateTurn cur
+                cur.copy(
+                    answer = picked.line,
+                    proposals = listOfNotNull(picked.proposal),
+                    recommendations = cur.recommendations.map { r -> if (r.hit.episode.facts.id == hit.episode.facts.id && picked.course != null) r.copy(course = picked.course) else r },
+                )
+            }
+        }
+    }
+
     /** 운전자가 고른 행동 실행 (예: 이 코스로 안내). 같은 질문 안에서 한 번에 하나만. */
     fun confirm(proposal: AgentEvent.ActionProposal) {
         val id = turn.value?.id ?: return
@@ -357,8 +401,28 @@ class AgentViewModel @Inject constructor(
             is AgentEvent.CourseRecommendations -> updateTurn(id) {
                 it.copy(courses = event.courses, courseFocus = event.focus.coerceIn(0, (event.courses.size - 1).coerceAtLeast(0)), coursesFresh = true)
             }
+            is AgentEvent.MemoryCandidates -> {
+                val focusId = event.hits.getOrNull(event.focus)?.episode?.facts?.id
+                updateTurn(id) { t ->
+                    // 후보 칸이 목록을 맡고, 자세한 카드는 고른 후보 하나만
+                    t.copy(candidates = event.hits, candidateFocus = event.focus, recommendations = t.recommendations.filter { it.hit.episode.facts.id == focusId })
+                }
+            }
             is AgentEvent.Recommendation -> {
-                val first = turn.value?.takeIf { it.id == id }?.recommendations?.isEmpty() == true
+                val cur = turn.value?.takeIf { it.id == id }
+                if (cur != null && cur.candidates.size > 1) {
+                    // 후보 모드: 자세한 카드를 이 후보로 바꿔 끼운다 (같은 후보면 지도는 그대로)
+                    val old = cur.recommendations.firstOrNull()
+                    val same = old?.hit?.episode?.facts?.id == event.hit.episode.facts.id
+                    val rec = RecommendationUi(event.hit, event.course).let { if (same && old != null) it.copy(map = old.map, mapLoaded = old.mapLoaded) else it }
+                    updateTurn(id) { t ->
+                        val selected = if (same) t.selectedStop else rec.stops.indexOfFirst { it.name == event.hit.bestStop?.name }.coerceAtLeast(0)
+                        t.copy(recommendations = listOf(rec), selectedStop = selected, courses = emptyList(), courseFocus = 0)
+                    }
+                    if (!same) loadMap(id, event.hit.episode.facts.day)
+                    return
+                }
+                val first = cur?.recommendations?.isEmpty() == true
                 updateTurn(id) { it.copy(courses = emptyList(), courseFocus = 0) }
                 updateTurn(id) { t ->
                     val rec = RecommendationUi(event.hit, event.course)

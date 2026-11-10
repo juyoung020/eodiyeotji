@@ -46,6 +46,8 @@
     <string name="agent_map_none">지도 기록이 없는 날이에요</string>
     <string name="agent_more_days">비슷한 기억 후보</string>
     <string name="agent_ai_tags">AI 꼬리표</string>
+    <string name="agent_candidates_title">후보 목록</string>
+    <string name="agent_candidates_hint">눌러서 견줘 보세요</string>
 
     <string name="agent_kind_commute_to_work">출근길</string>
     <string name="agent_kind_commute_home">퇴근길</string>

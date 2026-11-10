@@ -234,6 +234,7 @@ impl AgentListener for Recorder {
     fn on_course_recommendations(&self, courses: Vec<DriveRouteRecommendation>, focus: u32) {
         self.0.lock().unwrap().push(Ev::Courses(courses.into_iter().map(|c| c.route.id).collect(), focus));
     }
+    fn on_memory_candidates(&self, _candidates: Vec<MemoryHit>, _focus: u32) {}
     fn on_action_proposal(&self, proposal: NavProposal) {
         self.0.lock().unwrap().push(Ev::Proposal(proposal));
     }

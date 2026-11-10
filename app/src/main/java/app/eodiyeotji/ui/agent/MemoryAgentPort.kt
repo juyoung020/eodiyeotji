@@ -5,6 +5,7 @@ import app.eodiyeotji.R
 import app.eodiyeotji.agent.AgentBridge
 import app.eodiyeotji.agent.AgentNavAction
 import app.eodiyeotji.agent.AgentProposal
+import app.eodiyeotji.core.CourseRoute
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -32,10 +33,8 @@ class MemoryAgentPort @Inject constructor(
                 is BridgeEvent.AnswerDelta -> emit(AgentEvent.AnswerDelta(e.text))
                 is BridgeEvent.Recommendation -> emit(AgentEvent.Recommendation(e.hit, e.course))
                 is BridgeEvent.CourseRecommendations -> emit(AgentEvent.CourseRecommendations(e.courses, e.focus))
-                is BridgeEvent.ActionProposal -> {
-                    proposals[e.proposal.id] = e.proposal
-                    emit(AgentEvent.ActionProposal(e.proposal.id, buttonTitle(e.proposal.action), buttonDetail(e.proposal)))
-                }
+                is BridgeEvent.MemoryCandidates -> emit(AgentEvent.MemoryCandidates(e.hits, e.focus))
+                is BridgeEvent.ActionProposal -> emit(button(e.proposal))
                 // 운전자가 말로 "응"이라고 해 이미 안내를 보냈다 → 답 글에 한 줄 덧붙인다
                 is BridgeEvent.ActionStarted ->
                     emit(AgentEvent.AnswerDelta(text(if (e.ok) R.string.agent_started_line else R.string.agent_start_failed_line)))
@@ -43,6 +42,15 @@ class MemoryAgentPort @Inject constructor(
                 is BridgeEvent.Error -> emit(AgentEvent.Error(e.message))
             }
         }
+
+    override suspend fun selectCandidate(episodeId: Long, context: AgentContext): CandidatePick? =
+        bridge.selectCandidate(episodeId, context.isDriving, context.currentLocation)?.let { c -> CandidatePick(c.proposal?.let(::button), c.course, c.line) }
+
+    /** 제안을 기억해 두고 화면 버튼 모양으로. */
+    private fun button(p: AgentProposal): AgentEvent.ActionProposal {
+        proposals[p.id] = p
+        return AgentEvent.ActionProposal(p.id, buttonTitle(p.action), buttonDetail(p))
+    }
 
     override suspend fun confirm(proposal: AgentEvent.ActionProposal) {
         val p = proposals.remove(proposal.id) ?: error("이미 끝난 제안이에요.")

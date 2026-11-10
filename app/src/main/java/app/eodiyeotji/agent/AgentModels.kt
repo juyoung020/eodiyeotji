@@ -32,6 +32,9 @@ sealed interface AgentEvent {
     /** 추천 카드 (같은 질문에서 여러 번 오면 마지막이 최신). 코스를 짰으면 [course] 포함. */
     data class Recommendation(val hit: MemoryHit, val course: CourseRoute?) : AgentEvent
 
+    /** 기억 후보 목록 (1번이 가장 비슷한 곳, 최대 3개). [focus]: 지금 이야기하는 후보 자리 ("2번" 하면 바뀌어 다시 온다). */
+    data class MemoryCandidates(val hits: List<MemoryHit>, val focus: Int) : AgentEvent
+
     /**
      * 근처 추천 드라이브 길 목록 (순서 = 순위). [focus]: 지금 이야기하는(안내를 제안한) 길의 자리.
      * 후속 말("2번으로 가자", "바다 쪽은?")마다 다시 온다 — 마지막이 최신.
@@ -63,6 +66,9 @@ data class RecommendedCourse(
     val distanceKm: Double?,
     val score: Double,
 )
+
+/** 후보 칸에서 후보를 골랐을 때: 그곳으로 갈 안내 제안(대기 중)과 코스면 경로. */
+data class CandidateChoice(val proposal: AgentProposal?, val course: CourseRoute?, val line: String)
 
 /** 운전자 확인을 기다리는 안내 제안. */
 data class AgentProposal(val id: String, val summary: String, val action: AgentNavAction)

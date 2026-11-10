@@ -184,6 +184,7 @@ fun AgentPanel(
             onAsk = viewModel::ask,
             onConfirm = viewModel::confirm,
             onSelectStop = viewModel::selectStop,
+            onSelectCandidate = viewModel::selectCandidate,
             onRetry = viewModel::retry,
             onClear = viewModel::clear,
             onClose = onClose,
@@ -217,15 +218,16 @@ fun AgentPanelContent(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
     topSpace: Dp = 0.dp,
+    onSelectCandidate: (Int) -> Unit = {},
 ) {
     Surface(modifier = modifier.fillMaxSize(), color = EodiTheme.colors.background) {
         Crossfade(targetState = state.isDriving, label = "agentMode", modifier = Modifier.padding(top = topSpace)) { driving ->
             if (driving) {
                 DrivingAgent(state.turn, onConfirm, onClear, onClose, onVoiceRequest, onRetry)
             } else if (compact) {
-                CompactParkedAgent(state.turn, onAsk, onConfirm, onSelectStop, onRetry, onVoiceRequest)
+                CompactParkedAgent(state.turn, onAsk, onConfirm, onSelectStop, onSelectCandidate, onRetry, onVoiceRequest)
             } else {
-                ParkedAgent(state.turn, onAsk, onConfirm, onSelectStop, onRetry, onClose, onVoiceRequest)
+                ParkedAgent(state.turn, onAsk, onConfirm, onSelectStop, onSelectCandidate, onRetry, onClose, onVoiceRequest)
             }
         }
     }
@@ -241,6 +243,7 @@ private fun ParkedAgent(
     onAsk: (String) -> Unit,
     onConfirm: (AgentEvent.ActionProposal) -> Unit,
     onSelectStop: (Int) -> Unit,
+    onSelectCandidate: (Int) -> Unit,
     onRetry: () -> Unit,
     onClose: (() -> Unit)?,
     onVoiceRequest: () -> Unit,
@@ -276,6 +279,8 @@ private fun ParkedAgent(
                         if (turn.courses.isNotEmpty()) {
                             CourseRecommendationList(turn, onAsk)
                         } else {
+                            // 후보 칸이 맨 위: 1·2·3번을 한눈에 견주고 눌러서 고른다
+                            if (turn.candidates.size > 1) CandidateStrip(turn.candidates, turn.candidateFocus, today, onSelectCandidate)
                             RecommendationsBlock(turn, today, onSelectStop, onAsk)
                         }
                     }
@@ -292,6 +297,7 @@ private fun ParkedAgent(
                         ActionBlock(turn, onConfirm, onAsk)
                         CourseRecommendationList(turn, onAsk)
                     } else {
+                        if (turn.candidates.size > 1) CandidateStrip(turn.candidates, turn.candidateFocus, today, onSelectCandidate)
                         RecommendationsBlock(turn, today, onSelectStop, onAsk, onlyFirst = true)
                         ActionBlock(turn, onConfirm, onAsk)
                     }
@@ -312,6 +318,7 @@ private fun CompactParkedAgent(
     onAsk: (String) -> Unit,
     onConfirm: (AgentEvent.ActionProposal) -> Unit,
     onSelectStop: (Int) -> Unit,
+    onSelectCandidate: (Int) -> Unit,
     onRetry: () -> Unit,
     onVoiceRequest: () -> Unit,
 ) {
@@ -332,6 +339,7 @@ private fun CompactParkedAgent(
                     ActionBlock(turn, onConfirm, onAsk)
                     CourseRecommendationList(turn, onAsk)
                 } else {
+                    if (turn.candidates.size > 1) CandidateStrip(turn.candidates, turn.candidateFocus, today, onSelectCandidate, compact = true)
                     RecommendationsBlock(turn, today, onSelectStop, onAsk, onlyFirst = true)
                     ActionBlock(turn, onConfirm, onAsk)
                 }
@@ -618,7 +626,7 @@ private fun ActionBlock(turn: AgentTurn, onConfirm: (AgentEvent.ActionProposal) 
     val first = turn.recommendations.firstOrNull()
     val selectedStop = first?.stops?.getOrNull(turn.selectedStop)
     val showOnlyHere = first != null && first.stops.size > 1 && selectedStop != null
-    val showOtherDays = first != null && turn.phase == AnswerPhase.Done && turn.recommendations.size == 1
+    val showOtherDays = first != null && turn.phase == AnswerPhase.Done && turn.recommendations.size == 1 && turn.candidates.size < 2
     val onlyHereQuestion = selectedStop?.let { stringResource(R.string.agent_followup_only_here, it.name) }
     val otherDaysQuestion = stringResource(R.string.agent_followup_other_days)
 

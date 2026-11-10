@@ -11,6 +11,7 @@ struct Rec {
     text: Mutex<String>,
     cards: Mutex<Vec<MemoryHit>>,
     proposals: Mutex<Vec<NavProposal>>,
+    cands: Mutex<(Vec<MemoryHit>, u32)>,
 }
 
 impl AgentListener for Rec {
@@ -21,6 +22,9 @@ impl AgentListener for Rec {
         self.cards.lock().unwrap().push(h);
     }
     fn on_course_recommendations(&self, _c: Vec<DriveRouteRecommendation>, _f: u32) {}
+    fn on_memory_candidates(&self, c: Vec<MemoryHit>, f: u32) {
+        *self.cands.lock().unwrap() = (c, f);
+    }
     fn on_action_proposal(&self, p: NavProposal) {
         self.proposals.lock().unwrap().push(p);
     }
@@ -32,15 +36,15 @@ impl AgentListener for Rec {
 }
 
 impl Rec {
-    /// 받은 카드의 기억 id (처음 받은 순서, 같은 기억은 한 번 — 화면이 같은 기억을 제자리에서 바꿔 끼우는 것과 같다)
+    /// 후보 칸의 기억 id (번호 순서)와 지금 고른 자리
     fn order(&self) -> Vec<i64> {
-        let mut ids: Vec<i64> = vec![];
-        for h in self.cards.lock().unwrap().iter() {
-            if !ids.contains(&h.episode.facts.id) {
-                ids.push(h.episode.facts.id);
-            }
-        }
-        ids
+        self.cands.lock().unwrap().0.iter().map(|h| h.episode.facts.id).collect()
+    }
+    fn focus(&self) -> u32 {
+        self.cands.lock().unwrap().1
+    }
+    fn first_id(&self) -> i64 {
+        self.cards.lock().unwrap().first().map(|h| h.episode.facts.id).unwrap_or_default()
     }
     fn first_place(&self) -> String {
         self.cards.lock().unwrap().first().and_then(|h| h.best_stop.as_ref().map(|s| s.name.clone())).unwrap_or_default()
@@ -84,35 +88,50 @@ fn vague_question_shows_numbered_candidates_and_picks_by_number() {
     let a = agent("pick");
     let r = ask(&a, "옛날에 놀러갔던 바다 어디였지");
     let order = r.order();
-    assert!(order.len() >= 2 && order.len() <= runner::MAX_CANDIDATES, "후보 {order:?}");
+    assert!(order.len() >= 3, "맞는 기억은 모두 후보: {order:?}");
+    assert_eq!((r.focus(), r.first_id()), (0, order[0]), "1번이 자세한 카드");
+    // 목록은 화면 후보 칸이 보이고, 말은 짧게 한 줄
     let text = r.text.lock().unwrap().clone();
-    assert!(text.contains("비슷한 기억도 있어요: 2번"), "{text}");
+    assert!(text.starts_with("비슷한 기억을 찾았어요. 가장 비슷한 1번은"), "{text}");
     // "옛날에": 최근 한 달 기록(11월 7일 경포)보다 지난 기록이 1번
-    let first_day = r.cards.lock().unwrap()[0].episode.facts.day.clone();
-    assert!(first_day.as_str() < "2026-10-08", "1번 {first_day}");
+    let cands = r.cands.lock().unwrap().0.clone();
+    assert!(cands[0].episode.facts.day.as_str() < "2026-10-08", "1번 {}", cands[0].episode.facts.day);
     // 후보는 모두 바다 쪽 (해수욕장)
-    assert!(r.cards.lock().unwrap().iter().all(|h| h.best_stop.as_ref().is_some_and(|s| s.category == "해수욕장")));
+    assert!(cands.iter().all(|h| h.best_stop.as_ref().is_some_and(|s| s.category == "해수욕장")));
 
-    // "2번" → 2번 후보가 앞 카드, 안내 제안도 그곳
+    // "2번" → 같은 번호 그대로, 2번이 자세한 카드 · 안내 제안
     let r2 = ask(&a, "2번");
-    assert_eq!(r2.order()[0], order[1]);
-    assert_eq!(r2.order().len(), order.len(), "다른 후보도 같이 다시 보인다");
-    // 고른 후보가 1번이 되고 나머지가 2·3번 (화면 줄 번호와 같다)
-    assert!(r2.text.lock().unwrap().contains("비슷한 기억도 있어요: 2번"), "{}", r2.text.lock().unwrap());
-    assert_eq!(r2.order()[1], order[2 % order.len()]);
+    assert_eq!((r2.order(), r2.focus(), r2.first_id()), (order.clone(), 1, order[1]));
+    assert!(r2.text.lock().unwrap().starts_with("2번은 "), "{}", r2.text.lock().unwrap());
     assert!(!r2.proposals.lock().unwrap().is_empty());
 
     // "그거 말고 다른 거" → 지금(2번) 다음 후보
     let r3 = ask(&a, "그거 말고 다른 거");
-    assert_eq!(r3.order()[0], order[2 % order.len()]);
+    assert_eq!(r3.focus() as usize, 2 % order.len());
 
     // 없는 번호
-    let r4 = ask(&a, "5번");
+    let r4 = ask(&a, "50번");
     assert!(r4.text.lock().unwrap().contains(&format!("{}번까지", order.len())));
 
     // 새 검색어가 있으면 고르는 말이 아니다
     let r5 = ask(&a, "감자탕집은 어디였지");
     assert_eq!(r5.first_place(), "태조감자국");
+}
+
+#[test]
+fn tapping_a_candidate_switches_the_proposal_silently() {
+    let a = agent("tap");
+    let r = ask(&a, "옛날에 놀러갔던 바다 어디였지");
+    let order = r.order();
+    let ctx = AgentContext { now_ms: NOW, tz_offset_minutes: 540, current_location: None, is_driving: false };
+    let choice = a.select_candidate(order[1], ctx.clone()).expect("후보");
+    assert!(choice.line.starts_with("2번은 "), "{}", choice.line);
+    let p = choice.proposal.expect("안내 제안");
+    assert_eq!(a.pending_proposal().map(|x| x.id), Some(p.id.clone()), "누른 후보가 대기 중인 제안");
+    assert!(a.select_candidate(-1, ctx).is_none(), "후보가 아닌 기억");
+    // 이어서 "다른 거"는 누른 후보(2번) 다음
+    let r2 = ask(&a, "다른 거");
+    assert_eq!(r2.focus() as usize, 2 % order.len());
 }
 
 #[test]
@@ -124,12 +143,12 @@ fn matched_ai_tags_explain_the_hit() {
 }
 
 #[test]
-fn shortlist_keeps_close_scores_and_distinct_places() {
+fn candidates_are_every_close_memory_one_per_day() {
     let a = agent("short");
     let r = ask(&a, "옛날에 놀러갔던 바다 어디였지");
-    let cards = r.cards.lock().unwrap().clone();
-    let mut places: Vec<String> = cards.iter().filter_map(|h| h.best_stop.as_ref().map(|s| s.name.clone())).collect();
-    places.dedup();
-    let unique: std::collections::HashSet<_> = places.iter().collect();
-    assert_eq!(unique.len(), r.order().len(), "같은 곳은 후보에 한 번만: {places:?}");
+    let cands = r.cands.lock().unwrap().0.clone();
+    let days: std::collections::HashSet<_> = cands.iter().map(|h| h.episode.facts.day.clone()).collect();
+    assert_eq!(days.len(), cands.len(), "한 날 = 후보 하나");
+    let top = cands[0].score;
+    assert!(cands.iter().all(|h| h.score >= top * 0.4), "엉뚱한 날은 빠진다");
 }

@@ -18,6 +18,7 @@
 ## [Unreleased]
 
 ### Added
+- 기억 후보 목록 화면: 흐릿한 질문의 답을 긴 문장 대신 화면 위 "후보 목록"에 사진 카드(번호 · 곳 · 언제 · #AI 꼬리표)로 개수 제한 없이 옆으로 늘어놓고, 카드를 누르면 새 질문 없이 아래에 그날 다녀온 코스 지도 · 들른 곳 · 안내 버튼이 그 후보로 바뀐다. 답 말은 "가장 비슷한 1번은 …" 한 줄로 줄였고, "12번"처럼 두 자리 번호도 말로 고른다 (`agent::MemoryAgent::select_candidate`, `ui/agent/AgentRecommendationCard.kt CandidateStrip`, docs/70 §3-2)
 - 흐릿한 기억 검색 · 후보 여러 개: "옛날에 놀러갔던 바다", "예전에 갔던 감자탕집", "애들이랑 갔던 계곡", "그 산 어디였더라"처럼 날짜 · 이름 없는 질문도 LLM 없이 찾고("옛날 · 예전"은 최근 한 달 기록을 뒤로, "~집"은 떼고), 점수가 가까운 다른 곳을 1 · 2 · 3번 후보로 같이 보인다. "2번", "그거 말고 다른 거"로 바로 고르고, 카드에 질문과 맞은 AI 꼬리표(#바다 #해변)를 보여 LLM 라벨에서 찾았음을 드러낸다. 시연 기록에 성북동 감자탕 · 광화문 국밥 · 가족 계곡 물놀이 나들이를 더했다 (`agent/runner.rs shortlist · candidate_pick`, `agent/words.rs`, `ui/agent/AgentRecommendationCard.kt`)
 - 폰 "내 차" 카드에 주차 경과 시간("2시간 10분째")과 층 · 자리 메모: B1 · B2 · B3 · 1층 · 옥상 버튼과 글 칸으로 "B2 F-12"를 남기면 카드와 내 차 찾기 화면에 함께 보이고, 다음 주차가 오면 비워진다 (`phone/PhoneParking.kt`, `phone/ui/PhoneWalk.kt`)
 - 코스 안내 전 남은 주행 거리 확인: 코스를 시작하면 Pleos Vehicle SDK 남은 주행 가능 거리와 코스 길이(지나는 곳 직선거리 × 도로 우회율 1.3)를 견줘, 모자라거나 여유(15%, 최소 10km)가 없으면 안내 배너에 "남은 거리 30km · 이 코스 40km라 10km 모자라요. 가는 길에 충전하고 가요"를 띄운다 (`readings.rs range_check · course_km`, `pleos/CourseGuide.kt`)

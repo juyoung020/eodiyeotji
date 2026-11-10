@@ -20,12 +20,18 @@ interface AgentPort {
 
     /** 운전자가 고른 행동을 실행한다 (예: 코스로 내비 안내 시작). 실패하면 예외를 던진다. */
     suspend fun confirm(proposal: AgentEvent.ActionProposal)
+
+    /** 후보 칸에서 후보를 골랐다 (말 없이): 그 후보로 갈 안내 버튼 · 코스 · 답 한 줄. 고를 수 없으면 null. */
+    suspend fun selectCandidate(episodeId: Long, context: AgentContext): CandidatePick? = null
 }
 
 /**
  * 질문할 때의 상황. "작년 여름" 같은 날짜 표현은 [nowMs](기기 시각) 기준으로 해석한다.
  * [isDriving]이면 답을 더 짧게(TTS로 읽을 한두 문장) 만든다.
  */
+/** 후보를 고른 결과 (화면용). */
+data class CandidatePick(val proposal: AgentEvent.ActionProposal?, val course: CourseRoute?, val line: String)
+
 data class AgentContext(val nowMs: Long, val currentLocation: LatLon?, val isDriving: Boolean)
 
 sealed interface AgentEvent {
@@ -34,6 +40,9 @@ sealed interface AgentEvent {
 
     /** 찾은 기억 한 건 + (있으면) 다시 달릴 코스. 첫 번째가 가장 그럴듯한 답이다. */
     data class Recommendation(val hit: MemoryHit, val course: CourseRoute?) : AgentEvent
+
+    /** 기억 후보 목록 (번호 = 자리 + 1). [focus]: 지금 자세히 보이는 후보. 후보 칸에 나란히 그린다. */
+    data class MemoryCandidates(val hits: List<MemoryHit>, val focus: Int) : AgentEvent
 
     /**
      * 근처 인기 드라이브 코스 목록 (순서 = 순위, [RecommendedCourse.rank]는 1부터).

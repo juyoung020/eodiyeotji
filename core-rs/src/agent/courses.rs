@@ -147,14 +147,21 @@ pub fn detect(u: &str, in_topic: bool, list_len: usize) -> Option<CourseIntent> 
 
 /// "2번", "1위", "두 번째", "둘째", "마지막" → 자리 (0부터). 목록 밖 번호도 돌려준다(없다고 답하게).
 pub fn ordinal(c: &str, len: usize) -> Option<usize> {
+    // "2번", "12번" (후보가 많으면 두 자리도), "1위". "2번지"는 주소라 뺀다.
     let chars: Vec<char> = c.chars().collect();
-    for (i, ch) in chars.iter().enumerate() {
-        if let Some(d) = ch.to_digit(10) {
-            let prev_digit = i > 0 && chars[i - 1].is_ascii_digit();
-            let next = chars.get(i + 1).copied();
-            if !prev_digit && (1..=9).contains(&d) && matches!(next, Some('번') | Some('위')) && chars.get(i + 2) != Some(&'지') {
-                return Some(d as usize - 1);
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i].is_ascii_digit() {
+            let start = i;
+            while i < chars.len() && chars[i].is_ascii_digit() {
+                i += 1;
             }
+            let n: usize = chars[start..i].iter().collect::<String>().parse().unwrap_or(0);
+            if (1..=99).contains(&n) && matches!(chars.get(i), Some('번') | Some('위')) && chars.get(i + 1) != Some(&'지') {
+                return Some(n - 1);
+            }
+        } else {
+            i += 1;
         }
     }
     const WORDS: &[(&[&str], usize)] = &[

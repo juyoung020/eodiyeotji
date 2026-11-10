@@ -78,6 +78,10 @@ class AgentBridge @Inject constructor(
                 trySendBlocking(AgentEvent.Recommendation(hit.toModel(), course?.toModel()))
             }
 
+            override fun onMemoryCandidates(candidates: List<RMemoryHit>, focus: UInt) {
+                trySendBlocking(AgentEvent.MemoryCandidates(candidates.map { it.toModel() }, focus.toInt()))
+            }
+
             override fun onCourseRecommendations(courses: List<RDriveRouteRecommendation>, focus: UInt) {
                 trySendBlocking(AgentEvent.CourseRecommendations(courses.toModel(), focus.toInt()))
             }
@@ -119,6 +123,14 @@ class AgentBridge @Inject constructor(
             .onFailure { Log.i(TAG, "확인할 제안 없음: ${it.message}") }
             .getOrNull() ?: return@withContext false
         execute(action.toModel())
+    }
+
+    /** 화면 후보 칸에서 후보를 눌렀다 (말 없이): 그 후보로 안내 제안을 바꾼다. 앞 질문의 후보가 아니면 null. */
+    suspend fun selectCandidate(episodeId: Long, isDriving: Boolean, location: LatLon?): CandidateChoice? = withContext(Dispatchers.IO) {
+        runCatching { agent.selectCandidate(episodeId, agentContext(isDriving, location)) }
+            .onFailure { Log.w(TAG, "후보 고르기 실패", it) }
+            .getOrNull()
+            ?.let { CandidateChoice(it.proposal?.toModel(), it.course?.toModel(), it.line) }
     }
 
     /** 화면의 "아니오". */

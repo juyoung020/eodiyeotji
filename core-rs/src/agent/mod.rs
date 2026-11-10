@@ -138,6 +138,15 @@ pub struct AgentDone {
     pub timing: AgentTiming,
 }
 
+/// 화면에서 후보를 고른 결과: 그곳으로 갈 안내 제안(대기 중)과 코스면 경로.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct CandidateChoice {
+    pub proposal: Option<NavProposal>,
+    pub course: Option<CourseRoute>,
+    /// 답 칸에 바꿔 보일 한 줄 ("2번은 작년 11월 7일 경포해변이에요. 그 코스로 안내할까요?")
+    pub line: String,
+}
+
 /// 하루 라벨링 한 차례 결과.
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct LabelReport {
@@ -165,6 +174,10 @@ pub trait AgentListener: Send + Sync {
     /// 근처 추천 드라이브 길 목록 (순서 = 순위, 1번이 맨 앞). [focus]: 지금 이야기하는(안내를 제안한) 길의 자리 (0부터).
     /// 후속 말("2번으로 가자", "바다 쪽은?")로 목록이 바뀌거나 고른 길이 바뀌면 다시 온다 (마지막이 최신).
     fn on_course_recommendations(&self, courses: Vec<DriveRouteRecommendation>, focus: u32);
+    /// 기억 후보 목록 (1번이 가장 비슷한 곳, 최대 3개). [focus]: 지금 이야기하는 후보의 자리 (0부터).
+    /// 흐릿한 질문("옛날에 갔던 바다")의 답이고, "2번"·"다른 거"로 고르면 같은 목록이 [focus]만 바뀌어 다시 온다.
+    /// 지금 후보의 자세한 카드(코스 포함)는 [on_recommendation]으로 따로 온다.
+    fn on_memory_candidates(&self, candidates: Vec<MemoryHit>, focus: u32);
     /// 안내 제안 ("그 코스로 안내할까요?"). 운전자가 "예"하면 `confirm(proposal.id)`.
     fn on_action_proposal(&self, proposal: NavProposal);
     /// 운전자가 말로 "응/안내해줘"라고 확인함 → Kotlin이 [action]을 바로 실행한다.
@@ -318,6 +331,11 @@ impl MemoryAgent {
         if p.as_ref().is_some_and(|x| x.id == proposal_id) {
             *p = None;
         }
+    }
+
+    /// 화면 후보 칸에서 후보를 눌렀을 때 (말 없이): 그 후보로 안내 제안을 바꾼다. 앞 질문의 후보가 아니면 None.
+    pub fn select_candidate(&self, episode_id: i64, context: AgentContext) -> Option<CandidateChoice> {
+        self.select_candidate_inner(episode_id, &context)
     }
 
     /// 지금 대기 중인 제안.

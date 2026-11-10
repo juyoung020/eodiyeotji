@@ -5,7 +5,18 @@ import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.common.agoText
 import app.eodiyeotji.ui.common.durationText
 import app.eodiyeotji.ui.common.distanceText
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.rememberScrollState
+import app.eodiyeotji.core.MemoryHit
+import app.eodiyeotji.ui.map.DayMap
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -78,7 +89,24 @@ internal fun RecommendationCard(
                 distanceText(facts.distanceM),
                 durationText(facts.endMs - facts.startMs),
             ).filter { it.isNotBlank() }.joinToString(" · ")
-            if (hero != null) {
+            val map = rec.map
+            if (map != null) {
+                // 그때 갔던 코스가 먼저: 제목 한 줄 + 그날 달린 길 · 들른 곳 지도 (사진은 아래 들른 곳 줄에)
+                Text(title, style = EodiTheme.type.title, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    listOf(agoText(LocalDate.parse(facts.day), today), kindText(facts.kind), sub).joinToString(" · "),
+                    style = EodiTheme.type.meta,
+                    color = c.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                DayMap(
+                    data = map,
+                    selectedKey = null,
+                    onSelectKey = {},
+                    modifier = Modifier.fillMaxWidth().height(340.dp).clip(RoundedCornerShape(20.dp)),
+                )
+            } else if (hero != null) {
                 FeedHero(
                     hero,
                     title = title,
@@ -114,6 +142,94 @@ internal fun RecommendationCard(
                     onMore = { hero?.let(openPlace) },
                     selected = selectedStop,
                     onPick = { i -> if (i == selectedStop) openPlace(stops[i]) else onSelectStop(i) },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 후보 칸: 흐릿한 질문의 후보 1 · 2 · 3번을 사진 카드로 나란히 (고른 후보는 강조 테두리).
+ * 누르면 새 질문 없이 그 후보가 아래 자세한 카드 · 안내 버튼이 된다. 폰 세로 화면([compact])은 옆으로 넘겨 본다.
+ */
+@Composable
+internal fun CandidateStrip(candidates: List<MemoryHit>, focus: Int, today: LocalDate, onSelect: (Int) -> Unit, compact: Boolean = false) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.agent_candidates_title),
+                style = EodiTheme.type.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = EodiTheme.colors.textPrimary,
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(stringResource(R.string.agent_candidates_hint), style = EodiTheme.type.meta, color = EodiTheme.colors.textTertiary)
+        }
+        if (compact || candidates.size > 3) {
+            // 후보가 많으면 옆으로 넘겨 본다 (개수 제한 없음)
+            val w = if (compact) 220.dp else 300.dp
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.horizontalScroll(rememberScrollState()).height(IntrinsicSize.Min)) {
+                candidates.forEachIndexed { i, hit -> CandidateTile(hit, i + 1, i == focus, today, { onSelect(i) }, Modifier.width(w).fillMaxHeight()) }
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                candidates.forEachIndexed { i, hit ->
+                    CandidateTile(hit, i + 1, i == focus, today, { onSelect(i) }, Modifier.weight(1f).fillMaxHeight())
+                }
+                // 후보가 둘이면 빈 칸을 남겨 카드 크기를 맞춘다
+                repeat((3 - candidates.size).coerceAtLeast(0)) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CandidateTile(hit: MemoryHit, rank: Int, selected: Boolean, today: LocalDate, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val c = EodiTheme.colors
+    val facts = hit.episode.facts
+    val place = hit.bestStop ?: facts.stops.firstOrNull()
+    val title = hit.episode.title ?: hit.dayTitle ?: facts.ruleLabel
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(24.dp),
+        color = if (selected) c.accentSoft else c.surface,
+        border = BorderStroke(if (selected) 3.dp else 1.dp, if (selected) c.accent else c.outline),
+        modifier = modifier,
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.fillMaxWidth().aspectRatio(16f / 10f)) {
+                StopPhotoBox(place?.name.orEmpty(), place?.address.orEmpty(), place?.lat ?: 0.0, place?.lon ?: 0.0, null, Modifier.fillMaxSize(), radius = 16.dp)
+                // 후보 번호 ("2번 보여줘"와 같은 번호)
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.padding(8.dp).size(40.dp).background(if (selected) c.accent else c.textPrimary.copy(alpha = 0.72f), CircleShape),
+                ) {
+                    Text("$rank", style = EodiTheme.type.titleSmall, fontWeight = FontWeight.Bold, color = c.onAccent)
+                }
+            }
+            Text(
+                place?.name ?: title,
+                style = EodiTheme.type.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = if (selected) c.accent else c.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                listOf(agoText(LocalDate.parse(facts.day), today), facts.region).filter { it.isNotBlank() }.joinToString(" · "),
+                style = EodiTheme.type.meta,
+                color = c.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (hit.matchedTags.isNotEmpty()) {
+                Text(
+                    hit.matchedTags.take(2).joinToString("  ") { "#$it" },
+                    style = EodiTheme.type.meta,
+                    fontWeight = FontWeight.SemiBold,
+                    color = c.accent,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
