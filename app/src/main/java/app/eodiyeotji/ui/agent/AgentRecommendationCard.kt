@@ -215,8 +215,15 @@ private fun CandidateTile(hit: MemoryHit, rank: Int, selected: Boolean, today: L
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            // 같은 곳을 여러 날 갔으면 "4개월 전"으로는 카드가 같아 보이니 날짜로 쓴다
+            val d = LocalDate.parse(facts.day)
+            val date = if (d.year == today.year) {
+                stringResource(R.string.community_date_md, d.monthValue, d.dayOfMonth)
+            } else {
+                stringResource(R.string.community_date_ymd, d.year, d.monthValue, d.dayOfMonth)
+            }
             Text(
-                listOf(agoText(LocalDate.parse(facts.day), today), facts.region).filter { it.isNotBlank() }.joinToString(" · "),
+                listOf(date, facts.region).filter { it.isNotBlank() }.joinToString(" · "),
                 style = EodiTheme.type.meta,
                 color = c.textSecondary,
                 maxLines = 1,

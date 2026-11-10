@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -16,6 +17,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,11 +63,13 @@ fun RegionReportPane(viewModel: RegionReportViewModel = hiltViewModel()) {
                 CenterMessage(stringResource(R.string.region_empty), Modifier.fillMaxSize())
             } else if (wide) {
                 Row(Modifier.fillMaxSize().padding(start = 32.dp, end = 32.dp, top = 8.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                    Column(
-                        Modifier.width(360.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(bottom = 32.dp),
+                    // 지역이 많아도 보이는 줄만 그린다
+                    LazyColumn(
+                        Modifier.width(360.dp).fillMaxHeight(),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
+                        contentPadding = PaddingValues(bottom = 32.dp),
                     ) {
-                        regions.value.forEach { r -> RegionRow(r, r.region == state.selected) { viewModel.select(r.region) } }
+                        items(regions.value, key = { it.region }) { r -> RegionRow(r, r.region == state.selected) { viewModel.select(r.region) } }
                     }
                     Box(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
                         ReportBody(state.report, wide = true)
@@ -71,8 +77,10 @@ fun RegionReportPane(viewModel: RegionReportViewModel = hiltViewModel()) {
                 }
             } else {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 32.dp, vertical = 8.dp)) {
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        regions.value.forEach { r -> RegionRow(r, r.region == state.selected, Modifier.width(260.dp)) { viewModel.select(r.region) } }
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        items(regions.value, key = { it.region }) { r ->
+                            RegionRow(r, r.region == state.selected, Modifier.width(260.dp)) { viewModel.select(r.region) }
+                        }
                     }
                     Spacer(Modifier.height(20.dp))
                     ReportBody(state.report, wide = false)
