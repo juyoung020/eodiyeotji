@@ -6,6 +6,14 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import kotlinx.coroutines.delay
+import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.clickable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -88,9 +96,9 @@ import org.maplibre.geojson.Point
 
 /** 걸어서 찾아갈 곳: 차에서 내려 가게까지, 또는 다시 내 차로. */
 @Immutable
-data class WalkTarget(val name: String, val lat: Double, val lon: Double, val toCar: Boolean)
+data class WalkTarget(val name: String, val lat: Double, val lon: Double, val toCar: Boolean, val note: String = "")
 
-fun ParkedCar.carTarget() = WalkTarget(name.ifBlank { "내 차" }, lat, lon, toCar = true)
+fun ParkedCar.carTarget(memo: String = "") = WalkTarget(name.ifBlank { "내 차" }, lat, lon, toCar = true, note = memo)
 fun ParkedCar.destTarget(): WalkTarget? = if (destName.isBlank()) null else WalkTarget(destName, destLat, destLon, toCar = false)
 
 @EntryPoint
@@ -107,10 +115,26 @@ private val CarBlue = Color(0xFF0B5CFF)
  * 차가 P에 들어가며 보낸 것(또는 폰이 직접 기록한 주행의 끝)이 있을 때만 보인다.
  */
 @Composable
-fun ParkedCarCard(car: ParkedCar, onWalk: (WalkTarget) -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+fun ParkedCarCard(
+    car: ParkedCar,
+    memo: String,
+    onMemo: (String) -> Unit,
+    onWalk: (WalkTarget) -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val c = EodiTheme.colors
     val type = EodiTheme.type
     val time = remember(car.tMs) { Instant.ofEpochMilli(car.tMs).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("a h:mm")) }
+    // 주차한 지 얼마나 됐는지: 1분마다 다시 센다
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(car.tMs) {
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(60_000)
+        }
+    }
+    var editing by remember(car.tMs) { mutableStateOf(false) }
     Surface(color = c.surface, shape = RoundedCornerShape(EodiTheme.space.radiusL), shadowElevation = 2.dp, modifier = modifier.fillMaxWidth()) {
         Column(Modifier.padding(start = 24.dp, end = 16.dp, top = 18.dp, bottom = 18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -119,22 +143,79 @@ fun ParkedCarCard(car: ParkedCar, onWalk: (WalkTarget) -> Unit, onDismiss: () ->
                 }
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("내 차 · $time 주차", style = type.label, color = c.textSecondary, maxLines = 1)
+                    Text("내 차 · $time 주차 · ${parkedFor(now - car.tMs)}", style = type.label, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(car.name.ifBlank { "주차한 곳" }, style = type.bodyStrong, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 SecondaryPill("찾았어요", null, onDismiss)
             }
-            Spacer(Modifier.size(14.dp))
+            Spacer(Modifier.size(10.dp))
+            if (editing) {
+                ParkingMemoEditor(memo, onSave = { onMemo(it); editing = false })
+            } else {
+                // 층 · 자리 메모: 있으면 보여 주고 누르면 고친다, 없으면 남기기
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { editing = true }.heightIn(min = 48.dp).padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(EodiIcons.Pin, null, tint = if (memo.isBlank()) c.textTertiary else CarBlue, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(10.dp))
+                    if (memo.isBlank()) {
+                        Text("층 · 자리 메모 남기기", style = type.body, color = c.textTertiary)
+                    } else {
+                        Text(memo, style = type.bodyStrong, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+            Spacer(Modifier.size(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 car.destTarget()?.let { d ->
                     PrimaryPill("${d.name}까지 걷기", EodiIcons.Navi, { onWalk(d) }, Modifier.weight(1f))
                 }
-                (if (car.destTarget() == null) PrimaryPill("내 차 찾기", EodiIcons.Pin, { onWalk(car.carTarget()) }, Modifier.weight(1f))
-                else SecondaryPill("내 차 찾기", EodiIcons.Pin, { onWalk(car.carTarget()) }, Modifier.weight(1f)))
+                (if (car.destTarget() == null) PrimaryPill("내 차 찾기", EodiIcons.Pin, { onWalk(car.carTarget(memo)) }, Modifier.weight(1f))
+                else SecondaryPill("내 차 찾기", EodiIcons.Pin, { onWalk(car.carTarget(memo)) }, Modifier.weight(1f)))
             }
         }
     }
 }
+
+/** "12분째" · "2시간 10분째" · "1일째". */
+private fun parkedFor(ms: Long): String {
+    val m = (ms / 60_000).coerceAtLeast(0)
+    return when {
+        m < 1 -> "방금"
+        m < 60 -> "${m}분째"
+        m < 24 * 60 -> if (m % 60 == 0L) "${m / 60}시간째" else "${m / 60}시간 ${m % 60}분째"
+        else -> "${m / (24 * 60)}일째"
+    }
+}
+
+/** 층 · 자리 메모 입력: 글 칸 + 자주 쓰는 층 버튼(누르면 앞에 붙는다) + 저장. */
+@Composable
+private fun ParkingMemoEditor(initial: String, onSave: (String) -> Unit) {
+    var text by remember { mutableStateOf(initial) }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (floor in listOf("B1", "B2", "B3", "1층", "옥상")) {
+                SecondaryPill(floor, null, { text = (floor + " " + text.removePrefix(floorPrefix(text))).trim() })
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it.take(40) },
+                singleLine = true,
+                placeholder = { Text("예: B2 F-12, 엘리베이터 옆") },
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(10.dp))
+            PrimaryPill("저장", null, { onSave(text) })
+        }
+    }
+}
+
+/** 메모 앞에 이미 붙은 층 (바꿔 누르면 갈아 끼운다). */
+private fun floorPrefix(text: String): String =
+    listOf("B1", "B2", "B3", "1층", "옥상").firstOrNull { text.startsWith(it) } ?: ""
 
 /**
  * 걸어서 찾아가기 (전체 화면): 위 = 큰 화살표(내가 보는 방향 기준) + "오른쪽 앞 · 120m" + 걸어서 N분,
@@ -189,6 +270,9 @@ fun PhoneWalkScreen(target: WalkTarget, onClose: () -> Unit, onFoundCar: () -> U
             Column(Modifier.weight(1f)) {
                 Text(if (target.toCar) "내 차로" else "걸어서", style = EodiTheme.type.meta, color = c.textSecondary)
                 Text(target.name, style = EodiTheme.type.title, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (target.note.isNotBlank()) {
+                    Text(target.note, style = EodiTheme.type.bodyStrong, color = CarBlue, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
             if (guide?.arrived == true && target.toCar) {
                 PrimaryPill("찾았어요", EodiIcons.Check, { onFoundCar(); onClose() })

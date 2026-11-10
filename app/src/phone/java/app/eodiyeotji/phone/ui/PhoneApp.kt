@@ -160,6 +160,7 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
     val permissions by shell.permissions.collectAsStateWithLifecycle()
     val nav by shell.nav.collectAsStateWithLifecycle()
     val parked by shell.parked.collectAsStateWithLifecycle()
+    val parkedMemo by shell.parkedMemo.collectAsStateWithLifecycle()
     var walk by remember { mutableStateOf<WalkTarget?>(null) }
     val guideProgress by guide.progress.collectAsStateWithLifecycle()
     LifecycleResumeEffect(Unit) {
@@ -308,7 +309,7 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
                             }
                             // 차를 세워 둔 동안: 내 차 카드 (가게까지 걷기 · 내 차 찾기)
                             parked != null && !moving -> {
-                                { parked?.let { ParkedCarCard(it, onWalk = { t -> walk = t }, onDismiss = shell::dismissParked) } }
+                                { parked?.let { ParkedCarCard(it, parkedMemo, onMemo = shell::setParkedMemo, onWalk = { t -> walk = t }, onDismiss = shell::dismissParked) } }
                             }
                             else -> null
                         },

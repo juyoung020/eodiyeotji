@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
  * 폰: "내 차" 주차 위치.
  * 두 곳에서 온다 — 연결된 차가 P에 들어가며 보낸 것(받아 둔다), 폰이 직접 기록한 주행의 끝(Rust `parked_car`).
  * 둘 중 늦은 것을 쓴다 (Rust `parked_latest`). 차가 다시 출발했다고 알리거나, "찾았어요"를 누르면 감춘다.
+ * 주차마다 "B2 · F-12" 같은 층 · 자리 메모를 하나 남길 수 있다 (다음 주차가 오면 비워진다).
  */
 @Singleton
 class PhoneParking @Inject constructor(
@@ -33,6 +34,18 @@ class PhoneParking @Inject constructor(
 
     /** 지금 보여 줄 주차 위치 (없으면 null). */
     val car: StateFlow<ParkedCar?> = _car.asStateFlow()
+    private val _memo = MutableStateFlow("")
+
+    /** 지금 주차의 층 · 자리 메모 (없으면 ""). */
+    val memo: StateFlow<String> = _memo.asStateFlow()
+
+    /** 지금 주차에 메모를 남긴다 (빈 글이면 지운다). */
+    fun setMemo(text: String) {
+        val car = _car.value ?: return
+        val t = text.trim().take(MEMO_MAX)
+        prefs.edit().putLong(K_MEMO_T, car.tMs).putString(K_MEMO, t).apply()
+        _memo.value = t
+    }
 
     init {
         scope.launch { core.changes.collect { refresh() } }
@@ -61,7 +74,9 @@ class PhoneParking @Inject constructor(
     suspend fun refresh() {
         val own = runCatching { core.parkedCar() }.getOrNull()
         val latest = parkedLatest(received(), own)
-        _car.value = latest?.takeIf { it.tMs > prefs.getLong(K_DISMISSED, 0) }
+        val car = latest?.takeIf { it.tMs > prefs.getLong(K_DISMISSED, 0) }
+        _car.value = car
+        _memo.value = if (car != null && prefs.getLong(K_MEMO_T, 0) == car.tMs) prefs.getString(K_MEMO, "").orEmpty() else ""
     }
 
     private fun received(): ParkedCar? = prefs.getString(K_RECEIVED, null)?.let { parkedFromJson(it) }
@@ -69,5 +84,8 @@ class PhoneParking @Inject constructor(
     private companion object {
         const val K_RECEIVED = "received"
         const val K_DISMISSED = "dismissed"
+        const val K_MEMO = "memo"
+        const val K_MEMO_T = "memo_t"
+        const val MEMO_MAX = 40
     }
 }
