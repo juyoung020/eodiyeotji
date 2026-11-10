@@ -56,7 +56,7 @@ use crate::places::{self, PlaceLabel, REF_END, REF_START, REF_STAY};
 use crate::trip::{self, DriveMark, MarkKind, Segmenter, Stay, TripConfig};
 
 /// DB 구조 버전 (`PRAGMA user_version`). 구조를 바꾸면 올리고 `migrate`에 단계를 추가한다.
-pub(crate) const SCHEMA_VERSION: i32 = 15;
+pub(crate) const SCHEMA_VERSION: i32 = 16;
 /// 이보다 정확도가 나쁜(m) 점은 버린다.
 pub const MAX_ACCURACY_M: f32 = 100.0;
 /// 지도에 넘길 경로의 단순화 허용 오차(m).
@@ -186,7 +186,7 @@ impl From<rusqlite::Error> for CoreError {
 /// (쓰기 연결 하나 + 읽기 전용 연결 여러 개, 조회 결과 캐시: [`conn`] 모듈 설명).
 #[derive(uniffi::Object)]
 pub struct EodiStore {
-    tz_offset_minutes: i32,
+    pub(crate) tz_offset_minutes: i32,
     cfg: TripConfig,
     conn: Mutex<Connection>,
     pool: conn::Pool,
@@ -410,7 +410,11 @@ fn migrate(conn: &mut Connection) -> Result<(), CoreError> {
         // 차 계기: 주행거리계 · 와이퍼 · 남은 주행 가능 거리 (readings.rs)
         tx.execute_batch(crate::readings::SCHEMA_V15)?;
     }
-    // 다음 버전은 여기에: if version < 16 { ... }
+    if version < 16 {
+        // 출장으로 직접 정한 날 (biztrip.rs)
+        tx.execute_batch(crate::biztrip::SCHEMA_V16)?;
+    }
+    // 다음 버전은 여기에: if version < 17 { ... }
     tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     tx.commit()?;
     Ok(())

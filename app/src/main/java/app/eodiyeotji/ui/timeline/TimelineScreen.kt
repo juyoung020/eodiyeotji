@@ -123,6 +123,8 @@ import app.eodiyeotji.ui.share.ShareTarget
 import app.eodiyeotji.ui.recap.RecapListTop
 import app.eodiyeotji.ui.recap.RecapOverlay
 import app.eodiyeotji.ui.memorymap.MemoryMapOverlay
+import app.eodiyeotji.ui.biz.BizOverlay
+import app.eodiyeotji.ui.biz.BizViewModel
 import app.eodiyeotji.ui.recap.RecapViewModel
 import app.eodiyeotji.ui.theme.AlbumPhoto
 import app.eodiyeotji.ui.theme.DottedRoute
@@ -158,6 +160,7 @@ fun TimelineRoute(
     val state by viewModel.state.collectAsStateWithLifecycle()
     // 날짜 목록 맨 위: "N년 전 오늘" 카드 · 이번 달 요약 입구 (ui/recap)
     val recap: RecapViewModel = hiltViewModel()
+    val biz: BizViewModel = hiltViewModel()
     val openDay: (String) -> Unit = { viewModel.openDay(it, null) }
     var shareEpisode by rememberSaveable { mutableStateOf<Long?>(null) }
     var shared by remember { mutableStateOf(false) }
@@ -190,11 +193,12 @@ fun TimelineRoute(
         compact = compact,
         headerBanner = headerBanner,
         search = search,
-        listTop = { RecapListTop(recap, onOpenDay = openDay) },
+        listTop = { RecapListTop(recap, onOpenDay = openDay, onOpenBiz = biz::open) },
     ) }
     PlaceEditHost(editVm)
     RecapOverlay(recap, onOpenDay = openDay)
     MemoryMapOverlay(recap)
+    BizOverlay(biz, onOpenDay = openDay)
     // 하루 상세에서 바로 커뮤니티에 코스로 올리기 (커뮤니티 탭까지 가지 않는다)
     shareEpisode?.let { id ->
         BackHandler { shareEpisode = null }

@@ -130,7 +130,7 @@ pub fn logbook_csv(book: &Logbook, tz_offset_minutes: i32) -> String {
     out
 }
 
-fn csv_cell(s: &str) -> String {
+pub(crate) fn csv_cell(s: &str) -> String {
     if s.contains([',', '"', '\n', '\r']) {
         format!("\"{}\"", s.replace('"', "\"\""))
     } else {
@@ -143,14 +143,14 @@ fn nearest(odo: &[(i64, f64)], t: i64) -> Option<f64> {
 }
 
 /// "YYYY-MM" → 그 달 1일 (일 번호).
-fn parse_month(s: &str) -> Option<i64> {
+pub(crate) fn parse_month(s: &str) -> Option<i64> {
     if s.len() != 7 {
         return None;
     }
     crate::store::parse_day(&format!("{s}-01"))
 }
 
-fn next_month(first: i64) -> i64 {
+pub(crate) fn next_month(first: i64) -> i64 {
     let s = crate::store::format_day(first);
     let (y, m): (i32, u32) = (s[0..4].parse().unwrap_or(1970), s[5..7].parse().unwrap_or(1));
     let (y, m) = if m == 12 { (y + 1, 1) } else { (y, m + 1) };

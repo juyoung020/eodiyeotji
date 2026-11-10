@@ -4,7 +4,8 @@
 //! - 기간: 오늘 365일 전(또는 1년 전 같은 날짜 중 이른 쪽) ~ 어제. 오늘은 실제 기록용으로 비워 둔다.
 //! - 집: 서울 성동구 응봉동, 회사: 서울 중구 을지로(센터원빌딩). 내비 즐겨찾기처럼 `set_home_office`로도 넣는다.
 //! - 평일: 출근(07:45~08:20 출발)·퇴근(18:10~19:20 출발). 가끔 아침 스타벅스·주유소, 저녁 이마트·스타벅스,
-//!   매달 첫 화요일 저녁 병원. 6%는 차를 안 쓴 날.
+//!   매달 첫 화요일 저녁 병원. 6%는 차를 안 쓴 날. 출장: 첫째 · 셋째 수요일 화성 남양연구소, 둘째 목요일 판교,
+//!   분기 마지막 달 넷째 목요일 대전컨벤션센터 (회사 → 행선지 → 회사, `biztrip.rs`가 찾는다).
 //! - 주말: 토요일 42%·일요일 20% 나들이(성수 카페거리 3곳·서울숲, 남산서울타워+광장시장, 여의도 한강공원+더현대,
 //!   북촌+인사동, 롯데월드몰, 스타필드 하남, 이케아 광명, 북한산, 을왕리(여름), 남이섬+쁘띠프랑스(가을), 성북동 감자탕·광화문 국밥(겨울), 가평 계곡 물놀이(여름, 가족) — 계절에 맞는
 //!   것 중 덜 간 곳부터, 같은 곳은 1년에 2번까지), 그 밖에는 이마트·주유소 볼일.
@@ -83,6 +84,9 @@ const POIS: &[Poi] = &[
     ("광화문국밥", "국밥", "서울 중구 정동 1-19", 37.5680, 126.9745),
     ("용추계곡", "계곡", "경기 가평군 가평읍 승안리 산1", 37.8705, 127.4600),
     ("가평 막국수촌", "막국수", "경기 가평군 가평읍 읍내리 450", 37.8290, 127.5100),
+    ("현대자동차 남양연구소", "연구소", "경기 화성시 남양읍 장덕리 772-1", 37.2012, 126.8295),
+    ("판교테크노밸리 스타트업캠퍼스", "업무시설", "경기 성남시 분당구 삼평동 694", 37.4110, 127.0990),
+    ("대전컨벤션센터", "컨벤션센터", "대전 유성구 도룡동 4-19", 36.3755, 127.3880),
 ];
 
 const HOME: usize = 0;
@@ -127,6 +131,9 @@ const GAMJATANG: usize = 38;
 const GUKBAP: usize = 39;
 const YONGCHU: usize = 40;
 const MAKGUKSU: usize = 41;
+const NAMYANG: usize = 42;
+const PANGYO: usize = 43;
+const DCC: usize = 44;
 
 type Via = &'static [(f64, f64)];
 
@@ -212,6 +219,26 @@ const NAMI_BACK: Via = &[(37.7600, 127.5000), (37.6900, 127.4500), (37.6400, 127
 const EULWANG_OUT: Via = &[(37.5400, 127.0000), (37.5300, 126.9400), (37.5500, 126.8500), (37.5300, 126.7000), (37.5000, 126.5800), (37.4800, 126.4800)];
 const EULWANG_BACK: Via = &[(37.4800, 126.4800), (37.5000, 126.5800), (37.5300, 126.7000), (37.5500, 126.8500), (37.5300, 126.9400), (37.5400, 127.0000)];
 
+// 출장길 (회사 → 남서쪽 서해안고속도로 / 남쪽 경부고속도로)
+const NAMYANG_OUT: Via = &[(37.5300, 126.9600), (37.4600, 126.8900), (37.3500, 126.8500), (37.2600, 126.8350)];
+const NAMYANG_BACK: Via = &[(37.2600, 126.8350), (37.3500, 126.8500), (37.4600, 126.8900), (37.5300, 126.9600)];
+const PANGYO_OUT: Via = &[(37.5300, 127.0100), (37.4800, 127.0400), (37.4400, 127.0800)];
+const PANGYO_BACK: Via = &[(37.4400, 127.0800), (37.4800, 127.0400), (37.5300, 127.0100)];
+const DCC_OUT: Via = &[(37.5300, 127.0100), (37.4300, 127.0700), (37.2000, 127.1100), (36.8000, 127.2500), (36.5000, 127.3600)];
+const DCC_BACK: Via = &[(36.5000, 127.3600), (36.8000, 127.2500), (37.2000, 127.1100), (37.4300, 127.0700), (37.5300, 127.0100)];
+
+/// 그 평일의 출장 (행선지, 가는 길, 오는 길, 머무는 분): 매달 첫째 · 셋째 수요일 화성 남양연구소, 둘째 목요일 판교,
+/// 분기 마지막 달(3 · 6 · 9 · 12월) 넷째 목요일 대전컨벤션센터.
+fn biz_trip_on(d: i64) -> Option<(usize, Via, Via, i64)> {
+    let (_, m, dom) = civil(d);
+    match (weekday_index(d), (dom - 1) / 7) {
+        (3, 0) | (3, 2) => Some((NAMYANG, NAMYANG_OUT, NAMYANG_BACK, 150)),
+        (4, 1) => Some((PANGYO, PANGYO_OUT, PANGYO_BACK, 120)),
+        (4, 3) if m % 3 == 0 => Some((DCC, DCC_OUT, DCC_BACK, 240)),
+        _ => None,
+    }
+}
+
 /// 한 구간: (도착 장소, 지나는 점, 도착 뒤 머무는 분).
 type Leg = (usize, Via, i64);
 
@@ -226,6 +253,9 @@ struct Outing {
     summary: &'static str,
     tags: &'static [&'static str],
 }
+
+/// [OUTINGS]에서 보충 판 1([top_up])로 더한 첫 나들이 자리.
+const FIRST_TOPUP_OUTING: usize = 12;
 
 const ALL_YEAR: &[i64] = &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
@@ -350,6 +380,7 @@ const OUTINGS: &[Outing] = &[
         summary: "쁘띠프랑스를 들렀다가 남이섬 은행나무길을 걸었다.",
         tags: &["단풍", "가을", "섬", "산책", "가족"],
     },
+    // ---- 여기부터 보충 판 1에서 더한 나들이 ([FIRST_TOPUP_OUTING]) ----
     Outing {
         months: &[1, 2, 3, 10, 11, 12],
         depart_h: 18,
@@ -598,7 +629,13 @@ impl Gen<'_> {
             legs.push((GAS, NO_VIA, 11));
         }
         legs.push((OFFICE, if legs.is_empty() { COMMUTE_OUT } else { &COMMUTE_OUT[1..] }, 0));
-        let arrived = self.route(t, HOME, &legs);
+        let mut arrived = self.route(t, HOME, &legs);
+        // 출장: 출근해서 한 시간쯤 뒤 회사 → 행선지 → 회사
+        if let Some((to, out, back, dwell)) = biz_trip_on(d) {
+            let go = arrived + (50 + self.rng.below(40)) * MIN;
+            let stay = dwell + self.rng.below(30);
+            arrived = self.route(go, OFFICE, &[(to, out, stay), (OFFICE, back, 0)]);
+        }
         let m = 10 + self.rng.below(70);
         let leave = (arrived + 8 * 60 * MIN).max(self.at(d, 18, m));
         let dom = civil(d).2;
@@ -706,6 +743,107 @@ impl Gen<'_> {
     }
 }
 
+/// 이미 넣은 시연 기록에 나중에 더한 장면만 덧붙인다 (기존 기록은 그대로): 평일 출장(출근해 회사에 있던 낮 시간),
+/// 새 나들이(감자탕 · 국밥 · 가족 계곡 — 기록이 없는 주말). 시연 기록이 없으면 처음부터 만든다. 반환: 더한 주행 수.
+pub(crate) fn top_up(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
+    let (seeded, done): (Option<i64>, Option<i64>) = {
+        let conn = store.lock()?;
+        let q = |k: &str| conn.query_row("SELECT value FROM meta WHERE key = ?1", [k], |r| r.get(0)).optional();
+        (q("demo_seeded")?, q("demo_topup")?)
+    };
+    let Some(seeded) = seeded else { return seed(store, today_ms) };
+    if done.unwrap_or(0) >= TOPUP_VERSION {
+        return Ok(0);
+    }
+    let p = plan(seeded);
+    let (range_lo, range_hi) = (store.day_start_ms(p.first), store.day_start_ms(p.last + 1));
+    let (mut occupied, fix_times): (HashSet<i64>, Vec<i64>) = {
+        let conn = store.lock()?;
+        let tz_ms = -store.day_start_ms(0);
+        let mut st = conn.prepare("SELECT DISTINCT (t_ms + ?1) / 86400000 FROM fix WHERE t_ms >= ?2 AND t_ms < ?3")?;
+        let days = st.query_map([tz_ms, range_lo, range_hi], |r| r.get::<_, i64>(0))?.collect::<Result<_, _>>()?;
+        let mut st = conn.prepare("SELECT t_ms FROM fix WHERE t_ms >= ?1 AND t_ms < ?2 ORDER BY t_ms")?;
+        let times = st.query_map([range_lo, range_hi], |r| r.get::<_, i64>(0))?.collect::<Result<_, _>>()?;
+        (days, times)
+    };
+    let busy = |a: i64, b: i64| {
+        let i = fix_times.partition_point(|&t| t < a);
+        fix_times.get(i).is_some_and(|&t| t < b)
+    };
+    let before = |table: &str, extra: &str, t: i64| -> Result<Option<f64>, CoreError> {
+        let conn = store.snapshot()?;
+        let sql = format!("SELECT {} FROM {table} WHERE t_ms <= ?1{extra} ORDER BY t_ms DESC LIMIT 1", if table == "drive_energy" { "pct" } else { "value" });
+        Ok(conn.query_row(&sql, [t], |r| r.get(0)).optional()?)
+    };
+    let mut g = Gen {
+        store,
+        rng: Rng(0x70b5_2026),
+        fixes: Vec::new(),
+        events: Vec::new(),
+        labels: BTreeMap::new(),
+        trips: 0,
+        outing_uses: vec![0; OUTINGS.len()],
+        people_now: 1,
+        people: Vec::new(),
+        soc: 70.0,
+        energy: Vec::new(),
+        odo: 18_240.0,
+        rain_now: false,
+        readings: Vec::new(),
+    };
+    let mut shifts: Vec<(i64, f64, f64)> = Vec::new();
+    // 1) 평일 출장: 시연 출퇴근이 있는 날, 회사에 있던 10:00~16:30에 기록이 없을 때만
+    for d in p.first..=p.last {
+        let Some((to, out, back, dwell)) = biz_trip_on(d) else { continue };
+        if !occupied.contains(&d) || busy(g.at(d, 9, 50), g.at(d, 17, 0)) {
+            continue;
+        }
+        let m = g.rng.below(30);
+        let go = g.at(d, 10, m);
+        g.soc = before("drive_energy", "", go)?.unwrap_or(70.0);
+        g.odo = before("drive_reading", &format!(" AND kind = {}", crate::readings::ReadingKind::Odometer.code()), go)?.unwrap_or(18_240.0);
+        let (soc0, odo0) = (g.soc, g.odo);
+        g.people_now = 1;
+        g.rain_now = false;
+        let stay = dwell + g.rng.below(30);
+        let end = g.route(go, OFFICE, &[(to, out, stay), (OFFICE, back, 0)]);
+        shifts.push((end, soc0 - g.soc, g.odo - odo0));
+    }
+    // 2) 새 나들이: 계절이 맞고 기록이 없는 주말 (나들이마다 한 번)
+    for (i, o) in OUTINGS.iter().enumerate().skip(FIRST_TOPUP_OUTING) {
+        // 이미 그 나들이의 첫 곳에 간 기록이 있으면 (새 판으로 처음부터 만든 기록) 넣지 않는다
+        let at = poi(o.stops[0].0);
+        let been: i64 = store.snapshot()?.query_row(
+            "SELECT count(*) FROM place WHERE abs(lat - ?1) < 0.002 AND abs(lon - ?2) < 0.002",
+            params![at.lat, at.lon],
+            |r| r.get(0),
+        )?;
+        if been > 0 {
+            continue;
+        }
+        let day = (p.first..=p.last).rev().find(|&d| {
+            matches!(weekday_index(d), 0 | 6) && !occupied.contains(&d) && o.months.contains(&civil(d).1) && d < p.last - 7
+        });
+        if let Some(d) = day {
+            g.people_now = 2;
+            g.rain_now = false;
+            g.soc = before("drive_energy", "", g.at(d, 6, 0))?.unwrap_or(80.0).max(40.0);
+            g.odo = before("drive_reading", &format!(" AND kind = {}", crate::readings::ReadingKind::Odometer.code()), g.at(d, 6, 0))?.unwrap_or(18_240.0);
+            let (soc0, odo0) = (g.soc, g.odo);
+            let n = g.events.len();
+            g.outing(d, i);
+            let end = g.events[n..].iter().map(|e| e.0).max().unwrap_or(g.at(d, 20, 0));
+            shifts.push((end, soc0 - g.soc, g.odo - odo0));
+            occupied.insert(d);
+        }
+    }
+    let made = g.trips;
+    let new_days: HashSet<i64> = g.labels.keys().copied().collect();
+    let meta = [("demo_topup", TOPUP_VERSION)];
+    write_out(store, &mut g, &meta, p.first, p.last, |d| new_days.contains(&d), &shifts)?;
+    Ok(made)
+}
+
 /// 시연 데이터를 만든다 (모듈 설명). 반환: 만든 주행 수 (이미 만들었으면 0).
 pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
     let today = store.local_day(today_ms);
@@ -780,6 +918,27 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
         d += 1;
     }
     let made = g.trips;
+    let meta = [("demo_seeded", today), ("demo_from_ms", range_lo), ("demo_to_ms", range_hi), ("demo_topup", TOPUP_VERSION)];
+    write_out(store, &mut g, &meta, p.first, p.last, |d| d != p.gangneung && d < today - 30, &[])?;
+    Ok(made)
+}
+
+/// 시연 기록 보충 판 (새 장면을 더할 때마다 올린다). 1 = 평일 출장 · 감자탕 · 국밥 · 가족 계곡 나들이,
+/// 2 = 1판에서 일부 날만 다시 계산하던 것을 시연 기간 전체로 (덧붙일 것은 1판과 같다 — 이미 있으면 건너뛴다).
+const TOPUP_VERSION: i64 = 2;
+
+/// 만든 주행을 DB에 쓰고, 장소 이름 · 하루 요약 · 기억을 다시 만들고, 라벨이 필요한 날 중 [label_day]가 참인 날의 LLM 라벨을 미리 넣는다.
+/// [shifts]: (덧붙인 주행 끝, 쓴 배터리 %p, 달린 km) — 보충 때 그 뒤 기록을 옮긴다.
+#[allow(clippy::too_many_arguments)]
+fn write_out(
+    store: &EodiStore,
+    g: &mut Gen,
+    meta: &[(&str, i64)],
+    first: i64,
+    last: i64,
+    label_day: impl Fn(i64) -> bool,
+    shifts: &[(i64, f64, f64)],
+) -> Result<(), CoreError> {
     let (fixes, events, labels) = (std::mem::take(&mut g.fixes), std::mem::take(&mut g.events), std::mem::take(&mut g.labels));
     let people = std::mem::take(&mut g.people);
     let energy = std::mem::take(&mut g.energy);
@@ -810,14 +969,22 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
                 st.execute(params![t, k, v])?;
             }
         }
-        if let (Some(lo), Some(hi)) = (fixes.first(), fixes.last()) {
-            mark_dirty(&tx, lo.0, hi.0)?;
+        // 시연 기간 전체를 다시 계산한다 (보충은 여러 날에 흩어져 들어가고 시각순이 아니다)
+        mark_dirty(&tx, store.day_start_ms(first), store.day_start_ms(last + 1))?;
+        // 보충이면 덧붙인 출장 뒤 기록(그날 배터리 · 그 뒤 주행거리계)을 출장에 쓴 만큼 옮긴다
+        for &(end, used_pct, km) in shifts {
+            let day_end = store.day_start_ms(store.local_day(end) + 1);
+            tx.execute("UPDATE drive_energy SET pct = max(0.0, pct - ?1) WHERE t_ms > ?2 AND t_ms < ?3", params![used_pct, end, day_end])?;
+            tx.execute(
+                "UPDATE drive_reading SET value = value + ?1 WHERE kind = ?2 AND t_ms > ?3",
+                params![km, crate::readings::ReadingKind::Odometer.code(), end],
+            )?;
         }
-        let mut meta = tx.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?1, ?2)")?;
-        meta.execute(params!["demo_seeded", today])?;
-        meta.execute(params!["demo_from_ms", range_lo])?;
-        meta.execute(params!["demo_to_ms", range_hi])?;
-        drop(meta);
+        let mut st = tx.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?1, ?2)")?;
+        for (k, v) in meta {
+            st.execute(params![k, v])?;
+        }
+        drop(st);
         tx.commit()?;
     }
     store.flush(&mut conn)?;
@@ -839,7 +1006,7 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
                 places::set_label(&tx, id, &label)?;
             }
         }
-        store.refresh_days(&tx, p.first, p.last + 1)?;
+        store.refresh_days(&tx, first, last + 1)?;
         episode::set_navi_anchors(&tx, Some(poi(HOME)), Some(poi(OFFICE)))?;
         tx.commit()?;
     }
@@ -847,9 +1014,9 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
 
     // 30일보다 오래된 날의 LLM 라벨을 미리 넣는다 (강릉 날 제외).
     let old_days: Vec<i64> = {
-        let mut st = conn.prepare("SELECT day FROM day_memory WHERE needs_llm = 1 AND day < ?1 AND day >= ?2 AND day != ?3")?;
-        let rows = st.query_map([today - 30, p.first, p.gangneung], |r| r.get(0))?;
-        rows.collect::<Result<_, _>>()?
+        let mut st = conn.prepare("SELECT day FROM day_memory WHERE needs_llm = 1 AND day >= ?1")?;
+        let rows = st.query_map([first], |r| r.get(0))?;
+        rows.collect::<Result<Vec<i64>, _>>()?.into_iter().filter(|&d| label_day(d)).collect()
     };
     for d in old_days {
         let episodes = episode::episodes_of_day(&conn, d)?;
@@ -865,5 +1032,5 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
         let e = DayEnrichment { day: format_day(d), title, summary, tags, episodes: ep_labels };
         episode::save_enrichment(&mut conn, d, &e)?;
     }
-    Ok(made)
+    Ok(())
 }

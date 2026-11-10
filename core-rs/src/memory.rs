@@ -61,7 +61,7 @@
 //! 다시 만들 날로 표시한다 (원본·주행·장소는 그대로).
 
 mod demo;
-mod episode;
+pub(crate) mod episode;
 pub(crate) mod search;
 
 pub(crate) use episode::{
@@ -308,12 +308,13 @@ impl EodiStore {
     }
 
     /// 시연용 1년치 기록을 만든다 (출퇴근 + 주말 나들이 + 여행, 장소 이름 포함). 반환: 만든 주행 수.
-    /// 앱 디버그 빌드에서만 부른다. 내용·규칙은 `demo` 모듈 설명 (이미 만들었으면 아무것도 하지 않고 0).
+    /// 앱 디버그 빌드에서만 부른다. 내용·규칙은 `demo` 모듈 설명. 이미 만들었으면 그 뒤 더한 장면(출장 · 새 나들이)만
+    /// 덧붙이고(기존 기록은 그대로), 그것도 넣었으면 아무것도 하지 않고 0.
     pub fn seed_demo_data(&self, today_ms: i64) -> Result<u32, CoreError> {
         if today_ms <= 0 {
             return Err(CoreError::InvalidInput(format!("today_ms {today_ms}")));
         }
-        demo::seed(self, today_ms)
+        demo::top_up(self, today_ms)
     }
 }
 

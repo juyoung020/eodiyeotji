@@ -674,6 +674,8 @@ fn build_episodes(ctx: &Ctx, d: i64, rec: &DayRec) -> Vec<Built> {
         let kind = match (from_a, to_a) {
             (Some(Anchor::Home), Some(Anchor::Office)) => EpisodeKind::CommuteToWork,
             (Some(Anchor::Office), Some(Anchor::Home)) => EpisodeKind::CommuteHome,
+            // 회사에서 나가 회사로 돌아온 이동은 멀어도 업무 외근 (출장 관리 `biztrip.rs`가 따로 묶는다, 여행 · 나들이가 아니다)
+            (Some(Anchor::Office), Some(Anchor::Office)) => EpisodeKind::Errand,
             _ if far || overnight => EpisodeKind::Trip,
             _ if rare.iter().any(|&r| r) || outside.iter().any(|&o| o) || a.outside(last.end) => EpisodeKind::Outing,
             _ => EpisodeKind::Errand,

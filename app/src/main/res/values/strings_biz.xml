@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 출장 관리 (ui/biz) -->
+<resources>
+    <string name="biz_entry">출장 관리</string>
+    <string name="biz_title">출장 관리</string>
+    <string name="biz_back">뒤로</string>
+    <string name="biz_prev">지난달</string>
+    <string name="biz_next">다음 달</string>
+    <string name="biz_month">%1$d년 %2$d월</string>
+    <string name="biz_export">정산서 내보내기</string>
+    <string name="biz_subject">출장 정산서 %1$s</string>
+    <string name="biz_failed">출장 기록을 불러오지 못했어요.</string>
+    <string name="biz_empty">이 달에는 출장 기록이 없어요.</string>
+    <string name="biz_hint">평일 낮에 집 · 회사에서 15km 넘게 다녀온 기록을 자동으로 출장으로 묶어요. 거리는 계기판, 경비는 쓴 배터리 · 연료 × 충전 · 주유 단가로 어림한 값이에요.</string>
+    <string name="biz_count">%1$d건</string>
+    <string name="biz_count_label">출장</string>
+    <string name="biz_km_label">주행 거리</string>
+    <string name="biz_time_label">출장에 쓴 시간</string>
+    <string name="biz_cost_label">경비 어림</string>
+    <string name="biz_date">%1$d월 %2$d일 (%3$s)</string>
+    <string name="biz_km_odo">계기판 %1$.1fkm</string>
+    <string name="biz_km_gps">GPS %1$.1fkm</string>
+    <string name="biz_drive">운전 %1$s</string>
+    <string name="biz_battery">배터리 %1$d%%</string>
+    <string name="biz_fuel">연료 %1$d%%</string>
+    <string name="biz_auto">자동으로 찾음</string>
+    <string name="biz_marked">직접 지정</string>
+    <string name="biz_open_day">그날 보기</string>
+    <string name="biz_not_biz">출장 아님</string>
+    <string name="biz_about">약 %1$s</string>
+</resources>

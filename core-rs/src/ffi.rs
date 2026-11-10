@@ -254,6 +254,12 @@ pub fn logbook_csv(book: crate::logbook::Logbook, tz_offset_minutes: i32) -> Str
     crate::logbook::logbook_csv(&book, tz_offset_minutes)
 }
 
+/// 출장 정산서를 엑셀용 CSV 글로 (`biztrip.rs`).
+#[uniffi::export]
+pub fn biz_report_csv(month: crate::biztrip::BizMonth, tz_offset_minutes: i32) -> String {
+    crate::biztrip::biz_report_csv(&month, tz_offset_minutes)
+}
+
 /// 코스 길이 어림 (km, 직선 × 도로 우회율, `readings.rs`).
 #[uniffi::export]
 pub fn course_km(from: Option<GeoPoint>, legs: Vec<crate::memory::CourseLeg>) -> f64 {

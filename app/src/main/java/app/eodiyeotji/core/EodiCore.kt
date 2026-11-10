@@ -120,6 +120,16 @@ class EodiCore @Inject constructor(
     fun logbookCsv(book: app.eodiyeotji.core.rust.Logbook): String =
         app.eodiyeotji.core.rust.logbookCsv(book, java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000)
 
+    /** 그 달("YYYY-MM") 출장 (평일 업무 시간에 집 · 회사에서 멀리 다녀온 나들이, `biztrip.rs`). */
+    suspend fun bizTrips(month: String): app.eodiyeotji.core.rust.BizMonth = coreCall("bizTrips") { store.bizTrips(month) }
+
+    /** 하루를 출장 / 출장 아님으로 정한다 (null = 자동 판정으로). */
+    suspend fun setBizMark(day: String, mark: Boolean?) = coreCall("setBizMark") { store.setBizMark(day, mark) }
+
+    /** 출장 정산서 → 엑셀용 CSV 글 (UTF-8 BOM). */
+    fun bizReportCsv(month: app.eodiyeotji.core.rust.BizMonth): String =
+        app.eodiyeotji.core.rust.bizReportCsv(month, java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000)
+
     /** 코스 길이 어림 (km): [from]에서 구간의 곳들을 차례로 지나는 직선거리 × 도로 우회율. */
     fun courseKm(from: LatLon?, legs: List<CourseLeg>): Double {
         fun s(f: StopFact) = RStopFact(f.name, f.category, f.address, f.arriveMs, f.leaveMs, f.lat, f.lon, f.firstVisit)
