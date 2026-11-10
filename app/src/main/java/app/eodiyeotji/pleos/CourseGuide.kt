@@ -8,6 +8,7 @@ import app.eodiyeotji.BuildConfig
 import app.eodiyeotji.agent.AgentBridge
 import app.eodiyeotji.core.CourseLeg
 import app.eodiyeotji.core.StopFact
+import app.eodiyeotji.core.lastKnownLocation
 import app.eodiyeotji.platform.NaviEvent
 import app.eodiyeotji.platform.Navigator
 import app.eodiyeotji.platform.RouteStop
@@ -48,6 +49,8 @@ data class CourseProgress(
     val finished: Boolean = false,
     val failed: Boolean = false,
     val single: Boolean = false,
+    /** 남은 주행 가능 거리로는 모자라거나 빠듯할 때 한 줄 (예: "남은 거리 50km · 이 코스 64km라 14km 모자라요…"). 넉넉하면 null. */
+    val rangeNote: String? = null,
 ) {
     val hasNextLeg: Boolean get() = leg < total
 }
@@ -74,6 +77,9 @@ class CourseGuide @Inject constructor(
     @ApplicationContext private val context: Context,
     private val navi: Navigator,
     private val agent: AgentBridge,
+    private val core: app.eodiyeotji.core.EodiCore,
+    private val gauges: app.eodiyeotji.platform.GaugeSource,
+    private val energy: app.eodiyeotji.platform.EnergySource,
 ) {
     private val scope = CoroutineScope(
         SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, e -> Log.w(TAG, "코스 안내 오류", e) },
@@ -202,6 +208,21 @@ class CourseGuide @Inject constructor(
             nextLeg = legs.getOrNull(1)?.firstName(),
         )
         if (watchJob?.isActive != true) watchJob = scope.launch { watchNavi() }
+        scope.launch { checkRange(legs.filterNotNull()) }
+    }
+
+    /**
+     * 코스를 시작할 때 한 번: 남은 주행 가능 거리(차 계기)와 코스 길이를 견줘, 모자라면 배너에 한 줄 띄운다.
+     * 계기가 없는 판(폰)이나 코스 곳을 모르면 아무것도 하지 않는다.
+     */
+    private suspend fun checkRange(known: List<CourseLeg>) {
+        if (known.isEmpty()) return
+        val range = gauges.rangeKm()?.takeIf { it > 0 } ?: return
+        val from = runCatching { core.lastKnownLocation() }.getOrNull()
+        val km = core.courseKm(from, known)
+        val check = core.rangeCheck(range, km, energy.level()?.ev ?: true)
+        if (BuildConfig.DEBUG) Log.d(TAG, "남은 거리 확인: ${check.text}")
+        if (!check.enough) _progress.update { it?.copy(rangeNote = check.text) }
     }
 
     private suspend fun advance(manual: Boolean) {

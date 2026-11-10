@@ -120,6 +120,19 @@ class EodiCore @Inject constructor(
     fun logbookCsv(book: app.eodiyeotji.core.rust.Logbook): String =
         app.eodiyeotji.core.rust.logbookCsv(book, java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000)
 
+    /** 코스 길이 어림 (km): [from]에서 구간의 곳들을 차례로 지나는 직선거리 × 도로 우회율. */
+    fun courseKm(from: LatLon?, legs: List<CourseLeg>): Double {
+        fun s(f: StopFact) = RStopFact(f.name, f.category, f.address, f.arriveMs, f.leaveMs, f.lat, f.lon, f.firstVisit)
+        return app.eodiyeotji.core.rust.courseKm(
+            from?.let { RGeoPoint(it.lat, it.lon) },
+            legs.map { app.eodiyeotji.core.rust.CourseLeg(it.waypoints.map(::s), s(it.destination)) },
+        )
+    }
+
+    /** 남은 주행 가능 거리로 코스를 갈 수 있는가. */
+    fun rangeCheck(rangeKm: Double, routeKm: Double, ev: Boolean): app.eodiyeotji.core.rust.RangeCheck =
+        app.eodiyeotji.core.rust.rangeCheck(rangeKm, routeKm, ev)
+
     /** 그 하루 가장 많이 탄 인원 (모르면 0). */
     suspend fun dayPeople(day: String): Int = coreCall("dayPeople") { store.dayPeople(day).toInt() }
 

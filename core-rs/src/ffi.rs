@@ -254,6 +254,18 @@ pub fn logbook_csv(book: crate::logbook::Logbook, tz_offset_minutes: i32) -> Str
     crate::logbook::logbook_csv(&book, tz_offset_minutes)
 }
 
+/// 코스 길이 어림 (km, 직선 × 도로 우회율, `readings.rs`).
+#[uniffi::export]
+pub fn course_km(from: Option<GeoPoint>, legs: Vec<crate::memory::CourseLeg>) -> f64 {
+    crate::readings::course_km(from, &legs)
+}
+
+/// 남은 주행 가능 거리로 코스를 충전 · 주유 없이 갈 수 있는가 (`readings.rs`).
+#[uniffi::export]
+pub fn range_check(range_km: f64, route_km: f64, ev: bool) -> crate::readings::RangeCheck {
+    crate::readings::range_check(range_km, route_km, ev)
+}
+
 /// 지금 위치 · 보는 방향(모르면 음수)에서 목표까지 걷는 방향과 거리.
 #[uniffi::export]
 pub fn walk_guide(from_lat: f64, from_lon: f64, heading_deg: f64, to_lat: f64, to_lon: f64) -> crate::parking::WalkGuide {
