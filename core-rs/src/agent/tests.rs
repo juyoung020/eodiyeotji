@@ -123,7 +123,7 @@ impl MemoryBackend for FakeBackend {
                 let matches = |t: &str| fields.iter().any(|f| f.contains(t) || (f.chars().count() >= 2 && t.contains(f)));
                 let score = if q.terms.is_empty() { 1.0 } else { q.terms.iter().filter(|t| !t.is_empty() && matches(t)).count() as f64 };
                 let best = e.facts.stops.iter().find(|s| q.terms.iter().any(|t| s.name.contains(t.as_str()) || s.category.contains(t.as_str()))).or(e.facts.stops.first()).cloned();
-                (score > 0.0).then(|| MemoryHit { episode: e.clone(), day_title: e.title.clone(), score, best_stop: best })
+                (score > 0.0).then(|| MemoryHit { episode: e.clone(), day_title: e.title.clone(), score, best_stop: best, matched_tags: vec![] })
             })
             .collect();
         hits.sort_by(|a, b| b.score.total_cmp(&a.score).then(b.episode.facts.start_ms.cmp(&a.episode.facts.start_ms)));
@@ -435,7 +435,7 @@ fn short_answers_and_search_words() {
     assert_eq!(words::parse("조개구이 먹었던 데").terms, vec!["조개구이", "조개구"]);
     assert_eq!(words::parse("산에 갔던 기록 있어?").terms, vec!["산"]);
     let mom = words::parse("엄마랑 갔던 순두부집 어디였지?");
-    assert_eq!(mom.terms, vec!["순두부집"]);
+    assert_eq!(mom.terms, vec!["순두부"], "\"~집\"은 떼고 찾는다 (가게 이름에 \"집\"이 없는 때가 많다)");
     assert!(mom.has_people);
     assert!(words::parse("거기 말고 다른 데").has_reference);
     assert!(words::parse("작년 크리스마스 이브에 어디 갔었지?").terms.is_empty());

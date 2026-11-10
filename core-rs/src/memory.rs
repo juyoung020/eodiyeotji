@@ -62,7 +62,7 @@
 
 mod demo;
 mod episode;
-mod search;
+pub(crate) mod search;
 
 pub(crate) use episode::{
     anchor_sources, is_short_move, current_anchors, day_title, episode_from_row, flush_memory, kind_code, reindex_day, set_user_anchor, Anchors,
@@ -193,6 +193,8 @@ pub struct MemoryHit {
     pub score: f64,
     /// 질문과 가장 맞는 들른 곳 (추천 경유지)
     pub best_stop: Option<StopFact>,
+    /// 질문과 맞은 AI 꼬리표 (하루 라벨링 때 LLM이 붙인 태그 중, 최대 3개) — 화면에 "왜 이 기억인지"로 보인다
+    pub matched_tags: Vec<String>,
 }
 
 /// 코스 한 구간 (내비 경유지 2개 + 목적지).

@@ -62,6 +62,9 @@ pub(crate) const SYNONYMS: &[&[&str]] = &[
     &["쇼핑", "쇼핑몰", "백화점", "아울렛"],
     &["공원", "한강공원"],
     &["휴게소", "고속도로"],
+    &["계곡", "물놀이", "골짜기"],
+    &["감자탕", "뼈해장국", "감자국"],
+    &["국밥", "돼지국밥", "순대국", "순댓국"],
 ];
 
 /// 혼자서도 뜻이 분명한 한 글자 낱말. 나머지 한 글자 낱말은 버린다.
@@ -271,7 +274,7 @@ pub(crate) fn search(conn: &Connection, q: &MemoryQuery) -> Result<Vec<MemoryHit
             if terms.is_empty() {
                 let recency = (-((newest - ep.facts.start_ms).max(0) as f64) / YEAR_MS).exp();
                 let best_stop = best_stop(&ep.facts.stops, &[]).map(|(i, _)| ep.facts.stops[i].clone());
-                return MemoryHit { episode: ep, day_title, score: recency, best_stop };
+                return MemoryHit { episode: ep, day_title, score: recency, best_stop, matched_tags: vec![] };
             }
             let coverage = {
                 let f = &ep.facts;
@@ -292,7 +295,9 @@ pub(crate) fn search(conn: &Connection, q: &MemoryQuery) -> Result<Vec<MemoryHit
                 if groups.is_empty() { 0.0 } else { hit as f64 / groups.len() as f64 }
             };
             let s_fts = if fts > 0.0 { fts / (fts + 4.0) * 4.0 } else { 0.0 };
-            let tag_hits = terms.iter().filter(|t| ep.tags.contains(t) || day_tags.contains(t)).count().min(3);
+            let matched_tags: Vec<String> =
+                terms.iter().filter(|t| ep.tags.contains(t) || day_tags.contains(t)).take(3).cloned().collect();
+            let tag_hits = matched_tags.len();
             let best = best_stop(&ep.facts.stops, &terms);
             let stop_score = best.map_or(0.0, |(i, m)| {
                 let s = &ep.facts.stops[i];
@@ -311,7 +316,7 @@ pub(crate) fn search(conn: &Connection, q: &MemoryQuery) -> Result<Vec<MemoryHit
             let recency = 0.5 * (-((newest - ep.facts.start_ms).max(0) as f64) / YEAR_MS).exp();
             let score = s_fts + 1.5 * coverage + tag_hits as f64 + stop_score + kind_bonus + recency;
             let best_stop = best.map(|(i, _)| ep.facts.stops[i].clone());
-            MemoryHit { episode: ep, day_title, score, best_stop }
+            MemoryHit { episode: ep, day_title, score, best_stop, matched_tags }
         })
         .collect();
     hits.sort_by(|a, b| b.score.total_cmp(&a.score).then(b.episode.facts.start_ms.cmp(&a.episode.facts.start_ms)));

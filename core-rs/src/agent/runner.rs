@@ -134,9 +134,30 @@ impl MemoryAgent {
             }
         }
 
-        // 3) 빠른 길: 규칙으로 날짜·검색어 → 기기 검색 (수 ms)
         let tz = ctx.tz_offset_minutes;
         let today = local_days(ctx.now_ms, tz);
+
+        // 2-1) 기억 후보 고르기: 앞 질문에서 후보를 여럿 보였으면 "2번", "두 번째 거", "그거 말고 다른 거" (규칙, 수 ms)
+        if self.opts.fast_path && !s.course_topic && s.candidates.len() > 1 {
+            if let Some(pick) = candidate_pick(u, &s.candidates) {
+                match pick {
+                    Some(i) => {
+                        // 고른 후보가 1번, 그 뒤 후보들이 차례로 2·3번 (화면 줄 번호와 말 번호가 같게, 안 본 후보가 먼저)
+                        s.candidates.rotate_left(i);
+                        let chosen = s.candidates[0].clone();
+                        for c in s.candidates.clone().iter() {
+                            t.recommend(c, None);
+                        }
+                        s.focus = Some(chosen.clone());
+                        self.fast_answer(&mut s, &mut t, &chosen, ctx, today);
+                    }
+                    None => t.say(&format!("후보는 {}번까지 있어요. 몇 번으로 할까요?", s.candidates.len())),
+                }
+                return self.finish(&mut s, t, u, AnswerSource::FastPath);
+            }
+        }
+
+        // 3) 빠른 길: 규칙으로 날짜·검색어 → 기기 검색 (수 ms)
         let parsed = words::parse(u);
         let range = dates::parse_korean_range(u, today);
         let mut fast_hits: Vec<MemoryHit> = vec![];
@@ -152,7 +173,7 @@ impl MemoryAgent {
             let (limit, kinds) = if parsed.rain {
                 (80, if parsed.terms.is_empty() { vec![EpisodeKind::Errand, EpisodeKind::Outing, EpisodeKind::Trip] } else { vec![] })
             } else {
-                (5, vec![])
+                (8, vec![])
             };
             let q = MemoryQuery { terms: parsed.terms.clone(), from_ms, to_ms, kinds, limit };
             fast_hits = self.backend.search_memories(q).unwrap_or_default();
@@ -170,6 +191,10 @@ impl MemoryAgent {
                     fast_hits.truncate(5);
                 }
             }
+            // "옛날에 · 예전에": 최근 [RECENT_DAYS]일 기록은 뒤로 (순서만 바꾸고 빼지는 않는다)
+            if parsed.long_ago && range.is_none() {
+                fast_hits.sort_by_key(|h| parse_ymd(&h.episode.facts.day, false).is_some_and(|d| today - d < RECENT_DAYS));
+            }
             // "엄마랑 · 가족이랑 · 혼자": 좌석 센서로 그때 탄 인원이 맞는 기억만 남긴다 (맞는 게 하나도 없으면 그대로 LLM에게)
             if let Some(want) = parsed.people {
                 let fits: Vec<bool> =
@@ -185,7 +210,12 @@ impl MemoryAgent {
                 t.recommend(top, None);
                 s.tools.remember(&fast_hits);
                 s.focus = Some(top.clone());
-                s.candidates = fast_hits.clone();
+                // 흐릿한 질문("옛날에 갔던 바다")은 답이 하나가 아닐 수 있다 → 후보 몇 곳을 같이 보인다 (1번이 가장 비슷한 곳)
+                let short = shortlist(&fast_hits);
+                for c in short.iter().skip(1) {
+                    t.recommend(c, None);
+                }
+                s.candidates = short;
             }
         }
         let narrow_date = range.is_some_and(|r| r.to - r.from <= 2);
@@ -307,11 +337,24 @@ impl MemoryAgent {
             Some(_) => " 그곳으로 안내할까요?",
             None => "",
         };
+        let others: Vec<(usize, &MemoryHit)> = s.candidates.iter().enumerate().filter(|(_, c)| c.episode.facts.id != f.id).collect();
+        let more = match (others.len(), ctx.is_driving) {
+            (0, _) => String::new(),
+            (n, true) => format!(" 다른 후보도 {n}곳 있어요."),
+            (_, false) => {
+                let list = others
+                    .iter()
+                    .map(|(i, c)| format!("{}번 {} {}", i + 1, spoken_date(&c.episode.facts.day, today), hit_place(c)))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(" 비슷한 기억도 있어요: {list}.")
+            }
+        };
         let text = if ctx.is_driving || f.stops.len() <= 1 {
-            format!("{when}, {place}에 다녀오셨어요.{ask}")
+            format!("{when}, {place}에 다녀오셨어요.{more}{ask}")
         } else {
             let names = f.stops.iter().take(3).map(|x| x.name.as_str()).filter(|n| !n.is_empty()).collect::<Vec<_>>().join(", ");
-            format!("{when} '{title}' 기록이에요. {names}에 들르셨어요.{ask}")
+            format!("{when} '{title}' 기록이에요. {names}에 들르셨어요.{more}{ask}")
         };
         t.say(&text);
         if let Some(p) = proposal {
@@ -564,6 +607,67 @@ fn context_block(ctx: &AgentContext, range: Option<DayRange>, s: &Session, fast_
     }
     b.push_str("[운전자 말]\n");
     b
+}
+
+/// "옛날에 갔던"이라고 하면 이 날수 안의 기록은 뒤로 민다.
+const RECENT_DAYS: i64 = 30;
+
+/// 한 번에 보일 기억 후보 수 (화면: 큰 카드 1장 + 줄 2개, 말: "2번 …, 3번 …").
+pub const MAX_CANDIDATES: usize = 3;
+/// 1위 점수의 이 비율보다 낮은 결과는 후보로 보이지 않는다 (엉뚱한 곳이 끼지 않게).
+const CANDIDATE_MIN_RATIO: f64 = 0.5;
+
+/// 검색 결과 → 후보 목록: 1위 + 점수가 가까운 다른 곳들 (같은 장소는 한 번, 최대 [MAX_CANDIDATES]).
+pub(crate) fn shortlist(hits: &[MemoryHit]) -> Vec<MemoryHit> {
+    let Some(top) = hits.first() else { return vec![] };
+    let mut out: Vec<MemoryHit> = vec![top.clone()];
+    for h in &hits[1..] {
+        if out.len() >= MAX_CANDIDATES || h.score < top.score * CANDIDATE_MIN_RATIO {
+            break;
+        }
+        let place = hit_place(h);
+        if out.iter().any(|o| hit_place(o) == place) {
+            continue;
+        }
+        out.push(h.clone());
+    }
+    out
+}
+
+/// 후보를 부를 이름: 질문과 가장 맞는 들른 곳, 없으면 첫 곳, 없으면 제목.
+fn hit_place(h: &MemoryHit) -> String {
+    h.best_stop
+        .as_ref()
+        .map(|b| b.name.clone())
+        .filter(|n| !n.is_empty())
+        .or_else(|| h.episode.facts.stops.first().map(|x| x.name.clone()).filter(|n| !n.is_empty()))
+        .or_else(|| h.episode.title.clone())
+        .or_else(|| h.day_title.clone())
+        .unwrap_or_else(|| h.episode.facts.rule_label.clone())
+}
+
+/// 후보 고르는 말인가. Some(Some(i)) = i번째 후보, Some(None) = 없는 번호, None = 고르는 말이 아님 (새 질문).
+/// "2번", "두 번째 거", "마지막 거로 안내해줘" / 새 검색어 없이 "그거 말고", "다른 거" → 다음 후보(2번).
+/// 지금 이야기하는 후보는 언제나 1번이다 (고르면 목록을 돌려 고른 것을 앞에 둔다).
+fn candidate_pick(u: &str, cands: &[MemoryHit]) -> Option<Option<usize>> {
+    let c = courses::compact(u);
+    // 번호 말·고르는 말을 뺀 검색어가 남으면 새 질문이다 ("2번 국도 옆 식당"은 고르는 말이 아니다)
+    let new_terms = words::parse(u).terms.iter().any(|w| {
+        let w = courses::compact(w);
+        courses::ordinal(&w, cands.len()).is_none()
+            && !courses::OTHER_WORDS.iter().any(|x| w.contains(x))
+            && !["거", "걸로", "거로", "곳", "후보", "번", "번째", "안내", "다른", "딴"].iter().any(|x| w.contains(x))
+    });
+    if new_terms || courses::is_past(u) {
+        return None;
+    }
+    if let Some(i) = courses::ordinal(&c, cands.len()) {
+        return Some((i < cands.len()).then_some(i));
+    }
+    if courses::OTHER_WORDS.iter().any(|w| c.contains(w)) {
+        return Some(Some(1 % cands.len()));
+    }
+    None
 }
 
 /// "2025-08-14" → "작년 8월 14일" / "8월 14일" / "어제" …

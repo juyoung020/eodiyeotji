@@ -465,7 +465,7 @@ fn with_memory(tag: &str) -> (TempDb, std::sync::Arc<EodiStore>) {
 #[test]
 fn share_candidates_on_a_day_are_that_days_outings() {
     let (_db, store) = with_memory("share-day");
-    let all = store.share_candidates(0).unwrap();
+    let all = store.share_candidates(200).unwrap();
     let trip = all.iter().find(|c| c.stops.iter().any(|s| s.name == "초당할머니순두부")).expect("강릉 여행");
     let on = store.share_candidates_on(trip.day.clone()).unwrap();
     assert!(on.iter().any(|c| c.episode_id == trip.episode_id), "그날 기록에서 바로 올릴 수 있다");
@@ -477,7 +477,7 @@ fn share_candidates_on_a_day_are_that_days_outings() {
 #[test]
 fn share_from_my_record_hides_home_and_office_and_keeps_hearts_on_reshare() {
     let (_db, store) = with_memory("share");
-    let cands = store.share_candidates(0).unwrap();
+    let cands = store.share_candidates(200).unwrap();
     assert!(!cands.is_empty());
     assert!(cands.windows(2).all(|w| w[0].day >= w[1].day), "최신순");
     assert!(cands.iter().all(|c| matches!(c.kind, EpisodeKind::Outing | EpisodeKind::Trip) && !c.stops.is_empty()));

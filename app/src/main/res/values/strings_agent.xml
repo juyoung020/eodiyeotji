@@ -12,8 +12,8 @@
     <string name="agent_empty_title">그때 거기, 어디였지?</string>
     <string name="agent_empty_body">지난 기록에서 찾아 드려요. 그날 코스로 바로 안내도 할 수 있어요.</string>
     <string name="agent_examples">이렇게 물어보세요</string>
-    <string name="agent_example_1">1년 전에 간 바다 어디였지?</string>
-    <string name="agent_example_2">엄마랑 갔던 식당</string>
+    <string name="agent_example_1">옛날에 갔던 바다 어디였지?</string>
+    <string name="agent_example_2">예전에 갔던 감자탕집</string>
     <string name="agent_example_3">지난주 퇴근길에 들른 카페</string>
     <string name="agent_example_4">여기 근처 드라이브 추천코스</string>
 
@@ -44,7 +44,8 @@
     <string name="agent_years_ago">%1$d년 전</string>
     <string name="agent_stops_count">들른 곳 %1$d곳</string>
     <string name="agent_map_none">지도 기록이 없는 날이에요</string>
-    <string name="agent_more_days">다른 날</string>
+    <string name="agent_more_days">비슷한 기억 후보</string>
+    <string name="agent_ai_tags">AI 꼬리표</string>
 
     <string name="agent_kind_commute_to_work">출근길</string>
     <string name="agent_kind_commute_home">퇴근길</string>
@@ -72,7 +73,7 @@
     <!-- 버튼을 누르면 에이전트에 이어서 묻는 말 -->
     <string name="agent_followup_only_here">%1$s만 안내해줘</string>
     <string name="agent_followup_other_days">다른 날도 보여줘</string>
-    <string name="agent_followup_pick_day">%1$s %2$s 보여줘</string>
+    <string name="agent_followup_pick_candidate">%1$d번 보여줘</string>
     <string name="agent_followup_pick_course">%1$d번으로 안내해줘</string>
 
     <!-- 근처 추천 코스 카드 -->

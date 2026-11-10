@@ -101,7 +101,7 @@ private fun REpisode.toModel() = Episode(
     title, tags,
 )
 
-internal fun RMemoryHit.toModel() = MemoryHit(episode.toModel(), dayTitle, score, bestStop?.toModel())
+internal fun RMemoryHit.toModel() = MemoryHit(episode.toModel(), dayTitle, score, bestStop?.toModel(), matchedTags)
 
 internal fun RNavAction.toModel(): AgentNavAction = when (this) {
     is RNavAction.Course -> AgentNavAction.Course(episodeId, title, legs.map { it.toModel() })

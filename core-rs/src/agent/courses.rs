@@ -72,7 +72,7 @@ const DESCRIBE_WORDS: &[&str] = &[
     "뭐보여", "뭐가보여", "보여줘",
 ];
 const CLOSER_WORDS: &[&str] = &["가까운", "가까이", "덜먼", "안먼"];
-const OTHER_WORDS: &[&str] = &["다른거", "다른코스", "다른데", "딴거", "딴데", "말고", "다음거", "다른곳", "또없", "더없", "다른건"];
+pub(crate) const OTHER_WORDS: &[&str] = &["다른거", "다른코스", "다른데", "딴거", "딴데", "말고", "다음거", "다른곳", "또없", "더없", "다른건"];
 
 /// 테마 동의어 묶음 (장소 사전이 아니라 일반 낱말). 첫 낱말이 대표.
 const THEMES: &[&[&str]] = &[
@@ -94,7 +94,7 @@ const FILLER: &[&str] = &[
     "더", "번", "번째", "말고", "없어", "없을까", "없니", "없지", "나갈", "만한곳", "곳이", "다른", "그거", "그럼", "보러", "같은", "어때", "어떤", "가요", "갈까", "가볼까", "있나", "있니", "없나", "뭐", "좀",
 ];
 
-fn compact(u: &str) -> String {
+pub(crate) fn compact(u: &str) -> String {
     u.chars().filter(|c| !c.is_whitespace() && !"?!.,~".contains(*c)).collect::<String>().to_lowercase()
 }
 

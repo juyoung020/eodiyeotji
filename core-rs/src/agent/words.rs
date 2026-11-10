@@ -57,7 +57,11 @@ const STOP: &[&str] = &[
     "혹시", "가본", "갔었던", "갔었는데", "갔는데", "들렀던", "갔다온", "다녀왔던", "했던", "먹었던", "마셨던", "봤던", "샀던", "놀러",
     "뭐", "무슨", "어떤", "어느", "누구", "몇", "그거", "그곳", "거", "것", "데가", "곳이", "덴", "건", "게", "얘기", "말야", "말이야",
     "알아", "아니", "응", "네", "좀요", "해줘", "줘", "안내해줘", "가자", "었지", "였지", "지", "한", "하던", "할", "하는", "했던가",
-    "근처", "주변", "옆", "앞", "쪽", "근방", "되나", "돼"
+    "근처", "주변", "옆", "앞", "쪽", "근방", "되나", "돼",
+    // 흐릿한 때 말 ("옛날에 갔던 바다"): 기간을 정하지 않고 전체에서 찾는다
+    "전", "언젠가", "그전", "지난번", "이전",
+    // "비 오는 날"의 나머지 말 (비는 와이퍼 기록으로 따로 거른다)
+    "오는", "오던", "온", "내리는", "내리던", "날",
 ];
 
 /// 사람 말 (기록에 사람 정보가 없어 검색어로 쓰지 않는다. 있으면 LLM에게 넘긴다).
@@ -73,6 +77,9 @@ const ALONE: &[&str] = &["혼자", "혼자서", "나혼자"];
 fn is_rain(w: &str, stem: &str) -> bool {
     stem == "비" || ["비오", "비올", "비내", "빗길", "빗속", "우중"].iter().any(|p| w.starts_with(p))
 }
+
+/// 오래전 일을 묻는 말 ("옛날에 갔던 바다"): 기간은 정하지 않고, 최근 한 달 기록을 뒤로 민다.
+const LONG_AGO: &[&str] = &["옛날", "예전", "오래전", "한참전", "어릴"];
 
 /// 앞 대화를 가리키는 말 (LLM이 대화를 보고 풀어야 한다).
 const REFERENCE: &[&str] = &["거기", "그때", "아까", "방금", "말고", "다른", "그곳", "거기서", "그날", "저번에", "그거"];
@@ -101,6 +108,8 @@ pub struct Parsed {
     pub people: Option<crate::cabin::PeopleWant>,
     /// "비 오던 날 · 빗길": 와이퍼가 돈 때만
     pub rain: bool,
+    /// "옛날에 · 예전에 · 오래전": 최근 기록보다 지난 기록을 앞에
+    pub long_ago: bool,
 }
 
 pub fn parse(utterance: &str) -> Parsed {
@@ -125,21 +134,38 @@ pub fn parse(utterance: &str) -> Parsed {
             p.rain = true;
             continue;
         }
+        if LONG_AGO.iter().any(|x| stem == *x || w.starts_with(x)) {
+            p.long_ago = true;
+            continue;
+        }
         if is_noise(&w) || is_noise(&stem) {
             continue;
         }
+        // 한 글자는 뜻이 분명한 것("산", "강", "섬")만 — 잘린 말("오는" → "오")이 검색어가 되지 않게
+        let usable = |x: &str| x.chars().count() >= 2 || crate::memory::search::SINGLE_OK.contains(&x);
         if stem != w {
             // 받침 없는 낱말 끝 "이·가·도…"는 조사인지 낱말 일부("조개구이")인지 모른다 → 둘 다 넣는다
             if AMBIGUOUS_JOSA.iter().any(|j| w.ends_with(j)) && w.chars().count() >= 2 {
-                push(&mut p.terms, &w);
+                push(&mut p.terms, &place_word(&w));
             }
-            push(&mut p.terms, &stem);
-        } else if w.chars().count() >= 2 {
-            push(&mut p.terms, &w);
+            if usable(&stem) {
+                push(&mut p.terms, &place_word(&stem));
+            }
+        } else if usable(&w) {
+            push(&mut p.terms, &place_word(&w));
         }
     }
     p.terms.truncate(6);
     p
+}
+
+/// "감자탕집", "국밥집" → "감자탕", "국밥": 가게 이름에는 "집"이 없는 때가 많다 ("태조감자국"·"광화문국밥").
+/// 두 글자("맛집")는 그대로 둔다.
+fn place_word(w: &str) -> String {
+    match w.strip_suffix('집') {
+        Some(head) if head.chars().count() >= 2 => head.to_string(),
+        _ => w.to_string(),
+    }
 }
 
 fn push(v: &mut Vec<String>, s: &str) {

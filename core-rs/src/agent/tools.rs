@@ -181,7 +181,7 @@ fn day(call: &ToolCall, a: &Value, c: &mut Ctx) -> Result<Outcome, Bad> {
     let d = opt_day(a, "d", false)?.or(opt_day(a, "day", false)?).ok_or_else(|| Bad("d(YYYY-MM-DD)가 필요합니다.".into()))?;
     let list = c.backend.episodes_for_day(fmt_day(d)).map_err(|e| Bad(format!("기록 오류: {e}.")))?;
     for ep in &list {
-        let e = c.cache.episodes.entry(ep.facts.id).or_insert_with(|| MemoryHit { episode: ep.clone(), day_title: None, score: 0.0, best_stop: None });
+        let e = c.cache.episodes.entry(ep.facts.id).or_insert_with(|| MemoryHit { episode: ep.clone(), day_title: None, score: 0.0, best_stop: None, matched_tags: vec![] });
         e.episode = ep.clone();
     }
     let tz = c.ctx.tz_offset_minutes;

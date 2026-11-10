@@ -719,7 +719,7 @@ private fun OtherDays(turn: AgentTurn, today: LocalDate, onAsk: (String) -> Unit
             color = EodiTheme.colors.textSecondary,
             modifier = Modifier.padding(top = 8.dp),
         )
-        others.forEach { rec -> OtherDayRow(rec, today, onAsk) }
+        others.forEachIndexed { i, rec -> OtherDayRow(rec, rank = i + 2, today, onAsk) }
     }
 }
 

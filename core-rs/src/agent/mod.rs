@@ -51,6 +51,8 @@ pub mod words;
 #[cfg(test)]
 mod course_tests;
 #[cfg(test)]
+mod vague_tests;
+#[cfg(test)]
 mod eval;
 #[cfg(test)]
 mod tests;

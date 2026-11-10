@@ -106,6 +106,8 @@ internal fun RecommendationCard(
                 // 이 나들이·여행을 사진 카드로 공유 (폰 판만 보인다, ui/share)
                 if (ComposableImageShare.supported) ShareImageButton(ShareTarget.Episode(facts.id), style = ShareButtonStyle.ICON)
             }
+            // 왜 이 기억인지: 질문과 맞은 AI 꼬리표 (하루 라벨링 때 LLM이 붙인 태그)
+            if (rec.hit.matchedTags.isNotEmpty()) AiTagRow(rec.hit.matchedTags)
             if (stops.isNotEmpty()) {
                 StopStrip(
                     stops,
@@ -118,13 +120,27 @@ internal fun RecommendationCard(
     }
 }
 
-/** "다른 날" 한 줄. 누르면 그날로 다시 묻는다. */
+/** "AI 꼬리표  #바다  #가족": 검색이 LLM 라벨에서 찾았다는 표시. */
 @Composable
-internal fun OtherDayRow(rec: RecommendationUi, today: LocalDate, onAsk: (String) -> Unit) {
+private fun AiTagRow(tags: List<String>) {
+    val c = EodiTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(stringResource(R.string.agent_ai_tags), style = EodiTheme.type.meta, color = c.textTertiary)
+        tags.forEach { tag ->
+            Surface(shape = RoundedCornerShape(50), color = c.accentSoft, contentColor = c.accent) {
+                Text("#$tag", style = EodiTheme.type.meta, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+            }
+        }
+    }
+}
+
+/** 다른 후보 한 줄 ([rank]번). 누르면 그 후보로 다시 묻는다 ("2번 보여줘"). */
+@Composable
+internal fun OtherDayRow(rec: RecommendationUi, rank: Int, today: LocalDate, onAsk: (String) -> Unit) {
     val facts = rec.hit.episode.facts
     val title = rec.hit.episode.title ?: rec.hit.dayTitle ?: facts.ruleLabel
     val dateLine = memoryDateLine(facts.day, today)
-    val question = stringResource(R.string.agent_followup_pick_day, memoryDateText(facts.day), title)
+    val question = stringResource(R.string.agent_followup_pick_candidate, rank)
     Surface(
         onClick = { onAsk(question) },
         shape = RoundedCornerShape(24.dp),
@@ -136,7 +152,7 @@ internal fun OtherDayRow(rec: RecommendationUi, today: LocalDate, onAsk: (String
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.size(56.dp).background(EodiTheme.colors.surfaceHigh, CircleShape),
             ) {
-                Icon(EodiIcons.Calendar, contentDescription = null, tint = EodiTheme.colors.textPrimary, modifier = Modifier.size(28.dp))
+                Text("$rank", style = EodiTheme.type.titleSmall, fontWeight = FontWeight.Bold, color = EodiTheme.colors.textPrimary)
             }
             Spacer(Modifier.width(20.dp))
             Column(Modifier.weight(1f)) {

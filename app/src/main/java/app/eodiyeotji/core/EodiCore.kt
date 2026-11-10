@@ -220,7 +220,7 @@ class EodiCore @Inject constructor(
     /** 기억 검색 (기기 안). */
     suspend fun searchMemories(q: MemoryQuery): List<MemoryHit> = coreCall("searchMemories") {
         store.searchMemories(RMemoryQuery(q.terms, q.fromMs, q.toMs, q.kinds.map { it.toRust() }, q.limit.toUInt()))
-            .map { MemoryHit(it.episode.toModel(), it.dayTitle, it.score, it.bestStop?.toModel()) }
+            .map { MemoryHit(it.episode.toModel(), it.dayTitle, it.score, it.bestStop?.toModel(), it.matchedTags) }
     }
 
     /** 코스 다시 달리기 경로 (optimize면 from에서 가장 짧은 순서). 내비 경유지 2개 제한에 맞춘 구간 포함. */
@@ -453,7 +453,8 @@ data class MemoryQuery(
     val limit: Int = 10,
 )
 
-data class MemoryHit(val episode: Episode, val dayTitle: String?, val score: Double, val bestStop: StopFact?)
+/** [matchedTags]: 질문과 맞은 AI 꼬리표 (LLM 하루 라벨링 태그, 최대 3개). */
+data class MemoryHit(val episode: Episode, val dayTitle: String?, val score: Double, val bestStop: StopFact?, val matchedTags: List<String> = emptyList())
 
 data class CourseLeg(val waypoints: List<StopFact>, val destination: StopFact)
 
