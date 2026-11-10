@@ -7,7 +7,8 @@
 //! # 묶음 형식 (압축 전, 리틀 엔디언)
 //! `EDS1` · 위치 점 수(u32) · 점마다 [시각 차, 위도 차(1e-7도), 경도 차, 정확도(0.1m)] (zigzag varint)
 //! · 신호 수 · 신호마다 [시각 차(zigzag varint), 종류(u8)] · 힌트 수 · 힌트마다 [시각 i64, 종류 u8, 위도 f64, 경도 f64, 이름, 주소]
-//! · 장소 수 · 장소마다 [위도 f64, 경도 f64, 출처 u8, 이름, 분류, 주소]. 글자는 varint 길이 + UTF-8.
+//! · 장소 수 · 장소마다 [위도 f64, 경도 f64, 출처 u8, 이름, 분류, 주소]
+//! · 센서 기록 수 · 기록마다 [시각 i64, 종류 u8(1 인원 · 2 배터리 · 3 연료 · 10+계기), 값 f64]. 글자는 varint 길이 + UTF-8.
 //! 전체를 deflate로 줄인다 (1년치 37만 점 ≈ 1~2MB). 같은 묶음을 두 번 받아도 겹치는 줄은 무시된다.
 
 use miniz_oxide::deflate::compress_to_vec;
@@ -18,6 +19,12 @@ use crate::geo::{haversine_m, Point};
 use crate::store::{mark_dirty, CoreError, EodiStore};
 
 const MAGIC: &[u8; 4] = b"EDS1";
+/// 차 센서 기록 종류 (묶음 끝 칸).
+const EXTRA_PEOPLE: u8 = 1;
+const EXTRA_EV: u8 = 2;
+const EXTRA_FUEL: u8 = 3;
+/// 계기 기록: 10 + `ReadingKind` 코드
+const EXTRA_READING: u8 = 10;
 /// 풀었을 때 최대 크기 (잘못된 묶음이 메모리를 다 쓰지 않게).
 const MAX_RAW: usize = 64 * 1024 * 1024;
 /// 받은 장소 이름을 이 거리(m) 안의 장소에 붙인다 (`places::PLACE_RADIUS_M`보다 좁게).
@@ -68,6 +75,23 @@ impl EodiStore {
         let places: Vec<(f64, f64, i64, String, String, String)> = st
             .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)))?
             .collect::<Result<_, _>>()?;
+        // 차 센서 기록 (인원 · 잔량 · 계기): [시각, 종류, 값]
+        let mut extras: Vec<(i64, u8, f64)> = Vec::new();
+        let mut st = conn.prepare_cached("SELECT t_ms, people FROM drive_people WHERE t_ms > ?1 AND t_ms <= ?2")?;
+        for row in st.query_map(params![since_ms, until], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)))? {
+            let (t, n) = row?;
+            extras.push((t, EXTRA_PEOPLE, n as f64));
+        }
+        let mut st = conn.prepare_cached("SELECT t_ms, pct, ev FROM drive_energy WHERE t_ms > ?1 AND t_ms <= ?2")?;
+        for row in st.query_map(params![since_ms, until], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, f64>(1)?, r.get::<_, i64>(2)?)))? {
+            let (t, pct, ev) = row?;
+            extras.push((t, if ev != 0 { EXTRA_EV } else { EXTRA_FUEL }, pct));
+        }
+        let mut st = conn.prepare_cached("SELECT t_ms, kind, value FROM drive_reading WHERE t_ms > ?1 AND t_ms <= ?2")?;
+        for row in st.query_map(params![since_ms, until], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?, r.get::<_, f64>(2)?)))? {
+            let (t, k, v) = row?;
+            extras.push((t, EXTRA_READING + k as u8, v));
+        }
 
         if fixes.is_empty() && events.is_empty() && hints.is_empty() {
             return Ok(SyncChunk { data: Vec::new(), until_ms: since_ms, fixes: 0, done: true });
@@ -108,6 +132,12 @@ impl EodiStore {
             w.str(name);
             w.str(cat);
             w.str(addr);
+        }
+        w.u32(extras.len() as u32);
+        for (t, k, v) in &extras {
+            w.0.extend_from_slice(&t.to_le_bytes());
+            w.0.push(*k);
+            w.0.extend_from_slice(&v.to_le_bytes());
         }
         let until_ms = if done { fixes.last().map(|f| f.0).unwrap_or(since_ms).max(events.last().map(|e| e.0).unwrap_or(0)) } else { until };
         Ok(SyncChunk { data: compress_to_vec(&w.0, 6), until_ms, fixes: fixes.len() as u32, done })
@@ -171,6 +201,28 @@ impl EodiStore {
             let (lat, lon) = (r.f64()?, r.f64()?);
             let src = r.u8()? as i8 as i64;
             names.push((Point { lat, lon }, src, r.str()?, r.str()?, r.str()?));
+        }
+        // 차 센서 기록 (예전 묶음에는 없다)
+        if r.i < r.b.len() {
+            let n = r.u32()?;
+            let mut rows = Vec::with_capacity(n.min(100_000) as usize);
+            for _ in 0..n {
+                rows.push((r.i64()?, r.u8()?, r.f64()?));
+            }
+            drop(conn);
+            for (t, k, v) in rows {
+                match k {
+                    EXTRA_PEOPLE => self.set_drive_people(t, v as u32)?,
+                    EXTRA_EV | EXTRA_FUEL => self.set_drive_energy(t, v, k == EXTRA_EV)?,
+                    k if k > EXTRA_READING => {
+                        if let Some(kind) = crate::readings::ReadingKind::from_code((k - EXTRA_READING) as i64) {
+                            self.set_drive_reading(t, kind, v)?;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            conn = self.lock()?;
         }
         // 받은 원본으로 주행·장소를 다시 나눈 뒤 이름 붙이기
         self.flush(&mut conn)?;

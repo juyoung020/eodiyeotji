@@ -190,6 +190,10 @@ pub trait MemoryBackend: Send + Sync {
     fn people_between(&self, _from_ms: i64, _to_ms: i64) -> Option<u32> {
         None
     }
+    /// `[from_ms, to_ms]` 동안 와이퍼가 돌았는가 (비, 모르면 None).
+    fn rain_between(&self, _from_ms: i64, _to_ms: i64) -> Option<bool> {
+        None
+    }
 }
 
 impl MemoryBackend for EodiStore {
@@ -222,6 +226,9 @@ impl MemoryBackend for EodiStore {
     }
     fn people_between(&self, from_ms: i64, to_ms: i64) -> Option<u32> {
         EodiStore::people_between(self, from_ms, to_ms).ok().flatten()
+    }
+    fn rain_between(&self, from_ms: i64, to_ms: i64) -> Option<bool> {
+        EodiStore::rain_between(self, from_ms, to_ms).ok().flatten()
     }
 }
 

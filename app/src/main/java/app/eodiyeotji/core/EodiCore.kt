@@ -109,6 +109,10 @@ class EodiCore @Inject constructor(
     /** 배터리 · 연료 잔량 기록 (출발 · 도착 때). */
     suspend fun setDriveEnergy(tMs: Long, pct: Double, ev: Boolean) = coreCall("setDriveEnergy") { store.setDriveEnergy(tMs, pct, ev) }
 
+    /** 차 계기 기록 (주행거리계 · 와이퍼 · 남은 주행 가능 거리). */
+    suspend fun setDriveReading(tMs: Long, kind: app.eodiyeotji.core.rust.ReadingKind, value: Double) =
+        coreCall("setDriveReading") { store.setDriveReading(tMs, kind, value) }
+
     /** 그 하루 가장 많이 탄 인원 (모르면 0). */
     suspend fun dayPeople(day: String): Int = coreCall("dayPeople") { store.dayPeople(day).toInt() }
 
@@ -122,7 +126,8 @@ class EodiCore @Inject constructor(
         val d = store.dayDetail(day).toModel()
         val people = store.dayPeople(day).toInt()
         val e = store.dayEnergy(day)
-        d.copy(summary = d.summary.copy(people = people, energy = if (e.known) DayEnergyUse(e.ev, e.usedPct, e.refills.toInt()) else null))
+        val rain = store.dayRain(day)
+        d.copy(summary = d.summary.copy(people = people, rain = rain, energy = if (e.known) DayEnergyUse(e.ev, e.usedPct, e.refills.toInt()) else null))
     }
 
     /**
@@ -384,6 +389,8 @@ data class DaySummary(
     val people: Int = 0,
     /** 그날 쓴 배터리 · 연료 (하루 상세에서만, 모르면 null). */
     val energy: DayEnergyUse? = null,
+    /** 그날 와이퍼가 돌았다 (비 온 날, 하루 상세에서만). */
+    val rain: Boolean = false,
 )
 
 /** 하루에 쓴 배터리(전기차) 또는 연료: 쓴 양 %p, 충전 · 주유 횟수. */

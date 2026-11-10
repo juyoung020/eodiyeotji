@@ -122,3 +122,24 @@ fn real_db() {
     }
     println!("묶음 {n}개 · {} KB · {:?} · 날 {} = {}", total / 1024, t.elapsed(), dst.day_summaries(400).unwrap().len(), src.day_summaries(400).unwrap().len());
 }
+
+#[test]
+fn sensor_records_ride_along() {
+    let (da, db) = (TempDb::new("sa"), TempDb::new("sb"));
+    let (car, phone) = (da.open(), db.open());
+    record(&car);
+    car.set_drive_people(T0 + 20 * SEC, 3).unwrap();
+    car.set_drive_energy(T0, 80.0, true).unwrap();
+    car.set_drive_energy(T0 + 300 * SEC, 72.0, true).unwrap();
+    car.set_drive_reading(T0 + 60 * SEC, crate::readings::ReadingKind::Rain, 1.0).unwrap();
+    car.set_drive_reading(T0, crate::readings::ReadingKind::Odometer, 18_240.0).unwrap();
+    let chunk = car.sync_export(0, 10_000).unwrap();
+    assert!(chunk.done);
+    phone.sync_import(chunk.data).unwrap();
+    let day = car.day_summaries(1).unwrap()[0].day.clone();
+    assert_eq!(phone.day_people(day.clone()).unwrap(), 3);
+    assert!((phone.day_energy(day.clone()).unwrap().used_pct - 8.0).abs() < 1e-9);
+    assert!(phone.day_rain(day).unwrap());
+    let conn = phone.snapshot().unwrap();
+    assert_eq!(phone.odometer_between(&conn, T0 - 1, T0 + 1).unwrap(), vec![(T0, 18_240.0)]);
+}

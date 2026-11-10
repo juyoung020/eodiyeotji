@@ -120,3 +120,15 @@ data class EnergyLevel(val pct: Double, val ev: Boolean)
 interface EnergySource {
     suspend fun level(): EnergyLevel?
 }
+
+/** 차 계기: 주행거리계 · 와이퍼(비) · 남은 주행 가능 거리. 차는 Pleos Vehicle SDK, 폰은 알 수 없어 null. */
+interface GaugeSource {
+    /** 주행거리계 (km) */
+    suspend fun odometerKm(): Double?
+
+    /** 와이퍼가 움직이는가 (비) */
+    suspend fun wiping(): Boolean?
+
+    /** 남은 주행 가능 거리 (km) */
+    suspend fun rangeKm(): Double?
+}

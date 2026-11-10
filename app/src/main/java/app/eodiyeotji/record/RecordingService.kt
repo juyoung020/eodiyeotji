@@ -14,6 +14,7 @@ import androidx.lifecycle.lifecycleScope
 import app.eodiyeotji.BuildConfig
 import app.eodiyeotji.R
 import app.eodiyeotji.core.EodiCore
+import app.eodiyeotji.core.rust.ReadingKind
 import app.eodiyeotji.core.LocationFix
 import app.eodiyeotji.core.NaviHint
 import app.eodiyeotji.platform.DriveSignalSource
@@ -79,6 +80,7 @@ class RecordingService : LifecycleService() {
     @Inject lateinit var handoff: app.eodiyeotji.handoff.HandoffRepository
     @Inject lateinit var cabin: app.eodiyeotji.platform.CabinSource
     @Inject lateinit var energy: app.eodiyeotji.platform.EnergySource
+    @Inject lateinit var gauges: app.eodiyeotji.platform.GaugeSource
 
     private var running = false
     private var foregroundOk = false
@@ -185,24 +187,43 @@ class RecordingService : LifecycleService() {
     }
 
     /**
-     * 주행 중 탑승 인원: 출발하고 다들 앉은 뒤(20초) 한 번, 그 뒤 10분마다 (휴게소에서 타고 내림).
-     * 좌석 센서가 없으면(폰) 아무것도 남기지 않는다. 몇 명인지만 남는다.
+     * 주행 중 실내 · 날씨: 출발하고 다들 앉은 뒤(20초)부터 2분마다 와이퍼(비)를 읽고, 탑승 인원은 10분마다
+     * (휴게소에서 타고 내림). 센서가 없으면(폰) 아무것도 남기지 않는다. 인원은 몇 명인지만 남는다.
      */
     private fun CoroutineScope.startCabin(): Job = launch(Dispatchers.Default) {
         delay(CABIN_FIRST_MS)
-        while (true) {
-            val n = cabin.occupants() ?: return@launch
-            if (BuildConfig.DEBUG) Log.d(TAG, "탑승 인원 $n")
-            safely("setDrivePeople") { core.setDrivePeople(System.currentTimeMillis(), n) }
+        var tick = 0
+        var seats = true
+        var wiper = true
+        while (seats || wiper) {
+            val now = System.currentTimeMillis()
+            if (wiper) {
+                val w = gauges.wiping()
+                if (BuildConfig.DEBUG) Log.d(TAG, "와이퍼 ${when (w) { true -> "움직임(비)"; false -> "멈춤"; null -> "읽을 수 없음" }}")
+                if (w == null) wiper = false else safely("setDriveReading(비)") { core.setDriveReading(now, ReadingKind.RAIN, if (w) 1.0 else 0.0) }
+            }
+            if (seats && tick % CABIN_PEOPLE_EVERY == 0) {
+                val n = cabin.occupants()
+                if (n == null) seats = false else {
+                    if (BuildConfig.DEBUG) Log.d(TAG, "탑승 인원 $n")
+                    safely("setDrivePeople") { core.setDrivePeople(now, n) }
+                }
+            }
+            tick++
             delay(CABIN_EVERY_MS)
         }
     }
 
-    /** 출발 · 도착 때 배터리 · 연료 잔량 (모르면(폰) 건너뛴다). */
+    /** 출발 · 도착 때 배터리 · 연료 잔량과 주행거리계 (모르면(폰) 건너뛴다). */
     private suspend fun recordEnergy(tMs: Long) {
-        val e = energy.level() ?: return
-        if (BuildConfig.DEBUG) Log.d(TAG, "잔량 ${e.pct}% (${if (e.ev) "배터리" else "연료"})")
-        safely("setDriveEnergy") { core.setDriveEnergy(tMs, e.pct, e.ev) }
+        energy.level()?.let { e ->
+            if (BuildConfig.DEBUG) Log.d(TAG, "잔량 ${e.pct}% (${if (e.ev) "배터리" else "연료"})")
+            safely("setDriveEnergy") { core.setDriveEnergy(tMs, e.pct, e.ev) }
+        }
+        gauges.odometerKm()?.let { km ->
+            if (BuildConfig.DEBUG) Log.d(TAG, "주행거리계 ${km}km")
+            safely("setDriveReading(주행거리계)") { core.setDriveReading(tMs, ReadingKind.ODOMETER, km) }
+        }
     }
 
     /** 주행 중에만 도는 내비 듣기. 힌트는 받는 즉시 Rust에 넘긴다 (드물게 오므로 묶지 않는다). */
@@ -303,7 +324,9 @@ class RecordingService : LifecycleService() {
         private const val BATCH_SIZE = 30
         private const val FLUSH_INTERVAL_MS = 10_000L
         private const val CABIN_FIRST_MS = 20_000L
-        private const val CABIN_EVERY_MS = 10 * 60_000L
+        // 와이퍼는 2분마다, 인원은 그 5번에 한 번(10분)
+        private const val CABIN_EVERY_MS = 2 * 60_000L
+        private const val CABIN_PEOPLE_EVERY = 5
         /** 주차 위치를 폰으로 보내는 쪽은 차 판뿐 (폰 판은 자기 기록으로 바로 안다). */
         private val SENDS_PARKING = BuildConfig.FLAVOR == "car"
     }
