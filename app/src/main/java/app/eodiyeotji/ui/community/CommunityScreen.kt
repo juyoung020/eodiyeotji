@@ -54,7 +54,8 @@ fun CommunityRoute(
     onTabChange: ((CommunityTab) -> Unit)? = null,
 ) {
     var ownTab by rememberSaveable { mutableStateOf(CommunityTab.COURSES) }
-    val tab = selectedTab ?: ownTab
+    // 지역 리포트(지자체 · 가게용 집계)는 운전자에게 쓸모가 적어 탭에서 뺐다 → 예전에 고른 값이 남아 있어도 코스로
+    val tab = (selectedTab ?: ownTab).let { if (it == CommunityTab.REGION) CommunityTab.COURSES else it }
     val selectTab: (CommunityTab) -> Unit = { t -> ownTab = t; onTabChange?.invoke(t) }
     // 폰 세로 화면: 코스 상세 · 게시글을 열면 머리(제목 · 하위 탭)를 감춰 상세가 화면을 다 쓴다. 차 화면은 그대로.
     val detailOpen = if (!compact) {
@@ -79,7 +80,6 @@ fun CommunityRoute(
                             CommunityTab.BOARD to stringResource(R.string.community_tab_board),
                             CommunityTab.COURSES to stringResource(R.string.community_tab_courses),
                             CommunityTab.REVIEWS to stringResource(R.string.community_tab_reviews),
-                            CommunityTab.REGION to stringResource(R.string.community_tab_region),
                         ),
                         selected = tab,
                         onSelect = selectTab,
