@@ -136,6 +136,8 @@ pub struct AgentDone {
     pub answer: String,
     pub source: AnswerSource,
     pub timing: AgentTiming,
+    /// 답과 따로 보일 안내 한 줄 (예: "AI 연결이 잠깐 끊겨 기기 안 기록으로 찾았어요."). 오류가 아니라 화면이 흐린 글씨로 보이고, 읽지 않는다.
+    pub notice: Option<String>,
 }
 
 /// 화면에서 후보를 고른 결과: 그곳으로 갈 안내 제안(대기 중)과 코스면 경로.

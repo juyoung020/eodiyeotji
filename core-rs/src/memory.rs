@@ -195,6 +195,11 @@ pub struct MemoryHit {
     pub best_stop: Option<StopFact>,
     /// 질문과 맞은 AI 꼬리표 (하루 라벨링 때 LLM이 붙인 태그 중, 최대 3개) — 화면에 "왜 이 기억인지"로 보인다
     pub matched_tags: Vec<String>,
+    /// 에이전트 후보 칸에서 같은 곳을 다른 날 다녀온 기억을 이 후보 하나로 합쳤을 때, 다녀온 날 전부 ("YYYY-MM-DD", 오래된 순).
+    /// 합치지 않았으면 비어 있다.
+    pub visit_days: Vec<String>,
+    /// 화면 후보 카드에 그대로 쓰는 한 줄 ("2번 다녀옴 · 10/11, 10/18"). 합치지 않았으면 빈 문자열.
+    pub visit_note: String,
 }
 
 /// 코스 한 구간 (내비 경유지 2개 + 목적지).

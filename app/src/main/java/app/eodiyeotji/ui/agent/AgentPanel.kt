@@ -560,11 +560,27 @@ private fun AnswerBlock(turn: AgentTurn, onRetry: () -> Unit) {
                         Spacer(Modifier.height(16.dp))
                         RetryButton(onRetry, label = stringResource(R.string.agent_retry))
                     }
-                    else -> AnswerText(turn.answer, streaming = turn.phase == AnswerPhase.Streaming, large = false)
+                    else -> {
+                        AnswerText(turn.answer, streaming = turn.phase == AnswerPhase.Streaming, large = false)
+                        turn.notice?.let { NoticeLine(it) }
+                    }
                 }
             }
         }
     }
+}
+
+/** 답 아래 흐린 안내 한 줄 (연결 문제 등). 오류가 아니므로 빨간색이 아니라 흐린 글씨. */
+@Composable
+private fun NoticeLine(text: String) {
+    Text(
+        text,
+        style = EodiTheme.type.meta,
+        color = EodiTheme.colors.textTertiary,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(top = 12.dp),
+    )
 }
 
 /** 답 글자. 오는 중에는 끝에 커서(▍)를 붙여 타자 치듯 보이게 한다. */
@@ -790,7 +806,10 @@ private fun DrivingAgent(
                                 style = EodiTheme.type.drivingTitle,
                                 color = EodiTheme.colors.error,
                             )
-                            else -> AnswerText(turn.answer, streaming = turn.phase == AnswerPhase.Streaming, large = true, maxLines = 6)
+                            else -> Column {
+                                AnswerText(turn.answer, streaming = turn.phase == AnswerPhase.Streaming, large = true, maxLines = 6)
+                                turn.notice?.let { NoticeLine(it) }
+                            }
                         }
                     }
                     ActionStatus(turn.action, large = true)

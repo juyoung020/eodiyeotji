@@ -123,7 +123,7 @@ impl MemoryBackend for FakeBackend {
                 let matches = |t: &str| fields.iter().any(|f| f.contains(t) || (f.chars().count() >= 2 && t.contains(f)));
                 let score = if q.terms.is_empty() { 1.0 } else { q.terms.iter().filter(|t| !t.is_empty() && matches(t)).count() as f64 };
                 let best = e.facts.stops.iter().find(|s| q.terms.iter().any(|t| s.name.contains(t.as_str()) || s.category.contains(t.as_str()))).or(e.facts.stops.first()).cloned();
-                (score > 0.0).then(|| MemoryHit { episode: e.clone(), day_title: e.title.clone(), score, best_stop: best, matched_tags: vec![] })
+                (score > 0.0).then(|| MemoryHit { episode: e.clone(), day_title: e.title.clone(), score, best_stop: best, matched_tags: vec![], visit_days: vec![], visit_note: String::new() })
             })
             .collect();
         hits.sort_by(|a, b| b.score.total_cmp(&a.score).then(b.episode.facts.start_ms.cmp(&a.episode.facts.start_ms)));
@@ -668,12 +668,31 @@ fn server_down_falls_back_to_on_device_search_and_cools_down() {
     assert!(r.answer().contains("경포해변") || r.answer().contains("초당순두부마을"), "{}", r.answer());
     assert!(!r.answer().contains("연결"), "{}", r.answer());
     assert_eq!(r.done().source, AnswerSource::Fallback);
+    // 연결 사정은 답 문장(소리로 읽힘)이 아니라 따로 회색 안내 한 줄
+    assert_eq!(r.done().notice.as_deref(), Some(SERVER_DOWN));
     assert_eq!(r.proposals().len(), 1, "대신 답해도 안내 제안은 한 번 누르면 된다");
     assert_eq!(server.bodies().len(), 1, "5xx는 새 연결로 다시 보내지 않는다");
-    // 쿨다운 동안은 연결하지 않고, 기기 안에서도 못 찾으면 다시 묻기를 권하는 오류
+    // 쿨다운 동안은 연결하지 않고, 기기 안에서도 못 찾으면 오류가 아니라 보통 답 "기록은 없어요"
     let r = ask(&agent, "친구랑 간 제주도 한라산", ctx(true));
     assert_eq!(server.bodies().len(), 1, "쿨다운 동안 다시 연결하지 않는다");
-    assert_eq!(r.events().last(), Some(&Ev::Error(SERVER_DOWN.into())));
+    assert!(!r.events().iter().any(|e| matches!(e, Ev::Error(_))), "{:?}", r.events());
+    assert!(r.answer().starts_with("제주도 기록은 없어요."), "{}", r.answer());
+    assert!(!r.answer().contains("연결"), "{}", r.answer());
+    assert_eq!(r.done().notice.as_deref(), Some(SERVER_DOWN));
+}
+
+#[test]
+fn not_found_with_a_period_offers_places_from_that_time() {
+    // 오늘 2026-11-06 → "작년 여름" = 2025-06~08. 가짜 기억에는 그때 스키 기록이 없다.
+    let agent = MemoryAgent::with_backend(FakeBackend::new(), cfg(""), AgentOptions::default());
+    let r = ask(&agent, "작년 여름에 스키 타러 갔던 데 어디였지", ctx(false));
+    let a = r.answer();
+    assert!(a.starts_with("스키 기록은 없어요. 그 무렵에는 "), "{a}");
+    assert!(a.ends_with("에 다녀오셨어요."), "{a}");
+    assert!(!r.events().iter().any(|e| matches!(e, Ev::Error(_))));
+    assert!(r.events().iter().any(|e| matches!(e, Ev::Rec(..))), "대신 볼 곳 카드");
+    assert!(r.proposals().is_empty(), "찾던 곳이 아니므로 안내 제안은 하지 않는다");
+    assert_eq!(r.done().notice.as_deref(), Some(NOT_CONFIGURED));
 }
 
 #[test]
@@ -729,8 +748,9 @@ fn no_llm_config_uses_fast_path_and_says_so_when_unsure() {
     let r = ask(&agent, "작년 여름 바다 어디였지?", ctx(true));
     assert_eq!(r.done().source, AnswerSource::FastPath);
     let r = ask(&agent, "제주도 갔던 곳", ctx(true));
-    assert!(r.answer().starts_with(NOT_CONFIGURED));
-    assert!(r.answer().contains("찾지 못했어요"));
+    assert_eq!(r.done().notice.as_deref(), Some(NOT_CONFIGURED));
+    assert!(!r.answer().contains("AI"), "{}", r.answer());
+    assert!(r.answer().starts_with("제주도 기록은 없어요."), "{}", r.answer());
     assert_eq!(r.done().source, AnswerSource::Fallback);
 }
 

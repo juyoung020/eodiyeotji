@@ -47,8 +47,11 @@ sealed interface AgentEvent {
     /** 내비 요청을 보냈다 (운전자가 말로 "응/안내해줘"라고 했거나 confirm 했을 때). [ok] = 내비에 요청이 갔는지. */
     data class ActionStarted(val action: AgentNavAction, val ok: Boolean) : AgentEvent
 
-    /** 끝. [source]: 빠른 길(LLM 없음)·LLM·대체(서버 없음)·확인. */
-    data class Done(val answer: String, val source: AnswerSource, val timing: Timing) : AgentEvent
+    /**
+     * 끝. [source]: 빠른 길(LLM 없음)·LLM·대체(서버 없음)·확인.
+     * [notice]: 답과 따로 보일 안내 한 줄 ("AI 연결이 잠깐 끊겨 기기 안 기록으로 찾았어요.") — 오류가 아니다, 읽지 않는다.
+     */
+    data class Done(val answer: String, val source: AnswerSource, val timing: Timing, val notice: String? = null) : AgentEvent
 
     /** 실패 (화면·TTS에 그대로 보여 줄 수 있는 한국어). */
     data class Error(val message: String) : AgentEvent
@@ -107,7 +110,7 @@ private fun REpisode.toModel() = Episode(
     title, tags,
 )
 
-internal fun RMemoryHit.toModel() = MemoryHit(episode.toModel(), dayTitle, score, bestStop?.toModel(), matchedTags)
+internal fun RMemoryHit.toModel() = MemoryHit(episode.toModel(), dayTitle, score, bestStop?.toModel(), matchedTags, visitNote)
 
 internal fun RNavAction.toModel(): AgentNavAction = when (this) {
     is RNavAction.Course -> AgentNavAction.Course(episodeId, title, legs.map { it.toModel() })
@@ -134,4 +137,5 @@ internal fun RAgentDone.toEvent() = AgentEvent.Done(
         timing.toRecommendationMs?.toLong(), timing.firstTextMs?.toLong(), timing.totalMs.toLong(),
         timing.llmCalls.toInt(), timing.llmMs.toLong(),
     ),
+    notice,
 )
