@@ -75,6 +75,8 @@ fun ScenicRouteMap(
     onFlightEnd: () -> Unit,
     contentDescription: String,
     modifier: Modifier = Modifier,
+    /** 비행 진행(0~1, 장면 순서 = 길 거리 비율). 비행 중 매 화면마다 불린다 → 받는 쪽은 그리기 단계에서만 읽는다. */
+    onFlightProgress: (Float) -> Unit = {},
 ) {
     val inPreview = LocalInspectionMode.current
     val appContext = LocalContext.current.applicationContext
@@ -87,7 +89,7 @@ fun ScenicRouteMap(
         Box(modifier.background(bg).semantics { this.contentDescription = contentDescription })
         return
     }
-    ScenicMapContent(style, theme, camera, frames, flying, flightMs, onFlightEnd, options, bg, modifier.semantics { this.contentDescription = contentDescription })
+    ScenicMapContent(style, theme, camera, frames, flying, flightMs, onFlightEnd, onFlightProgress, options, bg, modifier.semantics { this.contentDescription = contentDescription })
 }
 
 @SuppressLint("ClickableViewAccessibility") // 터치는 지도에 그대로 넘기고 비행만 멈춘다
@@ -100,6 +102,7 @@ private fun ScenicMapContent(
     flying: Boolean,
     flightMs: Long,
     onFlightEnd: () -> Unit,
+    onFlightProgress: (Float) -> Unit,
     baseOptions: MapLibreMapOptions,
     bg: Color,
     modifier: Modifier,
@@ -116,6 +119,7 @@ private fun ScenicMapContent(
         if (m != null && camera != null) m.moveCamera(CameraUpdateFactory.newCameraPosition(camera.toPosition()))
     }
     val endFlight by rememberUpdatedState(onFlightEnd)
+    val flightProgress by rememberUpdatedState(onFlightProgress)
     val overview by rememberUpdatedState(camera)
     DisposableEffect(m, flying, frames) {
         if (m == null || !flying || frames.size < 2) {
@@ -132,7 +136,11 @@ private fun ScenicMapContent(
         val anim = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = flightMs
             interpolator = AccelerateDecelerateInterpolator()
-            addUpdateListener { a -> m.moveCamera(CameraUpdateFactory.newCameraPosition(frameAt(frames, a.animatedValue as Float))) }
+            addUpdateListener { a ->
+                val t = a.animatedValue as Float
+                m.moveCamera(CameraUpdateFactory.newCameraPosition(frameAt(frames, t)))
+                flightProgress(t)
+            }
             addListener(object : AnimatorListenerAdapter() {
                 private var cancelled = false
                 override fun onAnimationCancel(animation: Animator) {

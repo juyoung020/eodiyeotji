@@ -165,6 +165,7 @@
     <string name="drive_sights_title">가는 길에 보이는 풍경</string>
     <string name="drive_fly">미리보기 비행</string>
     <string name="drive_fly_stop">비행 멈추기</string>
+    <string name="drive_fly_now">지금: %1$s</string>
     <string name="drive_navi_hint">시작점까지 안내하고, 도착하면 끝점까지 이어서 안내해요</string>
     <string name="drive_navigate_end">끝점으로 바로 안내</string>
     <string name="drive_navi_on_way">시작점으로 가는 중 · 도착하면 끝점까지 자동으로 이어서 안내해요</string>
