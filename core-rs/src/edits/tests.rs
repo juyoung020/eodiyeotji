@@ -521,3 +521,79 @@ fn short_move_labels_are_factual() {
     assert!(!is_short_move(747.0, HOUR), "오래 머물렀으면 짧은 이동이 아니다");
     assert!(!is_short_move(30_000.0, 10 * MIN));
 }
+
+/// 에뮬레이터 위치 재생으로 쌓인 하루 (UX 리뷰 4번, 2026-11-07 실제 기록 모양): 호연재 → 경포해변 747m를 17초에
+/// 세 번, 그 사이 400m · 15초 이동 한 번. 지우지 않고 보여 주는 규칙으로 정리한다.
+#[test]
+fn replayed_short_hops_are_one_row_an_errand_and_never_the_day_of_the_month() {
+    const HOYEON: Spot = ("호연재", "한옥", "강원 강릉시 운정동 1", 37.8010, 128.9020);
+    const NEAR: Spot = ("", "", "", 37.8030, 128.9050);
+    let db = TempDb::new("replayed-hops");
+    let store = db.open();
+    store.set_home_office(Some(pt(HOME)), Some(pt(OFFICE))).unwrap();
+    small_week(&store);
+    let t = kst(2026, 10, 20, 9, 0);
+    drive(&store, t, HOYEON, BEACH, 45.0);
+    drive(&store, t + 3 * MIN, HOYEON, BEACH, 45.0);
+    drive(&store, t + 6 * MIN, NEAR, BEACH, 27.0);
+    drive(&store, t + 9 * MIN, HOYEON, BEACH, 45.0);
+    name_places(&store);
+    let day = "2026-10-20";
+
+    // 타임라인: 400m · 15초 이동은 숨고, 같은 길 세 번은 한 줄 (지도용 주행 목록 · 거리 합은 그대로)
+    let d = store.day_detail(day.into()).unwrap();
+    assert_eq!(d.trips.len(), 4);
+    let rows: Vec<u32> = d.entries.iter().filter_map(|e| match e { DayEntry::Trip { repeat, .. } => Some(*repeat), _ => None }).collect();
+    assert_eq!(rows, [3]);
+    assert_eq!(d.summary.trip_count, 1, "주행 수 = 타임라인 주행 줄 수");
+    assert!((d.summary.distance_m - d.trips.iter().map(|t| t.distance_m).sum::<f64>()).abs() < 1e-6);
+    let listed = summary_of(&store.day_summaries(30).unwrap(), day).unwrap().clone();
+    assert_eq!((listed.trip_count, listed.stay_count), (d.summary.trip_count, d.summary.stay_count), "목록과 상세가 같은 값");
+
+    // 집에서 멀어도 운전 1분 남짓이면 여행 · 나들이가 아니다 → 사실 그대로의 이름, AI 라벨링도 필요 없다
+    let eps = store.episodes_for_day(day.into()).unwrap();
+    assert_eq!(eps.len(), 1);
+    assert_eq!(eps[0].facts.kind, crate::memory::EpisodeKind::Errand);
+    assert_eq!(eps[0].facts.rule_label, "경포해변 들름");
+    assert!(store.pending_day_enrichments(50).unwrap().iter().all(|f| f.day != day));
+    // 예전 규칙에서 붙은 AI 제목이 남아 있어도 화면에는 규칙 제목 (지우지는 않는다)
+    store
+        .set_day_enrichment(DayEnrichment {
+            day: day.into(),
+            title: "가을 경포해변 단풍 구경".into(),
+            summary: String::new(),
+            tags: vec!["단풍".into()],
+            episodes: vec![],
+        })
+        .unwrap();
+    let title = summary_of(&store.day_summaries(30).unwrap(), day).unwrap().title.clone();
+    assert_eq!(title.as_deref(), Some("경포해변 들름"));
+    assert_eq!(store.day_detail(day.into()).unwrap().summary.title.as_deref(), Some("경포해변 들름"));
+    let kept: Option<String> =
+        store.lock().unwrap().query_row("SELECT title FROM day_memory WHERE day = ?1", [days_from_civil(2026, 10, 20)], |r| r.get(0)).unwrap();
+    assert_eq!(kept.as_deref(), Some("가을 경포해변 단풍 구경"), "AI 제목은 지우지 않고 숨긴다");
+
+    // 이달의 하루 · 나들이 · 여행 횟수에서 빠진다 (토요일 강릉 여행이 이달의 하루)
+    let m = store.month_recap(2026, 10, kst(2026, 10, 31, 12, 0)).unwrap();
+    assert_eq!(m.best_day.as_ref().map(|b| b.day.as_str()), Some("2026-10-10"));
+    assert_eq!(m.outing_count, m.totals.outings + m.totals.trips, "비교 문장의 횟수 = 위 칸의 나들이 + 여행");
+}
+
+/// 하루 상세 · 날짜 목록 · 그날로 돌아가기의 들른 곳 수가 같다 (UX 리뷰 3번: 5곳 vs 4곳).
+#[test]
+fn day_detail_list_and_replay_count_the_same_visits() {
+    let db = TempDb::new("same-visits");
+    let store = db.open();
+    store.set_home_office(Some(pt(HOME)), Some(pt(OFFICE))).unwrap();
+    small_week(&store);
+    for day in ["2026-10-05", "2026-10-10", "2026-10-11"] {
+        let d = store.day_detail(day.into()).unwrap();
+        let listed = summary_of(&store.day_summaries(30).unwrap(), day).unwrap().stay_count;
+        assert_eq!(d.summary.stay_count, listed, "{day}");
+        let r = store.day_replay(day.into(), NOW).unwrap();
+        let want = if listed > 0 { format!("들른 곳 {listed}곳") } else { String::new() };
+        assert!(r.stats_line.starts_with(&want), "{day}: {} vs {want}", r.stats_line);
+    }
+    // 강릉: 집 → 경포해변 → 초당할머니순두부 → 집. 돌아와 머문 집은 세지 않는다
+    assert_eq!(store.day_detail("2026-10-10".into()).unwrap().summary.stay_count, 2);
+}

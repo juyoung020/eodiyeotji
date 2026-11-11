@@ -29,6 +29,7 @@ fn stay(at: GeoPoint, a: i64, l: i64, order: u32, name: &str) -> StaySummary {
 }
 
 fn day(trips: Vec<TripSummary>, stays: Vec<StaySummary>) -> DayDetail {
+    let visits = crate::store::visit_count(&trips, &stays);
     DayDetail {
         day: "2025-11-06".into(),
         trips,
@@ -37,7 +38,7 @@ fn day(trips: Vec<TripSummary>, stays: Vec<StaySummary>) -> DayDetail {
             replayable: false,
             day: "2025-11-06".into(),
             trip_count: 3,
-            stay_count: 0,
+            stay_count: visits,
             distance_m: 384_200.0,
             drive_millis: (4 * 60 + 12) * MIN,
             first_ms: 0,

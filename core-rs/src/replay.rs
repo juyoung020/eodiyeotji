@@ -6,7 +6,8 @@
 //!
 //! # 장면 고르기
 //! - 이름이 있는 머문 곳만, 도착 순서대로.
-//! - 그날 경로의 출발 · 도착 머문 곳(대개 집, `mapdata::route_ends`)은 뺀다 — 밤새 머문 시간이 섞여 "14시간 머묾"이 된다.
+//! - 하루 상세의 들른 곳과 같은 목록(`store::visit_indices`)에서 고른다: 그날 경로의 출발 · 도착 머문 곳(대개 집)은
+//!   뺀다 — 밤새 머문 시간이 섞여 "14시간 머묾"이 된다. 끝 화면 "들른 곳 N곳"도 하루 상세와 같은 수다.
 //!   그렇게 빼서 남는 곳이 없으면 이름 있는 곳을 그대로 쓴다.
 //!
 //! # 구간 (장면 i)
@@ -26,10 +27,10 @@ use rusqlite::Connection;
 use crate::agent::dates::civil_from_days;
 use crate::community::drive::{flight, FlightFrame};
 use crate::geo::{haversine_m, Point};
-use crate::mapdata::{coord, distance_text, duration_text, end_tag, route_ends, trip_points, Bounds, MapBounds};
+use crate::mapdata::{coord, distance_text, duration_text, trip_points, Bounds, MapBounds};
 use crate::memory::StopFact;
 use crate::recap::{ep_rank, episodes_between, season_of, years_between};
-use crate::store::{parse_day, CoreError, DayDetail, EodiStore, DAY_MS};
+use crate::store::{parse_day, visit_indices, CoreError, DayDetail, EodiStore, DAY_MS};
 
 /// 이보다 짧게 달린 날의 끝 문장은 들른 곳 중심이다 (m).
 pub const SHORT_DAY_M: f64 = 10_000.0;
@@ -166,8 +167,9 @@ pub(crate) fn build_replay(d: &DayDetail, tz_minutes: i32, today: i64, ep: Optio
 
     // 장면이 될 머문 곳
     let named: Vec<usize> = (0..d.stays.len()).filter(|&i| d.stays[i].place.as_ref().is_some_and(|p| !p.name.trim().is_empty())).collect();
-    let ends = route_ends(d);
-    let middle: Vec<usize> = named.iter().copied().filter(|&i| end_tag(&ends, i).is_none()).collect();
+    // 하루 상세의 들른 곳과 같은 목록 (`store::visit_indices`)
+    let visits = visit_indices(&d.trips, &d.stays);
+    let middle: Vec<usize> = named.iter().copied().filter(|i| visits.contains(i)).collect();
     let picked = if middle.is_empty() { named } else { middle };
 
     let mut bounds = Bounds::default();
@@ -227,9 +229,11 @@ pub(crate) fn build_replay(d: &DayDetail, tz_minutes: i32, today: i64, ep: Optio
     let distance_m = d.summary.distance_m;
     // 짧게 달린 날은 거리 대신 들른 곳이 주인공이다 ("4.5km를 달렸어요 · 운전 2분"은 자랑할 거리가 아니다)
     let short = distance_m < SHORT_DAY_M && !scenes.is_empty();
+    // 들른 곳 수는 하루 상세와 같은 값 (`store::visit_indices`: 하루 출발 · 도착 머문 곳 뺀 곳, 이름 없는 곳 포함)
+    let visits = visits.len();
     let mut stats = Vec::new();
-    if !scenes.is_empty() {
-        stats.push(format!("들른 곳 {}곳", scenes.len()));
+    if visits > 0 {
+        stats.push(format!("들른 곳 {visits}곳"));
     }
     if short {
         stats.push(distance_text(distance_m));
@@ -238,7 +242,7 @@ pub(crate) fn build_replay(d: &DayDetail, tz_minutes: i32, today: i64, ep: Optio
     }
     let summary_line = match scenes.as_slice() {
         [one] if short => format!("그날, {}에 들렀어요", one.stop.name),
-        [first, ..] if short => format!("그날, {}부터 {}곳에 들렀어요", first.stop.name, scenes.len()),
+        [first, ..] if short => format!("그날, {}부터 {}곳에 들렀어요", first.stop.name, visits.max(scenes.len())),
         _ => format!("그날, 우리는 {}를 달렸어요", distance_text(distance_m)),
     };
     let scenes_sky = scenes.last().map(|s| s.sky).unwrap_or(SkyPhase::Golden);

@@ -124,7 +124,12 @@ fun BizOverlay(viewModel: BizViewModel, onOpenDay: (String) -> Unit) {
 private fun SummaryRow(m: BizMonth) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
         Tile(stringResource(R.string.biz_count, m.trips.size), stringResource(R.string.biz_count_label), Modifier.weight(1f))
-        Tile("${m.totalKm.toInt()}km", stringResource(R.string.biz_km_label), Modifier.weight(1f))
+        // 아래 줄("계기판 89.8km")과 같은 숫자 · 같은 기준을 적는다 (하루 상세 거리는 GPS · 하루 전체라 다르다)
+        Tile(
+            stringResource(R.string.biz_km_value, m.totalKm),
+            stringResource(if (m.totalHasGps) R.string.biz_km_label_mixed else R.string.biz_km_label),
+            Modifier.weight(1f),
+        )
         Tile(durationText(m.totalMin * 60_000), stringResource(R.string.biz_time_label), Modifier.weight(1f))
         Tile(wonText(m.totalWon), stringResource(R.string.biz_cost_label), Modifier.weight(1f), accent = true)
     }

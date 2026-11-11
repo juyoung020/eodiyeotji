@@ -139,7 +139,7 @@ fn running_trip_end_waits_and_nearby_points_share_one_place() {
     assert_eq!(name_of(&d.stays[1].place), Some("우리 집"));
     // 타임라인 항목에도 같은 이름
     assert!(d.entries.iter().all(|e| match e {
-        crate::store::DayEntry::Trip { trip } => trip.start_place.is_some() && trip.end_place.is_some(),
+        crate::store::DayEntry::Trip { trip, .. } => trip.start_place.is_some() && trip.end_place.is_some(),
         crate::store::DayEntry::Stay { stay } => stay.place.is_some(),
     }));
 

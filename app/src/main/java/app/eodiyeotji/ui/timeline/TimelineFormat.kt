@@ -78,7 +78,7 @@ internal fun weekdayShort(day: String): String =
 /** 목록 날짜 타일 위 칸: 날짜(일) 숫자. */
 internal fun dayOfMonthText(day: String): String = LocalDate.parse(day).dayOfMonth.toString()
 
-/** "주행 2회 · 머문 곳 1곳 · 42.3km · 1시간 20분" (머문 곳이 없으면 그 칸은 뺀다). */
+/** "주행 2회 · 들른 곳 1곳 · 42.3km · 1시간 20분" (들른 곳이 없으면 그 칸은 뺀다). */
 @Composable
 @ReadOnlyComposable
 internal fun daySummaryLine(s: DaySummary): String = buildList {

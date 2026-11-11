@@ -95,6 +95,10 @@ data class MonthRecap(
     val vsPrevDistanceM: Double,
     val vsPrevDriveMillis: Long,
     val vsPrevOutings: Int,
+    /** 나들이 · 여행 횟수 (위 칸 나들이 + 여행과 같은 셈) */
+    val outingCount: Int,
+    /** 지난달(진행 중이면 같은 날짜까지) 나들이 · 여행 횟수 */
+    val prevOutingCount: Int,
     val hasPrevRecords: Boolean,
     val hasPrev: Boolean,
     val hasNext: Boolean,
@@ -107,6 +111,8 @@ data class SeasonRecap(val name: String, val distanceM: Double, val outingDays: 
 data class YearRecap(
     val year: Int,
     val inProgress: Boolean,
+    /** "2026년 1월 1일 ~ 11월 11일" (Rust가 만든 기간 글) */
+    val periodLabel: String,
     val recordDays: Int,
     val totals: RecapTotals,
     val topPlaces: List<RecapPlace>,
@@ -177,11 +183,12 @@ private fun RRecapTotals.toModel() = RecapTotals(distanceM, driveMillis, driveDa
 
 private fun RMonthRecap.toModel() = MonthRecap(
     year, month.toInt(), inProgress, recordDays.toInt(), totals.toModel(), topPlaces.map { it.toModel() }, regions.map { it.toModel() },
-    bestDay?.toModel(), vsPrevDistanceM, vsPrevDriveMillis, vsPrevOutings, hasPrevRecords, hasPrev, hasNext,
+    bestDay?.toModel(), vsPrevDistanceM, vsPrevDriveMillis, vsPrevOutings, outingCount.toInt(), prevOutingCount.toInt(),
+    hasPrevRecords, hasPrev, hasNext,
 )
 
 private fun RYearRecap.toModel() = YearRecap(
-    year, inProgress, recordDays.toInt(), totals.toModel(), topPlaces.map { it.toModel() }, regions.map { it.toModel() },
+    year, inProgress, periodLabel, recordDays.toInt(), totals.toModel(), topPlaces.map { it.toModel() }, regions.map { it.toModel() },
     seasons.map { SeasonRecap(it.name, it.distanceM, it.outingDays.toInt(), it.bestDay?.toModel()) },
     longestTrip?.toModel(), bestDay?.toModel(), monthDistanceM, hasPrev, hasNext,
 )

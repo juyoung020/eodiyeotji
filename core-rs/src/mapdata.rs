@@ -134,9 +134,14 @@ pub(crate) struct RouteEnds {
 const END_NEAR_M: f64 = 300.0;
 
 pub(crate) fn route_ends(d: &DayDetail) -> RouteEnds {
-    let (Some(first), Some(last)) = (d.trips.first(), d.trips.last()) else { return RouteEnds::default() };
+    route_ends_of(&d.trips, &d.stays)
+}
+
+/// [route_ends]를 주행·머문 곳 목록으로 (하루 요약의 들른 곳 수도 같은 규칙, `store::visit_count`).
+pub(crate) fn route_ends_of(trips: &[TripSummary], stays: &[StaySummary]) -> RouteEnds {
+    let (Some(first), Some(last)) = (trips.first(), trips.last()) else { return RouteEnds::default() };
     let nearest = |at: (f64, f64)| {
-        d.stays
+        stays
             .iter()
             .enumerate()
             .map(|(i, s)| (i, haversine_m(pt(at), pt((s.center.lat, s.center.lon)))))
@@ -145,8 +150,8 @@ pub(crate) fn route_ends(d: &DayDetail) -> RouteEnds {
             .map(|(i, _)| i)
     };
     let (first_pts, last_pts) = (trip_points(first), trip_points(last));
-    let start_stay = d.stays.iter().position(|s| s.arrive_ms < first.start_ms).or_else(|| nearest(first_pts[0]));
-    let end_stay = d.stays.iter().rposition(|s| s.arrive_ms >= last.start_ms).or_else(|| nearest(last_pts[last_pts.len() - 1]));
+    let start_stay = stays.iter().position(|s| s.arrive_ms < first.start_ms).or_else(|| nearest(first_pts[0]));
+    let end_stay = stays.iter().rposition(|s| s.arrive_ms >= last.start_ms).or_else(|| nearest(last_pts[last_pts.len() - 1]));
     RouteEnds { start_stay, end_stay }
 }
 

@@ -408,7 +408,9 @@ data class LatLon(val lat: Double, val lon: Double)
 
 data class DaySummary(
     val day: String,
+    /** 타임라인 주행 줄 수 (짧은 주행 숨김 · 같은 길 반복 한 줄, Rust) */
     val tripCount: Int,
+    /** 들른 곳 수 = 하루 출발 · 도착(대개 집)을 뺀 머문 곳 (Rust, 그날로 돌아가기와 같은 값) */
     val stayCount: Int,
     val distanceM: Double,
     val driveMillis: Long,
@@ -531,7 +533,8 @@ data class StaySummary(
 
 /** 하루 상세 한 줄. Rust가 시간순으로 섞어서 준다. */
 sealed interface DayEntry {
-    data class Trip(val trip: TripSummary) : DayEntry
+    /** [repeat] = 같은 길을 이어서 달린 횟수 (Rust가 한 줄로 묶음, 1 = 한 번) */
+    data class Trip(val trip: TripSummary, val repeat: Int = 1) : DayEntry
     data class Stay(val stay: StaySummary) : DayEntry
 }
 
@@ -634,7 +637,7 @@ private fun RDayDetail.toModel() = DayDetail(
     summary = summary.toModel(),
     entries = entries.map {
         when (it) {
-            is RDayEntry.Trip -> DayEntry.Trip(it.trip.toModel())
+            is RDayEntry.Trip -> DayEntry.Trip(it.trip.toModel(), it.repeat.toInt())
             is RDayEntry.Stay -> DayEntry.Stay(it.stay.toModel())
         }
     },

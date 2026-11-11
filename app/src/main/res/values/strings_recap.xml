@@ -21,7 +21,6 @@
     <string name="recap_tab_month">달별 요약</string>
     <string name="recap_tab_year">올해 결산</string>
     <string name="recap_title_month">%1$d년 %2$d월</string>
-    <string name="recap_title_year">%1$d 결산</string>
     <string name="recap_until_day">%1$d일까지</string>
     <string name="recap_back">뒤로</string>
     <string name="recap_prev">이전</string>
@@ -44,8 +43,8 @@
     <string name="recap_compare_less">지난달보다 %1$s 덜 달렸어요</string>
     <string name="recap_compare_more_same_period">지난달 같은 기간보다 %1$s 더 달렸어요</string>
     <string name="recap_compare_less_same_period">지난달 같은 기간보다 %1$s 덜 달렸어요</string>
-    <string name="recap_compare_outings_more">나들이 · 여행 %1$d번 더</string>
-    <string name="recap_compare_outings_less">나들이 · 여행 %1$d번 덜</string>
+    <!-- 나들이 · 여행 횟수 비교 (위 칸 나들이 + 여행과 같은 셈): 지난달 값 → 이번 달 값 -->
+    <string name="recap_compare_outings">나들이 · 여행 지난달 %1$d번 → 이번 달 %2$d번</string>
 
     <string name="recap_best_day_month">이달의 하루</string>
     <string name="recap_best_day_year">올해의 하루</string>
@@ -63,9 +62,10 @@
     <string name="memory_map_intro">1년 동안 달린 길을 밤하늘에서 보기</string>
     <string name="memory_map_intro_dismiss">닫기 (다시 보이지 않음)</string>
     <string name="memory_map_title">기억 지도</string>
-    <string name="memory_map_caption_years">%1$d년 동안 %2$,dkm, 우리가 지나온 길</string>
+    <string name="memory_map_caption_years">최근 %1$d년 동안 %2$,dkm, 우리가 지나온 길</string>
     <string name="memory_map_caption_months">%1$d개월 동안 %2$,dkm, 우리가 지나온 길</string>
-    <string name="memory_map_sub">%1$,d일 · %2$,d번의 길</string>
+    <!-- 기간(Rust: "최근 1년 (2025.11 ~ 2026.11)") · 달린 날 · 주행 수. 올해 결산(1월 1일부터)과 기간이 달라 숫자도 다르다 -->
+    <string name="memory_map_sub">%1$s · %2$,d일 · %3$,d번의 길</string>
     <string name="memory_map_loading">지나온 길을 모으는 중</string>
     <string name="memory_map_empty">아직 지나온 길이 없어요</string>
     <string name="memory_map_failed">기억 지도를 불러오지 못했어요</string>

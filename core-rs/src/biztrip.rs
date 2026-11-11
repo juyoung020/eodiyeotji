@@ -98,7 +98,10 @@ pub struct BizMonth {
     /// "YYYY-MM"
     pub month: String,
     pub trips: Vec<BizTrip>,
+    /// 출장 거리 합 (km, 계기판 우선 — 하루 상세의 GPS 거리와 출처 · 범위가 다르다)
     pub total_km: f64,
+    /// [total_km]에 GPS로 잰 출장이 섞였나 (false = 모두 계기판). 화면은 숫자 옆에 기준을 적는다
+    pub total_has_gps: bool,
     pub total_won: i64,
     /// 출장에 쓴 시간 (분, 출발~도착)
     pub total_min: i64,
@@ -167,7 +170,8 @@ impl EodiStore {
         let total_km = trips.iter().map(|t| t.distance_km).sum();
         let total_won = trips.iter().map(|t| t.cost_won).sum();
         let total_min = trips.iter().map(|t| (t.end_ms - t.start_ms) / 60_000).sum();
-        Ok(BizMonth { month, trips, total_km, total_won, total_min })
+        let total_has_gps = trips.iter().any(|t| t.gps_distance);
+        Ok(BizMonth { month, trips, total_km, total_has_gps, total_won, total_min })
     }
 
     /// 하루를 출장으로 정한다 (`Some(true)` 출장, `Some(false)` 출장 아님, `None` 자동 판정으로 되돌리기).

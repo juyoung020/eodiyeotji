@@ -10,7 +10,9 @@
     <string name="timeline_date_pattern_year" translatable="false">yyyy년 M월 d일 (E)</string>
 
     <string name="timeline_trips">주행 %1$d회</string>
-    <string name="timeline_stays">머문 곳 %1$d곳</string>
+    <string name="timeline_stays">들른 곳 %1$d곳</string>
+    <!-- 같은 길을 이어서 여러 번 달린 주행을 한 줄로 묶었을 때. 예: 747m · 1분 미만 · 같은 길 3번 -->
+    <string name="timeline_trip_repeat">같은 길 %1$d번</string>
     <string name="timeline_km">%1$skm</string>
     <string name="timeline_m">%1$dm</string>
     <string name="timeline_hours_minutes">%1$d시간 %2$d분</string>

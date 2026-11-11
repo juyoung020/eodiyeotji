@@ -337,7 +337,7 @@ private fun MemoryMapStage(data: MemoryMap) {
                 }
                 Text(caption, style = EodiTheme.type.hero, color = Moon, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Text(
-                    stringResource(R.string.memory_map_sub, data.driveDays, data.driveCount),
+                    stringResource(R.string.memory_map_sub, data.periodLabel, data.driveDays, data.driveCount),
                     style = EodiTheme.type.body,
                     color = Gold.copy(alpha = 0.8f),
                 )

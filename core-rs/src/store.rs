@@ -63,7 +63,15 @@ pub const MAX_ACCURACY_M: f32 = 100.0;
 pub const PATH_TOLERANCE_M: f64 = 5.0;
 pub(crate) const DAY_MS: i64 = 86_400_000;
 /// 하루 요약을 만드는 규칙의 버전. 규칙이 바뀌면(예: 잡음 주행 빼기) 올린다 → 다음에 열 때 날짜별 요약을 다시 만든다.
-const DAY_RULES: i64 = 2;
+/// 3: 들른 곳 수(`stay_count`)를 하루 출발·도착 머문 곳 뺀 수로, 주행 수(`trip_count`)를 타임라인 주행 줄 수로.
+const DAY_RULES: i64 = 3;
+/// 이보다 짧게(거리·시간 둘 다) 움직인 주행은 타임라인에서 숨긴다 (거리 합에는 들어간다). 에뮬레이터 위치 재생 · 주차장 안 이동.
+pub const BLIP_M: f64 = 500.0;
+pub const BLIP_MS: i64 = 60_000;
+/// 앞 주행과 출발 · 도착이 둘 다 이만큼(m) 안이고 앞 주행이 끝난 뒤 [SAME_ROUTE_GAP_MS] 안에 출발했으면
+/// 같은 길을 다시 달린 것으로 보고 타임라인 한 줄로 묶는다.
+pub const SAME_ROUTE_M: f64 = 300.0;
+pub const SAME_ROUTE_GAP_MS: i64 = 15 * 60_000;
 
 /// 위치 한 점 (FusedLocation `LocationData`에서 필요한 값만).
 #[derive(Debug, Clone, Copy, PartialEq, uniffi::Record)]
@@ -88,9 +96,10 @@ pub enum DriveEvent {
 pub struct DaySummary {
     /// 현지 날짜 "YYYY-MM-DD" (open 때 받은 tz_offset_minutes 기준)
     pub day: String,
-    /// 그날 출발한 주행 수
+    /// 그날 주행 수 = 타임라인의 주행 줄 수 (짧은 주행은 숨기고 같은 길 반복은 한 줄, [`timeline_trips`])
     pub trip_count: u32,
-    /// 그날 도착한 머문 곳 수
+    /// 그날 들른 곳 수: 그날 도착한 머문 곳 중 하루 경로의 출발 · 도착 머문 곳(대개 집)을 뺀 수 ([`visit_count`]).
+    /// 하루 상세 · 목록 · 그날로 돌아가기가 모두 이 값을 쓴다.
     pub stay_count: u32,
     /// 그날 출발한 모든 주행의 거리 합 (m)
     pub distance_m: f64,
@@ -149,7 +158,8 @@ pub struct StaySummary {
 /// 하루 타임라인의 한 칸: 주행 또는 머문 곳.
 #[derive(Debug, Clone, PartialEq, uniffi::Enum)]
 pub enum DayEntry {
-    Trip { trip: TripSummary },
+    /// `repeat` = 같은 길을 이어서 달린 횟수 (1 = 한 번). 2 이상이면 뒤 주행들은 이 줄에 묶여 따로 나오지 않는다.
+    Trip { trip: TripSummary, repeat: u32 },
     Stay { stay: StaySummary },
 }
 
@@ -625,8 +635,8 @@ impl DayAcc {
         let named = self.stays.iter().filter(|s| s.place.as_ref().is_some_and(|p| !p.name.trim().is_empty())).count();
         DaySummary {
             day: format_day(day),
-            trip_count: self.trips.len() as u32,
-            stay_count: self.stays.len() as u32,
+            trip_count: timeline_trips(&self.trips, &self.stays).len() as u32,
+            stay_count: visit_count(&self.trips, &self.stays),
             replayable: is_replayable(named, distance_m),
             distance_m,
             drive_millis: self.trips.iter().map(|t| t.end_ms - t.start_ms).sum(),
@@ -640,10 +650,9 @@ impl DayAcc {
 
     /// 주행·머문 곳을 시간순 한 줄로 (같은 시각이면 주행 먼저).
     fn entries(&self) -> Vec<DayEntry> {
-        let mut keyed: Vec<(i64, u8, DayEntry)> = self
-            .trips
-            .iter()
-            .map(|t| (t.start_ms, 0, DayEntry::Trip { trip: t.clone() }))
+        let mut keyed: Vec<(i64, u8, DayEntry)> = timeline_trips(&self.trips, &self.stays)
+            .into_iter()
+            .map(|(i, repeat)| (self.trips[i].start_ms, 0, DayEntry::Trip { trip: self.trips[i].clone(), repeat }))
             .chain(self.stays.iter().map(|s| (s.arrive_ms, 1, DayEntry::Stay { stay: s.clone() })))
             .collect();
         keyed.sort_by_key(|(t, k, _)| (*t, *k));
@@ -651,12 +660,69 @@ impl DayAcc {
     }
 }
 
+/// 하루 들른 곳 (머문 곳 번호, 도착순): 하루 경로의 도착 머문 곳과 출발 머문 곳(`mapdata::route_ends_of`)을 뺀 곳.
+/// 출발 머문 곳은 첫 주행 전에 도착한 곳이거나 도착 머문 곳과 같은 곳(집 → … → 집)일 때만 뺀다 — 낮에 들른 곳이
+/// 우연히 첫 출발점 근처라고 빠지지 않게. 주행이 없는 날은 머문 곳 전부.
+/// 하루 상세 · 목록의 들른 곳 수([`visit_count`])와 그날로 돌아가기 장면(`replay`)이 이 목록을 같이 쓴다.
+pub(crate) fn visit_indices(trips: &[TripSummary], stays: &[StaySummary]) -> Vec<usize> {
+    let ends = crate::mapdata::route_ends_of(trips, stays);
+    let first_start = trips.first().map_or(i64::MIN, |t| t.start_ms);
+    let start_out = ends.start_stay.filter(|&i| stays[i].arrive_ms < first_start || ends.end_stay == Some(i));
+    (0..stays.len()).filter(|&i| start_out != Some(i) && ends.end_stay != Some(i)).collect()
+}
+
+/// 하루 들른 곳 수 ([`DaySummary::stay_count`], [`visit_indices`]의 수).
+pub(crate) fn visit_count(trips: &[TripSummary], stays: &[StaySummary]) -> u32 {
+    visit_indices(trips, stays).len() as u32
+}
+
+/// 아주 짧은 주행인가 ([BLIP_M] · [BLIP_MS] 둘 다 미만).
+pub(crate) fn is_blip(t: &TripSummary) -> bool {
+    t.distance_m < BLIP_M && t.end_ms - t.start_ms < BLIP_MS
+}
+
+/// 타임라인에 보일 주행 (번호, 같은 길 반복 횟수), 출발 시각순.
+/// - 아주 짧은 주행([`is_blip`])은 숨긴다. 단 도착해서 머문 주행(조개구이집 → 해변 475m처럼 두 곳을 잇는 이동)과,
+///   그날 주행이 모두 짧은 날(빈 타임라인이 되지 않게)은 숨기지 않는다.
+/// - 앞에 보인 주행과 출발 · 도착이 둘 다 [SAME_ROUTE_M] 안이고 [SAME_ROUTE_GAP_MS] 안에 다시 출발했으면 그 줄에 묶는다
+///   ("호연재 → 경포해변 · 같은 길 3번"). 한 줄의 시각 · 거리는 첫 주행 것이다.
+///   사이에 머문 곳이 있으면 묶지 않는다 (집 → 한 바퀴 → 집, 쉬고 다시 한 바퀴는 두 줄).
+pub(crate) fn timeline_trips(trips: &[TripSummary], stays: &[StaySummary]) -> Vec<(usize, u32)> {
+    let all_blips = trips.iter().all(is_blip);
+    let near = |a: &GeoPoint, b: &GeoPoint| {
+        crate::geo::haversine_m(Point { lat: a.lat, lon: a.lon }, Point { lat: b.lat, lon: b.lon }) <= SAME_ROUTE_M
+    };
+    let mut out: Vec<(usize, u32)> = Vec::with_capacity(trips.len());
+    // 마지막으로 보인(묶인) 주행의 도착 시각
+    let mut last_end = i64::MIN;
+    for (i, t) in trips.iter().enumerate() {
+        let arrived = stays.iter().any(|s| s.arrive_ms == t.end_ms);
+        if !all_blips && !arrived && is_blip(t) {
+            continue;
+        }
+        let stay_between = stays.iter().any(|s| s.arrive_ms >= last_end && s.arrive_ms <= t.start_ms);
+        if let Some((j, n)) = out.last_mut() {
+            let p = &trips[*j];
+            let soon = t.start_ms - last_end <= SAME_ROUTE_GAP_MS;
+            if soon && !stay_between && near(&p.start, &t.start) && near(&p.end, &t.end) {
+                *n += 1;
+                last_end = t.end_ms;
+                continue;
+            }
+        }
+        out.push((i, 1));
+        last_end = t.end_ms;
+    }
+    out
+}
+
 impl EodiStore {
     fn day_summaries_uncached(&self, limit: u32) -> Result<Vec<DaySummary>, CoreError> {
         let conn = self.read()?;
         let mut st = conn.prepare_cached(
             "SELECT s.day, s.trip_count, s.stay_count, s.distance_m, s.drive_millis, s.first_ms, s.last_ms, s.stop_names,
-                    coalesce(u.title, m.title, m.rule_title), CASE WHEN m.title IS NULL THEN '' ELSE m.tags END
+                    coalesce(u.title, CASE WHEN m.needs_llm = 1 THEN m.title END, m.rule_title),
+                    CASE WHEN m.title IS NULL OR m.needs_llm = 0 THEN '' ELSE m.tags END
              FROM day_summary s LEFT JOIN day_memory m ON m.day = s.day LEFT JOIN day_user_title u ON u.day = s.day ORDER BY s.day DESC LIMIT ?1",
         )?;
         let rows = st.query_map([limit], |r| {

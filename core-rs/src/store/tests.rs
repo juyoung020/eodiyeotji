@@ -343,10 +343,11 @@ fn last_arrival_is_an_open_stay_only_after_an_end_signal() {
     assert_eq!((d5.stays[0].arrive_ms, d5.stays[0].leave_ms), (end, leave));
     let d6 = store.day_detail("2026-11-06".into()).unwrap();
     assert_eq!((d6.trips.len(), d6.stays.len()), (1, 0));
+    // 들른 곳 수는 하루 경로의 도착 머문 곳(밤새 주차)을 세지 않는다 (`visit_count`)
     let days = store.day_summaries(10).unwrap();
     assert_eq!(days.iter().map(|d| (d.day.as_str(), d.stay_count)).collect::<Vec<_>>(), vec![
         ("2026-11-06", 0),
-        ("2026-11-05", 1)
+        ("2026-11-05", 0)
     ]);
 }
 
@@ -373,7 +374,7 @@ fn entries_merge_trips_and_stays_in_time_order() {
         .entries
         .iter()
         .map(|e| match e {
-            DayEntry::Trip { trip } => ('T', trip.start_ms),
+            DayEntry::Trip { trip, .. } => ('T', trip.start_ms),
             DayEntry::Stay { stay } => ('S', stay.arrive_ms),
         })
         .collect();
@@ -921,4 +922,52 @@ fn concurrent_ingest_and_reads_agree_at_the_end() {
         reference.ingest(drive(t0 + k * 10 * SEC, 10, 37.5 + k as f64 * 1e-3, 127.0)).unwrap();
     }
     assert_eq!(store.day_summaries(10).unwrap(), reference.day_summaries(10).unwrap());
+}
+
+/// 타임라인 주행 줄: 아주 짧은 주행은 숨기고, 같은 길을 이어 달리면 한 줄, 사이에 머문 곳이 있으면 따로 (UX 리뷰 4번).
+#[test]
+fn timeline_hides_blips_and_folds_repeated_routes() {
+    let a = GeoPoint { lat: 37.8010, lon: 128.9020 };
+    let b = GeoPoint { lat: 37.8055, lon: 128.9083 };
+    let c = GeoPoint { lat: 37.7990, lon: 128.8990 };
+    let trip = |s: i64, secs: i64, from: GeoPoint, to: GeoPoint, m: f64| TripSummary {
+        start_ms: s,
+        end_ms: s + secs * SEC,
+        distance_m: m,
+        start: from,
+        end: to,
+        path: vec![from, to],
+        start_place: None,
+        end_place: None,
+    };
+    let stay = |at: GeoPoint, t: i64| StaySummary { center: at, arrive_ms: t, leave_ms: t + 20 * MIN, place: None, order: 1 };
+    let trips = vec![
+        trip(0, 17, a, b, 747.0),
+        trip(3 * MIN, 17, a, b, 747.0),
+        trip(6 * MIN, 15, c, b, 400.0), // 500m · 1분 미만 → 숨김
+        trip(9 * MIN, 17, a, b, 747.0),
+        trip(12 * MIN, 36, c, b, 1092.0), // 다른 출발점 → 새 줄
+    ];
+    assert_eq!(timeline_trips(&trips, &[]), [(0, 3), (4, 1)]);
+    // 사이에 머문 곳이 있으면 같은 길이어도 묶지 않는다
+    assert_eq!(timeline_trips(&trips[..2], &[stay(b, 30 * SEC)]), [(0, 1), (1, 1)]);
+    // 짧아도 도착해서 머문 이동(두 곳을 잇는 475m)은 보인다
+    assert_eq!(timeline_trips(&trips[..3], &[stay(b, trips[2].end_ms)]), [(0, 2), (2, 1)]);
+    // 모두 짧은 날은 숨기지 않는다 (빈 타임라인 방지)
+    assert_eq!(timeline_trips(&trips[2..3], &[]), [(0, 1)]);
+    // 길게 달린 주행은 짧지 않다
+    assert!(!is_blip(&trip(0, 30, a, b, 600.0)) && !is_blip(&trip(0, 90, a, b, 100.0)));
+
+    // 들른 곳 = 하루 출발 · 도착 머문 곳을 뺀 수: 집 → 마트 → 집이면 마트 하나
+    let home = GeoPoint { lat: 37.5530, lon: 127.0335 };
+    let mart = GeoPoint { lat: 37.5395, lon: 127.0531 };
+    let day = [trip(10 * HOUR, 600, home, mart, 2500.0), trip(11 * HOUR, 600, mart, home, 2500.0)];
+    let stays = [stay(mart, 10 * HOUR + 600 * SEC), stay(home, 11 * HOUR + 600 * SEC)];
+    assert_eq!(visit_count(&day, &stays), 1);
+    assert_eq!(visit_count(&[], &stays), 2, "주행이 없는 날은 머문 곳 전부");
+    // 낮에 들른 곳(경포호)이 우연히 아침 출발점 근처여도 들른 곳이다 (11/10: 호텔 · 경포호 → 2곳)
+    let (lake, hotel, end) = (c, b, a);
+    let day = [trip(7 * HOUR, 35, lake, hotel, 978.0), trip(8 * HOUR, 400, hotel, lake, 1105.0), trip(9 * HOUR, 22, lake, end, 595.0)];
+    let stays = [stay(hotel, 7 * HOUR + 35 * SEC), stay(lake, 8 * HOUR + 400 * SEC), stay(end, 9 * HOUR + 22 * SEC)];
+    assert_eq!(visit_indices(&day, &stays), [0, 1]);
 }
