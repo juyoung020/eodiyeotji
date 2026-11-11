@@ -15,6 +15,7 @@ pub mod energy;
 pub mod ffi;
 pub mod geo;
 pub mod handoff;
+pub mod hotplace;
 pub mod lastfix;
 pub mod mapdata;
 pub mod memmap;
