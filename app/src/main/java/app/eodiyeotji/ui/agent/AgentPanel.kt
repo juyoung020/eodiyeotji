@@ -19,7 +19,14 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -218,16 +225,20 @@ fun AgentPanelContent(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
     topSpace: Dp = 0.dp,
-    onSelectCandidate: (Int) -> Unit = {},
+    onSelectCandidate: (index: Int, bubble: String) -> Unit = { _, _ -> },
 ) {
+    // 후보를 누르면 대화에 남는 내 말풍선 ("2번 볼게요")
+    val pickBubble = stringResource(R.string.agent_pick_bubble)
+    val pick: (Int) -> Unit = remember(pickBubble, onSelectCandidate) { { i -> onSelectCandidate(i, pickBubble.format(i + 1)) } }
     Surface(modifier = modifier.fillMaxSize(), color = EodiTheme.colors.background) {
         Crossfade(targetState = state.isDriving, label = "agentMode", modifier = Modifier.padding(top = topSpace)) { driving ->
             if (driving) {
+                // 주행 중에는 대화 기록 없이 지금 답 하나만 크게
                 DrivingAgent(state.turn, onConfirm, onClear, onClose, onVoiceRequest, onRetry)
             } else if (compact) {
-                CompactParkedAgent(state.turn, onAsk, onConfirm, onSelectStop, onSelectCandidate, onRetry, onVoiceRequest)
+                CompactParkedAgent(state.history, state.turn, onAsk, onConfirm, onSelectStop, pick, onRetry, onVoiceRequest)
             } else {
-                ParkedAgent(state.turn, onAsk, onConfirm, onSelectStop, onSelectCandidate, onRetry, onClose, onVoiceRequest)
+                ParkedAgent(state.history, state.turn, onAsk, onConfirm, onSelectStop, pick, onRetry, onClose, onVoiceRequest)
             }
         }
     }
@@ -237,8 +248,14 @@ fun AgentPanelContent(
 // 정차 중: 전체 화면
 // =====================================================================================
 
+/**
+ * 정차 중 대화: 앞서 주고받은 말([history])이 위에 쌓이고 지금 차례([turn])가 맨 아래에 붙는다.
+ * 새 차례가 생기면 그 차례의 내 말풍선이 보이도록 아래로 스크롤한다.
+ * 넓은 화면: 왼쪽 = 대화(지난 차례 + 지금 답 + 행동 버튼), 오른쪽 = 지금 차례의 후보·카드.
+ */
 @Composable
 private fun ParkedAgent(
+    history: List<AgentTurn>,
     turn: AgentTurn?,
     onAsk: (String) -> Unit,
     onConfirm: (AgentEvent.ActionProposal) -> Unit,
@@ -249,11 +266,13 @@ private fun ParkedAgent(
     onVoiceRequest: () -> Unit,
 ) {
     val today = remember { LocalDate.now() }
+    val list = rememberLazyListState()
+    FollowLatest(list, history.size, turn?.id)
     BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
         val wide = maxWidth >= WideBreakpoint
         Column(Modifier.fillMaxSize()) {
             QuestionBar(
-                question = turn?.question,
+                question = turn?.takeIf { it.pickedRank == null }?.question,
                 onAsk = onAsk,
                 onVoiceRequest = onVoiceRequest,
                 onClose = onClose,
@@ -265,16 +284,25 @@ private fun ParkedAgent(
                     horizontalArrangement = Arrangement.spacedBy(40.dp),
                     modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = PagePadding),
                 ) {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(28.dp),
-                        modifier = Modifier.weight(0.44f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(vertical = 24.dp),
+                    LazyColumn(
+                        state = list,
+                        verticalArrangement = Arrangement.spacedBy(36.dp),
+                        contentPadding = PaddingValues(vertical = 24.dp),
+                        modifier = Modifier.weight(0.44f).fillMaxHeight(),
                     ) {
-                        AnswerBlock(turn, onRetry)
-                        ActionBlock(turn, onConfirm, onAsk)
+                        items(history, key = { "h${it.id}" }) { PastTurn(it, today) }
+                        item(key = "c${turn.id}") {
+                            Column(verticalArrangement = Arrangement.spacedBy(28.dp)) {
+                                AnswerBlock(turn, onRetry)
+                                ActionBlock(turn, onConfirm, onAsk)
+                            }
+                        }
                     }
+                    // 오른쪽 카드는 차례가 바뀌면 맨 위부터
+                    val cards = remember(turn.id) { ScrollState(0) }
                     Column(
                         verticalArrangement = Arrangement.spacedBy(20.dp),
-                        modifier = Modifier.weight(0.56f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(vertical = 24.dp),
+                        modifier = Modifier.weight(0.56f).fillMaxHeight().verticalScroll(cards).padding(vertical = 24.dp),
                     ) {
                         if (turn.courses.isNotEmpty()) {
                             CourseRecommendationList(turn, onAsk)
@@ -285,23 +313,16 @@ private fun ParkedAgent(
                         }
                     }
                 }
-                else -> Column(
-                    verticalArrangement = Arrangement.spacedBy(28.dp),
-                    modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
-                        .padding(horizontal = PagePadding, vertical = 24.dp),
+                else -> LazyColumn(
+                    state = list,
+                    verticalArrangement = Arrangement.spacedBy(36.dp),
+                    contentPadding = PaddingValues(horizontal = PagePadding, vertical = 24.dp),
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
                 ) {
-                    AnswerBlock(turn, onRetry)
-                    // 좁은 창: 카드를 먼저 보고 바로 아래에서 행동을 고른다
-                    if (turn.courses.isNotEmpty()) {
-                        // 좁은 창: 답 바로 아래에서 1번 안내를 고르고, 그 아래 순위 카드
-                        ActionBlock(turn, onConfirm, onAsk)
-                        CourseRecommendationList(turn, onAsk)
-                    } else {
-                        if (turn.candidates.size > 1) CandidateStrip(turn.candidates, turn.candidateFocus, today, onSelectCandidate)
-                        RecommendationsBlock(turn, today, onSelectStop, onAsk, onlyFirst = true)
-                        ActionBlock(turn, onConfirm, onAsk)
+                    items(history, key = { "h${it.id}" }) { PastTurn(it, today) }
+                    item(key = "c${turn.id}") {
+                        CurrentTurnColumn(turn, today, onAsk, onConfirm, onSelectStop, onSelectCandidate, onRetry, compact = false)
                     }
-                    OtherDays(turn, today, onAsk)
                 }
             }
         }
@@ -309,11 +330,12 @@ private fun ParkedAgent(
 }
 
 /**
- * 폰 세로 화면 (대화처럼): 위는 굴러가는 답 · 추천 카드(세로로 쌓음) · 행동 버튼, 맨 아래 엄지가 닿는 곳에 질문 칸과 큰 마이크.
+ * 폰 세로 화면 (대화처럼): 위는 쌓이는 대화(지난 차례 + 지금 답 · 추천 카드 · 행동 버튼), 맨 아래 엄지가 닿는 곳에 질문 칸과 큰 마이크.
  * 질문 칸은 키보드가 올라오면 같이 올라온다 (safeDrawing에 키보드가 들어 있다).
  */
 @Composable
 private fun CompactParkedAgent(
+    history: List<AgentTurn>,
     turn: AgentTurn?,
     onAsk: (String) -> Unit,
     onConfirm: (AgentEvent.ActionProposal) -> Unit,
@@ -323,31 +345,26 @@ private fun CompactParkedAgent(
     onVoiceRequest: () -> Unit,
 ) {
     val today = remember { LocalDate.now() }
+    val list = rememberLazyListState()
+    FollowLatest(list, history.size, turn?.id)
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         if (turn == null) {
             EmptyState(onAsk, Modifier.weight(1f).fillMaxWidth())
         } else {
-            // 새 질문이면 맨 위(내 질문)부터 보인다
-            val scroll = remember(turn.id) { androidx.compose.foundation.ScrollState(0) }
-            Column(
-                verticalArrangement = Arrangement.spacedBy(28.dp),
-                modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll)
-                    .padding(horizontal = PagePadding, vertical = 24.dp),
+            LazyColumn(
+                state = list,
+                verticalArrangement = Arrangement.spacedBy(36.dp),
+                contentPadding = PaddingValues(horizontal = PagePadding, vertical = 24.dp),
+                modifier = Modifier.weight(1f).fillMaxWidth(),
             ) {
-                AnswerBlock(turn, onRetry)
-                if (turn.courses.isNotEmpty()) {
-                    ActionBlock(turn, onConfirm, onAsk)
-                    CourseRecommendationList(turn, onAsk)
-                } else {
-                    if (turn.candidates.size > 1) CandidateStrip(turn.candidates, turn.candidateFocus, today, onSelectCandidate, compact = true)
-                    RecommendationsBlock(turn, today, onSelectStop, onAsk, onlyFirst = true)
-                    ActionBlock(turn, onConfirm, onAsk)
+                items(history, key = { "h${it.id}" }) { PastTurn(it, today) }
+                item(key = "c${turn.id}") {
+                    CurrentTurnColumn(turn, today, onAsk, onConfirm, onSelectStop, onSelectCandidate, onRetry, compact = true)
                 }
-                OtherDays(turn, today, onAsk)
             }
         }
         CompactAskBar(
-            question = turn?.question,
+            question = turn?.takeIf { it.pickedRank == null }?.question,
             onAsk = onAsk,
             onVoiceRequest = onVoiceRequest,
             modifier = Modifier
@@ -355,6 +372,99 @@ private fun CompactParkedAgent(
                 .background(EodiTheme.colors.background)
                 .padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 20.dp),
         )
+    }
+}
+
+/** 새 차례가 생기면 그 차례(지난 대화 [pastCount]개 다음 줄)의 내 말풍선이 위에 오도록 스크롤한다. */
+@Composable
+private fun FollowLatest(list: LazyListState, pastCount: Int, turnId: Long?) {
+    LaunchedEffect(turnId) {
+        if (turnId != null) list.animateScrollToItem(pastCount)
+    }
+}
+
+/** 지금 차례 한 줄 (좁은 창·폰): 답 → 카드 → 행동 (코스면 답 바로 아래 1번 안내, 그 아래 순위 카드). */
+@Composable
+private fun CurrentTurnColumn(
+    turn: AgentTurn,
+    today: LocalDate,
+    onAsk: (String) -> Unit,
+    onConfirm: (AgentEvent.ActionProposal) -> Unit,
+    onSelectStop: (Int) -> Unit,
+    onSelectCandidate: (Int) -> Unit,
+    onRetry: () -> Unit,
+    compact: Boolean,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(28.dp)) {
+        AnswerBlock(turn, onRetry)
+        if (turn.courses.isNotEmpty()) {
+            ActionBlock(turn, onConfirm, onAsk)
+            CourseRecommendationList(turn, onAsk)
+        } else {
+            if (turn.candidates.size > 1) CandidateStrip(turn.candidates, turn.candidateFocus, today, onSelectCandidate, compact = compact)
+            RecommendationsBlock(turn, today, onSelectStop, onAsk, onlyFirst = true)
+            ActionBlock(turn, onConfirm, onAsk)
+        }
+        OtherDays(turn, today, onAsk)
+    }
+}
+
+/**
+ * 지난 차례 (대화 기록): 내 말풍선 + 그때 답 + 그때의 후보 · 카드를 작게. 누를 수 있는 버튼은 없다
+ * (안내·후보 고르기는 맨 아래 지금 차례에서). 안내를 보냈으면 그 결과 줄도 남긴다.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PastTurn(turn: AgentTurn, today: LocalDate) {
+    val c = EodiTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        QuestionBubble(turn.question, Modifier.align(Alignment.End))
+        Row(verticalAlignment = Alignment.Top) {
+            SparkleBadge(size = 40.dp)
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f).padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                val text = turn.error ?: turn.answer
+                if (text.isNotBlank()) {
+                    Text(text, style = EodiTheme.type.titleSmall, color = if (turn.error != null) c.textSecondary else c.textPrimary)
+                }
+                turn.notice?.let { NoticeLine(it) }
+                val focusCourse = turn.courses.getOrNull(turn.courseFocus)
+                if (turn.courses.isNotEmpty()) {
+                    PastChips(turn.courses.map { "${it.rank}  ${it.route.title}" }, turn.courseFocus)
+                } else if (turn.candidates.size > 1) {
+                    PastChips(turn.candidates.mapIndexed { i, h -> "${i + 1}  ${h.bestStop?.name ?: h.episode.title ?: h.episode.facts.ruleLabel}" }, turn.candidateFocus)
+                }
+                if (focusCourse == null) turn.recommendations.firstOrNull()?.let { PastMemoryRow(it, today) }
+                if (turn.action is ActionState.Done || turn.action is ActionState.Failed) ActionStatus(turn.action)
+            }
+        }
+    }
+}
+
+/** 지난 차례의 후보·코스 번호 줄 (그때 보던 것은 강조). 누를 수 없다. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PastChips(labels: List<String>, focus: Int) {
+    val c = EodiTheme.colors
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        labels.forEachIndexed { i, label ->
+            val on = i == focus
+            Surface(
+                shape = CircleShape,
+                color = if (on) c.accentSoft else c.surface,
+                contentColor = if (on) c.accent else c.textSecondary,
+                border = BorderStroke(1.dp, if (on) c.accent else c.outline),
+            ) {
+                Text(
+                    label,
+                    style = EodiTheme.type.meta,
+                    fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 320.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
+        }
     }
 }
 
@@ -536,14 +646,7 @@ private fun EmptyState(onAsk: (String) -> Unit, modifier: Modifier = Modifier) {
 @Composable
 private fun AnswerBlock(turn: AgentTurn, onRetry: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        Surface(
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 28.dp, bottomEnd = 8.dp),
-            color = EodiTheme.colors.surfaceHigh,
-            contentColor = EodiTheme.colors.textPrimary,
-            modifier = Modifier.align(Alignment.End).widthIn(max = 640.dp),
-        ) {
-            Text(turn.question, style = EodiTheme.type.titleSmall, modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp))
-        }
+        QuestionBubble(turn.question, Modifier.align(Alignment.End))
         Row(verticalAlignment = Alignment.Top) {
             SparkleBadge(size = 52.dp)
             Spacer(Modifier.width(20.dp))
@@ -567,6 +670,19 @@ private fun AnswerBlock(turn: AgentTurn, onRetry: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+/** 내 말풍선 (오른쪽). 후보를 눌러 생긴 "2번 볼게요"도 같은 모양이다. */
+@Composable
+private fun QuestionBubble(text: String, modifier: Modifier = Modifier) {
+    Surface(
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 28.dp, bottomEnd = 8.dp),
+        color = EodiTheme.colors.surfaceHigh,
+        contentColor = EodiTheme.colors.textPrimary,
+        modifier = modifier.widthIn(max = 640.dp),
+    ) {
+        Text(text, style = EodiTheme.type.titleSmall, modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp))
     }
 }
 

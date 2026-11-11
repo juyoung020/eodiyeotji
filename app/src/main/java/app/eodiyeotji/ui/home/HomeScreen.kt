@@ -104,15 +104,23 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
             // 머리: [검색 칸 (손으로 · 말로 찾기)] + [✦ 물어보기 (기억 에이전트)]. 마이크는 검색 칸 안에 하나만 둔다.
             // 검색 칸이 글로 찾기·묻기의 한 곳: 문장으로 쓰면 결과 맨 위가 "AI에게 물어보기"(Rust search_ui의 question 판정).
             // 내 기록 머리 오른쪽: 작은 기록 상태(기록 중 · 시동 걸면 자동 기록 · 권한 꺼짐, 누르면 설명) + 물어보기(바로 대화로)
+            val recordsSearchVm: SearchViewModel = hiltViewModel(key = "search-records")
+            val communitySearchVm: SearchViewModel = hiltViewModel(key = "search-community")
+            // 검색 칸에 글을 쓴 채 물어보기를 누르면 그 글을 바로 묻는다 (빈 입력창으로 열리지 않게)
+            val openAgent = { search: SearchViewModel ->
+                val typed = search.state.value.query.trim()
+                if (typed.isNotEmpty()) agentViewModel.ask(typed)
+                agentOpen = true
+            }
             val entry: @Composable () -> Unit = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RecordingStatusChip()
                     Spacer(Modifier.width(12.dp))
-                    AgentEntryButton(onClick = { agentOpen = true }, mic = false)
+                    AgentEntryButton(onClick = { openAgent(recordsSearchVm) }, mic = false)
                 }
             }
             val compactEntry: @Composable () -> Unit = {
-                AgentEntryButton(onClick = { agentOpen = true }, mic = false, modifier = Modifier.widthIn(max = 300.dp))
+                AgentEntryButton(onClick = { openAgent(communitySearchVm) }, mic = false, modifier = Modifier.widthIn(max = 300.dp))
             }
             var communityTab by rememberSaveable { mutableStateOf(CommunityTab.COURSES) }
             val timeline: TimelineViewModel = hiltViewModel()
@@ -145,7 +153,6 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                     agentOpen = true
                 },
             )
-            val recordsSearchVm: SearchViewModel = hiltViewModel(key = "search-records")
             val recordsSearch = rememberSearchSlot(
                 viewModel = recordsSearchVm,
                 scope = SearchScope.RECORDS,
@@ -154,7 +161,7 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                 hint = stringResource(R.string.search_hint_records),
             )
             val communitySearch = rememberSearchSlot(
-                viewModel = hiltViewModel(key = "search-community"),
+                viewModel = communitySearchVm,
                 scope = communityTab.searchScope(),
                 agent = agentViewModel,
                 actions = actions,

@@ -32,12 +32,16 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** 화면 상태 전체. [turn]이 null이면 아직 묻지 않은 처음 화면(예시 질문)이다. */
+/**
+ * 화면 상태 전체. [turn]이 null이면 아직 묻지 않은 처음 화면(예시 질문)이다.
+ * [history]: 앞서 주고받은 대화 (오래된 것부터). 정차 화면은 [history] 아래에 [turn]을 이어 쌓고, 주행 화면은 [turn] 하나만 보인다.
+ */
 @Immutable
 data class AgentUiState(
     val isDriving: Boolean = false,
     val turn: AgentTurn? = null,
     val voice: VoiceUi = VoiceUi(),
+    val history: List<AgentTurn> = emptyList(),
 )
 
 /** 말로 묻기·답 읽기 상태. */
@@ -61,11 +65,15 @@ data class VoiceUi(
     val dictating: Boolean = false,
 )
 
-/** 질문 하나와 그 답. 새 질문을 하면 통째로 바뀐다. */
+/**
+ * 질문 하나와 그 답. 새 질문을 하거나 후보를 고르면 지금 것은 [AgentUiState.history]로 넘어가고 새 것이 아래에 붙는다.
+ * [pickedRank]가 있으면 화면에서 후보를 눌러 생긴 차례다 ([question]은 "2번 볼게요" 같은 내 말풍선 글).
+ */
 @Immutable
 data class AgentTurn(
     val id: Long,
     val question: String,
+    val pickedRank: Int? = null,
     val answer: String = "",
     val phase: AnswerPhase = AnswerPhase.Thinking,
     val recommendations: List<RecommendationUi> = emptyList(),
@@ -96,13 +104,17 @@ enum class AnswerPhase {
     Failed,
 }
 
-/** 추천 카드 하나. [map]은 첫 카드만 불러온다 ([mapLoaded] 전에는 자리만). */
+/**
+ * 추천 카드 하나. [map]은 첫 카드만 불러온다 ([mapLoaded] 전에는 자리만).
+ * 지도 핀 번호는 [stops](사진 줄) 순서로 매긴다 — [mapStops]는 지금 [map]이 번호를 맞춘 들른 곳 (코스가 늦게 와 순서가 바뀌면 다시 맞춘다).
+ */
 @Immutable
 data class RecommendationUi(
     val hit: MemoryHit,
     val course: CourseRoute?,
     val map: DayMapData? = null,
     val mapLoaded: Boolean = false,
+    val mapStops: List<StopFact>? = null,
 ) {
     /** 카드에 늘어놓을 곳: 코스가 있으면 코스 순서, 없으면 그날 들른 순서. */
     val stops: List<StopFact> get() = course?.stops ?: hit.episode.facts.stops
@@ -134,6 +146,7 @@ class AgentViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val turn = MutableStateFlow<AgentTurn?>(null)
+    private val history = MutableStateFlow<List<AgentTurn>>(emptyList())
     private val note = MutableStateFlow<String?>(null)
     private val followUp = MutableStateFlow(false)
     private val followUpCourses = MutableStateFlow(false)
@@ -157,7 +170,7 @@ class AgentViewModel @Inject constructor(
         )
     }
 
-    val state: StateFlow<AgentUiState> = combine(turn, driving.isDriving, voice) { t, d, v -> AgentUiState(isDriving = d, turn = t, voice = v) }
+    val state: StateFlow<AgentUiState> = combine(turn, history, driving.isDriving, voice) { t, h, d, v -> AgentUiState(isDriving = d, turn = t, voice = v, history = h) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AgentUiState(isDriving = driving.isDriving.value))
 
     /** 주행 중에 주행 화면만 보일지 (차 true, 폰 false). */
@@ -167,6 +180,8 @@ class AgentViewModel @Inject constructor(
     private var actionJob: Job? = null
     private var noteJob: Job? = null
     private var lastId = 0L
+    /** 불러오는 중인 지도 (차례 id, 번호를 맞출 들른 곳) — 같은 지도를 두 번 부르지 않게. */
+    private var mapKey: Pair<Long, List<StopFact>>? = null
 
     init {
         viewModelScope.launch { speech.results.collect(::onSpeech) }
@@ -218,7 +233,10 @@ class AgentViewModel @Inject constructor(
         }
     }
 
-    fun ask(utterance: String) {
+    fun ask(utterance: String) = ask(utterance, replace = false)
+
+    /** [replace]: 지금 차례를 대화에 남기지 않고 바꾼다 (실패한 질문 다시 묻기). */
+    private fun ask(utterance: String, replace: Boolean) {
         val question = utterance.trim()
         if (question.isEmpty()) return
         tts.stop()
@@ -231,6 +249,7 @@ class AgentViewModel @Inject constructor(
         val id = ++lastId
         // 추천 코스 이야기 중이면 후속 질문("2번으로 가자") 동안 목록을 그대로 둔다 (새 목록이 오면 바뀐다)
         val prev = turn.value
+        if (!replace) archive()
         turn.value = AgentTurn(id = id, question = question, courses = prev?.courses.orEmpty(), courseFocus = prev?.courseFocus ?: 0)
         val isDriving = driving.isDriving.value
         askJob = viewModelScope.launch(Dispatchers.Default) {
@@ -261,6 +280,22 @@ class AgentViewModel @Inject constructor(
         speech.cancel()
         followUp.value = false
         turn.value = null
+        history.value = emptyList()
+    }
+
+    /**
+     * 지금 차례를 대화 기록으로 넘긴다 (새 질문·후보 고르기 직전). 다 오지 않은 답은 온 데까지 남긴다.
+     * 기록에서는 버튼을 누를 수 없으니 안내 제안은 빼고, 지도(GeoJSON)도 들고 있지 않는다 (작은 카드로만 보인다).
+     */
+    private fun archive() {
+        val t = turn.value ?: return
+        val frozen = t.copy(
+            phase = if (t.phase == AnswerPhase.Failed) AnswerPhase.Failed else AnswerPhase.Done,
+            proposals = emptyList(),
+            action = if (t.action is ActionState.Running) ActionState.Idle else t.action,
+            recommendations = t.recommendations.take(1).map { it.copy(map = null, mapLoaded = false, mapStops = null) },
+        )
+        history.update { (it + frozen).takeLast(MAX_HISTORY) }
     }
 
     override fun onCleared() {
@@ -328,8 +363,10 @@ class AgentViewModel @Inject constructor(
         }
     }
 
+    /** 답을 못 받은 질문을 다시 묻는다 (실패한 차례는 대화에 남기지 않고 새 답으로 바꾼다). */
     fun retry() {
-        turn.value?.question?.let(::ask)
+        val t = turn.value ?: return
+        if (t.pickedRank == null) ask(t.question, replace = true)
     }
 
     fun selectStop(index: Int) {
@@ -341,22 +378,42 @@ class AgentViewModel @Inject constructor(
      * 후보 칸에서 후보를 눌렀다: 새 질문 없이 그 자리에서 자세한 카드를 바꾸고, Rust에 알려 안내 버튼을 그 후보로 바꾼다.
      * 이어서 말하는 "다른 거"·"응"도 이 후보 기준이 된다.
      */
-    fun selectCandidate(index: Int) {
+    fun selectCandidate(index: Int, bubble: String) {
         val t = turn.value ?: return
         val hit = t.candidates.getOrNull(index) ?: return
         if (index == t.candidateFocus || t.action is ActionState.Running) return
-        val id = t.id
         val rec = RecommendationUi(hit, null)
-        updateTurn(id) {
-            it.copy(
+        val stop = rec.stops.indexOfFirst { s -> s.name == hit.bestStop?.name }.coerceAtLeast(0)
+        // 답이 다 왔으면 "2번 볼게요" 말풍선과 새 답을 아래에 붙인다 (앞 답은 대화에 남는다). 오는 중이면 그 자리에서 바꾼다.
+        val finished = t.phase == AnswerPhase.Done || t.phase == AnswerPhase.Failed
+        val id = if (finished) {
+            archive()
+            val next = ++lastId
+            turn.value = t.copy(
+                id = next,
+                question = bubble,
+                pickedRank = index + 1,
+                answer = "",
+                phase = AnswerPhase.Thinking,
+                error = null,
+                notice = null,
                 candidateFocus = index,
                 recommendations = listOf(rec),
                 proposals = emptyList(),
                 action = ActionState.Idle,
-                selectedStop = rec.stops.indexOfFirst { s -> s.name == hit.bestStop?.name }.coerceAtLeast(0),
+                selectedStop = stop,
+                courses = emptyList(),
+                courseFocus = 0,
             )
+            next
+        } else {
+            updateTurn(t.id) {
+                it.copy(candidateFocus = index, recommendations = listOf(rec), proposals = emptyList(), action = ActionState.Idle, selectedStop = stop)
+            }
+            t.id
         }
-        loadMap(id, hit.episode.facts.day)
+        ensureMap(id)
+        val fallback = hit.episode.title ?: hit.dayTitle ?: hit.episode.facts.ruleLabel
         viewModelScope.launch(Dispatchers.Default) {
             val here = try {
                 core.lastKnownLocation()
@@ -365,15 +422,20 @@ class AgentViewModel @Inject constructor(
             } catch (e: Exception) {
                 null
             }
-            val picked = agent.selectCandidate(hit.episode.facts.id, AgentContext(System.currentTimeMillis(), here, driving.isDriving.value)) ?: return@launch
+            val picked = agent.selectCandidate(hit.episode.facts.id, AgentContext(System.currentTimeMillis(), here, driving.isDriving.value))
             updateTurn(id) { cur ->
                 if (cur.candidateFocus != index) return@updateTurn cur
+                val phase = if (finished) AnswerPhase.Done else cur.phase
+                if (picked == null) return@updateTurn if (finished) cur.copy(answer = fallback, phase = phase) else cur
                 cur.copy(
                     answer = picked.line,
+                    phase = phase,
                     proposals = listOfNotNull(picked.proposal),
                     recommendations = cur.recommendations.map { r -> if (r.hit.episode.facts.id == hit.episode.facts.id && picked.course != null) r.copy(course = picked.course) else r },
                 )
             }
+            // 코스가 오면 사진 줄 순서가 바뀔 수 있다 → 지도 번호를 다시 맞춘다
+            ensureMap(id)
         }
     }
 
@@ -416,12 +478,12 @@ class AgentViewModel @Inject constructor(
                     // 후보 모드: 자세한 카드를 이 후보로 바꿔 끼운다 (같은 후보면 지도는 그대로)
                     val old = cur.recommendations.firstOrNull()
                     val same = old?.hit?.episode?.facts?.id == event.hit.episode.facts.id
-                    val rec = RecommendationUi(event.hit, event.course).let { if (same && old != null) it.copy(map = old.map, mapLoaded = old.mapLoaded) else it }
+                    val rec = RecommendationUi(event.hit, event.course).let { if (same && old != null) it.copy(map = old.map, mapLoaded = old.mapLoaded, mapStops = old.mapStops) else it }
                     updateTurn(id) { t ->
                         val selected = if (same) t.selectedStop else rec.stops.indexOfFirst { it.name == event.hit.bestStop?.name }.coerceAtLeast(0)
                         t.copy(recommendations = listOf(rec), selectedStop = selected, courses = emptyList(), courseFocus = 0)
                     }
-                    if (!same) loadMap(id, event.hit.episode.facts.day)
+                    ensureMap(id)
                     return
                 }
                 val first = cur?.recommendations?.isEmpty() == true
@@ -436,11 +498,11 @@ class AgentViewModel @Inject constructor(
                         t.recommendations + rec
                     } else {
                         val old = t.recommendations[at]
-                        t.recommendations.toMutableList().also { it[at] = rec.copy(map = old.map, mapLoaded = old.mapLoaded) }
+                        t.recommendations.toMutableList().also { it[at] = rec.copy(map = old.map, mapLoaded = old.mapLoaded, mapStops = old.mapStops) }
                     }
                     t.copy(recommendations = recs, selectedStop = selected)
                 }
-                if (first) loadMap(id, event.hit.episode.facts.day)
+                ensureMap(id)
             }
             is AgentEvent.ActionProposal -> updateTurn(id) { it.copy(proposals = it.proposals + event) }
             is AgentEvent.Notice -> updateTurn(id) { it.copy(notice = event.text) }
@@ -458,19 +520,33 @@ class AgentViewModel @Inject constructor(
         }
     }
 
-    /** 첫 추천 카드의 하루 지도 (Rust가 만든 GeoJSON). 없거나 실패하면 카드가 지도 대신 코스 그림을 보인다. */
-    private fun loadMap(id: Long, day: String) {
+    /**
+     * 첫 추천 카드의 하루 지도 (Rust가 만든 GeoJSON, 핀 번호는 카드 사진 줄 순서로 맞춘 것). 이미 맞는 지도가 있거나
+     * 같은 지도를 부르는 중이면 아무것도 안 한다. 없거나 실패하면 카드가 지도 대신 사진을 보인다.
+     */
+    private fun ensureMap(id: Long) {
+        val head = turn.value?.takeIf { it.id == id }?.recommendations?.firstOrNull() ?: return
+        val stops = head.stops
+        if (head.mapLoaded && head.mapStops == stops) return
+        val key = id to stops
+        if (mapKey == key) return
+        mapKey = key
+        val epId = head.hit.episode.facts.id
+        val day = head.hit.episode.facts.day
         viewModelScope.launch {
             val map = try {
-                core.dayMap(day)
+                core.dayMap(day).let { it.copy(geojson = agent.numberMapStops(it.geojson, stops)) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 null
             }
+            if (mapKey == key) mapKey = null
             updateTurn(id) { t ->
-                val head = t.recommendations.firstOrNull() ?: return@updateTurn t
-                t.copy(recommendations = listOf(head.copy(map = map, mapLoaded = true)) + t.recommendations.drop(1))
+                val h = t.recommendations.firstOrNull() ?: return@updateTurn t
+                // 그새 다른 후보·순서로 바뀌었으면 버린다 (바뀐 쪽 지도를 따로 부른다)
+                if (h.hit.episode.facts.id != epId || h.stops != stops) return@updateTurn t
+                t.copy(recommendations = listOf(h.copy(map = map, mapLoaded = true, mapStops = stops)) + t.recommendations.drop(1))
             }
         }
     }
@@ -483,6 +559,8 @@ class AgentViewModel @Inject constructor(
         const val TAG = "EodiAgentVm"
         const val NOTE_MS = 4_000L
         const val FOLLOW_UP_LISTEN_MS = 7_000L
+        /** 대화 기록은 최근 이만큼만 (오래된 것부터 지운다). */
+        const val MAX_HISTORY = 30
         const val MSG_FAILED = "기억을 찾다가 문제가 생겼어요. 다시 물어봐 주세요."
         const val MSG_NO_SPEECH = "말씀을 듣지 못했어요. 마이크를 누르고 다시 말씀해 주세요."
         const val MSG_NO_MIC = "마이크 권한이 있어야 말로 물을 수 있어요."
