@@ -7,6 +7,7 @@ import app.eodiyeotji.ui.offers.CouponWallet
 import app.eodiyeotji.ui.offers.LocalCoupons
 import app.eodiyeotji.ui.offers.PlaceCouponBadge
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -38,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -60,7 +62,6 @@ import app.eodiyeotji.ui.community.ChoiceRow
 import app.eodiyeotji.ui.community.CommunityIcons
 import app.eodiyeotji.ui.community.LoadingBox
 import app.eodiyeotji.ui.community.Notice
-import app.eodiyeotji.ui.community.PrimaryPill
 import app.eodiyeotji.ui.community.SecondaryPill
 import app.eodiyeotji.ui.place.LocalOpenPlace
 import app.eodiyeotji.ui.theme.EodiIcons
@@ -91,6 +92,7 @@ fun PlacesRoute(
         viewModel.reload()
         coupons?.refresh()
     }
+    val couponCount = coupons?.claimed?.collectAsStateWithLifecycle()?.value?.size ?: 0
     Surface(Modifier.fillMaxSize(), color = c.background, contentColor = c.textPrimary) {
         Box(Modifier.fillMaxSize().safeDrawingPadding()) {
             Column(Modifier.fillMaxSize()) {
@@ -100,7 +102,8 @@ fun PlacesRoute(
                         options = listOf(
                             PlacesTab.SAVED to stringResource(R.string.places_tab_saved),
                             PlacesTab.FREQUENT to stringResource(R.string.places_tab_frequent),
-                            PlacesTab.COUPONS to stringResource(R.string.places_tab_coupons),
+                            // 왼쪽 레일 배지(받은 쿠폰 장 수)와 같은 숫자를 탭에도 단다 → 배지가 무엇인지 들어와서도 보인다
+                            PlacesTab.COUPONS to if (couponCount > 0) stringResource(R.string.places_tab_coupons_count, couponCount) else stringResource(R.string.places_tab_coupons),
                             PlacesTab.SETTINGS to stringResource(R.string.places_tab_settings),
                         ),
                         selected = s.tab,
@@ -228,9 +231,30 @@ private fun PlaceCardView(card: PlaceCard, offers: List<PartnerOffer>, onHeart: 
             }
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                PrimaryPill(stringResource(R.string.edit_navigate), EodiIcons.Navi, onNavigate, Modifier.weight(1f))
+                // 카드가 여러 장 나란히 있으니 안내는 보조(외곽선) 버튼 — 큰 파란 버튼이 화면 가득 경쟁하지 않게
+                OutlinePill(stringResource(R.string.edit_navigate), EodiIcons.Navi, onNavigate, Modifier.weight(1f))
                 if (onRecords != null) SecondaryPill(stringResource(R.string.places_records), EodiIcons.Calendar, onRecords, Modifier.weight(1f))
             }
+        }
+    }
+}
+
+/** 보조 동작 (흰 바탕 · 파란 외곽선 · 파란 글자, 76dp). */
+@Composable
+private fun OutlinePill(text: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val c = EodiTheme.colors
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = c.surface,
+        contentColor = c.accent,
+        border = BorderStroke(2.dp, c.accent),
+        modifier = modifier.heightIn(min = 76.dp),
+    ) {
+        Row(Modifier.padding(horizontal = 28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+            Icon(icon, null, Modifier.size(28.dp))
+            Spacer(Modifier.width(12.dp))
+            Text(text, style = EodiTheme.type.label, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

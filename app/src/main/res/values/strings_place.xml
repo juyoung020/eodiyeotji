@@ -20,7 +20,7 @@
     <string name="place_no_photos">이곳은 사진이 없어요</string>
     <!-- 장소 상세 창 (ui/place/PlaceDetailSheet.kt): 장소를 누르면 뜨는 사진 · 별점 · 리뷰 창 -->
     <string name="place_detail_open">장소 정보 보기</string>
-    <string name="place_detail_navigate">안내</string>
+    <string name="place_detail_navigate">여기로 안내</string>
     <string name="place_detail_navi_ok">내비로 안내를 보냈어요</string>
     <string name="place_detail_navi_fail">안내를 시작하지 못했어요</string>
     <string name="place_detail_save">저장</string>

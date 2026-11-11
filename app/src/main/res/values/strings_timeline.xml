@@ -42,8 +42,8 @@
     <!-- 데모용 Rust 코어 상태 한 줄 -->
     <string name="core_status_line">Rust 코어 v%1$s · 경로 단순화 %2$s ms</string>
     <!-- 하루 상세에서 바로 커뮤니티에 코스로 올리기 -->
-    <string name="timeline_share">커뮤니티에 올리기</string>
-    <string name="timeline_share_short">올리기</string>
+    <string name="timeline_share">코스 올리기</string>
+    <string name="timeline_share_short">코스 올리기</string>
     <string name="timeline_shared">여행 리뷰에 올렸어요</string>
     <!-- 하루 상세 머리 버튼을 못 쓰는 날, 누르면 버튼 아래 한 줄로 이유 -->
     <string name="timeline_share_unavailable">출퇴근 · 동네 볼일 기록은 올릴 수 없어요. 나들이 · 여행만 올릴 수 있어요</string>

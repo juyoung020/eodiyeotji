@@ -28,7 +28,6 @@
     <string name="biz_fuel">연료 %1$d%%</string>
     <string name="biz_auto">자동으로 찾음</string>
     <string name="biz_marked">직접 지정</string>
-    <string name="biz_open_day">그날 보기</string>
     <string name="biz_not_biz">출장 아님</string>
     <string name="biz_about">약 %1$s</string>
 </resources>

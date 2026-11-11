@@ -2,10 +2,8 @@ package app.eodiyeotji.ui.search
 
 import app.eodiyeotji.core.CourseOffers
 import app.eodiyeotji.core.PartnerOffer
-import app.eodiyeotji.ui.community.SecondaryPill
-import app.eodiyeotji.ui.community.PrimaryPill
+import app.eodiyeotji.ui.community.StopPhotoBox
 import app.eodiyeotji.ui.review.TripReviewCard
-import app.eodiyeotji.ui.review.FeedHero
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.ui.offers.CourseCouponBadge
 import app.eodiyeotji.ui.offers.PlaceCouponBadge
@@ -443,27 +441,23 @@ private fun LazyGridScope.group(
                 onOpen = { onOpen(r) },
                 onHeart = null,
             )
-            // 장소 · 하루 · 리뷰: 큰 사진 카드 (사진은 묶음 위쪽 몇 칸만, 구글 사진 요청을 적게)
-            place != null && place.name.isNotBlank() && index < PhotoRows * columns -> ResultCard(
-                r, place, onOpen = onOpen, onMap = onMap, onNavigate = onNavigate,
-                saved = if (r.kind == SearchRowKind.PLACE) saved[r.key] ?: false else null,
-                onHeart = onHeart,
-                offers = offers[r.key].orEmpty(),
-            )
+            // 장소 · 하루 · 리뷰 · 글: 촘촘한 한 줄 (썸네일 · 이름 · 마지막 방문). 큰 사진 카드는 2~3건만 보여 결과가 안 보였다.
+            // 썸네일 사진은 묶음 위쪽 몇 줄만 (구글 사진 요청을 적게), 나머지는 종류 아이콘.
             else -> ResultRow(
                 r, onOpen = onOpen, onMap = onMap, onNavigate = onNavigate,
                 saved = if (r.kind == SearchRowKind.PLACE && place != null) saved[r.key] ?: false else null,
                 onHeart = onHeart,
                 offers = offers[r.key].orEmpty(),
                 courseOffers = courseOffers[r.key],
+                photo = place != null && place.name.isNotBlank() && index < PhotoRows * columns,
             )
         }
     }
     if (g.more > 0) full("more-${g.kind}") { MoreLine(g.more) }
 }
 
-/** 묶음마다 큰 사진 카드로 보이는 줄 수 (한 칸 기준). 나머지는 사진 없는 줄. */
-private const val PhotoRows = 3
+/** 묶음마다 썸네일 사진을 붙이는 줄 수 (한 칸 기준). 나머지는 종류 아이콘. */
+private const val PhotoRows = 6
 
 @Composable
 private fun GroupHeader(title: String, count: Int) {
@@ -513,67 +507,7 @@ private fun NoResults() {
     }
 }
 
-/**
- * 장소 · 하루 · 리뷰 결과 카드 (여행 리뷰 피드와 같은 모양): 큰 사진 위에 제목 · 부제(처음 간 곳이면 왼쪽 위 띠) →
- * 날짜 줄 → 제휴 쿠폰 → [저장][지도][안내]. 카드나 사진을 누르면 열기 (장소는 장소 창, 하루는 그날 기록).
- */
-@Composable
-private fun ResultCard(
-    r: SearchRow,
-    place: StopFact,
-    onOpen: (SearchRow) -> Unit,
-    onMap: (SearchRow) -> Unit,
-    onNavigate: (SearchRow) -> Unit,
-    saved: Boolean?,
-    onHeart: (SearchRow) -> Unit,
-    offers: List<PartnerOffer>,
-) {
-    val c = EodiTheme.colors
-    val openLabel = stringResource(R.string.search_open)
-    Surface(
-        onClick = { onOpen(r) },
-        color = c.surface,
-        contentColor = c.textPrimary,
-        shape = RoundedCornerShape(EodiTheme.space.radiusL),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(Modifier.padding(horizontal = 22.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            FeedHero(
-                place,
-                title = r.title,
-                sub = r.subtitle,
-                mine = false,
-                onClickLabel = openLabel,
-                label = if (r.firstVisit && r.kind == SearchRowKind.PLACE) stringResource(R.string.search_first_visit) else null,
-                onClick = { onOpen(r) },
-            )
-            if (r.dateLine.isNotBlank()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(EodiIcons.Calendar, null, tint = c.textTertiary, modifier = Modifier.size(22.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(r.dateLine, style = EodiTheme.type.meta, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
-            val canMap = r.day != null && (r.kind == SearchRowKind.PLACE || r.kind == SearchRowKind.DAY)
-            val canNavi = r.kind == SearchRowKind.PLACE || r.kind == SearchRowKind.DAY || r.kind == SearchRowKind.REVIEW
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PlaceCouponBadge(offers)
-                Spacer(Modifier.weight(1f))
-                if (saved != null) {
-                    SecondaryPill(
-                        stringResource(if (saved) R.string.edit_saved else R.string.places_save),
-                        if (saved) CommunityIcons.HeartFilled else CommunityIcons.Heart,
-                        { onHeart(r) },
-                    )
-                }
-                if (canMap) SecondaryPill(stringResource(R.string.search_map), EodiIcons.Map, { onMap(r) })
-                if (canNavi) PrimaryPill(stringResource(R.string.search_navigate), EodiIcons.Navi, { onNavigate(r) })
-            }
-        }
-    }
-}
-
-/** 결과 한 줄 (사진 카드 아래 나머지 · 게시판 글): [그림] 제목 / 부제 / 날짜 줄 · [지도] [안내]. 줄을 누르면 열기. */
+/** 결과 한 줄: [썸네일 · 그림] 제목 / 부제 / 날짜 줄(마지막 방문) · [저장] [지도] [안내]. 줄을 누르면 열기 (장소는 장소 창, 하루는 그날 기록). */
 @Composable
 private fun ResultRow(
     r: SearchRow,
@@ -584,6 +518,7 @@ private fun ResultRow(
     onHeart: (SearchRow) -> Unit = {},
     offers: List<PartnerOffer> = emptyList(),
     courseOffers: CourseOffers? = null,
+    photo: Boolean = false,
 ) {
     val c = EodiTheme.colors
     val openLabel = stringResource(R.string.search_open)
@@ -596,8 +531,8 @@ private fun ResultRow(
             .clip(RoundedCornerShape(EodiTheme.space.radiusL))
             .clickable(role = Role.Button, onClickLabel = openLabel) { onOpen(r) },
     ) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            RowPicture(r)
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            RowPicture(r, photo)
             Spacer(Modifier.width(20.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -654,13 +589,17 @@ private fun ResultRow(
     }
 }
 
-/** 줄 왼쪽 그림 (사진 대신 종류 아이콘: 글 · 코스 · 하루 · 장소). */
+/** 줄 왼쪽 그림: [photo]면 그곳 사진 썸네일(글자를 얹지 않는다), 아니면 종류 아이콘 (글 · 코스 · 하루 · 장소). */
 @Composable
-private fun RowPicture(r: SearchRow) {
+private fun RowPicture(r: SearchRow, photo: Boolean) {
     val c = EodiTheme.colors
     val p = r.place
+    if (photo && p != null) {
+        StopPhotoBox(p.name, p.address, p.lat, p.lon, null, Modifier.size(RowThumb), radius = EodiTheme.space.radiusM, iconSize = 36.dp)
+        return
+    }
     Box(
-        Modifier.size(104.dp).clip(RoundedCornerShape(EodiTheme.space.radiusM)).background(if (p != null) c.staySoft else c.surfaceHigh),
+        Modifier.size(RowThumb).clip(RoundedCornerShape(EodiTheme.space.radiusM)).background(if (p != null) c.staySoft else c.surfaceHigh),
         contentAlignment = Alignment.Center,
     ) {
         val icon = when (r.kind) {
@@ -672,6 +611,8 @@ private fun RowPicture(r: SearchRow) {
         Icon(icon, null, tint = if (p != null) c.stay.copy(alpha = 0.7f) else c.textTertiary, modifier = Modifier.size(36.dp))
     }
 }
+
+private val RowThumb = 96.dp
 
 /** 줄 오른쪽 작은 동작 (76dp 동그라미 + 아래 이름). */
 @Composable
@@ -851,7 +792,10 @@ private fun SuggestionChip(chip: SearchChip, onClick: () -> Unit) {
 
 // ---- 조건 칩 ----
 
-/** 기간(하나만) · 종류(여럿) · 처음 간 곳. 옆으로 민다. "직접 고르기"는 달력에서 기간을 고른다. */
+/**
+ * 기간(하나만) 4개가 기본. "더보기"를 누르면 직접 고르기 · 종류(여럿) · 처음 간 곳이 이어서 나온다 (옆으로 민다).
+ * 숨은 조건이 켜져 있으면 처음부터 펼친다 (켜진 조건이 안 보이면 결과가 왜 줄었는지 모른다).
+ */
 @Composable
 private fun FilterChips(
     filter: SearchFilter,
@@ -862,6 +806,9 @@ private fun FilterChips(
     onPickMonth: () -> Unit,
 ) {
     val c = EodiTheme.colors
+    val hiddenSet = filter.period == SearchPeriod.CUSTOM || filter.kinds.isNotEmpty() || filter.firstVisitOnly
+    var more by rememberSaveable { mutableStateOf(false) }
+    val expanded = more || hiddenSet
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -873,7 +820,13 @@ private fun FilterChips(
             SearchPeriod.THIS_MONTH to stringResource(R.string.search_period_month),
             SearchPeriod.THIS_YEAR to stringResource(R.string.search_period_year),
         )
-        periods.forEach { (p, label) -> TogglePill(label, filter.period == p, { onPeriod(p, null, null) }) }
+        periods.forEach { (p, label) -> TogglePill(label, filter.period == p, { onPeriod(p, null, null) }, minHeight = ChipHeight) }
+        if (!expanded) {
+            TextButton(onClick = { more = true }, modifier = Modifier.heightIn(min = ChipHeight)) {
+                Text(stringResource(R.string.search_filter_more), style = EodiTheme.type.label, color = c.accent)
+            }
+            return@Row
+        }
         val custom = filter.period == SearchPeriod.CUSTOM
         val from = filter.from
         val to = filter.to
@@ -887,7 +840,7 @@ private fun FilterChips(
             }
             else -> stringResource(R.string.search_period_custom_range, shortDate(from), shortDate(to))
         }
-        TogglePill(customLabel, custom, onPickMonth)
+        TogglePill(customLabel, custom, onPickMonth, minHeight = ChipHeight)
         Box(Modifier.size(width = 2.dp, height = 36.dp).background(c.outline))
         val kinds = listOf(
             listOf(EpisodeKind.TRIP) to stringResource(R.string.search_kind_trip),
@@ -896,17 +849,25 @@ private fun FilterChips(
             listOf(EpisodeKind.COMMUTE_TO_WORK, EpisodeKind.COMMUTE_HOME) to stringResource(R.string.search_kind_commute),
         )
         kinds.forEach { (ks, label) ->
-            TogglePill(label, ks.all { it in filter.kinds }, { ks.forEach(onKind) })
+            TogglePill(label, ks.all { it in filter.kinds }, { ks.forEach(onKind) }, minHeight = ChipHeight)
         }
         Box(Modifier.size(width = 2.dp, height = 36.dp).background(c.outline))
-        TogglePill(stringResource(R.string.search_first_only), filter.firstVisitOnly, onFirstVisit)
+        TogglePill(stringResource(R.string.search_first_only), filter.firstVisitOnly, onFirstVisit, minHeight = ChipHeight)
+        if (!hiddenSet) {
+            TextButton(onClick = { more = false }, modifier = Modifier.heightIn(min = ChipHeight)) {
+                Text(stringResource(R.string.search_filter_less), style = EodiTheme.type.label, color = c.accent)
+            }
+        }
         if (filter.isSet) {
-            TextButton(onClick = onReset, modifier = Modifier.heightIn(min = 64.dp)) {
+            TextButton(onClick = onReset, modifier = Modifier.heightIn(min = ChipHeight)) {
                 Text(stringResource(R.string.search_filter_reset), style = EodiTheme.type.label, color = c.accent)
             }
         }
     }
 }
+
+/** 조건 칩 높이 (터치 76dp). */
+private val ChipHeight = 76.dp
 
 /**
  * "직접 고르기": 최근 13개월을 큰 알약으로 (달력의 작은 날짜 칸은 차 화면에서 누르기 어렵다).

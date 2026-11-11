@@ -92,7 +92,11 @@ class PlacesViewModel @Inject constructor(
     }
 
 
+    /** 사용자가 탭을 직접 골랐는지 (고른 뒤에는 첫 탭을 대신 정하지 않는다) */
+    private var tabPicked = false
+
     fun setTab(tab: PlacesTab) {
+        tabPicked = true
         _state.update { it.copy(tab = tab) }
     }
 
@@ -133,7 +137,11 @@ class PlacesViewModel @Inject constructor(
                 Loaded4(saved.await(), frequent.await(), ho.await(), hidden.await())
             }
             val offers = loadOffers(saved + frequent)
-            _state.update { it.copy(loaded = true, saved = saved, frequent = frequent, homeOffice = ho, hidden = hidden, offers = offers) }
+            _state.update {
+                // 저장한 곳이 비어 있으면 빈 화면 대신 자주 가는 곳을 먼저 연다 (사용자가 탭을 고르기 전까지만)
+                val tab = if (!tabPicked && it.tab == PlacesTab.SAVED && saved.isEmpty() && frequent.isNotEmpty()) PlacesTab.FREQUENT else it.tab
+                it.copy(tab = tab, loaded = true, saved = saved, frequent = frequent, homeOffice = ho, hidden = hidden, offers = offers)
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

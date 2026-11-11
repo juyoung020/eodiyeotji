@@ -19,6 +19,8 @@
 
     <!-- 내 장소 › 쿠폰함 -->
     <string name="places_tab_coupons">쿠폰함</string>
+    <!-- 왼쪽 레일 배지와 같은 숫자 (받은 쿠폰 장 수) -->
+    <string name="places_tab_coupons_count">쿠폰함 %1$d</string>
     <string name="coupon_wallet_empty_title">아직 받은 쿠폰이 없어요</string>
     <string name="coupon_wallet_empty">장소 · 코스에 붙은 쿠폰 배지를 눌러 받아 보세요.</string>
     <string name="coupon_wallet_driving">운전 중에는 쿠폰 번호를 가려요. 차를 세우면 다시 보여요.</string>

@@ -43,6 +43,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -202,7 +203,8 @@ fun RecordingStatusChip(
     ) {
         Row(
             Modifier
-                .background(if (warn) c.staySoft else if (interactive) c.surface else c.accentSoft, CircleShape)
+                // 머리의 상태 표시는 버튼처럼 보이지 않게 점 + 글자만 (경고일 때만 옅은 바탕). 누르면 설명은 그대로 열린다.
+                .background(if (warn) c.staySoft else if (interactive) Color.Transparent else c.accentSoft, CircleShape)
                 .padding(
                     start = if (interactive) 16.dp else 24.dp,
                     end = if (interactive) 20.dp else 30.dp,

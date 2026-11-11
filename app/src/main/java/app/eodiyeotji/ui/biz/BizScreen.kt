@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
@@ -48,6 +49,7 @@ import app.eodiyeotji.ui.community.LoadingBox
 import app.eodiyeotji.ui.community.RoundIconButton
 import app.eodiyeotji.ui.community.SecondaryPill
 import app.eodiyeotji.ui.recap.Load
+import app.eodiyeotji.ui.replay.LocalOpenReplay
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
 import java.io.File
@@ -94,13 +96,16 @@ fun BizOverlay(viewModel: BizViewModel, onOpenDay: (String) -> Unit) {
                     textAlign = TextAlign.Center,
                     modifier = Modifier.widthIn(min = 150.dp).padding(horizontal = 8.dp),
                 )
-                RoundIconButton(EodiIcons.Chevron, stringResource(R.string.biz_next), { viewModel.shift(1) }, enabled = state.ym < YearMonth.now(), containerColor = c.surface)
+                // 이번 달 다음으로는 못 넘어간다 → 흐리게
+                val canNext = state.ym < YearMonth.now()
+                RoundIconButton(EodiIcons.Chevron, stringResource(R.string.biz_next), { viewModel.shift(1) }, Modifier.alpha(if (canNext) 1f else 0.35f), enabled = canNext, containerColor = c.surface)
             }
             Box(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = EodiTheme.space.page, vertical = 8.dp),
                 contentAlignment = Alignment.TopCenter,
             ) {
-                val inner = Modifier.widthIn(max = 1280.dp).fillMaxWidth().padding(bottom = EodiTheme.space.page)
+                // 차 화면(2560dp)에서 1280dp로 묶으면 오른쪽 절반이 비어 보인다 → 머리 줄과 같은 폭까지 쓴다
+                val inner = Modifier.widthIn(max = 2000.dp).fillMaxWidth().padding(bottom = EodiTheme.space.page)
                 when (val m = state.month) {
                     Load.Loading -> LoadingBox(Modifier.padding(top = 80.dp))
                     Load.Failed -> CenterMessage(stringResource(R.string.biz_failed), Modifier.padding(top = 48.dp))
@@ -110,8 +115,14 @@ fun BizOverlay(viewModel: BizViewModel, onOpenDay: (String) -> Unit) {
                         if (m.value.trips.isEmpty()) {
                             CenterMessage(stringResource(R.string.biz_empty), Modifier.padding(top = 32.dp))
                         }
+                        val openReplay = LocalOpenReplay.current
                         m.value.trips.forEach { t ->
-                            TripCard(t, onOpenDay = { viewModel.close(); onOpenDay(t.day) }, onNotBiz = { viewModel.markNotBiz(t.day) })
+                            TripCard(
+                                t,
+                                onOpenDay = { viewModel.close(); onOpenDay(t.day) },
+                                onReplay = { openReplay(t.day) },
+                                onNotBiz = { viewModel.markNotBiz(t.day) },
+                            )
                         }
                     }
                 }
@@ -147,9 +158,10 @@ private fun Tile(value: String, label: String, modifier: Modifier, accent: Boole
 }
 
 @Composable
-private fun TripCard(t: BizTrip, onOpenDay: () -> Unit, onNotBiz: () -> Unit) {
+private fun TripCard(t: BizTrip, onOpenDay: () -> Unit, onReplay: () -> Unit, onNotBiz: () -> Unit) {
     val c = EodiTheme.colors
-    Surface(shape = RoundedCornerShape(28.dp), color = c.surface, modifier = Modifier.fillMaxWidth()) {
+    // 카드를 누르면 그날 기록, 버튼은 다른 화면과 같은 이름의 "그날로 돌아가기"(사진 · 지도로 다시 보기)
+    Surface(onClick = onOpenDay, shape = RoundedCornerShape(28.dp), color = c.surface, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
             // 날짜 칸 (회사 · 연구소는 장소 사진이 엉뚱한 경우가 많아 사진 대신 날짜로)
             val dd = java.time.LocalDate.parse(t.day)
@@ -193,7 +205,7 @@ private fun TripCard(t: BizTrip, onOpenDay: () -> Unit, onNotBiz: () -> Unit) {
                     color = c.textTertiary,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SecondaryPill(stringResource(R.string.biz_open_day), EodiIcons.Map, onOpenDay)
+                    SecondaryPill(stringResource(R.string.replay_open), EodiIcons.Play, onReplay)
                     SecondaryPill(stringResource(R.string.biz_not_biz), EodiIcons.Close, onNotBiz)
                 }
             }

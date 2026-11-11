@@ -4,7 +4,7 @@
     <!-- N년 전 오늘 -->
     <string name="recap_on_this_day_stamp">%1$d년 전 오늘</string>
     <string name="recap_open_day">그날 다시 보기</string>
-    <string name="recap_navigate">그 코스로 안내</string>
+    <string name="recap_navigate">이 코스로 안내</string>
     <string name="recap_dismiss">오늘은 닫기</string>
     <string name="recap_navi_started">내비로 그 코스 안내를 시작했어요</string>
     <string name="recap_navi_failed">내비에 코스를 보내지 못했어요</string>
@@ -54,13 +54,12 @@
     <string name="recap_seasons">계절</string>
     <string name="recap_months_chart">달마다 달린 거리</string>
     <string name="recap_span">%1$d일 · %2$s</string>
-    <string name="recap_season_days">나들이 · 여행 %1$d일</string>
+    <!-- 머리 칸 "나들이 N번" · "여행 N번"과 같은 셈 (Rust SeasonRecap.outings) -->
+    <string name="recap_season_outings">나들이 · 여행 %1$d번</string>
     <string name="recap_region_days">%1$s · %2$d일</string>
 
     <!-- 기억 지도 -->
     <string name="memory_map_entry">기억 지도</string>
-    <string name="memory_map_intro">1년 동안 달린 길을 밤하늘에서 보기</string>
-    <string name="memory_map_intro_dismiss">닫기 (다시 보이지 않음)</string>
     <string name="memory_map_title">기억 지도</string>
     <string name="memory_map_caption_years">최근 %1$d년 동안 %2$,dkm, 우리가 지나온 길</string>
     <string name="memory_map_caption_months">%1$d개월 동안 %2$,dkm, 우리가 지나온 길</string>

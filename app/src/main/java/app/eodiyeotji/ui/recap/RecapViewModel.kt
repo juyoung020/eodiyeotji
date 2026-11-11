@@ -12,9 +12,7 @@ import app.eodiyeotji.core.MonthRecap
 import app.eodiyeotji.core.OnThisDay
 import app.eodiyeotji.core.YearRecap
 import app.eodiyeotji.core.dismissOnThisDay
-import app.eodiyeotji.core.dismissMemoryMapIntro
 import app.eodiyeotji.core.memoryMap
-import app.eodiyeotji.core.memoryMapIntro
 import app.eodiyeotji.core.monthRecap
 import app.eodiyeotji.core.onThisDay
 import app.eodiyeotji.core.yearRecap
@@ -32,7 +30,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 enum class RecapMode { MONTH, YEAR }
@@ -64,8 +61,6 @@ data class RecapUiState(
     /** 기억 지도 화면 (정차 중에만, 주행을 시작하면 닫는다) */
     val memoryMapOpen: Boolean = false,
     val memoryMap: Load<MemoryMap> = Load.Loading,
-    /** 첫 화면 기억 지도 소개 카드 (기록 30일 이상 · 한 번 닫으면 끝, Rust가 정한다) */
-    val memoryMapIntro: Boolean = false,
 )
 
 /** 계산은 모두 Rust(`recap.rs`): 여기서는 부르고 상태에 담기만 한다. */
@@ -94,30 +89,13 @@ class RecapViewModel @Inject constructor(
     }
 
     private fun loadOnThisDay() {
-        // 앞서 읽던 것은 버리고(연달아 바뀌어도 한 번만), 서로 상관없는 두 조회는 동시에
+        // 앞서 읽던 것은 버린다 (연달아 바뀌어도 한 번만)
         otdJob?.cancel()
         otdJob = viewModelScope.launch {
-            val otdCall = async {
-                runCatching { core.onThisDay() }.onFailure { if (it is CancellationException) throw it; Log.w(TAG, "N년 전 오늘 실패", it) }
-                    .getOrNull()
-            }
-            val intro = runCatching { core.memoryMapIntro() }.onFailure { if (it is CancellationException) throw it; Log.w(TAG, "기억 지도 소개 실패", it) }
-                .getOrDefault(false)
-            val otd = otdCall.await()
-            _state.update { it.copy(today = LocalDate.now(), onThisDay = otd?.takeUnless { o -> o.dismissed }, memoryMapIntro = intro) }
+            val otd = runCatching { core.onThisDay() }.onFailure { if (it is CancellationException) throw it; Log.w(TAG, "N년 전 오늘 실패", it) }
+                .getOrNull()
+            _state.update { it.copy(today = LocalDate.now(), onThisDay = otd?.takeUnless { o -> o.dismissed }) }
         }
-    }
-
-    /** 기억 지도 소개 카드를 닫는다 (다시 나오지 않는다). */
-    fun dismissMemoryMapIntro() {
-        _state.update { it.copy(memoryMapIntro = false) }
-        viewModelScope.launch { runCatching { core.dismissMemoryMapIntro() }.onFailure { Log.w(TAG, "소개 닫기 저장 실패", it) } }
-    }
-
-    /** 소개 카드에서 기억 지도를 연다 (한 번 봤으니 카드는 접는다). */
-    fun openMemoryMapFromIntro() {
-        dismissMemoryMapIntro()
-        openMemoryMap()
     }
 
     fun dismissOnThisDay() {

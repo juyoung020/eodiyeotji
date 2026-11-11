@@ -105,7 +105,7 @@ data class MonthRecap(
 )
 
 @Immutable
-data class SeasonRecap(val name: String, val distanceM: Double, val outingDays: Int, val bestDay: RecapDay?)
+data class SeasonRecap(val name: String, val distanceM: Double, val outings: Int, val bestDay: RecapDay?)
 
 @Immutable
 data class YearRecap(
@@ -189,6 +189,6 @@ private fun RMonthRecap.toModel() = MonthRecap(
 
 private fun RYearRecap.toModel() = YearRecap(
     year, inProgress, periodLabel, recordDays.toInt(), totals.toModel(), topPlaces.map { it.toModel() }, regions.map { it.toModel() },
-    seasons.map { SeasonRecap(it.name, it.distanceM, it.outingDays.toInt(), it.bestDay?.toModel()) },
+    seasons.map { SeasonRecap(it.name, it.distanceM, it.outings.toInt(), it.bestDay?.toModel()) },
     longestTrip?.toModel(), bestDay?.toModel(), monthDistanceM, hasPrev, hasNext,
 )

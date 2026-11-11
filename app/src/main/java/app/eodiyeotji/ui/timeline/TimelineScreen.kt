@@ -1337,7 +1337,8 @@ private fun EntryRow(
             }
             if (onMore != null) {
                 Box(Modifier.fillMaxHeight().padding(end = 8.dp), contentAlignment = Alignment.Center) {
-                    MoreButton(stringResource(R.string.edit_more_entry), onMore, size = 64.dp, filled = false)
+                    // 누르는 칸은 76dp (점 아이콘은 그대로 작게) — Pleos 터치 크기
+                    MoreButton(stringResource(R.string.edit_more_entry), onMore, size = 76.dp, filled = false)
                 }
             }
         }

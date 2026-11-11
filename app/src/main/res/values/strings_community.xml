@@ -69,8 +69,8 @@
     <string name="course_stop_rating">%1$.1f · 리뷰 %2$d</string>
     <string name="course_stop_author_review">%1$s 님이 남긴 리뷰</string>
     <string name="course_stop_top_review">인기 리뷰 · %1$s 님</string>
-    <string name="course_share_from_record">내 기록에서 올리기</string>
-    <string name="course_share_short">올리기</string>
+    <string name="course_share_from_record">코스 올리기</string>
+    <string name="course_share_short">코스 올리기</string>
     <string name="course_shared_done">여행 코스 후기를 올렸어요</string>
     <string name="course_view">코스 보기</string>
     <string name="course_more_stops">+%1$d</string>
@@ -116,7 +116,7 @@
     <string name="review_count">리뷰 %1$d</string>
     <!-- 여행 리뷰 피드의 여행 코스 후기 카드 (큰 사진 왼쪽 위 띠) -->
     <string name="review_trip_badge">여행 코스 · %1$d곳</string>
-    <string name="review_share_trip">여행 코스 올리기</string>
+    <string name="review_share_trip">코스 올리기</string>
     <string name="review_share_trip_short">코스 올리기</string>
     <string name="review_posted">리뷰를 올렸어요</string>
     <!-- 자세한 리뷰 카드 -->
@@ -163,8 +163,8 @@
     <string name="drive_best_foliage">단풍</string>
     <string name="drive_best_blossom">벚꽃</string>
     <string name="drive_sights_title">가는 길에 보이는 풍경</string>
-    <string name="drive_fly">미리보기 비행</string>
-    <string name="drive_fly_stop">비행 멈추기</string>
+    <string name="drive_fly">3D로 미리 달리기</string>
+    <string name="drive_fly_stop">미리 달리기 멈추기</string>
     <string name="drive_navi_hint">시작점까지 안내하고, 도착하면 끝점까지 이어서 안내해요</string>
     <string name="drive_navigate_end">끝점으로 바로 안내</string>
     <string name="drive_navi_on_way">시작점으로 가는 중 · 도착하면 끝점까지 자동으로 이어서 안내해요</string>

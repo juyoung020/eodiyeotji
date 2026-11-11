@@ -57,7 +57,7 @@
     <string name="agent_kind_trip">여행</string>
 
     <!-- 행동 -->
-    <string name="agent_only_here">여기만 가기</string>
+    <string name="agent_only_here">여기로 안내</string>
     <string name="agent_other_days">다른 날도 보기</string>
     <string name="agent_navigate">안내</string>
     <string name="agent_cancel">취소</string>

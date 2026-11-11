@@ -7,7 +7,6 @@ import app.eodiyeotji.ui.community.LoadingBox
 import app.eodiyeotji.ui.community.StopPhotoBox
 import app.eodiyeotji.ui.place.LocalOpenPlace
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,11 +38,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -63,7 +60,9 @@ import app.eodiyeotji.ui.common.distanceText
 import app.eodiyeotji.ui.common.durationText
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
+import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /** 요약 화면을 이 폭 이상에서 두 칸으로 나눈다 (자주 간 곳 | 다녀온 곳). */
 private val TwoColumn = 900.dp
@@ -118,7 +117,7 @@ fun RecapOverlay(viewModel: RecapViewModel, onOpenDay: (String) -> Unit) {
                         Load.Failed -> CenterMessage(stringResource(R.string.recap_failed), Modifier.padding(top = 48.dp))
                         is Load.Ready -> Column(cardModifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                             if (!state.driving && y.value.recordDays > 0) {
-                                EntryPill(stringResource(R.string.memory_map_entry), gold = true, Modifier.fillMaxWidth()) { viewModel.openMemoryMap() }
+                                EntryPill(stringResource(R.string.memory_map_entry), EodiIcons.Map, ai = false, Modifier.fillMaxWidth()) { viewModel.openMemoryMap() }
                             }
                             YearRecapCard(y.value, Modifier.fillMaxWidth(), onOpenDay = open)
                         }
@@ -151,7 +150,8 @@ private fun RecapHeader(
             ModeTab(stringResource(R.string.recap_tab_year), mode == RecapMode.YEAR, Modifier.weight(1f, fill = false)) { onMode(RecapMode.YEAR) }
         }
         Spacer(Modifier.width(16.dp))
-        RoundIconButton(EodiIcons.Chevron, stringResource(R.string.recap_prev), { onShift(-1) }, enabled = hasPrev, containerColor = c.surface, iconModifier = Modifier.rotate(180f))
+        // 넘어갈 수 없는 쪽 화살표는 흐리게 (눌러도 아무 일 없는 버튼이 살아 있는 것처럼 보이지 않게)
+        RoundIconButton(EodiIcons.Chevron, stringResource(R.string.recap_prev), { onShift(-1) }, Modifier.alpha(if (hasPrev) 1f else DisabledAlpha), enabled = hasPrev, containerColor = c.surface, iconModifier = Modifier.rotate(180f))
         Text(
             title,
             style = EodiTheme.type.bodyStrong,
@@ -161,9 +161,12 @@ private fun RecapHeader(
             textAlign = TextAlign.Center,
             modifier = Modifier.widthIn(min = 120.dp).padding(horizontal = 8.dp).semantics { heading() },
         )
-        RoundIconButton(EodiIcons.Chevron, stringResource(R.string.recap_next), { onShift(1) }, enabled = hasNext, containerColor = c.surface)
+        RoundIconButton(EodiIcons.Chevron, stringResource(R.string.recap_next), { onShift(1) }, Modifier.alpha(if (hasNext) 1f else DisabledAlpha), enabled = hasNext, containerColor = c.surface)
     }
 }
+
+/** 넘어갈 수 없는 화살표의 흐림 정도. */
+private const val DisabledAlpha = 0.35f
 
 @Composable
 private fun ModeTab(text: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
@@ -276,7 +279,7 @@ private fun YearBody(recap: YearRecap, onOpenDay: ((String) -> Unit)?) {
                             ) {
                                 Text(s.name, style = EodiTheme.type.bodyStrong, fontWeight = FontWeight.Bold, color = c.textPrimary)
                                 Text(distanceText(s.distanceM), style = EodiTheme.type.titleSmall, color = c.textPrimary)
-                                Text(stringResource(R.string.recap_season_days, s.outingDays), style = EodiTheme.type.caption, color = c.textTertiary)
+                                Text(stringResource(R.string.recap_season_outings, s.outings), style = EodiTheme.type.caption, color = c.textTertiary)
                                 Text(
                                     s.bestDay?.title ?: "—",
                                     style = EodiTheme.type.meta,
@@ -382,33 +385,55 @@ private fun Regions(regions: List<RecapRegion>) {
     }
 }
 
-/** 달마다 달린 거리 막대 12개 (가장 긴 달은 파랑, 나머지 옅은 파랑). 숫자는 Rust가 준 그대로 높이만 맞춘다. */
+/**
+ * 달마다 달린 거리 막대 12개: 막대 위에 그달 km (0인 달은 비운다), 가장 긴 달은 진한 파랑, 나머지도 흰 바탕에서 보이는 파랑(대비 3:1 이상).
+ * 숫자는 Rust가 준 그대로 높이만 맞춘다.
+ */
 @Composable
 private fun MonthBars(distances: List<Double>) {
     val c = EodiTheme.colors
     val max = distances.maxOrNull()?.takeIf { it > 0 } ?: 1.0
-    Column(Modifier.fillMaxWidth()) {
-        Canvas(Modifier.fillMaxWidth().height(140.dp)) {
-            val n = distances.size.coerceAtLeast(1)
-            val slot = size.width / n
-            val barW = slot * 0.56f
-            distances.forEachIndexed { i, d ->
-                val h = (d / max * size.height).toFloat().coerceAtLeast(if (d > 0) 4f else 0f)
-                drawRoundRect(
-                    color = if (d == max) c.accent else c.tripSoft,
-                    topLeft = Offset(i * slot + (slot - barW) / 2, size.height - h),
-                    size = Size(barW, h),
-                    cornerRadius = CornerRadius(8f, 8f),
-                )
+    val rest = c.accent.copy(alpha = 0.7f)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // 좁은 폰 화면(한 달 칸이 좁으면)에서는 숫자가 겹치니 가장 긴 달만 적는다
+        val roomy = maxWidth / distances.size.coerceAtLeast(1) >= 72.dp
+        Column(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().height(BarArea + BarLabel), verticalAlignment = Alignment.Bottom) {
+                distances.forEach { d ->
+                    val top = d == max
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        if (d > 0 && (roomy || top)) {
+                            Text(
+                                stringResource(R.string.timeline_km, String.format(Locale.ROOT, "%,d", (d / 1000.0).roundToInt())),
+                                style = EodiTheme.type.caption,
+                                fontWeight = if (top) FontWeight.Bold else FontWeight.Medium,
+                                color = if (top) c.accent else c.textSecondary,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Visible,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                        }
+                        Box(
+                            Modifier
+                                .fillMaxWidth(0.56f)
+                                .height(if (d > 0) maxOf(BarArea * (d / max).toFloat().coerceIn(0f, 1f), 2.dp) else 0.dp)
+                                .background(if (top) c.accent else rest, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)),
+                        )
+                    }
+                }
             }
-        }
-        Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-            distances.indices.forEach { i ->
-                Text("${i + 1}", style = EodiTheme.type.caption, color = c.textTertiary, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+                distances.indices.forEach { i ->
+                    Text("${i + 1}", style = EodiTheme.type.caption, color = c.textTertiary, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+                }
             }
         }
     }
 }
+
+private val BarArea = 140.dp
+private val BarLabel = 40.dp
 
 /**
  * 결산 머리 한 줄 "4,090km 달렸어요": 거리 숫자만 기억 금색으로, 한 단계 큰 글자(display)로 — 결산의 주인공은 숫자 하나.

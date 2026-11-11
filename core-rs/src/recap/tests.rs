@@ -217,6 +217,9 @@ fn month_and_year_recaps_add_up() {
     assert_eq!(longest.title, "여름휴가 첫날, 해운대 바다", "AI 제목");
     assert_eq!(y.seasons.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["봄", "여름", "가을", "겨울"]);
     assert!(y.seasons.iter().all(|s| s.distance_m > 0.0));
+    // 계절 칸 "나들이 · 여행 N번"은 머리 칸(나들이 N번 · 여행 N번)과 같은 셈 (계절을 넘는 여행이 없으면 합이 같다)
+    let season_sum: u32 = y.seasons.iter().map(|s| s.outings).sum();
+    assert_eq!(season_sum, y.totals.outings + y.totals.trips, "{:?}", y.seasons.iter().map(|s| s.outings).collect::<Vec<_>>());
     assert_eq!(y.month_distance_m.len(), 12);
     assert_eq!(y.month_distance_m[11], 0.0, "12월은 아직");
     let sum: f64 = y.month_distance_m.iter().sum();

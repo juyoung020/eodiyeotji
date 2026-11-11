@@ -311,7 +311,7 @@ fun <T> ChoiceRow(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> 
                     .clip(CircleShape)
                     .background(bg)
                     .clickable(role = Role.Tab) { onSelect(value) }
-                    .heightIn(min = if (big) 72.dp else 64.dp)
+                    .heightIn(min = 76.dp) // 정렬 · 탭 칩도 Pleos 터치 크기
                     .padding(horizontal = if (big) 30.dp else 24.dp)
                     .semantics { this.selected = on },
                 contentAlignment = Alignment.Center,

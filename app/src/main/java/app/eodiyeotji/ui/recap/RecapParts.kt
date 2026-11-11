@@ -67,6 +67,8 @@ import app.eodiyeotji.ui.place.PlaceThumbnail
 import app.eodiyeotji.ui.replay.LocalOpenReplay
 import app.eodiyeotji.ui.agent.DrivingStatePort
 import app.eodiyeotji.ui.theme.EodiIcons
+import app.eodiyeotji.ui.places.PlacesIcons
+import androidx.compose.ui.graphics.vector.ImageVector
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.theme.MemoryStamp
 import dagger.hilt.EntryPoint
@@ -84,26 +86,25 @@ import dagger.hilt.components.SingletonComponent
 fun RecapListTop(viewModel: RecapViewModel, onOpenDay: (String) -> Unit, modifier: Modifier = Modifier, onOpenBiz: (() -> Unit)? = null) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        // 입구: 한 줄에 두 개씩 같은 너비로 (네 개가 한 줄이면 잘린다)
+        // 입구: 한 줄에 두 개씩 같은 너비로 (네 개가 한 줄이면 잘린다). 테두리는 모두 같고,
+        // 금색 반짝임(AI)은 AI가 실제로 글을 쓰는 요약 · 결산에만 — 기억 지도는 지도, 출장 관리는 건물 아이콘.
+        // (기억 지도 소개 배너는 이 버튼과 같은 일이라 두지 않는다)
         val month = stringResource(R.string.recap_month_entry, state.today.monthValue)
         val year = stringResource(R.string.recap_year_entry)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            EntryPill(month, gold = true, modifier = Modifier.weight(1f)) { viewModel.openRecap(RecapMode.MONTH) }
-            EntryPill(year, gold = false, modifier = Modifier.weight(1f)) { viewModel.openRecap(RecapMode.YEAR) }
+            EntryPill(month, EodiIcons.Sparkle, ai = true, modifier = Modifier.weight(1f)) { viewModel.openRecap(RecapMode.MONTH) }
+            EntryPill(year, EodiIcons.Sparkle, ai = true, modifier = Modifier.weight(1f)) { viewModel.openRecap(RecapMode.YEAR) }
         }
         if (!state.driving) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                EntryPill(stringResource(R.string.memory_map_entry), gold = true, modifier = Modifier.weight(1f)) { viewModel.openMemoryMap() }
+                EntryPill(stringResource(R.string.memory_map_entry), EodiIcons.Map, ai = false, modifier = Modifier.weight(1f)) { viewModel.openMemoryMap() }
                 // 출장 관리 (평일 업무 출장 · 경비 · 정산서)
                 if (onOpenBiz != null) {
-                    EntryPill(stringResource(R.string.biz_entry), gold = false, modifier = Modifier.weight(1f), onClick = onOpenBiz)
+                    EntryPill(stringResource(R.string.biz_entry), PlacesIcons.Office, ai = false, modifier = Modifier.weight(1f), onClick = onOpenBiz)
                 } else {
                     Spacer(Modifier.weight(1f))
                 }
             }
-        }
-        if (state.memoryMapIntro && !state.driving) {
-            MemoryMapIntroCard(onOpen = viewModel::openMemoryMapFromIntro, onDismiss = viewModel::dismissMemoryMapIntro)
         }
         val otd = state.onThisDay
         if (otd != null && !state.driving) {
@@ -118,56 +119,22 @@ fun RecapListTop(viewModel: RecapViewModel, onOpenDay: (String) -> Unit, modifie
     }
 }
 
-/** 한 번만 보이는 소개 카드: "1년 동안 달린 길을 밤하늘에서 보기" → 기억 지도. 닫으면(×) 다시 나오지 않는다. */
+/** 요약 · 결산 · 기억 지도 · 출장 관리 입구 (같은 테두리). [ai]면 아이콘을 금색(AI가 쓴 요약), 아니면 파랑. */
 @Composable
-private fun MemoryMapIntroCard(onOpen: () -> Unit, onDismiss: () -> Unit) {
-    val night = androidx.compose.ui.graphics.Color(0xFF0B1426)
-    val gold = androidx.compose.ui.graphics.Color(0xFFFFD58A)
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(EodiTheme.space.radiusL))
-            .background(night)
-            .clickable(role = Role.Button, onClick = onOpen)
-            .padding(start = 24.dp, end = 12.dp, top = 12.dp, bottom = 12.dp)
-            .heightIn(min = 76.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(EodiIcons.Sparkle, contentDescription = null, tint = gold, modifier = Modifier.size(32.dp))
-        Spacer(Modifier.width(14.dp))
-        Text(
-            stringResource(R.string.memory_map_intro),
-            style = EodiTheme.type.bodyStrong,
-            fontWeight = FontWeight.Bold,
-            color = gold,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        Box(
-            Modifier.size(64.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onDismiss),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(EodiIcons.Close, contentDescription = stringResource(R.string.memory_map_intro_dismiss), tint = gold.copy(alpha = 0.7f), modifier = Modifier.size(30.dp))
-        }
-    }
-}
-
-@Composable
-internal fun EntryPill(text: String, gold: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun EntryPill(text: String, icon: ImageVector, ai: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = EodiTheme.colors
     Row(
         modifier
             .heightIn(min = 76.dp)
             .clip(CircleShape)
             .background(c.surface)
-            .border(2.dp, if (gold) c.memory else c.outline, CircleShape)
+            .border(2.dp, c.outline, CircleShape)
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
-        Icon(EodiIcons.Sparkle, contentDescription = null, tint = c.memoryInk, modifier = Modifier.size(28.dp))
+        Icon(icon, contentDescription = null, tint = if (ai) c.memoryInk else c.accent, modifier = Modifier.size(28.dp))
         Spacer(Modifier.width(10.dp))
         Text(text, style = EodiTheme.type.label, fontWeight = FontWeight.Bold, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }

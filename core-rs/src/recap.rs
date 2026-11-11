@@ -231,8 +231,8 @@ pub struct SeasonRecap {
     /// "봄" · "여름" · "가을" · "겨울"
     pub name: String,
     pub distance_m: f64,
-    /// 나들이 · 여행 날 수
-    pub outing_days: u32,
+    /// 나들이 · 여행 횟수 (결산 머리 칸 "나들이 N번" · "여행 N번"과 같은 셈: 나들이는 날, 여행은 이어진 묶음)
+    pub outings: u32,
     pub best_day: Option<RecapDay>,
 }
 
@@ -871,7 +871,7 @@ fn year_recap(store: &EodiStore, conn: &Connection, y: i64, now_ms: i64) -> Resu
         ("겨울", vec![(1, 2), (12, 12)]),
     ] {
         let mut distance_m = 0.0;
-        let mut outing_days = 0;
+        let mut outings = 0;
         let mut best: Option<RecapDay> = None;
         let mut best_score = f64::MIN;
         for (m0, m1) in ranges {
@@ -879,7 +879,7 @@ fn year_recap(store: &EodiStore, conn: &Connection, y: i64, now_ms: i64) -> Resu
             let (_, b) = month_bounds(y, m1);
             let t = span.totals(a, b, &anchors);
             distance_m += t.distance_m;
-            outing_days += (span.outing_days(a, b).len() + span.trip_days(a, b).len()) as u32;
+            outings += t.outings + t.trips;
             if let Some(d) = span.best_day(conn, a, b, &anchors)? {
                 let dn = crate::store::parse_day(&d.day).unwrap_or(0);
                 let s = span.day_score(dn, &anchors, has_ai_title(conn, dn)?).unwrap_or(0.0);
@@ -889,7 +889,7 @@ fn year_recap(store: &EodiStore, conn: &Connection, y: i64, now_ms: i64) -> Resu
                 }
             }
         }
-        seasons.push(SeasonRecap { name: name.to_owned(), distance_m, outing_days, best_day: best });
+        seasons.push(SeasonRecap { name: name.to_owned(), distance_m, outings, best_day: best });
     }
     // 가장 긴 여행: 이어진 여행 날들의 거리 합
     let mut longest: Option<(f64, Vec<i64>)> = None;

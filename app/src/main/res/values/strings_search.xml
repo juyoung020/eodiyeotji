@@ -28,7 +28,7 @@
 
     <string name="search_open">열기</string>
     <string name="search_map">지도</string>
-    <string name="search_navigate">안내</string>
+    <string name="search_navigate">여기로 안내</string>
     <string name="search_first_visit">처음</string>
     <string name="search_navi_ok">내비로 안내를 보냈어요</string>
     <string name="search_navi_fail">내비에 안내를 보내지 못했어요</string>
@@ -47,6 +47,9 @@
     <string name="search_kind_commute">출퇴근</string>
     <string name="search_first_only">처음 간 곳</string>
     <string name="search_filter_reset">조건 지우기</string>
+    <!-- 조건 칩은 기간 4개만 기본, 나머지(직접 고르기 · 종류 · 처음 간 곳)는 더보기로 -->
+    <string name="search_filter_more">더보기</string>
+    <string name="search_filter_less">접기</string>
     <string name="search_pick_range">기간 고르기</string>
     <string name="search_month">%1$d월</string>
     <string name="search_month_last_year">작년 %1$d월</string>
