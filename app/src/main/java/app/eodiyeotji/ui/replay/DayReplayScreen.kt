@@ -47,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
@@ -244,18 +245,22 @@ private fun Player(r: DayReplay, onClose: () -> Unit, onNavigate: () -> Unit) {
                     .graphicsLayer { alpha = insetAlpha.value }
                     .clip(RoundedCornerShape(24.dp)),
             )
-            Progress(n, step, Modifier.align(Alignment.TopCenter).padding(top = 28.dp, start = 140.dp, end = 140.dp))
+            Progress(n, step, Modifier.align(Alignment.TopCenter).padding(top = 28.dp, start = 140.dp, end = 320.dp))
             RoundButton(AgentIcons.Close, stringResource(R.string.replay_close), onClose, Modifier.align(Alignment.TopStart).padding(28.dp))
-            RoundButton(
-                if (paused) EodiIcons.Play else EodiIcons.Pause,
-                stringResource(if (paused) R.string.replay_resume else R.string.replay_pause),
-                { paused = !paused },
+            // 이전 · 멈춤 · 다음: 오른쪽 위 한 줄 (사진 카드 · 자막과 겹치지 않는 자리, 반투명 바탕)
+            Row(
                 Modifier.align(Alignment.TopEnd).padding(top = 20.dp, end = 32.dp),
-            )
-            if (step > 0) {
-                RoundButton(EodiIcons.Back, stringResource(R.string.replay_prev), { go(step - 1) }, Modifier.align(Alignment.CenterStart).padding(start = 24.dp))
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                RoundButton(EodiIcons.Back, stringResource(R.string.replay_prev), { go(step - 1) }, Modifier.alpha(if (step > 0) 1f else 0.4f))
+                RoundButton(
+                    if (paused) EodiIcons.Play else EodiIcons.Pause,
+                    stringResource(if (paused) R.string.replay_resume else R.string.replay_pause),
+                    { paused = !paused },
+                    Modifier,
+                )
+                RoundButton(EodiIcons.Chevron, stringResource(R.string.replay_next), { go(step + 1) }, Modifier)
             }
-            RoundButton(EodiIcons.Chevron, stringResource(R.string.replay_next), { go(step + 1) }, Modifier.align(Alignment.CenterEnd).padding(end = 24.dp))
             if (paused) {
                 Box(Modifier.align(Alignment.Center).size(140.dp).background(Color.Black.copy(alpha = 0.45f), CircleShape), contentAlignment = Alignment.Center) {
                     Icon(EodiIcons.Pause, contentDescription = null, tint = Color.White, modifier = Modifier.size(64.dp))
@@ -276,67 +281,88 @@ private fun IntroCard(r: DayReplay) {
         a2.animateTo(1f, tween(700))
         a3.animateTo(1f, tween(900))
     }
-    val first = r.scenes.firstOrNull()
     Box(Modifier.fillMaxSize()) {
-        // 첫 들른 곳 사진을 어둡게 깔아 둔다
-        if (first != null) {
-            PlaceThumbnail(first.stop.name, first.stop.address, first.stop.lat, first.stop.lon, Modifier.fillMaxSize().alpha(0.35f))
-        }
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Night.copy(alpha = 0.4f), Night))))
-        Column(Modifier.align(Alignment.CenterStart).padding(start = 120.dp, end = 120.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        // 사진 없이 지도가 비치게 두고, 글 쪽(왼쪽)만 짙은 밤색으로 가린다 (글 자리는 86% 이상 → 흰 글 대비 4.5:1 넘게)
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Night.copy(alpha = 0.94f), 0.6f to Night.copy(alpha = 0.86f), 1f to Night.copy(alpha = 0.35f))))
+        Column(Modifier.align(Alignment.CenterStart).fillMaxWidth(0.6f).padding(start = 120.dp, end = 24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
             if (r.stamp.isNotBlank()) MemoryStamp(r.stamp, large = true, modifier = Modifier.alpha(a1.value))
-            Text(r.dateText, style = EodiTheme.type.title, color = Color.White.copy(alpha = 0.85f), modifier = Modifier.alpha(a2.value))
+            Text(r.dateText, style = EodiTheme.type.title, color = Color.White.copy(alpha = 0.92f), modifier = Modifier.alpha(a2.value))
             Text(r.title, style = EodiTheme.type.hero, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.alpha(a3.value))
-            Text(r.subtitle, style = EodiTheme.type.body, color = Color.White.copy(alpha = 0.7f), modifier = Modifier.alpha(a3.value))
+            Text(r.subtitle, style = EodiTheme.type.body, color = Color.White.copy(alpha = 0.9f), modifier = Modifier.alpha(a3.value))
             if (r.scenes.isEmpty()) {
-                Text(stringResource(R.string.replay_no_places), style = EodiTheme.type.body, color = Color.White.copy(alpha = 0.7f))
+                Text(stringResource(R.string.replay_no_places), style = EodiTheme.type.body, color = Color.White.copy(alpha = 0.9f))
             }
         }
     }
 }
 
-/** 들른 곳 장면: 큰 사진이 천천히 다가가고 움직인다(켄 번스), 아래 그늘 위에 시각 · 이름 · 머문 시간 · 하루 줄. */
+/**
+ * 들른 곳 장면: 지도는 덮지 않는다. 왼쪽 아래에 사진 카드(화면 폭 28%, 둥근 모서리 · 그림자, 천천히 다가가는 켄 번스),
+ * 그 옆에 시각 · 이름 · 머문 시간 · 하루 줄. 글 뒤에는 아래로 짙어지는 스크림(글 자리 78% 이상 → 흰 글 대비 4.5:1 넘게).
+ * 집 · 회사 · 회사 건물처럼 사진이 맥락과 어긋나는 곳(Rust `show_photo` = false)은 사진 없이 글만.
+ */
 @Composable
 private fun SceneCard(r: DayReplay, s: ReplayScene, paused: Boolean) {
     val kb = remember(s) { Animatable(0f) }
     LaunchedEffect(s, paused) {
-        if (!paused) kb.animateTo(1f, tween(((1f - kb.value) * KEN_BURNS_MS).toInt().coerceAtLeast(1), easing = LinearEasing))
+        if (!paused && s.showPhoto) kb.animateTo(1f, tween(((1f - kb.value) * KEN_BURNS_MS).toInt().coerceAtLeast(1), easing = LinearEasing))
     }
     // 장면마다 움직이는 방향을 번갈아 (홀수: 오른쪽 위로, 짝수: 왼쪽 아래로)
     val dir = if (s.order % 2 == 1) 1f else -1f
-    Box(Modifier.fillMaxSize()) {
-        PlaceThumbnail(
-            s.stop.name, s.stop.address, s.stop.lat, s.stop.lon,
-            modifier = Modifier.fillMaxSize().graphicsLayer {
-                val k = kb.value
-                scaleX = 1.04f + 0.14f * k
-                scaleY = scaleX
-                translationX = dir * size.width * 0.03f * k
-                translationY = -dir * size.height * 0.02f * k
-            },
-            fallback = { Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFF2A3140), Night)))) },
-            loading = { PhotoLoadingPlaceholder(Color(0xFF1C222C)) },
-        )
-        Box(
-            Modifier.fillMaxSize().background(
-                Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.35f), 0.25f to Color.Transparent, 0.5f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.85f)),
-            ),
-        )
-        Column(Modifier.align(Alignment.BottomStart).padding(start = 120.dp, end = 120.dp, bottom = 56.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (r.stamp.isNotBlank()) {
-                    MemoryStamp(r.stamp)
-                    Spacer(Modifier.width(14.dp))
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // 카드 폭: 화면 폭 28% (낮은 창에서는 카드 높이가 화면 높이 40%를 넘지 않게)
+        val cardW = minOf(maxWidth * 0.28f, maxHeight * 0.4f * (4f / 3f))
+        Row(
+            Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .background(Brush.verticalGradient(0f to Color.Transparent, 0.2f to Color.Black.copy(alpha = 0.78f), 1f to Color.Black.copy(alpha = 0.9f)))
+                .padding(start = 40.dp, end = 120.dp, top = 96.dp, bottom = 48.dp),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            if (s.showPhoto) {
+                val shape = RoundedCornerShape(24.dp)
+                Box(
+                    Modifier
+                        .width(cardW)
+                        .height(cardW * 0.75f)
+                        .shadow(20.dp, shape)
+                        .clip(shape)
+                        .background(Color(0xFF1C222C)),
+                ) {
+                    PlaceThumbnail(
+                        s.stop.name, s.stop.address, s.stop.lat, s.stop.lon,
+                        modifier = Modifier.fillMaxSize().graphicsLayer {
+                            val k = kb.value
+                            scaleX = 1.04f + 0.10f * k
+                            scaleY = scaleX
+                            translationX = dir * size.width * 0.02f * k
+                            translationY = -dir * size.height * 0.015f * k
+                        },
+                        fallback = { Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFF2A3140), Night)))) },
+                        loading = { PhotoLoadingPlaceholder(Color(0xFF1C222C)) },
+                    )
                 }
-                Text(listOf(r.title, r.subtitle).filter { it.isNotBlank() }.joinToString(" · "), style = EodiTheme.type.label, color = Color.White.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.width(36.dp))
+            } else {
+                Spacer(Modifier.width(80.dp))
             }
-            Text(s.timeText, style = EodiTheme.type.hero, color = EodiTheme.colors.memory)
-            Text(s.stop.name, style = EodiTheme.type.hero, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(
-                listOf(stringResource(R.string.replay_stop_order, s.order), s.stayText).filter { it.isNotBlank() }.joinToString(" · "),
-                style = EodiTheme.type.bodyStrong,
-                color = Color.White.copy(alpha = 0.85f),
-            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (r.stamp.isNotBlank()) {
+                        MemoryStamp(r.stamp)
+                        Spacer(Modifier.width(14.dp))
+                    }
+                    Text(listOf(r.title, r.subtitle).filter { it.isNotBlank() }.joinToString(" · "), style = EodiTheme.type.label, color = Color.White.copy(alpha = 0.9f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Text(s.timeText, style = EodiTheme.type.hero, color = EodiTheme.colors.memory)
+                Text(s.stop.name, style = EodiTheme.type.hero, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    listOf(stringResource(R.string.replay_stop_order, s.order), s.stayText).filter { it.isNotBlank() }.joinToString(" · "),
+                    style = EodiTheme.type.bodyStrong,
+                    color = Color.White.copy(alpha = 0.92f),
+                )
+            }
         }
     }
 }
@@ -354,7 +380,8 @@ private fun EndScreen(r: DayReplay, wide: Boolean, onNavigate: () -> Unit, onAga
             if (r.statsLine.isNotBlank()) Text(r.statsLine, style = EodiTheme.type.body, color = Color.White.copy(alpha = 0.75f))
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                if (r.episodeId != null) {
+                // 출퇴근 날은 숨긴다 (늘 다니는 길, Rust `can_guide`)
+                if (r.canGuide) {
                     Button(
                         onClick = onNavigate,
                         shape = CircleShape,

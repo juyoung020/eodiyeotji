@@ -69,6 +69,7 @@ import kotlinx.coroutines.delay
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
@@ -79,7 +80,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -515,6 +518,7 @@ private fun CompactDayDetail(
                         is DetailState.Loading -> LoadingBox(compact = true)
                         is DetailState.Failed -> CenterMessage(stringResource(R.string.timeline_failed, detail.message))
                         is DetailState.Loaded -> EntryList(
+                            day = detail.summary.day,
                             entries = detail.entries,
                             offers = detail.offers,
                             selectedKey = selectedEntry,
@@ -526,14 +530,24 @@ private fun CompactDayDetail(
                                     Column(Modifier.padding(start = 4.dp, end = 4.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                         StatRow(detail.summary)
                                         if (detail.summary.tags.isNotEmpty()) TagRow(detail.summary.tags)
-                                        // 커뮤니티에 올리기 옆에 카드로 공유(카톡 등, ui/share). 올릴 기록이 없는 날은 공유만 알약으로.
-                                        if (shareEpisode != null) {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                                SecondaryPill(stringResource(R.string.timeline_share), CommunityIcons.Upload, { onShare(shareEpisode) }, Modifier.weight(1f))
-                                                ShareImageButton(ShareTarget.Day(detail.summary.day), style = ShareButtonStyle.ICON)
+                                        // 커뮤니티에 올리기 옆에 카드로 공유(카톡 등, ui/share). 자리는 날마다 같고, 올릴 기록이 없는 날은 흐리게 + 누르면 이유.
+                                        var reason by remember(detail.summary.day) { mutableStateOf(false) }
+                                        LaunchedEffect(reason) {
+                                            if (reason) {
+                                                delay(ReasonMs)
+                                                reason = false
                                             }
-                                        } else {
-                                            ShareImageButton(ShareTarget.Day(detail.summary.day), Modifier.fillMaxWidth())
+                                        }
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            DimPill(
+                                                stringResource(R.string.timeline_share), CommunityIcons.Upload, available = shareEpisode != null,
+                                                onClick = { shareEpisode?.let(onShare) }, onUnavailable = { reason = true },
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                            ShareImageButton(ShareTarget.Day(detail.summary.day), style = ShareButtonStyle.ICON)
+                                        }
+                                        if (reason) {
+                                            Text(stringResource(R.string.timeline_share_unavailable), style = EodiTheme.type.body, color = c.textSecondary)
                                         }
                                         if (detail.entries.isEmpty()) {
                                             Text(stringResource(R.string.timeline_detail_empty), style = EodiTheme.type.body, color = c.textSecondary)
@@ -818,7 +832,7 @@ private fun DayDetailCard(
         modifier = modifier,
     ) {
         Column(Modifier.fillMaxSize()) {
-            DetailHeader(summary, today, onBack, onShare = shareEpisode?.let { id -> { onShare(id) } })
+            DetailHeader(summary, today, onBack, loaded = detail is DetailState.Loaded, onShare = shareEpisode?.let { id -> { onShare(id) } })
             val loaded = detail as? DetailState.Loaded
             // 정차한 곳 사진 상자 (이름을 찾은 머문 곳만)
             val photoPins = remember(loaded?.entries) {
@@ -844,7 +858,7 @@ private fun DayDetailCard(
                         if (detail.entries.isEmpty()) {
                             CenterMessage(stringResource(R.string.timeline_detail_empty))
                         } else {
-                            EntryList(detail.entries, selectedEntry, onEntryClick, offers = detail.offers)
+                            EntryList(detail.summary.day, detail.entries, selectedEntry, onEntryClick, offers = detail.offers)
                         }
                 }
             }
@@ -853,7 +867,7 @@ private fun DayDetailCard(
 }
 
 @Composable
-private fun DetailHeader(summary: DaySummary?, today: LocalDate, onBack: (() -> Unit)?, onShare: (() -> Unit)? = null) {
+private fun DetailHeader(summary: DaySummary?, today: LocalDate, onBack: (() -> Unit)?, loaded: Boolean, onShare: (() -> Unit)? = null) {
     val c = EodiTheme.colors
     val space = EodiTheme.space
     Column(Modifier.fillMaxWidth().padding(start = space.xl, end = space.xl, top = 28.dp, bottom = space.l)) {
@@ -878,6 +892,7 @@ private fun DetailHeader(summary: DaySummary?, today: LocalDate, onBack: (() -> 
                     } else if (relative != null) {
                         Text(relative, style = EodiTheme.type.label, color = c.accent)
                     }
+                    // 제목은 버튼과 줄을 나눠 폭을 다 쓰고, 두 줄까지 보인다
                     Text(
                         title ?: dayTitle(summary.day, today),
                         style = EodiTheme.type.hero,
@@ -887,35 +902,14 @@ private fun DetailHeader(summary: DaySummary?, today: LocalDate, onBack: (() -> 
                         modifier = Modifier.semantics { heading() },
                     )
                 }
-                // 넓은 창: 제목 옆. 좁은 창(뒤로 버튼이 있을 때)은 제목이 눌리지 않게 아래 줄에 둔다.
-                // 그날로 돌아가기 (재생 버튼): 다시 볼 것이 있는 날만 (Rust `replayable`)
-                if (summary.replayable) {
-                    val openReplay = app.eodiyeotji.ui.replay.LocalOpenReplay.current
-                    Spacer(Modifier.width(16.dp))
-                    SecondaryPill(stringResource(R.string.replay_open), app.eodiyeotji.ui.theme.EodiIcons.Play, { openReplay(summary.day) })
-                }
-                if (onShare != null && onBack == null) {
-                    Spacer(Modifier.width(16.dp))
-                    // 옆에 공유 버튼까지 있어 짧게 ("올리기") — 제목이 잘리지 않게
-                    SecondaryPill(stringResource(R.string.timeline_share_short), CommunityIcons.Upload, onShare)
-                }
-                // 카드로 공유 (차: 연결된 휴대폰으로 → 카톡)
-                Spacer(Modifier.width(16.dp))
-                ShareImageButton(ShareTarget.Day(summary.day), style = ShareButtonStyle.ICON)
-                LocalTimelineEdits.current?.let { edits ->
-                    Spacer(Modifier.width(16.dp))
-                    MoreButton(stringResource(R.string.edit_more_day), { edits.onDay(summary) })
-                }
             }
         }
         if (summary != null) {
+            Spacer(Modifier.height(16.dp))
+            DayActions(summary, loaded, onShare)
             if (summary.tags.isNotEmpty()) {
                 Spacer(Modifier.height(14.dp))
                 TagRow(summary.tags)
-            }
-            if (onShare != null && onBack != null) {
-                Spacer(Modifier.height(14.dp))
-                SecondaryPill(stringResource(R.string.timeline_share), CommunityIcons.Upload, onShare)
             }
             Spacer(Modifier.height(20.dp))
             StatRow(summary)
@@ -923,12 +917,67 @@ private fun DetailHeader(summary: DaySummary?, today: LocalDate, onBack: (() -> 
     }
 }
 
-/** 하루 태그 알약 줄 ("#여행 #가족"). 한 줄에 들어가는 만큼만 보이고 넘치면 오른쪽이 잘린다. */
+/**
+ * 하루 상세 머리 버튼: 자리는 날마다 같다 — 그날로 돌아가기 · 올리기 · 공유 · 더보기.
+ * 못 쓰는 날은 숨기지 않고 흐리게 두고, 누르면 버튼 아래 한 줄로 이유를 잠깐 보여 준다 (이 화면에서는 토스트가 안 보인다).
+ * [loaded]가 false(불러오는 중)면 올리기는 흐리게만 두고 이유는 보이지 않는다.
+ */
+@Composable
+private fun DayActions(summary: DaySummary, loaded: Boolean, onShare: (() -> Unit)?) {
+    val c = EodiTheme.colors
+    var reason by remember(summary.day) { mutableStateOf<Int?>(null) }
+    LaunchedEffect(reason) {
+        if (reason != null) {
+            delay(ReasonMs)
+            reason = null
+        }
+    }
+    val openReplay = app.eodiyeotji.ui.replay.LocalOpenReplay.current
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        // 그날로 돌아가기: 다시 볼 것이 있는 날만 (Rust `replayable`)
+        DimPill(
+            stringResource(R.string.replay_open), app.eodiyeotji.ui.theme.EodiIcons.Play, available = summary.replayable,
+            onClick = { openReplay(summary.day) }, onUnavailable = { reason = R.string.timeline_replay_unavailable },
+        )
+        // 커뮤니티에 올리기: 나들이 · 여행 기록이 있는 날만 (Rust `share_candidates_on`)
+        DimPill(
+            stringResource(R.string.timeline_share_short), CommunityIcons.Upload, available = onShare != null,
+            onClick = { onShare?.invoke() }, onUnavailable = { if (loaded) reason = R.string.timeline_share_unavailable },
+        )
+        // 카드로 공유 (차: 연결된 휴대폰으로 → 카톡)
+        ShareImageButton(ShareTarget.Day(summary.day), style = ShareButtonStyle.ICON)
+        LocalTimelineEdits.current?.let { edits ->
+            MoreButton(stringResource(R.string.edit_more_day), { edits.onDay(summary) })
+        }
+    }
+    reason?.let {
+        Spacer(Modifier.height(10.dp))
+        Text(stringResource(it), style = EodiTheme.type.body, color = c.textSecondary, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+    }
+}
+
+/** 못 쓰는 날은 흐리게(눌러도 동작 대신 [onUnavailable]로 이유를 보인다). 자리는 그대로 지킨다. */
+@Composable
+private fun DimPill(text: String, icon: ImageVector, available: Boolean, onClick: () -> Unit, onUnavailable: () -> Unit, modifier: Modifier = Modifier) {
+    SecondaryPill(
+        text, icon,
+        onClick = if (available) onClick else onUnavailable,
+        modifier = if (available) modifier else modifier.alpha(0.42f),
+    )
+}
+
+/** 하루 태그는 앞에서 이만큼만 (9개가 한 줄에 몰리면 읽히지 않는다). */
+private const val MaxTags = 3
+
+/** 이유 한 줄이 떠 있는 시간 (ms). */
+private const val ReasonMs = 3_500L
+
+/** 하루 태그 알약 줄 ("#여행 #가족"). 앞에서 [MaxTags]개까지만 보이고, 그래도 넘치면 오른쪽이 잘린다. */
 @Composable
 private fun TagRow(tags: List<String>) {
     val c = EodiTheme.colors
     Row(Modifier.fillMaxWidth().clipToBounds(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (tag in tags) {
+        for (tag in tags.take(MaxTags)) {
             Text(
                 stringResource(R.string.day_tag, tag),
                 style = EodiTheme.type.caption,
@@ -953,17 +1002,17 @@ private fun StatRow(s: DaySummary) {
             .background(c.surfaceHigh, RoundedCornerShape(EodiTheme.space.radiusM))
             .padding(vertical = 16.dp),
     ) {
-        StatCell(stringResource(R.string.stat_trips_value, s.tripCount), stringResource(R.string.stat_trips_label), c.trip)
+        StatCell(stringResource(R.string.stat_trips_value, s.tripCount), stringResource(R.string.stat_trips_label), c.trip, weight = CountWeight)
         StatDivider()
-        StatCell(stringResource(R.string.stat_stays_value, s.stayCount), stringResource(R.string.stat_stays_label), c.stay)
+        StatCell(stringResource(R.string.stat_stays_value, s.stayCount), stringResource(R.string.stat_stays_label), c.stay, weight = CountWeight)
         StatDivider()
-        StatCell(distanceText(s.distanceM), stringResource(R.string.stat_distance_label), null)
+        StatCell(distanceText(s.distanceM), stringResource(R.string.stat_distance_label), null, weight = DistanceWeight)
         StatDivider()
-        StatCell(durationText(s.driveMillis), stringResource(R.string.stat_drive_label), null)
+        StatCell(durationText(s.driveMillis), stringResource(R.string.stat_drive_label), null, weight = DriveWeight)
         // 좌석 센서로 센 탑승 인원 (차만, 모르면 칸 없음)
         if (s.people > 0) {
             StatDivider()
-            StatCell(stringResource(R.string.stat_people_value, s.people), stringResource(R.string.stat_people_label), null)
+            StatCell(stringResource(R.string.stat_people_value, s.people), stringResource(R.string.stat_people_label), null, weight = CountWeight)
         }
         // 배터리 · 연료 (차만): 쓴 양 %p, 충전 · 주유했으면 이름 줄에 횟수
         s.energy?.let { e ->
@@ -984,10 +1033,10 @@ private fun StatRow(s: DaySummary) {
 }
 
 @Composable
-private fun androidx.compose.foundation.layout.RowScope.StatCell(value: String, label: String, dot: Color?) {
+private fun androidx.compose.foundation.layout.RowScope.StatCell(value: String, label: String, dot: Color?, weight: Float = 1f) {
     val c = EodiTheme.colors
     Column(
-        Modifier.weight(1f).padding(horizontal = 6.dp).semantics(mergeDescendants = true) {},
+        Modifier.weight(weight).padding(horizontal = 4.dp).semantics(mergeDescendants = true) {},
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(value, style = EodiTheme.type.titleSmall, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1001,6 +1050,13 @@ private fun androidx.compose.foundation.layout.RowScope.StatCell(value: String, 
     }
 }
 
+/**
+ * 통계 칸 폭 비율: 숫자 한두 글자인 칸(주행 · 머문 곳 · 인원)은 좁게, 운전 시간("1시간 21분")은 넓게 — 시간이 잘리지 않게.
+ */
+private const val CountWeight = 0.7f
+private const val DistanceWeight = 1.1f
+private const val DriveWeight = 1.7f
+
 @Composable
 private fun StatDivider() {
     Box(Modifier.width(2.dp).fillMaxHeight().padding(vertical = 8.dp).background(EodiTheme.colors.outline))
@@ -1009,9 +1065,11 @@ private fun StatDivider() {
 /**
  * 고른 항목이 화면 밖이면(지도에서 고른 경우) 보이게 굴린다. 이미 다 보이면 그대로 둔다.
  * [header]: 항목 위에 같이 굴러가는 머리 줄 ([headerCount]개, 폰 하루 상세의 통계·올리기).
+ * 스크롤 위치는 날([day])마다 새로 잡는다 — 다른 날로 바꾸면 그날의 첫 출발부터 보인다.
  */
 @Composable
 private fun EntryList(
+    day: String,
     entries: List<DayEntry>,
     selectedKey: String?,
     onClick: (String) -> Unit,
@@ -1020,7 +1078,7 @@ private fun EntryList(
     contentPadding: PaddingValues = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = EodiTheme.space.page),
     offers: Map<String, List<PartnerOffer>> = emptyMap(),
 ) {
-    val listState = rememberLazyListState()
+    val listState = remember(day) { LazyListState() }
     LaunchedEffect(selectedKey, entries) {
         val key = selectedKey ?: return@LaunchedEffect
         val info = listState.layoutInfo

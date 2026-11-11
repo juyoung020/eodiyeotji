@@ -74,7 +74,7 @@ fn sample() -> DayDetail {
 #[test]
 fn scenes_skip_home_and_carry_time_and_stay_text() {
     let today = days_from_civil(2026, 11, 6);
-    let r = build_replay(&sample(), KST, today, Some(EpisodeInfo { id: 7, label: "강릉 여행".into(), region: "강원 강릉시".into() }));
+    let r = build_replay(&sample(), KST, today, Some(EpisodeInfo { id: 7, label: "강릉 여행".into(), region: "강원 강릉시".into(), commute: false }), &[]);
     let names: Vec<&str> = r.scenes.iter().map(|s| s.stop.name.as_str()).collect();
     assert_eq!(names, ["경포해변", "초당할머니순두부"]);
     assert_eq!(r.scenes[0].time_text, "09:51");
@@ -93,7 +93,7 @@ fn scenes_skip_home_and_carry_time_and_stay_text() {
 
 #[test]
 fn each_scene_draws_its_leg_in_frames_ending_at_the_stop() {
-    let r = build_replay(&sample(), KST, days_from_civil(2026, 11, 6), None);
+    let r = build_replay(&sample(), KST, days_from_civil(2026, 11, 6), None, &[]);
     let s0 = &r.scenes[0];
     assert_eq!(s0.leg_frames.len(), LEG_FRAMES);
     // 첫 단계는 짧고, 마지막 단계는 해변(128.9)에 차가 있다
@@ -122,7 +122,7 @@ fn leg_prefix_cuts_by_distance() {
 #[test]
 fn a_day_without_named_places_has_no_scenes_but_a_summary() {
     let d = day(vec![trip(kst(9, 0), kst(10, 0), vec![p(37.5, 127.0), p(37.6, 127.1)])], vec![stay(p(37.6, 127.1), kst(10, 0), kst(11, 0), 1, "")]);
-    let r = build_replay(&d, KST, days_from_civil(2025, 12, 1), None);
+    let r = build_replay(&d, KST, days_from_civil(2025, 12, 1), None, &[]);
     assert!(r.scenes.is_empty());
     assert_eq!(r.stamp, "");
     assert!(r.final_geojson.contains(r#""kind":"route""#));
@@ -149,7 +149,7 @@ fn seeded_on_this_day_replays_with_scenes() {
 
 #[test]
 fn leg_flight_follows_the_leg_and_flies_higher_on_long_legs() {
-    let r = build_replay(&sample(), KST, days_from_civil(2026, 11, 6), None);
+    let r = build_replay(&sample(), KST, days_from_civil(2026, 11, 6), None, &[]);
     let f = &r.scenes[0].leg_flight;
     assert_eq!(f.len(), LEG_FLIGHT_FRAMES);
     // 끝 장면은 해변(128.9, 37.8) 근처
@@ -180,12 +180,12 @@ fn a_short_day_ends_on_the_stops_not_the_distance() {
     );
     d.summary.distance_m = 4_500.0;
     d.summary.drive_millis = 5 * MIN;
-    let r = build_replay(&d, KST, days_from_civil(2026, 11, 6), None);
+    let r = build_replay(&d, KST, days_from_civil(2026, 11, 6), None, &[]);
     assert_eq!(r.summary_line, "그날, 광장시장부터 2곳에 들렀어요");
     assert_eq!(r.stats_line, "들른 곳 2곳 · 4.5km");
 
     d.stays.truncate(1);
-    let r = build_replay(&d, KST, days_from_civil(2026, 11, 6), None);
+    let r = build_replay(&d, KST, days_from_civil(2026, 11, 6), None, &[]);
     assert_eq!(r.summary_line, "그날, 광장시장에 들렀어요");
 }
 
@@ -199,4 +199,32 @@ fn sky_phase_follows_local_clock() {
     assert_eq!(sky_phase(at(18, 45), kst), SkyPhase::Blue);
     assert_eq!(sky_phase(at(22, 0), kst), SkyPhase::Night);
     assert_eq!(sky_phase(at(2, 0), kst), SkyPhase::Night);
+}
+
+#[test]
+fn office_and_building_scenes_drop_the_photo() {
+    let mut d = sample();
+    // 해변 = 회사 자리(250m 안), 순두부집 분류는 그대로
+    let office = Point { lat: 37.80, lon: 128.90 };
+    let r = build_replay(&d, KST, days_from_civil(2026, 11, 6), None, &[office]);
+    let shown: Vec<bool> = r.scenes.iter().map(|s| s.show_photo).collect();
+    assert_eq!(shown, [false, true]);
+
+    // 집 · 회사를 몰라도 분류가 회사 · 건물이면 사진 없이
+    d.stays[2].place.as_mut().unwrap().category = "기업".into();
+    let r = build_replay(&d, KST, days_from_civil(2026, 11, 6), None, &[]);
+    let shown: Vec<bool> = r.scenes.iter().map(|s| s.show_photo).collect();
+    assert_eq!(shown, [true, false]);
+    assert!(!photo_fits("회사", "", Point { lat: 0.0, lon: 0.0 }, &[]));
+}
+
+#[test]
+fn commute_day_hides_course_guide() {
+    let ep = |commute| Some(EpisodeInfo { id: 3, label: "출근길".into(), region: String::new(), commute });
+    let today = days_from_civil(2026, 11, 6);
+    assert!(build_replay(&sample(), KST, today, ep(false), &[]).can_guide);
+    let r = build_replay(&sample(), KST, today, ep(true), &[]);
+    assert!(!r.can_guide);
+    assert_eq!(r.episode_id, Some(3));
+    assert!(!build_replay(&sample(), KST, today, None, &[]).can_guide);
 }
