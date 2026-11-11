@@ -19,8 +19,10 @@
     <!-- 차 → 폰 넘기기 (ui/share/CarHandoff.kt · 폰 받기) -->
     <string name="handoff_button">휴대폰으로 공유</string>
     <string name="handoff_sending">보내는 중…</string>
-    <string name="handoff_sent">휴대폰으로 보냈어요. 폰 알림을 누르면 바로 공유할 수 있어요</string>
-    <string name="handoff_send_failed">휴대폰으로 보내지 못했어요. 인터넷 연결을 확인해 주세요</string>
+    <string name="handoff_icon_label">폰으로</string>
+    <string name="handoff_sent">휴대폰으로 보냈어요 · 폰 알림을 누르면 바로 공유할 수 있어요</string>
+    <string name="handoff_send_failed">보내지 못했어요</string>
+    <string name="handoff_retry">다시 보내기</string>
     <string name="handoff_paired">휴대폰과 연결됐어요</string>
     <string name="handoff_pair_title">휴대폰 연결</string>
     <string name="handoff_pair_body">휴대폰 어디였지 앱 → 설정 → 차와 연결에서 아래 코드를 입력하거나, 휴대폰 카메라로 QR을 비추세요. 처음 한 번만 하면 돼요.</string>

@@ -22,6 +22,8 @@ fun AppRoot() {
         PlaceDetailHost()
         // 앱이 소리 내어 읽는 말 (답 · 회상)을 맨 위에 자막으로
         SpokenCaption()
+        // 공유 결과 같은 앱 안 알림을 화면 아래에 (ui/share/ShareNotice.kt)
+        app.eodiyeotji.ui.share.ShareNoticeHost()
         // 연결된 휴대폰으로 기록 맞추기 (ui/share/CarHandoff.kt)
         app.eodiyeotji.ui.share.HandoffSyncLoop()
     }

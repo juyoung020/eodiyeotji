@@ -133,6 +133,8 @@ fun PhoneApp(shell: PhoneShellViewModel = hiltViewModel()) {
                 SpokenCaption(bottomInset = if (navigating) 120.dp else null)
                 // 시트는 맨 위에 (아래 탭 · 운전 중 띠까지 덮는다)
                 PhoneSheetHost(sheets)
+                // 공유 결과 같은 앱 안 알림은 시트 위, 아래 탭을 피해서 (ui/share/ShareNotice.kt)
+                app.eodiyeotji.ui.share.ShareNoticeHost(bottom = 160.dp)
             }
         }
     }

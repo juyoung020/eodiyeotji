@@ -1,6 +1,5 @@
 package app.eodiyeotji.ui.share
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -46,6 +45,7 @@ fun ShareImageButton(target: ShareTarget, modifier: Modifier = Modifier, style: 
     val sharer = rememberImageSharer()
     if (!sharer.available) return
     val deps = remember(context) { EntryPointAccessors.fromApplication(context.applicationContext, ShareEntryPoint::class.java) }
+    val notice = LocalShareNotice.current
     val onClick = {
         sharer.share(
             fileName = "eodiyeotji-${target.fileTag()}",
@@ -61,7 +61,7 @@ fun ShareImageButton(target: ShareTarget, modifier: Modifier = Modifier, style: 
                     (data?.first?.hiddenCount ?: 0) > 0 -> context.getString(R.string.share_card_hidden, data!!.first.hiddenCount)
                     else -> context.getString(R.string.share_card_text_copied)
                 }
-                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                notice.notify(context, msg)
             },
         ) { (card, photos) -> ShareCardView(card, photos) }
     }
