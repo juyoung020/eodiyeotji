@@ -12,6 +12,7 @@ import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.LatLon
 import app.eodiyeotji.core.courseLegs
 import app.eodiyeotji.core.courseMap
+import app.eodiyeotji.core.courseRoadMap
 import app.eodiyeotji.core.courseOffers
 import app.eodiyeotji.core.courseStopReviews
 import app.eodiyeotji.core.StopReviews
@@ -129,11 +130,17 @@ class CourseViewModel @Inject constructor(
             val (map, legs, reviews) = Triple(mapJob.await(), legsJob.await(), reviewsJob.await())
             _state.update { s ->
                 if (s.detail?.course?.post?.id == id) {
-                    s.copy(detail = s.detail.copy(map = map, legs = legs, stopReviews = reviews, course = s.detail.course.copy(offers = offers ?: s.detail.course.offers)))
+                    // 도로 경로가 먼저 왔으면 그것을 둔다
+                    s.copy(detail = s.detail.copy(map = s.detail.map ?: map, legs = legs, stopReviews = reviews, course = s.detail.course.copy(offers = offers ?: s.detail.course.offers)))
                 } else {
                     s
                 }
             }
+        }
+        // 곳 사이 도로 경로: 지도는 먼저 (받아 둔 길 또는 직선으로) 그리고, 처음 여는 코스면 받아 오는 대로 도로로 바꾼다
+        viewModelScope.launch {
+            val road = runCatching { core.courseRoadMap(id) }.onFailure { Log.w(TAG, "코스 도로 경로 실패 $id", it) }.getOrNull() ?: return@launch
+            _state.update { s -> if (s.detail?.course?.post?.id == id) s.copy(detail = s.detail.copy(map = road)) else s }
         }
     }
 

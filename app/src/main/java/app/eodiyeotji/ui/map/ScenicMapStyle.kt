@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 /**
  * 드라이브 코스 3D 미리보기 스타일 (`assets/map/scenic-3d.json`): OpenFreeMap 벡터 타일 + 건물 3D + 산 음영 + 빛나는 길.
  * 때(낮·노을·밤, Rust가 언제 좋은지에서 정한 [RouteTheme])마다 색만 바꾸고, 길 GeoJSON은 Rust가 만든 것을 그대로 넣는다.
+ * 길 가운데 선(`routeCore`)은 지형 위에서 묻히지 않게 진한 색(밝은 땅엔 파랑, 어두운 땅엔 주황) 6px 안팎 + 흰 테두리다.
  * 라이브 지도와 목록 카드 스냅숏이 같은 스타일을 쓴다. 파일 읽기는 IO 스레드에서.
  */
 internal object ScenicMapStyle {
@@ -46,7 +47,7 @@ internal object ScenicMapStyle {
         "roadMinor" to "#EADDE4", "roadMajor" to "#F6E9EE", "roadCasing" to "#B9A8BC", "roadLight" to "#FFD3B8",
         "buildingLow" to "#D7C9D6", "buildingMid" to "#B7A3C0", "buildingHigh" to "#F4C59A", "boundary" to "#A898B0",
         "label" to "#3D3150", "labelHalo" to "#F4ECF2", "sightText" to "#8A3A5A",
-        "routeHalo" to "#FF9E8A", "routeGlow" to "#FFC2A0", "routeCore" to "#FFF4EC",
+        "routeHalo" to "#FF9E8A", "routeGlow" to "#FFC2A0", "routeCore" to "#2A56C6",
         "start" to "#2E9E6B", "end" to "#C2453B", "light" to "#FFE0D0",
     )
 
@@ -57,11 +58,11 @@ internal object ScenicMapStyle {
         "roadMinor" to "#38426A", "roadMajor" to "#4A5480", "roadCasing" to "#1F2746", "roadLight" to "#FFC67A",
         "buildingLow" to "#3A4270", "buildingMid" to "#7B6E9E", "buildingHigh" to "#FFC874", "boundary" to "#4A5480",
         "label" to "#E6EAFB", "labelHalo" to "#2A3358", "sightText" to "#FFD3A0",
-        "routeHalo" to "#FFB35A", "routeGlow" to "#FFD08A", "routeCore" to "#FFF8E8",
+        "routeHalo" to "#FFB35A", "routeGlow" to "#FFD08A", "routeCore" to "#FF9A2E",
         "start" to "#3DDC97", "end" to "#FF6B6B", "light" to "#FFD9A0",
     )
 
-    /** 때별 색. 낮 = 따뜻한 미색 땅·맑은 물·코랄 길, 노을 = 살구빛 땅·청록에서 보랏빛으로 저무는 물(먼 바다일수록 깊게)·금빛 길, 밤 = 남색 땅·불 켜진 건물·환한 길. */
+    /** 때별 색. 낮 = 따뜻한 미색 땅·맑은 물·코랄 빛 + 파란 길, 노을 = 살구빛 땅·청록에서 보랏빛으로 저무는 물(먼 바다일수록 깊게)·금빛 + 남파랑 길, 밤 = 남색 땅·불 켜진 건물·주황 길. */
     private fun palette(theme: RouteTheme): Map<String, String> = when (theme) {
         RouteTheme.DAY -> mapOf(
             "land" to "#ECE7DE", "green" to "#D3E6C6", "park" to "#C6E1BA", "water" to "#9CCFE6", "waterDeep" to "#9CCFE6", "waterLabel" to "#4F7FA8",
@@ -69,7 +70,7 @@ internal object ScenicMapStyle {
             "roadMinor" to "#FFFFFF", "roadMajor" to "#FFFCF5", "roadCasing" to "#D8D0C3", "roadLight" to "#FFFFFF",
             "buildingLow" to "#F2ECE3", "buildingMid" to "#E6DCCD", "buildingHigh" to "#D4C6B3", "boundary" to "#B5ADA2",
             "label" to "#3E3A35", "labelHalo" to "#FFFFFF", "sightText" to "#B4401F",
-            "routeHalo" to "#FF8A65", "routeGlow" to "#FF7043", "routeCore" to "#FFF3EC",
+            "routeHalo" to "#FF8A65", "routeGlow" to "#FF7043", "routeCore" to "#1B5FD9",
             "start" to "#00A35A", "end" to "#E0522A", "light" to "#FFFFFF",
         )
         RouteTheme.SUNSET -> mapOf(
@@ -78,7 +79,7 @@ internal object ScenicMapStyle {
             "roadMinor" to "#FBE3CC", "roadMajor" to "#FFEBD6", "roadCasing" to "#E0A884", "roadLight" to "#FFD9A8",
             "buildingLow" to "#F6D0AA", "buildingMid" to "#F0A878", "buildingHigh" to "#FFC27A", "boundary" to "#C99780",
             "label" to "#6B3A2E", "labelHalo" to "#FCE6D2", "sightText" to "#7A2F3A",
-            "routeHalo" to "#FF9E3D", "routeGlow" to "#FFC15E", "routeCore" to "#FFF6DD",
+            "routeHalo" to "#FF9E3D", "routeGlow" to "#FFC15E", "routeCore" to "#1D4FB8",
             "start" to "#2E9E6B", "end" to "#C2453B", "light" to "#FFB27A",
         )
         RouteTheme.NIGHT -> mapOf(
@@ -87,7 +88,7 @@ internal object ScenicMapStyle {
             "roadMinor" to "#1C2640", "roadMajor" to "#2F3D60", "roadCasing" to "#111829", "roadLight" to "#F0B45C",
             "buildingLow" to "#1F2742", "buildingMid" to "#6A5A70", "buildingHigh" to "#FFD27A", "boundary" to "#2B3554",
             "label" to "#DCE4F7", "labelHalo" to "#0F1626", "sightText" to "#FFD98A",
-            "routeHalo" to "#FFC94A", "routeGlow" to "#FFD978", "routeCore" to "#FFFBEA",
+            "routeHalo" to "#FFC94A", "routeGlow" to "#FFD978", "routeCore" to "#FF8A1F",
             "start" to "#3DDC97", "end" to "#FF6B6B", "light" to "#AFC2FF",
         )
     }

@@ -10,6 +10,8 @@ import app.eodiyeotji.core.DriveRouteItem
 import app.eodiyeotji.core.DriveRouteSort
 import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.FlightFrame
+import app.eodiyeotji.core.FlightSight
+import app.eodiyeotji.core.driveRouteFlightSights
 import app.eodiyeotji.core.LatLon
 import app.eodiyeotji.core.RouteCameraSpec
 import app.eodiyeotji.core.driveRouteCamera
@@ -42,6 +44,8 @@ data class DriveRouteDetail(
     val style: String? = null,
     val camera: RouteCameraSpec? = null,
     val frames: List<FlightFrame> = emptyList(),
+    /** 비행 중 "지금: 주문진항"처럼 보일 풍경 */
+    val sights: List<FlightSight> = emptyList(),
     val legs: List<CourseLeg> = emptyList(),
     val flying: Boolean = false,
     val naviFailed: Boolean = false,
@@ -120,11 +124,13 @@ class DriveRouteViewModel @Inject constructor(
             // 지도 · 비행 장면 · 구간은 서로 상관없다 → 동시에
             val framesJob = async { runCatching { core.driveRouteFlight(id) }.getOrDefault(emptyList()) }
             val legsJob = async { runCatching { core.driveRouteLegs(id) }.getOrDefault(emptyList()) }
+            val sightsJob = async { runCatching { core.driveRouteFlightSights(id) }.getOrDefault(emptyList()) }
             val style = runCatching { ScenicMapStyle.build(context, item.route.theme, core.driveRouteMap(id).geojson) }
                 .onFailure { Log.w(TAG, "3D 지도 실패 $id", it) }
                 .getOrNull()
             val (frames, legs) = framesJob.await() to legsJob.await()
-            updateDetail(id) { it.copy(style = style, frames = frames, legs = legs) }
+            val sights = sightsJob.await()
+            updateDetail(id) { it.copy(style = style, frames = frames, sights = sights, legs = legs) }
         }
     }
 

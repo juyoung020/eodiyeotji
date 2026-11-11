@@ -60,6 +60,14 @@ import app.eodiyeotji.core.BestTime
 import app.eodiyeotji.core.DriveRoute
 import app.eodiyeotji.core.DriveRouteItem
 import app.eodiyeotji.core.DriveRouteSort
+import app.eodiyeotji.core.FlightSight
+import androidx.compose.runtime.FloatState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import app.eodiyeotji.core.RouteTheme
 import app.eodiyeotji.pleos.CourseProgress
 import app.eodiyeotji.ui.map.RouteSnapshotImage
@@ -339,6 +347,8 @@ private fun DriveRouteDetailScreen(
                         val w = maxWidth.value
                         val h = maxHeight.value
                         LaunchedEffect(r.id, w, h) { onMapSize(w, h) }
+                        // 비행 진행(0~1): 매 화면 바뀌므로 상태 하나에 두고 진행 막대는 그리기 단계에서만 읽는다
+                        val flightT = remember(r.id) { mutableFloatStateOf(0f) }
                         if (driving) {
                             RouteSnapshotImage(r, description, Modifier.fillMaxSize())
                         } else {
@@ -352,7 +362,12 @@ private fun DriveRouteDetailScreen(
                                 onFlightEnd = onFlightEnd,
                                 contentDescription = description,
                                 modifier = Modifier.fillMaxSize(),
+                                onFlightProgress = { flightT.floatValue = it },
                             )
+                        }
+                        if (!driving && d.flying) {
+                            LaunchedEffect(Unit) { flightT.floatValue = 0f }
+                            FlightProgressBar(flightT, d.sights, Modifier.align(Alignment.BottomCenter).padding(start = 18.dp, end = 18.dp, bottom = 52.dp))
                         }
                         BestTimeBadge(r.bestTime, r.theme, Modifier.align(Alignment.TopStart).padding(18.dp))
                         if (!driving && d.frames.size >= 2) {
@@ -452,3 +467,37 @@ private fun DriveRouteDetailScreen(
         }
     }
 }
+
+/**
+ * 미리보기 비행 아래 띠: "지금: 주문진항"(지나는 풍경, Rust가 정한 구간) + 진행 막대(풍경 자리에 눈금).
+ * 진행 값은 매 화면 바뀌므로 막대는 그리기 단계에서만 읽고, 글은 풍경이 바뀔 때만 다시 그린다.
+ */
+@Composable
+private fun FlightProgressBar(t: FloatState, sights: List<FlightSight>, modifier: Modifier = Modifier) {
+    val now by remember(sights) { derivedStateOf { sights.firstOrNull { t.floatValue in it.from..it.to }?.name } }
+    Column(
+        modifier.fillMaxWidth().background(FlightScrim, RoundedCornerShape(16.dp)).padding(horizontal = 18.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            now?.let { stringResource(R.string.drive_fly_now, it) } ?: " ",
+            style = EodiTheme.type.label,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(
+            Modifier.fillMaxWidth().height(8.dp).drawBehind {
+                val r = CornerRadius(size.height / 2)
+                drawRoundRect(FlightTrack, cornerRadius = r)
+                drawRoundRect(FlightFill, size = size.copy(width = size.width * t.floatValue.coerceIn(0f, 1f)), cornerRadius = r)
+                sights.forEach { s -> drawCircle(Color.White, radius = size.height * 0.45f, center = Offset(size.width * s.at, size.height / 2)) }
+            },
+        )
+    }
+}
+
+private val FlightScrim = Color(0xCC111722)
+private val FlightFill = Color(0xFFFFB547)
+private val FlightTrack = Color(0x55FFFFFF)

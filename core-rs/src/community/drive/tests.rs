@@ -390,3 +390,39 @@ fn v9_database_gets_drive_routes_and_old_demo_device_gets_them_on_next_seed() {
     assert_eq!(store.community_courses(crate::community::CommunitySort::Recent, None, 0).unwrap().len(), courses);
     assert_eq!(store.seed_community_demo(NOW + 2).unwrap(), 0);
 }
+
+#[test]
+fn flight_sights_are_ordered_windows_along_the_line() {
+    // 동쪽으로 약 20km 곧은 길, 풍경은 길 옆 (8km · 2km · 8.5km 지점 근처) + 길에서 먼 곳 하나
+    let line: Vec<Point> = (0..=200).map(|i| Point { lat: 37.0, lon: 127.0 + i as f64 * 0.001125 }).collect();
+    let total = line_length_m(&line);
+    let at = |km: f64| 127.0 + km * 1000.0 / total * 0.225;
+    let h = |name: &str, lat: f64, lon: f64| RouteHighlight { name: name.into(), lat, lon };
+    let sights = flight_sights(
+        &line,
+        &[h("가", 37.001, at(8.0)), h("나", 36.999, at(2.0)), h("다", 37.001, at(8.5)), h("먼 산", 37.2, at(10.0))],
+    );
+    let names: Vec<&str> = sights.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["나", "가", "다"], "길 위 순서, 먼 곳은 빠진다");
+    assert!((sights[0].at - 2000.0 / total).abs() < 0.01, "{:?}", sights[0]);
+    for s in &sights {
+        assert!(s.from <= s.at && s.at <= s.to && (0.0..=1.0).contains(&s.from) && s.to <= 1.0, "{s:?}");
+    }
+    for w in sights.windows(2) {
+        assert!(w[0].to <= w[1].from + 1e-9, "겹치지 않는다 {w:?}");
+    }
+    assert!(flight_sights(&line[..1], &[h("가", 37.0, 127.0)]).is_empty());
+}
+
+#[test]
+fn seeded_route_flight_sights_follow_highlights() {
+    let db = TempDb::new("sights");
+    let store = db.open();
+    store.seed_community_demo(NOW).unwrap();
+    let all = store.drive_routes(DriveRouteSort::Recent, None, 0).unwrap();
+    let r = all.iter().find(|r| !r.route.highlights.is_empty()).unwrap();
+    let sights = store.drive_route_flight_sights(r.route.id.clone()).unwrap();
+    assert!(!sights.is_empty());
+    assert!(sights.iter().all(|s| r.route.highlights.iter().any(|h| h.name == s.name)));
+    assert!(store.drive_route_flight_sights("없음".into()).is_err());
+}

@@ -288,6 +288,35 @@ fn turn_of(code: i64, text: &str) -> NavTurn {
     }
 }
 
+/// 길찾기 응답의 구간(경유지 사이)마다 도로 점들 (그리기용, 안내 지점은 읽지 않는다).
+/// 카카오가 경로를 못 찾았다고 답하면(`result_code` ≠ 0, 곳끼리 너무 가까움 등) `Ok(None)`, 응답을 못 읽으면 `InvalidInput`.
+pub(crate) fn kakao_sections(json: &str) -> Result<Option<Vec<Vec<Point>>>, CoreError> {
+    let v: Value = serde_json::from_str(json).map_err(|_| CoreError::InvalidInput("길찾기 응답 형식".into()))?;
+    let r = v["routes"].get(0).ok_or_else(|| CoreError::InvalidInput("경로 없음".into()))?;
+    if r["result_code"].as_i64().unwrap_or(-1) != 0 {
+        return Ok(None);
+    }
+    let sections = r["sections"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|sec| {
+            let mut pts: Vec<Point> = Vec::new();
+            for road in sec["roads"].as_array().into_iter().flatten() {
+                let xs: Vec<f64> = road["vertexes"].as_array().into_iter().flatten().filter_map(|x| x.as_f64()).collect();
+                for [x, y] in xs.as_chunks::<2>().0 {
+                    let p = Point { lat: *y, lon: *x };
+                    if pts.last() != Some(&p) {
+                        pts.push(p);
+                    }
+                }
+            }
+            pts
+        })
+        .collect();
+    Ok(Some(sections))
+}
+
 fn parse_kakao(json: &str) -> Result<NavRoute, CoreError> {
     let v: Value = serde_json::from_str(json).map_err(|_| CoreError::InvalidInput("길찾기 응답 형식".into()))?;
     let r = v["routes"].get(0).ok_or_else(|| CoreError::InvalidInput("경로 없음".into()))?;

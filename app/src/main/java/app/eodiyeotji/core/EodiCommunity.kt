@@ -1,10 +1,12 @@
 package app.eodiyeotji.core
 
 import android.util.Log
+import app.eodiyeotji.BuildConfig
 import app.eodiyeotji.core.rust.BoardComment as RBoardComment
 import app.eodiyeotji.core.rust.BoardPost as RBoardPost
 import app.eodiyeotji.core.rust.CommunitySort as RCommunitySort
 import app.eodiyeotji.core.rust.CoursePost as RCoursePost
+import app.eodiyeotji.core.rust.DayMap as RDayMap
 import app.eodiyeotji.core.rust.EpisodeKind as REpisodeKind
 import app.eodiyeotji.core.rust.GeoPoint as RGeoPoint
 import app.eodiyeotji.core.rust.NearFilter as RNearFilter
@@ -16,6 +18,9 @@ import app.eodiyeotji.core.rust.reviewKeywordLimit as rustReviewKeywordLimit
 import app.eodiyeotji.core.rust.reviewKeywordOptions as rustReviewKeywordOptions
 import app.eodiyeotji.place.PlatformHttp
 import app.eodiyeotji.place.blockingWithTimeout
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 
 /*
  * 커뮤니티(게시판 · 여행 리뷰 · 여행 코스 후기) 화면용 입구 (core-rs/src/community.rs). 드라이브 코스(경치 길)는 EodiDriveRoutes.kt.
@@ -66,16 +71,39 @@ data class BoardComment(
 suspend fun EodiCore.driveCourses(sort: CommunitySort, near: LatLon? = null, radiusKm: Double = 30.0, limit: Int = 100): List<DriveCourse> =
     coreCall("driveCourses") { rust.communityCourses(sort.toR(), near.toNear(radiusKm), limit.toUInt()).map { it.toDrive() }.withOffers() }
 
-/** 코스 지도 (들른 곳 핀, 하루 지도와 같은 GeoJSON 모양). */
-suspend fun EodiCore.courseMap(postId: String): DayMapData = coreCall("courseMap") {
-    val m = rust.courseMap(postId)
-    DayMapData(
-        day = m.day,
-        geojson = m.geojson,
-        bounds = m.bounds?.let { MapBoundsLatLon(it.minLat, it.minLon, it.maxLat, it.maxLon) },
-        entryBounds = m.entries.associate { it.key to MapBoundsLatLon(it.bounds.minLat, it.bounds.minLon, it.bounds.maxLat, it.bounds.maxLon) },
-    )
+/** 코스 지도 (들른 곳 핀 + 곳 사이 길, 하루 지도와 같은 GeoJSON 모양). 받아 둔 도로 경로가 있으면 길은 도로를 따른다. */
+suspend fun EodiCore.courseMap(postId: String): DayMapData = coreCall("courseMap") { rust.courseMap(postId).toData() }
+
+/**
+ * 코스 곳 사이 도로 경로 받기 (카카오모빌리티 길찾기, 폰 길 안내와 같은 키·주소). 받으면 Rust가 줄여 기기에 두고
+ * 도로를 따른 새 지도를 돌려준다. 이미 받아 뒀거나, 키가 없거나, 하나라도 못 받으면 null (지도는 직선 그대로).
+ * 요청들은 동시에 보내고 [ROAD_WAIT_MS]까지만 기다린다.
+ */
+suspend fun EodiCore.courseRoadMap(postId: String): DayMapData? {
+    val key = BuildConfig.KAKAO_REST_API_KEY
+    if (key.isBlank()) return null
+    val urls = coreCall("courseRoadRequests") { rust.courseRoadRequests(postId) }
+    if (urls.isEmpty()) return null
+    val headers = mapOf("Authorization" to "KakaoAK $key")
+    val bodies = coroutineScope {
+        urls.map { u ->
+            async {
+                blockingWithTimeout(ROAD_WAIT_MS) {
+                    runCatching { PlatformHttp.get(u, headers) }.onFailure { Log.w(ROAD_TAG, "코스 길 못 받음: ${it.message}") }.getOrNull()
+                }
+            }
+        }.awaitAll()
+    }
+    if (bodies.any { it == null }) return null
+    return coreCall("saveCourseRoad") { rust.saveCourseRoad(postId, bodies.map { it.orEmpty() }).toData() }
 }
+
+private fun RDayMap.toData() = DayMapData(
+    day = day,
+    geojson = geojson,
+    bounds = bounds?.let { MapBoundsLatLon(it.minLat, it.minLon, it.maxLat, it.maxLon) },
+    entryBounds = entries.associate { it.key to MapBoundsLatLon(it.bounds.minLat, it.bounds.minLon, it.bounds.maxLat, it.bounds.maxLon) },
+)
 
 /** 내비 구간 (경유지 ≤ 2 + 목적지). */
 suspend fun EodiCore.courseLegs(postId: String): List<CourseLeg> = coreCall("courseLegs") {
@@ -178,6 +206,8 @@ suspend fun EodiCore.toggleBoardCommentHeart(id: String): Int = coreCall("toggle
 
 // ---- 내부 ----
 
+private const val ROAD_TAG = "EodiCourseRoad"
+private const val ROAD_WAIT_MS = 5_000L
 private const val WEATHER_TAG = "EodiWeather"
 private const val WEATHER_WAIT_MS = 4_000L
 

@@ -232,6 +232,16 @@ pub struct FlightFrame {
     pub zoom: f64,
 }
 
+/// 미리보기 비행 중 지나는 풍경 하나: 비행 진행(0~1, [FlightFrame] 순서와 같은 길 거리 비율) [from]~[to] 동안 "지금: 이름".
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct FlightSight {
+    pub name: String,
+    /// 길에서 풍경에 가장 가까운 곳 (0~1)
+    pub at: f64,
+    pub from: f64,
+    pub to: f64,
+}
+
 /// 내 기록에서 드라이브 코스로 올릴 수 있는 주행 하나 (집·회사 근처를 지운 뒤 길이).
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct DriveTripCandidate {
@@ -352,6 +362,12 @@ impl EodiStore {
         let r = route_by_id(&*self.snapshot()?, &id)?;
         let n = if frames == 0 { FLIGHT_FRAMES } else { frames.clamp(2, MAX_FLIGHT_FRAMES) };
         Ok(flight(&r.line, n as usize))
+    }
+
+    /// 미리보기 비행 중 지나는 풍경 ([flight_sights]): 길 위 순서대로, 겹치지 않는 진행 구간. 없는 id면 `InvalidInput`.
+    pub fn drive_route_flight_sights(&self, id: String) -> Result<Vec<FlightSight>, CoreError> {
+        let r = route_by_id(&*self.snapshot()?, &id)?;
+        Ok(flight_sights(&r.line, &r.post.highlights))
     }
 
     /// 안내 구간: ① 길 시작점까지 ② 도착하면 끝점까지 — 둘 다 경유지 없음 ([route_legs]). 없는 id면 `InvalidInput`.
@@ -683,6 +699,63 @@ pub(crate) fn flight(line: &[Point], n: usize) -> Vec<FlightFrame> {
             FlightFrame { lat: p.lat, lon: p.lon, bearing: prev, zoom }
         })
         .collect()
+}
+
+/// 비행 중 "지금: 이름"을 보여 줄 거리(m, 풍경 앞뒤로). 길이 길면 길 길이의 [SIGHT_WINDOW_FRAC]만큼.
+const SIGHT_WINDOW_M: f64 = 1_500.0;
+const SIGHT_WINDOW_FRAC: f64 = 0.06;
+/// 길에서 이보다 먼 풍경은 비행 자막에 넣지 않는다 (지도 글자로만).
+const SIGHT_MAX_OFF_M: f64 = 5_000.0;
+
+/// 풍경마다 비행 진행 구간 ([flight]와 같은 줄인 길 기준 거리 비율). 길 위 순서로 늘어놓고, 이웃과 겹치면 가운데에서 나눈다.
+pub(crate) fn flight_sights(line: &[Point], highlights: &[RouteHighlight]) -> Vec<FlightSight> {
+    let line = simplified(line);
+    let total = line_length_m(&line);
+    if line.len() < 2 || total <= 0.0 {
+        return Vec::new();
+    }
+    let half = SIGHT_WINDOW_M.max(total * SIGHT_WINDOW_FRAC) / total;
+    let mut out: Vec<FlightSight> = highlights
+        .iter()
+        .filter_map(|h| {
+            let q = Point { lat: h.lat, lon: h.lon };
+            let (mut best_d, mut best_along, mut walked) = (f64::MAX, 0.0, 0.0);
+            for w in line.windows(2) {
+                let seg = haversine_m(w[0], w[1]);
+                let t = project_t(q, w[0], w[1]);
+                let p = Point { lat: w[0].lat + (w[1].lat - w[0].lat) * t, lon: w[0].lon + (w[1].lon - w[0].lon) * t };
+                let d = haversine_m(q, p);
+                if d < best_d {
+                    (best_d, best_along) = (d, walked + seg * t);
+                }
+                walked += seg;
+            }
+            (best_d <= SIGHT_MAX_OFF_M).then(|| {
+                let at = (best_along / total).clamp(0.0, 1.0);
+                FlightSight { name: h.name.clone(), at, from: (at - half).max(0.0), to: (at + half).min(1.0) }
+            })
+        })
+        .collect();
+    out.sort_by(|a, b| a.at.total_cmp(&b.at));
+    for i in 1..out.len() {
+        if out[i].from < out[i - 1].to {
+            let mid = (out[i - 1].at + out[i].at) / 2.0;
+            out[i - 1].to = mid;
+            out[i].from = mid;
+        }
+    }
+    out
+}
+
+/// 점 [q]를 선분 ab에 내린 위치(0~1). 짧은 구간이라 평면으로 계산한다.
+fn project_t(q: Point, a: Point, b: Point) -> f64 {
+    let k = a.lat.to_radians().cos();
+    let (dx, dy) = ((b.lon - a.lon) * k, b.lat - a.lat);
+    let len2 = dx * dx + dy * dy;
+    if len2 <= 0.0 {
+        return 0.0;
+    }
+    (((q.lon - a.lon) * k * dx + (q.lat - a.lat) * dy) / len2).clamp(0.0, 1.0)
 }
 
 // ---- 내 기록 올리기 ----

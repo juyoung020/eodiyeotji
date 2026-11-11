@@ -19,6 +19,7 @@
 //!   버전 9부터 키워드([REVIEW_KEYWORDS] 중 5개까지)·누구와·다녀온 때·머문 분·몇 번째 방문도 담는다 (내가 쓸 때는 기록에서 채움,
 //!   [EodiStore::write_place_review]). 장소별 키워드 요약(많은 순)도 여기서 센다 ([keyword_summary]).
 //! - `board_post`·`board_comment`: 게시판 글·댓글.
+//! - `course_road` (버전 19): 여행 코스 후기 지도의 곳 사이 도로 경로 (받아서 줄여 둔 것, [road] 모듈).
 //! - 코스·리뷰는 다녀온 날(`visited_day`)과 그날 날씨(`weather`, 올리는 순간 받은 것)를 같이 둔다. 계절은 날짜로
 //!   그때그때 계산한다 (`weather` 모듈).
 //!
@@ -39,7 +40,7 @@ use serde_json::{json, Value};
 
 use crate::course;
 use crate::ffi::GeoPoint;
-use crate::geo::{haversine_m, Point};
+use crate::geo::{haversine_m, line_length_m, Point};
 use crate::mapdata::{map_safe_name, DayMap, EntryBounds, MapBounds};
 use crate::memory::{CourseLeg, Episode, EpisodeKind, MemoryQuery, StopFact};
 use crate::store::{format_day, join_names, parse_day, split_names, CoreError, EodiStore};
@@ -47,6 +48,7 @@ use crate::store::{format_day, join_names, parse_day, split_names, CoreError, Eo
 pub(crate) mod demo;
 pub mod drive;
 mod drive_demo;
+pub mod road;
 pub mod weather;
 
 pub use weather::{open_meteo_url, parse_open_meteo_weather, season_label};
@@ -506,11 +508,13 @@ impl EodiStore {
         Ok(recs)
     }
 
-    /// 코스 지도 데이터: 들른 곳 핀만 있는 GeoJSON (`mapdata` 머문 곳과 같은 모양 — kind "stay", key "s<순서>",
-    /// order = 순서(1부터), name = 지도용 이름). `day` 칸에는 코스 id가 들어간다. 없는 id면 `InvalidInput`.
+    /// 코스 지도 데이터: 들른 곳 핀(`mapdata` 머문 곳과 같은 모양 — kind "stay", key "s<순서>", order = 순서(1부터),
+    /// name = 지도용 이름)과 곳 사이 길(kind "trip"). 길은 저장된 도로 경로가 있으면 그것([road]), 없으면 직선.
+    /// `day` 칸에는 코스 id가 들어간다. 없는 id면 `InvalidInput`.
     pub fn course_map(&self, post_id: String) -> Result<DayMap, CoreError> {
         let post = self.course_by_id(&post_id)?;
-        Ok(stops_map(&post.id, &post.stops))
+        let road = road::load_road(&*self.snapshot()?, &post.id, &post.stops)?;
+        Ok(stops_map(&post.id, &post.stops, road.as_deref()))
     }
 
     /// 코스를 내비 구간으로 나눈다 (경유지 ≤ 2 + 목적지, `course::split_legs`). 첫 구간부터 차례로 요청한다.
@@ -1450,8 +1454,9 @@ pub(crate) fn is_day(s: &str) -> bool {
 
 // ---- 지도 ----
 
-/// 들른 곳 핀만 있는 지도 데이터 (`mapdata`의 머문 곳과 같은 GeoJSON 모양).
-fn stops_map(id: &str, stops: &[StopFact]) -> DayMap {
+/// 들른 곳 핀 + 곳 사이 길 지도 데이터 (`mapdata`의 머문 곳 · 주행과 같은 GeoJSON 모양).
+/// [road] = 구간마다 도로 점 (구간 수 = 곳 수 - 1). 없으면 곳과 곳을 직선으로 잇는다.
+fn stops_map(id: &str, stops: &[StopFact], road: Option<&[Vec<Point>]>) -> DayMap {
     let mut out = String::with_capacity(64 + stops.len() * 200);
     out.push_str(r#"{"type":"FeatureCollection","features":["#);
     let (mut lo_lat, mut lo_lon, mut hi_lat, mut hi_lon) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
@@ -1477,14 +1482,24 @@ fn stops_map(id: &str, stops: &[StopFact]) -> DayMap {
             bounds: MapBounds { min_lat: s.lat, min_lon: s.lon, max_lat: s.lat, max_lon: s.lon },
         });
     }
-    // 들른 곳을 순서대로 잇는 길 (남의 코스는 GPS 경로가 없어 곳과 곳을 바로 잇는다). 지도는 "trip" 선으로 그린다.
+    // 들른 곳을 순서대로 잇는 길 (남의 코스는 GPS 경로가 없다 → 받아 둔 도로 경로, 없으면 곳과 곳을 바로 잇는다).
+    // 지도는 "trip" 선으로 그린다. 도로 점이 넓게 퍼지면 범위도 넓힌다.
     for (i, w) in stops.windows(2).enumerate() {
         let (a, z) = (&w[0], &w[1]);
-        let d = haversine_m(stop_point(a), stop_point(z));
+        let straight = [stop_point(a), stop_point(z)];
+        let line: &[Point] = road.and_then(|r| r.get(i)).filter(|l| l.len() >= 2).map_or(&straight[..], Vec::as_slice);
+        let _ = write!(out, r#",{{"type":"Feature","geometry":{{"type":"LineString","coordinates":["#);
+        for (j, p) in line.iter().enumerate() {
+            let _ = write!(out, "{}[{:.6},{:.6}]", if j > 0 { "," } else { "" }, p.lon, p.lat);
+            (lo_lat, lo_lon, hi_lat, hi_lon) = (lo_lat.min(p.lat), lo_lon.min(p.lon), hi_lat.max(p.lat), hi_lon.max(p.lon));
+        }
         let _ = write!(
             out,
-            r#",{{"type":"Feature","geometry":{{"type":"LineString","coordinates":[[{:.6},{:.6}],[{:.6},{:.6}]]}},"properties":{{"kind":"trip","key":"c{}","start_ms":{},"end_ms":{},"distance_m":{:.1}}}}}"#,
-            a.lon, a.lat, z.lon, z.lat, i + 1, a.leave_ms, z.arrive_ms, d
+            r#"]}},"properties":{{"kind":"trip","key":"c{}","start_ms":{},"end_ms":{},"distance_m":{:.1}}}}}"#,
+            i + 1,
+            a.leave_ms,
+            z.arrive_ms,
+            line_length_m(line)
         );
     }
     out.push_str("]}");

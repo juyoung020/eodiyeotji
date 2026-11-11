@@ -69,6 +69,10 @@ data class RouteCameraSpec(val lat: Double, val lon: Double, val zoom: Double, v
 @Immutable
 data class FlightFrame(val lat: Double, val lon: Double, val bearing: Double, val zoom: Double)
 
+/** 비행 중 지나는 풍경: 비행 진행(0~1)이 [from]~[to]이면 "지금: [name]" (Rust가 길 위 순서·겹치지 않게 정한 구간), [at] = 가장 가까운 곳. */
+@Immutable
+data class FlightSight(val name: String, val at: Float, val from: Float, val to: Float)
+
 /** 드라이브 코스로 올릴 수 있는 내 주행 하나. */
 @Immutable
 data class DriveTripCandidate(
@@ -111,6 +115,11 @@ suspend fun EodiCore.driveRouteCamera(id: String, widthDp: Float, heightDp: Floa
 
 suspend fun EodiCore.driveRouteFlight(id: String, frames: Int = 0): List<FlightFrame> = coreCall("driveRouteFlight") {
     rust.driveRouteFlight(id, frames.toUInt()).map { FlightFrame(it.lat, it.lon, it.bearing, it.zoom) }
+}
+
+/** 비행 중 지나는 풍경 (길 위 순서). */
+suspend fun EodiCore.driveRouteFlightSights(id: String): List<FlightSight> = coreCall("driveRouteFlightSights") {
+    rust.driveRouteFlightSights(id).map { FlightSight(it.name, it.at.toFloat(), it.from.toFloat(), it.to.toFloat()) }
 }
 
 /** 안내 구간: ① 길 시작점까지 ② 도착하면 끝점까지 (둘 다 경유지 없음). */

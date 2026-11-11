@@ -209,7 +209,7 @@
       "layout": { "line-cap": "round", "line-join": "round" },
       "paint": {
         "line-color": "#FFFFFF",
-        "line-width": ["interpolate", ["linear"], ["zoom"], 8, 10, 12, 12, 16, 14]
+        "line-width": ["interpolate", ["linear"], ["zoom"], 8, 8, 12, 10, 16, 13]
       }
     },
     {
@@ -218,7 +218,7 @@
       "source": "route",
       "filter": ["==", ["get", "kind"], "route"],
       "layout": { "line-cap": "round", "line-join": "round" },
-      "paint": { "line-color": "{{routeCore}}", "line-width": ["interpolate", ["linear"], ["zoom"], 8, 2, 12, 4, 16, 6] }
+      "paint": { "line-color": "{{routeCore}}", "line-width": ["interpolate", ["linear"], ["zoom"], 8, 5, 12, 6, 16, 8] }
     },
     {
       "id": "sight-dot",

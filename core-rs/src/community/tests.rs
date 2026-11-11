@@ -317,9 +317,9 @@ fn course_map_is_stay_points_in_order() {
     assert_eq!(m.day, "d13");
     assert!(store.course_map("없음".into()).is_err());
     // 지도 글꼴로 못 그리는 글자는 걸러진다
-    let odd = stops_map("x", &[place("카페 ★ 바다", 37.0, 127.0)]);
+    let odd = stops_map("x", &[place("카페 ★ 바다", 37.0, 127.0)], None);
     assert!(odd.geojson.contains(r#""name":"카페 바다""#), "{}", odd.geojson);
-    assert!(stops_map("x", &[]).bounds.is_none());
+    assert!(stops_map("x", &[], None).bounds.is_none());
 }
 
 #[test]
