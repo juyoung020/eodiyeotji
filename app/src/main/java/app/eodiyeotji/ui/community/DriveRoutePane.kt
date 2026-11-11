@@ -240,6 +240,7 @@ internal fun DriveRouteCard(
             FromToLine(r, Modifier.padding(top = 14.dp))
             Spacer(Modifier.height(16.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), maxLines = 2) {
+                FromRecordChip()
                 VisitChip(r.visit)
                 InfoChip(routeStatsText(r))
                 item.distanceKm?.let { InfoChip(stringResource(R.string.drive_from_here, distanceText(it * 1000.0))) }

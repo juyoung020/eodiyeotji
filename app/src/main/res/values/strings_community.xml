@@ -181,4 +181,6 @@
     <string name="drive_share_body_label">무엇이 보이는지, 언제 가면 좋은지 (2~4문장)</string>
     <string name="drive_share_when">언제 가면 가장 좋아요?</string>
     <string name="drive_share_trimmed">집·회사 근처 1.2km는 자동으로 지웠어요</string>
+    <string name="community_from_record">직접 달린 기록</string>
+    <string name="community_from_record_description">글쓴이가 직접 달린 주행 기록에서 올린 코스</string>
 </resources>

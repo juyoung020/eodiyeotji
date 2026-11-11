@@ -568,6 +568,19 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier, icon: ImageVector?
 /** 정보 칩의 색 결: [Accent] = 옅은 파랑 · 파란 글자 (태그 · 키워드), [Quiet] = 옅은 회색 · 회색 글자 (거리 · 날짜 같은 정보). */
 enum class ChipTone { Accent, Quiet }
 
+/** "✓ 직접 달린 기록": 코스는 내 기록에서만 올릴 수 있으니(올리기 창), 모든 코스 카드에 붙는다. */
+@Composable
+fun FromRecordChip(modifier: Modifier = Modifier) {
+    val c = EodiTheme.colors
+    val desc = stringResource(R.string.community_from_record_description)
+    InfoChip(
+        stringResource(R.string.community_from_record),
+        modifier.semantics { contentDescription = desc },
+        tone = ChipTone.Accent,
+        icon = { Icon(EodiIcons.Check, null, tint = c.accent, modifier = Modifier.size(20.dp)) },
+    )
+}
+
 /**
  * 보여 주기만 하는 작은 알약 칩 (누르지 않는다). 태그("#해안도로")는 [text]에 #을 붙여 넘긴다.
  * [icon]이 있으면 글자 앞에 작은 아이콘.

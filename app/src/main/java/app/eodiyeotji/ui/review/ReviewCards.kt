@@ -3,6 +3,7 @@ package app.eodiyeotji.ui.review
 import app.eodiyeotji.ui.community.TogglePill
 import app.eodiyeotji.ui.community.ChipTone
 import app.eodiyeotji.ui.community.InfoChip
+import app.eodiyeotji.ui.community.FromRecordChip
 import app.eodiyeotji.ui.community.StopPhotoBox
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.aspectRatio
@@ -192,7 +193,8 @@ internal fun TripReviewCard(t: DriveCourse, onOpen: () -> Unit, onHeart: (() -> 
                 Text(p.body, style = EodiTheme.type.body, color = c.textPrimary, maxLines = CollapsedLines, overflow = TextOverflow.Ellipsis)
             }
             VisitLine(t.visit, extra = listOf(distanceText(p.distanceM), durationText(p.durationMs)), maxLines = 2)
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                FromRecordChip()
                 CourseCouponBadge(t.offers)
                 Spacer(Modifier.weight(1f))
                 if (onHeart != null) HeartButton(p.hearts, p.heartedByMe, onHeart, compact = true) else HeartCount(p.hearts, p.heartedByMe, Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
