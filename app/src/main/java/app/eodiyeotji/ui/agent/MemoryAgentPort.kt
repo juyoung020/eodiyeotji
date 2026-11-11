@@ -6,6 +6,7 @@ import app.eodiyeotji.agent.AgentBridge
 import app.eodiyeotji.agent.AgentNavAction
 import app.eodiyeotji.agent.AgentProposal
 import app.eodiyeotji.core.CourseRoute
+import app.eodiyeotji.core.StopFact
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -48,6 +49,8 @@ class MemoryAgentPort @Inject constructor(
 
     override suspend fun selectCandidate(episodeId: Long, context: AgentContext): CandidatePick? =
         bridge.selectCandidate(episodeId, context.isDriving, context.currentLocation)?.let { c -> CandidatePick(c.proposal?.let(::button), c.course, c.line) }
+
+    override suspend fun numberMapStops(geojson: String, stops: List<StopFact>): String = bridge.numberMapStops(geojson, stops)
 
     /** 제안을 기억해 두고 화면 버튼 모양으로. */
     private fun button(p: AgentProposal): AgentEvent.ActionProposal {

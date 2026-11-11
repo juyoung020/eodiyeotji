@@ -330,6 +330,49 @@ internal fun OtherDayRow(rec: RecommendationUi, rank: Int, today: LocalDate, onA
 }
 
 /**
+ * 앞서 주고받은 대화에 남는 작은 기억 카드: 고른 곳 사진 + 제목 + "1년 전 · 날짜 · 들른 곳 → …".
+ * 누를 수 없는 기록이다 (지금 보는 카드는 대화 맨 아래에 크게).
+ */
+@Composable
+internal fun PastMemoryRow(rec: RecommendationUi, today: LocalDate, modifier: Modifier = Modifier) {
+    val c = EodiTheme.colors
+    val facts = rec.hit.episode.facts
+    val place = rec.hit.bestStop ?: rec.stops.firstOrNull()
+    Surface(shape = RoundedCornerShape(20.dp), color = c.surface, border = BorderStroke(1.dp, c.outline), modifier = modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(12.dp)) {
+            StopPhotoBox(place?.name.orEmpty(), place?.address.orEmpty(), place?.lat ?: 0.0, place?.lon ?: 0.0, null, Modifier.size(84.dp), radius = 14.dp)
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    rec.hit.episode.title ?: rec.hit.dayTitle ?: facts.ruleLabel,
+                    style = EodiTheme.type.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = c.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    memoryDateLine(facts.day, today),
+                    style = EodiTheme.type.meta,
+                    color = c.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (rec.stops.isNotEmpty()) {
+                    Text(
+                        rec.stops.joinToString(" → ") { it.name },
+                        style = EodiTheme.type.meta,
+                        color = c.textTertiary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
  * 주행 중 기억 답 카드: 그날 첫 들른 곳 사진 한 장 + "1년 전" 도장 + 하루 제목. 버튼 · 목록 없이 한눈에 읽는 한 장.
  */
 @Composable

@@ -37,6 +37,7 @@ import app.eodiyeotji.core.rust.CourseRoute as RCourseRoute
 import app.eodiyeotji.core.rust.MemoryHit as RMemoryHit
 import app.eodiyeotji.core.rust.NavAction as RNavAction
 import app.eodiyeotji.core.rust.NavProposal as RNavProposal
+import app.eodiyeotji.core.rust.StopFact as RStopFact
 
 /**
  * 기억 에이전트 연결부 — 에이전트 자체(빠른 길·LLM 도구 루프·하루 라벨링)는 Rust `core-rs/src/agent`에 있고,
@@ -131,6 +132,16 @@ class AgentBridge @Inject constructor(
             .onFailure { Log.w(TAG, "후보 고르기 실패", it) }
             .getOrNull()
             ?.let { CandidateChoice(it.proposal?.toModel(), it.course?.toModel(), it.line) }
+    }
+
+    /**
+     * 후보 카드 지도의 핀 번호를 카드 사진 줄([stops]) 순서로 맞춘 GeoJSON (Rust `agent::stopmap`).
+     * 실패하면 받은 글 그대로.
+     */
+    suspend fun numberMapStops(geojson: String, stops: List<StopFact>): String = withContext(Dispatchers.Default) {
+        runCatching { agent.numberMapStops(geojson, stops.map { RStopFact(it.name, it.category, it.address, it.arriveMs, it.leaveMs, it.lat, it.lon, it.firstVisit) }) }
+            .onFailure { Log.w(TAG, "지도 번호 맞추기 실패", it) }
+            .getOrDefault(geojson)
     }
 
     /** 화면의 "아니오". */

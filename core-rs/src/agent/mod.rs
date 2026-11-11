@@ -45,6 +45,7 @@ pub mod label;
 pub mod llm;
 pub mod prompts;
 mod runner;
+pub mod stopmap;
 pub mod tools;
 pub mod words;
 
@@ -338,6 +339,11 @@ impl MemoryAgent {
     /// 화면 후보 칸에서 후보를 눌렀을 때 (말 없이): 그 후보로 안내 제안을 바꾼다. 앞 질문의 후보가 아니면 None.
     pub fn select_candidate(&self, episode_id: i64, context: AgentContext) -> Option<CandidateChoice> {
         self.select_candidate_inner(episode_id, &context)
+    }
+
+    /// 후보 카드 지도(하루 지도 GeoJSON)의 핀 번호를 카드 사진 줄 [stops] 순서로 맞춘 GeoJSON (`stopmap` 모듈).
+    pub fn number_map_stops(&self, geojson: String, stops: Vec<StopFact>) -> String {
+        stopmap::number_stops(&geojson, &stops)
     }
 
     /// 지금 대기 중인 제안.

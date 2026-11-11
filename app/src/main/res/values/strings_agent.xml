@@ -78,6 +78,8 @@
     <string name="agent_followup_other_days">다른 날도 보여줘</string>
     <string name="agent_followup_pick_candidate">%1$d번 보여줘</string>
     <string name="agent_followup_pick_course">%1$d번으로 안내해줘</string>
+    <!-- 후보 칸에서 후보를 눌렀을 때 대화에 남는 내 말풍선 -->
+    <string name="agent_pick_bubble">%1$d번 볼게요</string>
 
     <!-- 근처 추천 코스 카드 -->
     <string name="agent_courses_title">근처 인기 드라이브 길</string>

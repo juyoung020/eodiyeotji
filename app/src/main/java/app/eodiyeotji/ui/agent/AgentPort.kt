@@ -4,6 +4,7 @@ import app.eodiyeotji.agent.RecommendedCourse
 import app.eodiyeotji.core.CourseRoute
 import app.eodiyeotji.core.LatLon
 import app.eodiyeotji.core.MemoryHit
+import app.eodiyeotji.core.StopFact
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -23,6 +24,9 @@ interface AgentPort {
 
     /** 후보 칸에서 후보를 골랐다 (말 없이): 그 후보로 갈 안내 버튼 · 코스 · 답 한 줄. 고를 수 없으면 null. */
     suspend fun selectCandidate(episodeId: Long, context: AgentContext): CandidatePick? = null
+
+    /** 후보 카드 지도(하루 지도 GeoJSON)의 핀 번호를 카드 사진 줄 [stops] 순서(1부터)로 맞춘다. 기본은 그대로. */
+    suspend fun numberMapStops(geojson: String, stops: List<StopFact>): String = geojson
 }
 
 /**
