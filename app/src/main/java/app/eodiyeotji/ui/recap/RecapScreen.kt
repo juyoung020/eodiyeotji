@@ -219,10 +219,11 @@ private fun MonthBody(recap: MonthRecap, onOpenDay: ((String) -> Unit)?) {
                 recap.vsPrevDistanceM >= 0 -> stringResource(R.string.recap_compare_more, km)
                 else -> stringResource(R.string.recap_compare_less, km)
             }
-            val outings = when {
-                recap.vsPrevOutings > 0 -> stringResource(R.string.recap_compare_outings_more, recap.vsPrevOutings)
-                recap.vsPrevOutings < 0 -> stringResource(R.string.recap_compare_outings_less, -recap.vsPrevOutings)
-                else -> null
+            // 위 칸(나들이 + 여행)과 같은 셈의 두 값을 그대로 적는다 ("지난달 1번 → 이번 달 2번")
+            val outings = if (recap.outingCount != recap.prevOutingCount) {
+                stringResource(R.string.recap_compare_outings, recap.prevOutingCount, recap.outingCount)
+            } else {
+                null
             }
             Text(listOfNotNull(distance, outings).joinToString(" · "), style = EodiTheme.type.body, color = c.textSecondary)
         }
@@ -239,7 +240,8 @@ private fun MonthBody(recap: MonthRecap, onOpenDay: ((String) -> Unit)?) {
 fun YearRecapCard(recap: YearRecap, modifier: Modifier = Modifier, onOpenDay: ((String) -> Unit)? = null) {
     val c = EodiTheme.colors
     RecapCardFrame(modifier) {
-        Text(stringResource(R.string.recap_title_year, recap.year), style = EodiTheme.type.eyebrow, color = c.memoryInk)
+        // 기간을 밝힌다 ("2026년 1월 1일 ~ 11월 11일") — 기억 지도(최근 1년)와 숫자가 다른 이유
+        Text(recap.periodLabel, style = EodiTheme.type.eyebrow, color = c.memoryInk)
         RecapHeadline(distanceText(recap.totals.distanceM))
         if (recap.recordDays == 0) {
             Text(stringResource(R.string.recap_empty), style = EodiTheme.type.body, color = c.textTertiary)

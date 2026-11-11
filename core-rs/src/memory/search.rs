@@ -48,6 +48,9 @@ use super::{EpisodeKind, MemoryHit, MemoryQuery, StopFact};
 use crate::store::{split_names, CoreError};
 
 const CANDIDATES: u32 = 300;
+/// 결과의 하루 제목 · 태그 (`day_memory d`). LLM 제목은 LLM이 필요한 날에만 (`episode::LLM_TITLE`과 같은 규칙).
+const DAY_TITLE: &str = "CASE WHEN d.needs_llm = 1 THEN d.title END, d.rule_title";
+const DAY_TAGS: &str = "CASE WHEN d.title IS NULL OR d.needs_llm = 0 THEN '' ELSE d.tags END";
 const YEAR_MS: f64 = 365.0 * 86_400_000.0;
 
 /// 기본 동의어 묶음. 낱말이 묶음의 한 말과 같으면 묶음 전체로 넓힌다.
@@ -239,8 +242,8 @@ pub(crate) fn search(conn: &Connection, q: &MemoryQuery) -> Result<Vec<MemoryHit
     let rows: Vec<_> = match &expr {
         Some(m) => {
             let sql = format!(
-                "SELECT {EP_COLS}, -bm25(memory_fts, 2.0, 2.0, 1.5, 0.2), coalesce(d.title, d.rule_title),
-                        CASE WHEN d.title IS NULL THEN '' ELSE d.tags END
+                "SELECT {EP_COLS}, -bm25(memory_fts, 2.0, 2.0, 1.5, 0.2), coalesce({DAY_TITLE}),
+                        {DAY_TAGS}
                  FROM memory_fts JOIN episode e ON e.id = memory_fts.rowid LEFT JOIN day_memory d ON d.day = e.day
                  WHERE memory_fts MATCH ?1 AND e.end_ms >= ?2 AND e.start_ms <= ?3{kinds}
                  ORDER BY bm25(memory_fts, 2.0, 2.0, 1.5, 0.2) LIMIT {CANDIDATES}"
@@ -253,7 +256,7 @@ pub(crate) fn search(conn: &Connection, q: &MemoryQuery) -> Result<Vec<MemoryHit
         }
         None => {
             let sql = format!(
-                "SELECT {EP_COLS}, 0.0, coalesce(d.title, d.rule_title), CASE WHEN d.title IS NULL THEN '' ELSE d.tags END
+                "SELECT {EP_COLS}, 0.0, coalesce({DAY_TITLE}), {DAY_TAGS}
                  FROM episode e LEFT JOIN day_memory d ON d.day = e.day
                  WHERE e.end_ms >= ?1 AND e.start_ms <= ?2{kinds}
                  ORDER BY e.start_ms DESC LIMIT {CANDIDATES}"

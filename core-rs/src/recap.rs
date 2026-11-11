@@ -40,8 +40,12 @@
 //! - 자주 간 곳: 모든 에피소드의 들른 곳을 다녀간 날 수로 센다 (집 · 회사 빼고). 같으면 머문 시간 합, 이름 순.
 //! - 지역: 나들이 · 여행 에피소드의 지역(예: "강원 강릉시")을 다녀간 날 수로 센다.
 //! - 최고의 날: 나들이 · 여행 날 중 점수(여행 3 · 나들이 2 + 처음 간 곳 0.5 + 들른 곳 0.3 + 100km마다 1(최대 2) +
-//!   AI 제목 0.5)가 가장 높은 날, 같으면 최근 날. 제목은 하루 제목(AI, 없으면 규칙 제목), 사진은 가장 오래 머문 곳.
-//! - 지난달과 비교: 이번 달이 진행 중이면 지난달도 같은 날짜(1일 ~ 오늘의 일)까지만 비교한다.
+//!   들른 곳에 머문 1시간마다 0.25(최대 1.5) + AI 제목 0.5)가 가장 높은 날, 같으면 최근 날. 운전이 아주 짧은 날은
+//!   기억 모듈이 나들이 · 여행으로 치지 않으므로(`episode::is_tiny_drive`) 후보가 아니다.
+//!   제목은 하루 제목(AI, 없으면 규칙 제목), 사진은 가장 오래 머문 곳.
+//! - 지난달과 비교: 이번 달이 진행 중이면 지난달도 같은 날짜(1일 ~ 오늘의 일)까지만 비교한다. 나들이 · 여행 횟수는
+//!   위 칸과 같은 셈(나들이 날 + 여행 묶음)으로 이번 달 · 지난달 값을 둘 다 준다 (문장이 칸 숫자와 어긋나지 않게).
+//! - 기간 글(`period_label`): 올해 결산 "2026년 1월 1일 ~ 11월 11일"(진행 중) · "2025년 1월 ~ 12월".
 //! - 올해: 위 합계 + 계절(봄 3~5월 · 여름 6~8월 · 가을 9~11월 · 겨울 1 · 2 · 12월)별 거리 · 나들이 · 여행 날 수 · 최고의 날,
 //!   가장 긴 여행(이어진 여행 날들의 거리 합이 가장 큰 것), 달마다 거리(막대 그래프용 12칸).
 
@@ -74,6 +78,9 @@ const SAME_SPOT_M: f64 = 200.0;
 const JUST_NOW_MS: i64 = 10 * 60_000;
 /// "N년 전 오늘"을 찾는 가장 먼 해.
 const MAX_YEARS_BACK: i64 = 10;
+/// 최고의 날 점수: 들른 곳(집 · 회사 빼고)에 머문 시간 1시간마다 이만큼, 최대 [DWELL_SCORE_MAX].
+const DWELL_SCORE_PER_H: f64 = 0.25;
+const DWELL_SCORE_MAX: f64 = 1.5;
 
 const KEY_DAY: &str = "recall_day";
 const KEY_COUNT: &str = "recall_day_count";
@@ -207,6 +214,10 @@ pub struct MonthRecap {
     pub vs_prev_distance_m: f64,
     pub vs_prev_drive_millis: i64,
     pub vs_prev_outings: i32,
+    /// 나들이 · 여행 횟수 = `totals.outings + totals.trips` (위 칸과 같은 셈). 비교 문장은 이 둘로 쓴다
+    pub outing_count: u32,
+    /// 지난달(진행 중이면 같은 날짜까지) 나들이 · 여행 횟수 (같은 셈)
+    pub prev_outing_count: u32,
     /// 지난달에 기록이 있었나 (없으면 비교 줄을 숨긴다)
     pub has_prev_records: bool,
     /// 앞 · 뒤 달로 넘길 수 있나 (기록이 시작된 달 ~ 이번 달)
@@ -230,6 +241,8 @@ pub struct SeasonRecap {
 pub struct YearRecap {
     pub year: i32,
     pub in_progress: bool,
+    /// 화면에 쓸 기간: "2026년 1월 1일 ~ 11월 11일" (진행 중이면 오늘까지) · "2025년 1월 ~ 12월"
+    pub period_label: String,
     pub record_days: u32,
     pub totals: RecapTotals,
     /// 자주 간 곳 상위 5곳
@@ -727,7 +740,14 @@ impl Span {
         let stops: Vec<&StopFact> = eps.iter().flat_map(|e| e.facts.stops.iter()).filter(|s| notable(s, anchors)).collect();
         let first = stops.iter().filter(|s| s.first_visit).count() as f64;
         let km: f64 = eps.iter().map(|e| e.facts.distance_m).sum::<f64>() / 1000.0;
-        Some(kind + 0.5 * first + 0.3 * stops.len() as f64 + (km / 100.0).min(2.0) + if has_ai_title { 0.5 } else { 0.0 })
+        let dwell_h = stops.iter().map(|s| (s.leave_ms - s.arrive_ms).max(0)).sum::<i64>() as f64 / 3_600_000.0;
+        Some(
+            kind + 0.5 * first
+                + 0.3 * stops.len() as f64
+                + (km / 100.0).min(2.0)
+                + (DWELL_SCORE_PER_H * dwell_h).min(DWELL_SCORE_MAX)
+                + if has_ai_title { 0.5 } else { 0.0 },
+        )
     }
 
     /// 날들(이어진 여행 등)을 요약의 날 하나로.
@@ -769,7 +789,7 @@ impl Span {
 
 fn has_ai_title(conn: &Connection, d: i64) -> rusqlite::Result<bool> {
     Ok(conn
-        .prepare_cached("SELECT title IS NOT NULL FROM day_memory WHERE day = ?1")?
+        .prepare_cached("SELECT needs_llm = 1 AND title IS NOT NULL FROM day_memory WHERE day = ?1")?
         .query_row([d], |r| r.get::<_, bool>(0))
         .optional()?
         .unwrap_or(false))
@@ -821,11 +841,21 @@ fn month_recap(store: &EodiStore, conn: &Connection, y: i64, m: u32, now_ms: i64
         vs_prev_distance_m: cur.distance_m - prev.distance_m,
         vs_prev_drive_millis: cur.drive_millis - prev.drive_millis,
         vs_prev_outings: (cur.outings + cur.trips) as i32 - (prev.outings + prev.trips) as i32,
+        outing_count: cur.outings + cur.trips,
+        prev_outing_count: prev.outings + prev.trips,
         has_prev_records: span.record_days(plo, prev_hi) > 0,
         has_prev: first.is_some_and(|f| f < lo),
         has_next: hi < today,
         totals: cur,
     })
+}
+
+/// 올해 결산 기간 글: 진행 중이면 "2026년 1월 1일 ~ 11월 11일", 끝난 해면 "2025년 1월 ~ 12월".
+pub(crate) fn year_period_label(y: i64, today: Option<i64>) -> String {
+    match today.map(civil_from_days) {
+        Some((_, m, d)) => format!("{y}년 1월 1일 ~ {m}월 {d}일"),
+        None => format!("{y}년 1월 ~ 12월"),
+    }
 }
 
 fn year_recap(store: &EodiStore, conn: &Connection, y: i64, now_ms: i64) -> Result<YearRecap, CoreError> {
@@ -876,9 +906,11 @@ fn year_recap(store: &EodiStore, conn: &Connection, y: i64, now_ms: i64) -> Resu
         })
         .collect();
     let first = first_record_day(conn)?;
+    let in_progress = (lo..=hi).contains(&today);
     Ok(YearRecap {
         year: y as i32,
-        in_progress: (lo..=hi).contains(&today),
+        in_progress,
+        period_label: year_period_label(y, in_progress.then_some(today)),
         record_days: span.record_days(lo, hi),
         totals: span.totals(lo, hi, &anchors),
         top_places: span.top_places(lo, hi, &anchors, 5),

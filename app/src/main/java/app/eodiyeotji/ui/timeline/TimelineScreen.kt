@@ -1051,7 +1051,7 @@ private fun EntryList(
             val rail = Rail(first = i == 0, last = i == last)
             val onMore = edits?.let { ed -> { ed.onEntry(e) } }
             when (e) {
-                is DayEntry.Trip -> TripRow(e.trip, rail, selected, onClick = { onClick(key) }, onMore = onMore)
+                is DayEntry.Trip -> TripRow(e.trip, e.repeat, rail, selected, onClick = { onClick(key) }, onMore = onMore)
                 is DayEntry.Stay -> StayRow(e.stay, rail, selected, onClick = { onClick(key) }, onMore = onMore, offers = offers[key].orEmpty())
             }
         }
@@ -1061,11 +1061,15 @@ private fun EntryList(
 /** 세로 시간선에서 이 행의 위치 (첫 행은 위 선, 마지막 행은 아래 선을 그리지 않는다). */
 private data class Rail(val first: Boolean, val last: Boolean)
 
-/** 주행: 제목은 "출발 → 도착" 이름, 둘째 줄은 거리 · 시간. 이름을 하나도 모르면 제목이 거리 · 시간이 된다. */
+/**
+ * 주행: 제목은 "출발 → 도착" 이름, 둘째 줄은 거리 · 시간. 이름을 하나도 모르면 제목이 거리 · 시간이 된다.
+ * [repeat] ≥ 2면 같은 길을 이어 달린 주행들을 Rust가 이 한 줄로 묶은 것 → 둘째 줄 끝에 "같은 길 3번".
+ */
 @Composable
-private fun TripRow(trip: TripSummary, rail: Rail, selected: Boolean, onClick: () -> Unit, onMore: (() -> Unit)? = null) {
+private fun TripRow(trip: TripSummary, repeat: Int, rail: Rail, selected: Boolean, onClick: () -> Unit, onMore: (() -> Unit)? = null) {
     val c = EodiTheme.colors
     val places = tripPlacesText(trip)
+    val repeatText = if (repeat > 1) " · " + stringResource(R.string.timeline_trip_repeat, repeat) else ""
     EntryRow(
         kind = EntryKind.Trip,
         rail = rail,
@@ -1076,8 +1080,8 @@ private fun TripRow(trip: TripSummary, rail: Rail, selected: Boolean, onClick: (
             R.string.timeline_trip_line,
             distanceText(trip.distanceM),
             durationText(trip.endMs - trip.startMs),
-        ),
-        sub = if (places != null) tripStatsText(trip) else stringResource(R.string.place_pending),
+        ) + repeatText,
+        sub = if (places != null) tripStatsText(trip) + repeatText else stringResource(R.string.place_pending),
         subPending = places == null,
         navi = trip.hasNaviPlace,
         here = false,

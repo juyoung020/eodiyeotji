@@ -27,6 +27,8 @@ data class MemoryMap(
     /** 360일 이상이면 해 수, 아니면 0 */
     val spanYears: Int,
     val spanMonths: Int,
+    /** 조회 기간 글 "최근 1년 (2025.11 ~ 2026.11)" (Rust). 합계는 이 기간의 값이다 */
+    val periodLabel: String,
 )
 
 /** 기억 지도 ([from] ~ [to], 양 끝 포함). 기본 = 오늘까지 1년. */
@@ -46,5 +48,6 @@ suspend fun EodiCore.memoryMap(
         driveDays = m.driveDays.toInt(),
         spanYears = m.spanYears.toInt(),
         spanMonths = m.spanMonths.toInt(),
+        periodLabel = m.periodLabel,
     )
 }

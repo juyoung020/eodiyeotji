@@ -4,7 +4,8 @@
 
     <!-- 하루 상세 통계 칸: 위는 값, 아래는 이름 -->
     <string name="stat_trips_label">주행</string>
-    <string name="stat_stays_label">머문 곳</string>
+    <!-- 들른 곳 = 하루 출발 · 도착(대개 집)을 뺀 머문 곳 (Rust visit_count, 그날로 돌아가기와 같은 값) -->
+    <string name="stat_stays_label">들른 곳</string>
     <string name="stat_distance_label">거리</string>
     <string name="stat_drive_label">운전 시간</string>
     <string name="stat_people_value">%1$d명</string>

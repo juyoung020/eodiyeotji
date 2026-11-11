@@ -21,6 +21,13 @@ pub(crate) const OVERNIGHT_AWAY_M: f64 = 20_000.0;
 /// 이보다 짧게(거리·시간 둘 다) 움직인 나들이·여행 묶음은 "여행"·"나들이"라 부르지 않고 "경포해변 들름"처럼 사실만 쓴다.
 pub(crate) const SHORT_MOVE_M: f64 = 5_000.0;
 pub(crate) const SHORT_MOVE_MS: i64 = 20 * 60_000;
+/// 나들이 · 여행감이라도 운전 거리가 이보다 짧거나(m) 운전 시간(주행 시간 합)이 이보다 짧고(ms), [LONG_VISIT_MS] 넘게
+/// 머문 곳이 없으면 볼일로 보고 "경포해변 들름"처럼 사실만 쓴다 (에뮬레이터 위치 재생 · 1분짜리 이동이 "단풍 구경" ·
+/// "여행"이 되지 않게). 볼일이라 이달의 하루 · 나들이 · 여행 횟수에도 들지 않는다.
+pub(crate) const TINY_DRIVE_M: f64 = 2_000.0;
+pub(crate) const TINY_DRIVE_MS: i64 = 10 * 60_000;
+/// 이만큼(ms) 넘게 머문 곳이 있으면 운전이 짧아도 나들이 · 여행으로 본다.
+pub(crate) const LONG_VISIT_MS: i64 = 30 * 60_000;
 /// 머문 날이 이 수 이상인 장소는 자주 가는 곳 (미만이면 드문 곳).
 pub(crate) const FREQUENT_DAYS: i64 = 3;
 /// 마지막 위치 점에서 이만큼(ms) 지나면 그날 기록이 끝난 것으로 본다 (라벨링 대기열).
@@ -482,6 +489,8 @@ struct Built {
     stop_places: Vec<Option<i64>>,
     /// 나들이·여행이거나 처음 들른 곳이 있음 → 라벨링이 필요
     notable: bool,
+    /// 운전이 아주 짧아 볼일이 된 묶음 ("경포해변 들름") → 출퇴근이 없는 날의 하루 제목이 된다
+    tiny: bool,
 }
 
 /// 하루를 다시 만든다: 에피소드 표·하루 기억·검색 색인. 기록이 없으면 지운다.
@@ -504,7 +513,9 @@ fn rebuild_day(tx: &Connection, ctx: &Ctx, d: i64, rec: Option<&DayRec>) -> Resu
         let by_ord = || {
             old.iter().find(|o| o.1 == ord as i64 && o.2 == kind_code(b.facts.kind)).map(|o| o.3.clone())
         };
-        labels.push(by_id.filter(|l| l.0.is_some()).or_else(by_ord).unwrap_or((None, String::new())));
+        // 이제 LLM이 필요 없는 에피소드(나들이 · 여행이 아니게 된 짧은 이동 등)는 옛 AI 제목을 달지 않는다
+        let label = if b.notable { by_id.filter(|l| l.0.is_some()).or_else(by_ord) } else { None };
+        labels.push(label.unwrap_or((None, String::new())));
     }
     {
         let mut del_fts = tx.prepare_cached("DELETE FROM memory_fts WHERE rowid = ?1")?;
@@ -575,6 +586,10 @@ fn day_rule_title(built: &[Built]) -> Option<String> {
         return Some(b.facts.rule_label.clone());
     }
     let commute = built.iter().any(|b| matches!(b.facts.kind, EpisodeKind::CommuteToWork | EpisodeKind::CommuteHome));
+    // 멀리서 잠깐 움직인 날: "동네 볼일"이 아니라 그 묶음 이름 그대로 ("경포해변 들름")
+    if let Some(b) = built.iter().filter(|_| !commute).find(|b| b.tiny) {
+        return Some(b.facts.rule_label.clone());
+    }
     let mut names: Vec<&str> = Vec::new();
     for s in built.iter().flat_map(|b| &b.facts.stops) {
         if !s.name.is_empty() && !names.contains(&s.name.as_str()) && names.len() < 2 {
@@ -671,13 +686,22 @@ fn build_episodes(ctx: &Ctx, d: i64, rec: &DayRec) -> Vec<Built> {
             && from_home(last.end) >= OVERNIGHT_AWAY_M
             && rec.stays.iter().any(|s| s.arrive_ms == t1 && ctx.store.local_day(s.leave_ms) > d);
         let outside: Vec<bool> = stays.iter().map(|s| a.outside(s.center)).collect();
+        let drive_m: f64 = trips[i0..=i1].iter().map(|t| t.distance_m).sum();
+        let drive_ms: i64 = trips[i0..=i1].iter().map(|t| t.end_ms - t.start_ms).sum();
+        let outing = rare.iter().any(|&r| r) || outside.iter().any(|&o| o) || a.outside(last.end);
+        // 나들이 · 여행감이지만 운전이 아주 짧은 묶음 → 볼일로 보고 이름은 "○○ 들름"
+        let office_loop = from_a == Some(Anchor::Office) && to_a == Some(Anchor::Office);
+        // 한 곳에 오래 머물렀으면(동네 카페 1시간 반 등) 운전이 짧아도 나들이다
+        let long_visit = stops.iter().any(|s| s.leave_ms - s.arrive_ms >= LONG_VISIT_MS);
+        let tiny = !office_loop && !long_visit && (far || overnight || outing) && is_tiny_drive(drive_m, drive_ms);
         let kind = match (from_a, to_a) {
             (Some(Anchor::Home), Some(Anchor::Office)) => EpisodeKind::CommuteToWork,
             (Some(Anchor::Office), Some(Anchor::Home)) => EpisodeKind::CommuteHome,
             // 회사에서 나가 회사로 돌아온 이동은 멀어도 업무 외근 (출장 관리 `biztrip.rs`가 따로 묶는다, 여행 · 나들이가 아니다)
             (Some(Anchor::Office), Some(Anchor::Office)) => EpisodeKind::Errand,
+            _ if tiny => EpisodeKind::Errand,
             _ if far || overnight => EpisodeKind::Trip,
-            _ if rare.iter().any(|&r| r) || outside.iter().any(|&o| o) || a.outside(last.end) => EpisodeKind::Outing,
+            _ if outing => EpisodeKind::Outing,
             _ => EpisodeKind::Errand,
         };
 
@@ -718,6 +742,7 @@ fn build_episodes(ctx: &Ctx, d: i64, rec: &DayRec) -> Vec<Built> {
         let rule_label = match kind {
             EpisodeKind::CommuteToWork => with_stop("출근길", first_named),
             EpisodeKind::CommuteHome => with_stop("퇴근길", first_named),
+            EpisodeKind::Errand if tiny => short_move_label(main_stop.map(|s| s.name.as_str()), &short_city(&region)),
             EpisodeKind::Errand => {
                 let near_home = from_a == Some(Anchor::Home) || to_a == Some(Anchor::Home);
                 let what = main_stop.map(|s| if s.name.is_empty() { s.category.as_str() } else { s.name.as_str() });
@@ -757,9 +782,15 @@ fn build_episodes(ctx: &Ctx, d: i64, rec: &DayRec) -> Vec<Built> {
             to: last.end,
             stop_places: stays.iter().map(|s| s.place).collect(),
             notable,
+            tiny,
         });
     }
     out
+}
+
+/// 운전이 아주 짧은 묶음인지: 운전 거리 [TINY_DRIVE_M] 미만 또는 운전 시간 합 [TINY_DRIVE_MS] 미만.
+pub(crate) fn is_tiny_drive(drive_m: f64, drive_ms: i64) -> bool {
+    drive_m < TINY_DRIVE_M || drive_ms < TINY_DRIVE_MS
 }
 
 /// 거리·시간이 둘 다 짧은 이동인지 ([SHORT_MOVE_M], [SHORT_MOVE_MS]).
@@ -993,12 +1024,16 @@ pub(crate) fn course_stops(conn: &Connection, id: i64) -> Result<Option<Vec<Stop
     }))
 }
 
-/// 하루 제목·태그 (`DaySummary.title`·`tags`): 사용자가 고친 제목(`day_user_title`)이 있으면 그것, 다음은 LLM 제목이 있으면 그것과 LLM 태그, 없으면 규칙 제목, 없으면 None.
+/// 화면에 쓸 LLM 하루 제목 (`day_memory` 표 SQL 식). LLM이 필요한 날(`needs_llm`)에만 쓴다 — 기록이 바뀌어 이제 출퇴근 ·
+/// 짧은 이동뿐인 날에 남은 옛 AI 제목("단풍 구경")은 지우지 않고 규칙 제목 뒤로 숨긴다.
+pub(crate) const LLM_TITLE: &str = "CASE WHEN needs_llm = 1 THEN title END";
+
+/// 하루 제목·태그 (`DaySummary.title`·`tags`): 사용자가 고친 제목(`day_user_title`)이 있으면 그것, 다음은 LLM 제목([LLM_TITLE])이 있으면 그것과 LLM 태그, 없으면 규칙 제목, 없으면 None.
 pub(crate) fn day_title(conn: &Connection, d: i64) -> Result<(Option<String>, Vec<String>), CoreError> {
     let user: Option<String> =
         conn.prepare_cached("SELECT title FROM day_user_title WHERE day = ?1")?.query_row([d], |r| r.get(0)).optional()?;
     let row: Option<(Option<String>, Option<String>, String)> = conn
-        .prepare_cached("SELECT title, rule_title, tags FROM day_memory WHERE day = ?1")?
+        .prepare_cached(&format!("SELECT {LLM_TITLE}, rule_title, tags FROM day_memory WHERE day = ?1"))?
         .query_row([d], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
         .optional()?;
     if let Some(u) = user {
@@ -1015,7 +1050,11 @@ pub(crate) fn day_title(conn: &Connection, d: i64) -> Result<(Option<String>, Ve
 /// 하루의 검색 색인을 다시 쓴다 (에피소드마다 한 줄).
 pub(crate) fn reindex_day(conn: &Connection, d: i64) -> Result<(), CoreError> {
     let (title, summary, tags): (String, String, String) = conn
-        .prepare_cached("SELECT coalesce((SELECT title FROM day_user_title WHERE day = ?1), title, rule_title, ''), summary, tags FROM day_memory WHERE day = ?1")?
+        .prepare_cached(&format!(
+            "SELECT coalesce((SELECT title FROM day_user_title WHERE day = ?1), {LLM_TITLE}, rule_title, ''),
+                    CASE WHEN needs_llm = 1 THEN summary ELSE '' END, CASE WHEN needs_llm = 1 THEN tags ELSE '' END
+             FROM day_memory WHERE day = ?1"
+        ))?
         .query_row([d], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
         .optional()?
         .unwrap_or_default();

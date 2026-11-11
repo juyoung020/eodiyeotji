@@ -14,7 +14,10 @@
     <string name="biz_hint">평일 낮에 집 · 회사에서 15km 넘게 다녀온 기록을 자동으로 출장으로 묶어요. 거리는 계기판, 경비는 쓴 배터리 · 연료 × 충전 · 주유 단가로 어림한 값이에요.</string>
     <string name="biz_count">%1$d건</string>
     <string name="biz_count_label">출장</string>
-    <string name="biz_km_label">주행 거리</string>
+    <!-- 달 합계 칸: 값은 출장 줄과 같은 소수 한 자리, 이름에 거리 기준(계기판 / 계기판 · GPS 섞임) -->
+    <string name="biz_km_value">%1$.1fkm</string>
+    <string name="biz_km_label">주행 거리 · 계기판</string>
+    <string name="biz_km_label_mixed">주행 거리 · 계기판 · GPS</string>
     <string name="biz_time_label">출장에 쓴 시간</string>
     <string name="biz_cost_label">경비 어림</string>
     <string name="biz_date">%1$d월 %2$d일 (%3$s)</string>

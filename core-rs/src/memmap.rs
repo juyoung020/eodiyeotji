@@ -22,6 +22,7 @@
 //! # 합계
 //! - 거리 · 달린 날: 날짜별 요약(`day_summary`)의 합 (올해 결산과 같은 숫자). 주행 수: 주행 표.
 //! - 기간 길이: 첫 기록 날 ~ 마지막 기록 날. 360일 이상이면 `span_years`(반올림), 아니면 `span_months`만 쓴다.
+//! - 기간 글(`period_label`): 조회 기간 그대로 "최근 1년 (2025.11 ~ 2026.11)" — 올해 결산(1월 1일부터)과 숫자가 다른 이유를 화면에 밝힌다.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
@@ -77,6 +78,20 @@ pub struct MemoryMap {
     pub point_count: u32,
     /// 경로를 줄인 허용 오차 (m)
     pub tolerance_m: f64,
+    /// 화면에 쓸 기간 ([period_label]): "최근 1년 (2025.11 ~ 2026.11)". 합계(거리 · 달린 날 · 길)는 이 기간의 값이다
+    pub period_label: String,
+}
+
+/// 기억 지도 기간 글. 1년(양 끝 포함 365 · 366일)이면 "최근 1년 (2025.11 ~ 2026.11)",
+/// 아니면 "2025.11.12 ~ 2026.01.03". 올해 결산("2026년 …")과 기간이 다르다는 것을 화면에 밝히려고 쓴다.
+pub(crate) fn period_label(from: i64, to: i64) -> String {
+    let (fy, fm, fd) = civil_from_days(from);
+    let (ty, tm, td) = civil_from_days(to);
+    if (365..=366).contains(&(to - from + 1)) {
+        format!("최근 1년 ({fy}.{fm:02} ~ {ty}.{tm:02})")
+    } else {
+        format!("{fy}.{fm:02}.{fd:02} ~ {ty}.{tm:02}.{td:02}")
+    }
 }
 
 #[uniffi::export]
@@ -119,7 +134,7 @@ impl EodiStore {
             |r| Ok((r.get(0)?, r.get(1)?)),
         )?;
         drop(conn);
-        Ok(build(&trips, distance_m, drive_days as u32))
+        Ok(MemoryMap { period_label: period_label(from, to), ..build(&trips, distance_m, drive_days as u32) })
     }
 }
 
@@ -147,6 +162,7 @@ pub(crate) fn build(trips: &[(i64, Point, Vec<Point>)], distance_m: f64, drive_d
             span_months: 0,
             point_count: 0,
             tolerance_m: BASE_TOLERANCE_M,
+            period_label: String::new(),
         };
     };
     let m0 = month_key(first.0);
@@ -273,6 +289,7 @@ pub(crate) fn build(trips: &[(i64, Point, Vec<Point>)], distance_m: f64, drive_d
         span_months: ((span_days as f64 / 30.44).ceil() as u32).max(1),
         point_count: point_count as u32,
         tolerance_m: tol,
+        period_label: String::new(),
     }
 }
 
@@ -308,6 +325,16 @@ mod tests {
 
     fn line(n: usize, lat0: f64) -> Vec<Point> {
         (0..n).map(|i| Point { lat: lat0 + i as f64 * 1e-4, lon: 127.0 + (i as f64 * 0.05).sin() * 0.01 }).collect()
+    }
+
+    /// 기억 지도 기간 글: 1년이면 "최근 1년", 아니면 날짜 그대로. 올해 결산 기간 글과 겹쳐 읽혀도 헷갈리지 않게 (UX 리뷰 3번).
+    #[test]
+    fn period_label_names_the_window() {
+        let to = days_from_civil(2026, 11, 11);
+        assert_eq!(period_label(days_from_civil(2025, 11, 12), to), "최근 1년 (2025.11 ~ 2026.11)");
+        assert_eq!(period_label(days_from_civil(2026, 9, 1), to), "2026.09.01 ~ 2026.11.11");
+        assert_eq!(crate::recap::year_period_label(2026, Some(to)), "2026년 1월 1일 ~ 11월 11일");
+        assert_eq!(crate::recap::year_period_label(2025, None), "2025년 1월 ~ 12월");
     }
 
     #[test]
