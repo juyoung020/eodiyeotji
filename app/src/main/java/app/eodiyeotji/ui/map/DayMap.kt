@@ -200,38 +200,45 @@ private fun DayMapContent(
     val marks by produceState<MapMarks?>(initialValue = null, data) {
         value = data?.let { d -> withContext(Dispatchers.Default) { parseMapMarks(d.geojson) } }
     }
+    // 받은 사진은 핀(키 + 내 사진 주소)별로 기억한다: 핀 목록이 바뀌어도(다른 날, 내 사진이 뒤늦게 붙음) 그대로인 핀의 사진은 다시 받지 않고,
+    // 바뀐 핀의 예전 사진(다른 날 · 장소 사진)은 버린다. 예전에는 "새로 받은 수 > 이미 가진 수"일 때만 바꿔서, 핀 목록이 바뀌면
+    // 앞 목록의 사진이 남아 새 키에는 사진이 들어가지 않고 번호 칸만 남았다.
+    val photoCache = remember { java.util.concurrent.ConcurrentHashMap<MapPhotoPin, Bitmap>() }
     val stayPhotos by produceState<Map<String, Bitmap>>(initialValue = emptyMap(), photoPins) {
-        if (photoPins.isEmpty()) {
-            value = emptyMap()
-            return@produceState
-        }
+        val pins = photoPins.distinctBy { it.key }
+        photoCache.keys.retainAll(pins.toSet())
+        val got = java.util.concurrent.ConcurrentHashMap<String, Bitmap>()
+        photoCache.forEach { (pin, b) -> got[pin.key] = b }
+        value = HashMap(got)
+        if (pins.isEmpty()) return@produceState
         val repo = EntryPointAccessors.fromApplication(context.applicationContext, MapPhotoEntryPoint::class.java).photos()
         // 사진은 오는 대로 하나씩 채운다 (모두 기다리면 가장 느린 한 장 때문에 카드 사진이 늦게 뜬다).
         // 연달아 오면 카드 그림을 매번 다시 만들지 않게 잠깐([PHOTO_BATCH_MS]) 모아서 내보낸다.
-        val got = java.util.concurrent.ConcurrentHashMap<String, Bitmap>()
         val flush = kotlinx.coroutines.flow.MutableStateFlow(0)
         val emitter = launch {
             flush.collect {
-                if (got.size > value.size) value = HashMap(got)
+                if (got.size != value.size) value = HashMap(got)
                 delay(PHOTO_BATCH_MS)
             }
         }
+        val byKey = pins.associateBy { it.key }
         val load = suspend {
             withContext(Dispatchers.Default) {
-                loadStayPhotos(context.applicationContext, repo, photoPins.filter { !got.containsKey(it.key) }, density) { k, b ->
+                loadStayPhotos(context.applicationContext, repo, pins.filter { !got.containsKey(it.key) }, density) { k, b ->
                     got[k] = b
+                    byKey[k]?.let { photoCache[it] = b }
                     flush.value++
                 }
             }
         }
         load()
         // 앱을 막 켠 때처럼 사진 몇 장이 잠깐 안 받아지면 숫자 칸으로 남는다 → 빠진 게 있으면 잠시 뒤 한 번 더 (받은 건 캐시라 바로)
-        if (got.size < photoPins.size) {
+        if (got.size < pins.size) {
             delay(PHOTO_RETRY_MS)
             load()
         }
         emitter.cancel()
-        if (got.size > value.size) value = HashMap(got)
+        value = HashMap(got)
     }
     LaunchedEffect(controller, marks, stayPhotos, palette) {
         val m = marks

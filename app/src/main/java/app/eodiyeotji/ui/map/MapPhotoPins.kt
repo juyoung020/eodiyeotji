@@ -25,7 +25,7 @@ data class MapPhotoPin(
 )
 
 /**
- * 정차한 곳마다 대표 사진(내 사진이 있으면 그것, 없으면 구글 Places 첫 사진)을 받아 온다 (키 → 사진). 사진이 없는 곳은 빠진다.
+ * 정차한 곳마다 대표 사진(내 사진이 있으면 그것, 없거나 못 읽으면 구글 Places 첫 사진)을 받아 온다 (키 → 사진). 사진이 없는 곳은 빠진다.
  * 같은 곳은 기기에 저장된 결과·이미지 캐시를 쓴다. 카드 그림은 [buildMarkerIcons]가 이 사진으로 만든다.
  */
 internal suspend fun loadStayPhotos(
@@ -39,26 +39,34 @@ internal suspend fun loadStayPhotos(
     val px = (PHOTO_DECODE_DP * density).roundToInt()
     pins.map { pin ->
         async {
-            val base = if (pin.myPhoto != null) {
-                ImageRequest.Builder(context).data(pin.myPhoto).build()
-            } else {
-                val photo = repo.photos(pin.name, pin.address, pin.lat, pin.lon).firstOrNull() ?: return@async null
-                repo.imageRequest(photo)
-            }
-            val req = base.newBuilder(context)
-                .size(px)
-                .allowHardware(false) // Canvas로 다시 그리려면 소프트웨어 비트맵이어야 한다
-                .build()
-            val result = context.imageLoader.execute(req)
-            val bmp = ((result as? SuccessResult)?.drawable as? BitmapDrawable)?.bitmap
-            if (bmp == null) {
-                android.util.Log.w("EodiMapPhoto", "지도 사진 못 그림: ${pin.name} ${(result as? coil.request.ErrorResult)?.throwable} ${(result as? SuccessResult)?.drawable?.javaClass}")
-                return@async null
-            }
+            // 내 사진(content://)을 못 읽으면(권한 회수·지운 사진·잠깐의 미디어 저장소 오류) 장소 사진으로 대신한다
+            val bmp = pin.myPhoto?.let { decode(context, ImageRequest.Builder(context).data(it).build(), px, pin.name) }
+                ?: placePhoto(context, repo, pin, px)
+                ?: return@async null
             onPhoto(pin.key, bmp)
             pin.key to bmp
         }
     }.awaitAll().filterNotNull().toMap()
+}
+
+/** 장소 대표 사진 (구글 Places 첫 사진). 이름이 없거나 사진이 없으면 null. */
+private suspend fun placePhoto(context: Context, repo: PlacePhotoRepository, pin: MapPhotoPin, px: Int): Bitmap? {
+    val photo = repo.photos(pin.name, pin.address, pin.lat, pin.lon).firstOrNull() ?: return null
+    return decode(context, repo.imageRequest(photo), px, pin.name)
+}
+
+/** 요청 하나를 Canvas에 다시 그릴 수 있는 소프트웨어 비트맵으로. 실패하면 null(로그만). */
+private suspend fun decode(context: Context, base: ImageRequest, px: Int, name: String): Bitmap? {
+    val req = base.newBuilder(context)
+        .size(px)
+        .allowHardware(false) // Canvas로 다시 그리려면 소프트웨어 비트맵이어야 한다
+        .build()
+    val result = context.imageLoader.execute(req)
+    val bmp = ((result as? SuccessResult)?.drawable as? BitmapDrawable)?.bitmap
+    if (bmp == null) {
+        android.util.Log.w("EodiMapPhoto", "지도 사진 못 그림: $name ${base.data} ${(result as? coil.request.ErrorResult)?.throwable}")
+    }
+    return bmp
 }
 
 /** 받아 둘 사진 크기: 카드 사진(68dp)을 가운데 잘라 꽉 채울 만큼. */
