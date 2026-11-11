@@ -214,6 +214,8 @@ fn visit_note_lists_up_to_three_days() {
     let d = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
     assert_eq!(super::runner::visit_note(&d(&["2026-10-11", "2026-10-18"])), "2번 다녀옴 · 10/11, 10/18");
     assert_eq!(super::runner::visit_note(&d(&["2026-01-02", "2026-02-03", "2026-03-04", "2026-04-05"])), "4번 다녀옴 · 1/2, 2/3, 3/4 …");
+    // 해가 섞이면 해를 붙인다
+    assert_eq!(super::runner::visit_note(&d(&["2025-11-07", "2026-11-07"])), "2번 다녀옴 · '25.11/7, '26.11/7");
 }
 
 #[test]

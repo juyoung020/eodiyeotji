@@ -770,10 +770,20 @@ fn same_place(a: &MemoryHit, b: &MemoryHit) -> bool {
 
 /// ["2026-10-11", "2026-10-18"] → "2번 다녀옴 · 10/11, 10/18" (날은 3개까지, 넘으면 "…").
 pub(crate) fn visit_note(days: &[String]) -> String {
+    let years: Vec<i64> = days.iter().filter_map(|d| parse_ymd(d, false)).map(|x| dates::civil_from_days(x).0).collect();
+    let mixed = years.windows(2).any(|w| w[0] != w[1]);
     let short: Vec<String> = days
         .iter()
         .take(3)
-        .map(|d| parse_ymd(d, false).map(|x| { let (_, m, dd) = dates::civil_from_days(x); format!("{m}/{dd}") }).unwrap_or_else(|| d.clone()))
+        .map(|d| {
+            parse_ymd(d, false)
+                .map(|x| {
+                    let (y, m, dd) = dates::civil_from_days(x);
+                    // 해가 섞이면 "'25.11/7"처럼 해를 붙인다 (같은 달·날이 겹쳐 보이지 않게)
+                    if mixed { format!("'{:02}.{m}/{dd}", y % 100) } else { format!("{m}/{dd}") }
+                })
+                .unwrap_or_else(|| d.clone())
+        })
         .collect();
     let more = if days.len() > 3 { " …" } else { "" };
     format!("{}번 다녀옴 · {}{more}", days.len(), short.join(", "))
@@ -785,7 +795,19 @@ fn describe(h: &MemoryHit, today: i64) -> String {
     if h.visit_days.len() < 2 {
         return format!("{} {place}.", spoken_date(&h.episode.facts.day, today));
     }
-    let days: Vec<String> = h.visit_days.iter().take(3).map(|d| spoken_date(d, today)).collect();
+    // 해가 섞이면 올해 날짜에도 "올해"를 붙인다 ("작년 11월 7일, 올해 11월 7일").
+    let ty = dates::civil_from_days(today).0;
+    let mixed = h.visit_days.iter().filter_map(|d| parse_ymd(d, false)).any(|d| dates::civil_from_days(d).0 != ty);
+    let days: Vec<String> = h
+        .visit_days
+        .iter()
+        .take(3)
+        .map(|d| {
+            let s = spoken_date(d, today);
+            let this_year = parse_ymd(d, false).is_some_and(|x| dates::civil_from_days(x).0 == ty);
+            if mixed && this_year && s.contains('월') { format!("올해 {s}") } else { s }
+        })
+        .collect();
     let more = if h.visit_days.len() > 3 { " 등" } else { "" };
     format!("{place}. {}{more} {}다녀오셨어요.", days.join(", "), times(h.visit_days.len()))
 }
