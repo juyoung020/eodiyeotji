@@ -13,6 +13,7 @@ pub mod drivedetect;
 pub mod edits;
 pub mod energy;
 pub mod ffi;
+pub mod gallery;
 pub mod geo;
 pub mod handoff;
 pub mod hotplace;

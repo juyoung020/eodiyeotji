@@ -309,6 +309,8 @@ pub struct CoursePost {
     pub season: String,
     /// 그날 날씨 (예: "맑음 · 14°C"), 모르면 None
     pub weather: Option<String>,
+    /// 들른 곳마다 글쓴이가 붙인 내 사진 (앱 안 사본 경로, [stops]와 같은 순서·길이, 없으면 빈 문자열). `gallery` 모듈.
+    pub stop_photos: Vec<String>,
 }
 
 /// 들른 곳(식당·카페·관광지) 리뷰 하나.
@@ -1115,7 +1117,7 @@ pub(crate) fn same_place(a: &StopFact, b: &StopFact) -> bool {
 // ---- 내 기록 올리기 ----
 
 /// 집·회사 좌표 (memory_anchor의 모든 줄: 내비 즐겨찾기·추정·지금 쓰는 값 — 하나라도 가까우면 뺀다).
-fn privacy_anchors(conn: &Connection) -> Result<Vec<Point>, CoreError> {
+pub(crate) fn privacy_anchors(conn: &Connection) -> Result<Vec<Point>, CoreError> {
     let mut st = conn.prepare_cached("SELECT lat, lon FROM memory_anchor")?;
     let rows = st.query_map([], |r| Ok(Point { lat: r.get(0)?, lon: r.get(1)? }))?;
     Ok(rows.collect::<Result<_, _>>()?)
@@ -1275,10 +1277,12 @@ fn hearts_of(n: i64) -> u32 {
 }
 
 const COURSE_COLS: &str = "id, title, body, author, mine, region, tags, stops, distance_m, duration_ms, created_ms,
-     others_hearts + my_heart, my_heart, visited_day, weather";
+     others_hearts + my_heart, my_heart, visited_day, weather, stop_photos";
 
 fn course_from_row(r: &Row) -> rusqlite::Result<CoursePost> {
     let visited_day: String = r.get(13)?;
+    let stops = decode_stops(&r.get::<_, String>(7)?);
+    let stop_photos = crate::gallery::decode_stop_photos(&r.get::<_, String>(15)?, &stops);
     Ok(CoursePost {
         id: r.get(0)?,
         title: r.get(1)?,
@@ -1287,7 +1291,8 @@ fn course_from_row(r: &Row) -> rusqlite::Result<CoursePost> {
         mine: r.get(4)?,
         region: r.get(5)?,
         tags: split_names(&r.get::<_, String>(6)?),
-        stops: decode_stops(&r.get::<_, String>(7)?),
+        stops,
+        stop_photos,
         distance_m: r.get(8)?,
         duration_ms: r.get(9)?,
         created_ms: r.get(10)?,

@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.community
 
+import app.eodiyeotji.ui.gallery.MyPhotoImage
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.heading
 import app.eodiyeotji.ui.theme.EodiIcons
@@ -621,8 +622,11 @@ fun RatingStars(rating: Int, modifier: Modifier = Modifier, size: Dp = 24.dp) {
  * 순서 번호는 부르는 쪽이 [OrderDot]으로 사진 위에 얹는다 (자리 안에 번호를 또 그리지 않는다).
  */
 @Composable
-fun StopPhoto(name: String, address: String, lat: Double, lon: Double, order: Int?, size: Dp, modifier: Modifier = Modifier, radius: Dp = 16.dp) {
-    StopPhotoBox(name, address, lat, lon, order, modifier.size(size), radius = radius, iconSize = size / 3)
+fun StopPhoto(
+    name: String, address: String, lat: Double, lon: Double, order: Int?, size: Dp, modifier: Modifier = Modifier, radius: Dp = 16.dp,
+    localPhoto: String? = null,
+) {
+    StopPhotoBox(name, address, lat, lon, order, modifier.size(size), radius = radius, iconSize = size / 3, localPhoto = localPhoto)
 }
 
 /**
@@ -644,6 +648,8 @@ fun StopPhotoBox(
     showName: Boolean = false,
     onClick: (() -> Unit)? = null,
     onClickLabel: String? = null,
+    /** 글쓴이가 붙인 내 사진 (앱 안 사본 경로나 `content://`). 있으면 장소 대표 사진 대신 이것. */
+    localPhoto: String? = null,
 ) {
     val c = EodiTheme.colors
     val shape = RoundedCornerShape(radius)
@@ -660,7 +666,9 @@ fun StopPhotoBox(
     }
     Box(box) {
         // 미리보기(@Preview)에는 사진 저장소(Hilt)가 없으니 사진 없는 자리로 그린다
-        if (LocalInspectionMode.current || name.isBlank()) {
+        if (!localPhoto.isNullOrBlank()) {
+            MyPhotoImage(localPhoto, Modifier.fillMaxSize(), sizePx = 480)
+        } else if (LocalInspectionMode.current || name.isBlank()) {
             fallback()
         } else {
             PlaceThumbnail(

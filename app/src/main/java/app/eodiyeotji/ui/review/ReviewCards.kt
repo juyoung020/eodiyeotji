@@ -188,7 +188,7 @@ internal fun TripReviewCard(t: DriveCourse, onOpen: () -> Unit, onHeart: (() -> 
                 )
             }
             PostHeader(p.author, agoText(p.createdMs), mine = false)
-            if (p.stops.isNotEmpty()) StopStrip(p.stops, onMore = onOpen)
+            if (p.stops.isNotEmpty()) StopStrip(p.stops, onMore = onOpen, photos = p.stopPhotos)
             if (p.body.isNotBlank()) {
                 Text(p.body, style = EodiTheme.type.body, color = c.textPrimary, maxLines = CollapsedLines, overflow = TextOverflow.Ellipsis)
             }
@@ -212,7 +212,11 @@ private const val StripMaxSlots = 5
  * ([onPick]이 있으면 그것을 부른다), 다 못 보여 준 곳은 "+N" (누르면 [onMore]). [selected] 곳은 파란 테두리.
  */
 @Composable
-internal fun StopStrip(stops: List<StopFact>, onMore: () -> Unit, selected: Int? = null, onPick: ((Int) -> Unit)? = null) {
+internal fun StopStrip(
+    stops: List<StopFact>, onMore: () -> Unit, selected: Int? = null, onPick: ((Int) -> Unit)? = null,
+    /** 글쓴이가 붙인 들른 곳 사진 ([stops]와 같은 순서, 빈 문자열 = 없음) */
+    photos: List<String> = emptyList(),
+) {
     val c = EodiTheme.colors
     val openPlace = LocalOpenPlace.current
     val slots = stops.size.coerceIn(StripMinSlots, StripMaxSlots)
@@ -230,7 +234,10 @@ internal fun StopStrip(stops: List<StopFact>, onMore: () -> Unit, selected: Int?
                         .then(if (i == selected) Modifier.border(4.dp, c.accent, shape) else Modifier)
                         .clickable(onClickLabel = placeDetailOpenLabel(), role = Role.Button) { if (onPick != null) onPick(i) else openPlace(s) },
                 ) {
-                    StopPhotoBox(s.name, s.address, s.lat, s.lon, order = i + 1, modifier = Modifier.fillMaxSize(), radius = 14.dp, iconSize = 36.dp)
+                    StopPhotoBox(
+                        s.name, s.address, s.lat, s.lon, order = i + 1, modifier = Modifier.fillMaxSize(), radius = 14.dp, iconSize = 36.dp,
+                        localPhoto = photos.getOrNull(i)?.takeIf { it.isNotBlank() },
+                    )
                     OrderDot(i + 1, Modifier.align(Alignment.TopStart).padding(6.dp))
                 }
                 Text(

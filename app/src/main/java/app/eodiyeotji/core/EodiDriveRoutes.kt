@@ -49,6 +49,8 @@ data class DriveRoute(
     val hearts: Int,
     val heartedByMe: Boolean,
     val visit: Visit,
+    /** 글쓴이가 붙인 내 사진 (앱 안 사본 경로). */
+    val photos: List<String> = emptyList(),
 )
 
 /** 목록 한 줄: 길 + 지금 위치에서 길 위 가장 가까운 점까지 거리 (모르면 null). */
@@ -156,6 +158,7 @@ internal fun RDriveRoutePost.toModel() = DriveRoute(
     hearts = hearts.toInt(),
     heartedByMe = heartedByMe,
     visit = Visit(visitedDay, season, weather),
+    photos = photos,
 )
 
 private fun RDriveTripCandidate.toModel() =

@@ -10,6 +10,7 @@ use crate::drivedetect::{Detector, DriveDetectOut, DriveEdgeOut, MotionFix};
 use crate::geo::{self, Point};
 use crate::memory::StopFact;
 use crate::offers::{self, CourseOffers, OfferPlace, PartnerOffer};
+use crate::store::EodiStore;
 
 /// Kotlin과 주고받는 좌표.
 #[derive(Debug, Clone, Copy, PartialEq, uniffi::Record)]
@@ -304,4 +305,47 @@ pub fn parked_from_json(json: String) -> Option<crate::parking::ParkedCar> {
 #[uniffi::export]
 pub fn parked_latest(a: Option<crate::parking::ParkedCar>, b: Option<crate::parking::ParkedCar>) -> Option<crate::parking::ParkedCar> {
     crate::parking::latest(a, b)
+}
+
+// ---- 내 사진(갤러리) 연동 (gallery.rs). 사진 읽기는 Kotlin, 맞추기·집/회사 거르기·저장은 Rust ----
+
+#[uniffi::export]
+impl EodiStore {
+    /// 그날 머문 곳에 맞출 사진을 갤러리에서 읽을 범위 (찍은 시각). 머문 곳이 없으면 from > to.
+    pub fn gallery_window(&self, day: String) -> Result<crate::gallery::GalleryWindow, crate::store::CoreError> {
+        crate::gallery::window_for_day(self, day)
+    }
+
+    /// 그날 사진 묶음을 머문 곳마다 나눈다 (한 번에 넘긴다). 사진 없는 곳은 빠진다.
+    pub fn gallery_for_day(
+        &self,
+        day: String,
+        photos: Vec<crate::gallery::GalleryPhoto>,
+    ) -> Result<Vec<crate::gallery::StayPhotos>, crate::store::CoreError> {
+        crate::gallery::photos_for_day(self, day, &photos)
+    }
+
+    /// 주행 하나 동안 찍은 사진 (드라이브 코스에 붙일 후보, 최신순).
+    pub fn gallery_for_trip(
+        &self,
+        start_ms: i64,
+        end_ms: i64,
+        photos: Vec<crate::gallery::GalleryPhoto>,
+    ) -> Result<Vec<crate::gallery::MatchedPhoto>, crate::store::CoreError> {
+        crate::gallery::photos_for_window(self, start_ms, end_ms, &photos)
+    }
+
+    /// 내가 올린 여행 코스 후기의 들른 곳 사진을 통째로 바꾸고, 바뀐 글을 돌려준다.
+    pub fn set_course_stop_photos(
+        &self,
+        post_id: String,
+        photos: Vec<crate::gallery::StopPhotoRef>,
+    ) -> Result<crate::community::CoursePost, crate::store::CoreError> {
+        crate::gallery::set_course_stop_photos(self, &post_id, photos)
+    }
+
+    /// 내가 올린 드라이브 코스의 사진을 통째로 바꾼다.
+    pub fn set_drive_route_photos(&self, id: String, paths: Vec<String>) -> Result<(), crate::store::CoreError> {
+        crate::gallery::set_route_photos(self, &id, paths)
+    }
 }

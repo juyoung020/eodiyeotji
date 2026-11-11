@@ -1,6 +1,10 @@
 package app.eodiyeotji.ui.timeline
 
 import app.eodiyeotji.ui.community.RoundIconButton
+import app.eodiyeotji.core.StayMyPhotos
+import app.eodiyeotji.ui.gallery.AskGalleryOnce
+import app.eodiyeotji.ui.gallery.MyPhotoStrip
+import app.eodiyeotji.ui.gallery.MyPhotoViewer
 import app.eodiyeotji.ui.community.CenterMessage
 import app.eodiyeotji.ui.community.ErrorState
 import app.eodiyeotji.ui.community.LoadingBox
@@ -199,6 +203,9 @@ fun TimelineRoute(
         listTop = { RecapListTop(recap, onOpenDay = openDay, onOpenBiz = biz::open) },
     ) }
     PlaceEditHost(editVm)
+    // 내 사진 카드: 머문 곳이 있는 하루 상세를 처음 열 때 한 번만 갤러리 권한을 묻는다 (허용하면 다시 읽어 사진을 채운다)
+    val askGallery = (state.detail as? DetailState.Loaded)?.entries?.any { it is DayEntry.Stay } == true
+    AskGalleryOnce(enabled = askGallery, onGranted = viewModel::reload)
     RecapOverlay(recap, onOpenDay = openDay)
     MemoryMapOverlay(recap)
     BizOverlay(biz, onOpenDay = openDay)
@@ -494,11 +501,14 @@ private fun CompactDayDetail(
                 }
             }
         }
-        val photoPins = remember(loaded?.entries) {
+        val photoPins = remember(loaded?.entries, loaded?.myPhotos) {
             loaded?.entries.orEmpty().mapNotNull { e ->
                 val stay = (e as? DayEntry.Stay)?.stay ?: return@mapNotNull null
-                val p = stay.place?.takeIf { it.name.isNotBlank() } ?: return@mapNotNull null
-                MapPhotoPin("s${stay.arriveMs}", p.name, p.address, stay.center.lat, stay.center.lon)
+                // 내 사진이 있으면 그것이 대표 사진 (없으면 장소 대표 사진)
+                val mine = loaded?.myPhotos?.get("s${stay.arriveMs}")?.photos?.firstOrNull()?.uri
+                val p = stay.place?.takeIf { it.name.isNotBlank() }
+                if (p == null && mine == null) return@mapNotNull null
+                MapPhotoPin("s${stay.arriveMs}", p?.name.orEmpty(), p?.address.orEmpty(), stay.center.lat, stay.center.lon, mine)
             }
         }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
@@ -521,6 +531,7 @@ private fun CompactDayDetail(
                             day = detail.summary.day,
                             entries = detail.entries,
                             offers = detail.offers,
+                            myPhotos = detail.myPhotos,
                             selectedKey = selectedEntry,
                             onClick = onEntryClick,
                             headerCount = 1,
@@ -835,11 +846,13 @@ private fun DayDetailCard(
             DetailHeader(summary, today, onBack, loaded = detail is DetailState.Loaded, onShare = shareEpisode?.let { id -> { onShare(id) } })
             val loaded = detail as? DetailState.Loaded
             // 정차한 곳 사진 상자 (이름을 찾은 머문 곳만)
-            val photoPins = remember(loaded?.entries) {
+            val photoPins = remember(loaded?.entries, loaded?.myPhotos) {
                 loaded?.entries.orEmpty().mapNotNull { e ->
                     val stay = (e as? DayEntry.Stay)?.stay ?: return@mapNotNull null
-                    val p = stay.place?.takeIf { it.name.isNotBlank() } ?: return@mapNotNull null
-                    MapPhotoPin("s${stay.arriveMs}", p.name, p.address, stay.center.lat, stay.center.lon)
+                    val mine = loaded?.myPhotos?.get("s${stay.arriveMs}")?.photos?.firstOrNull()?.uri
+                    val p = stay.place?.takeIf { it.name.isNotBlank() }
+                    if (p == null && mine == null) return@mapNotNull null
+                    MapPhotoPin("s${stay.arriveMs}", p?.name.orEmpty(), p?.address.orEmpty(), stay.center.lat, stay.center.lon, mine)
                 }
             }
             DayMap(
@@ -858,7 +871,7 @@ private fun DayDetailCard(
                         if (detail.entries.isEmpty()) {
                             CenterMessage(stringResource(R.string.timeline_detail_empty))
                         } else {
-                            EntryList(detail.summary.day, detail.entries, selectedEntry, onEntryClick, offers = detail.offers)
+                            EntryList(detail.summary.day, detail.entries, selectedEntry, onEntryClick, offers = detail.offers, myPhotos = detail.myPhotos)
                         }
                 }
             }
@@ -1077,6 +1090,7 @@ private fun EntryList(
     headerCount: Int = 0,
     contentPadding: PaddingValues = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = EodiTheme.space.page),
     offers: Map<String, List<PartnerOffer>> = emptyMap(),
+    myPhotos: Map<String, StayMyPhotos> = emptyMap(),
 ) {
     val listState = remember(day) { LazyListState() }
     LaunchedEffect(selectedKey, entries) {
@@ -1110,7 +1124,7 @@ private fun EntryList(
             val onMore = edits?.let { ed -> { ed.onEntry(e) } }
             when (e) {
                 is DayEntry.Trip -> TripRow(e.trip, e.repeat, rail, selected, onClick = { onClick(key) }, onMore = onMore)
-                is DayEntry.Stay -> StayRow(e.stay, rail, selected, onClick = { onClick(key) }, onMore = onMore, offers = offers[key].orEmpty())
+                is DayEntry.Stay -> StayRow(e.stay, rail, selected, onClick = { onClick(key) }, onMore = onMore, offers = offers[key].orEmpty(), myPhotos = myPhotos[key])
             }
         }
     }
@@ -1158,9 +1172,11 @@ private fun StayRow(
     onClick: () -> Unit,
     onMore: (() -> Unit)? = null,
     offers: List<PartnerOffer> = emptyList(),
+    myPhotos: StayMyPhotos? = null,
 ) {
     val c = EodiTheme.colors
     val place = stay.place?.takeIf { it.name.isNotBlank() }
+    var viewing by remember(stay.arriveMs) { mutableStateOf<Int?>(null) }
     val main: String
     val sub: String?
     when {
@@ -1192,6 +1208,10 @@ private fun StayRow(
         onClick = onClick,
         onMore = onMore,
         badge = if (offers.isNotEmpty()) ({ PlaceCouponBadge(offers) }) else null,
+        // 그곳에서 찍은 내 사진 작은 카드 (누르면 크게 보기)
+        below = myPhotos?.let { mp ->
+            { MyPhotoStrip(mp.photos.map { it.uri }, mp.total, onOpen = { viewing = it }, size = MyPhotoThumb) }
+        },
         trailing = place?.let { p ->
             {
                 // 정차한 곳 대표 사진 (구글 지도 사진): 앨범에 붙인 사진처럼 흰 테두리 + 살짝 기울임(행마다 번갈아).
@@ -1208,9 +1228,14 @@ private fun StayRow(
             }
         },
     )
+    val open = viewing
+    if (open != null && myPhotos != null) {
+        MyPhotoViewer(myPhotos.photos.map { it.uri }, open, place?.name, onDismiss = { viewing = null })
+    }
 }
 
 private val StayThumb = 96.dp
+private val MyPhotoThumb = 76.dp
 
 private enum class EntryKind { Trip, Stay, Here }
 
@@ -1243,6 +1268,7 @@ private fun EntryRow(
     trailing: (@Composable () -> Unit)? = null,
     onMore: (() -> Unit)? = null,
     badge: (@Composable () -> Unit)? = null,
+    below: (@Composable () -> Unit)? = null,
 ) {
     val c = EodiTheme.colors
     val type = EodiTheme.type
@@ -1304,6 +1330,7 @@ private fun EntryRow(
                     }
                 }
                 badge?.invoke()
+                below?.invoke()
             }
             if (trailing != null) {
                 Box(Modifier.padding(top = 12.dp, bottom = 12.dp, end = 16.dp)) { trailing() }

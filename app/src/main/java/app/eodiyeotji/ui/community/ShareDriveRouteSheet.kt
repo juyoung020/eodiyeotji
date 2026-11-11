@@ -49,6 +49,12 @@ import app.eodiyeotji.core.driveShareCandidates
 import app.eodiyeotji.core.shareDriveRoute
 import app.eodiyeotji.core.weatherFor
 import app.eodiyeotji.ui.theme.EodiTheme
+import androidx.compose.foundation.lazy.LazyRow
+import app.eodiyeotji.core.MyPhoto
+import app.eodiyeotji.core.setDriveRoutePhotos
+import app.eodiyeotji.gallery.GalleryRepository
+import app.eodiyeotji.ui.gallery.AskGalleryOnce
+import app.eodiyeotji.ui.gallery.MyPhotoPick
 import app.eodiyeotji.ui.common.distanceText
 import app.eodiyeotji.ui.common.durationText
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -78,12 +84,16 @@ data class ShareDriveUiState(
     val weather: String? = null,
     val submitting: Boolean = false,
     val submitError: String? = null,
+    /** 이 주행 동안 찍은 내 사진 (집·회사 근처는 빠짐) · 뺀 수 · 고른 uri (기본은 안 고름) */
+    val myPhotos: List<MyPhoto> = emptyList(),
+    val privatePhotos: Int = 0,
+    val pickedPhotos: List<String> = emptyList(),
 ) {
     val canSubmit: Boolean get() = !submitting && picked != null && title.isNotBlank() && best != null
 }
 
 @HiltViewModel
-class ShareDriveViewModel @Inject constructor(private val core: EodiCore) : ViewModel() {
+class ShareDriveViewModel @Inject constructor(private val core: EodiCore, private val gallery: GalleryRepository) : ViewModel() {
     private val _state = MutableStateFlow(ShareDriveUiState())
     val state: StateFlow<ShareDriveUiState> = _state.asStateFlow()
     private var weatherJob: Job? = null
@@ -105,11 +115,40 @@ class ShareDriveViewModel @Inject constructor(private val core: EodiCore) : View
 
     /** 주행을 고른다. 제목 기본값은 Rust가 지은 이름 ("A → B 드라이브" 등). */
     fun pick(c: DriveTripCandidate) {
-        _state.update { it.copy(picked = c, title = c.defaultTitle, body = "", best = null, weather = null, submitError = null) }
+        _state.update {
+            it.copy(
+                picked = c, title = c.defaultTitle, body = "", best = null, weather = null, submitError = null,
+                myPhotos = emptyList(), privatePhotos = 0, pickedPhotos = emptyList(),
+            )
+        }
+        viewModelScope.launch { loadPhotos(c) }
         weatherJob?.cancel()
         weatherJob = viewModelScope.launch {
             val w = core.weatherFor(c)
             _state.update { s -> if (s.picked?.tripStartMs == c.tripStartMs) s.copy(weather = w) else s }
+        }
+    }
+
+    /** 그 주행 동안 찍은 내 사진 (권한이 없으면 빈 것). 권한을 막 받았을 때도 부른다. */
+    fun reloadPhotos() {
+        val c = _state.value.picked ?: return
+        viewModelScope.launch { loadPhotos(c) }
+    }
+
+    private suspend fun loadPhotos(c: DriveTripCandidate) {
+        val all = gallery.tripPhotos(c.startMs, c.endMs)
+        _state.update { s ->
+            if (s.picked?.tripStartMs != c.tripStartMs) s
+            else s.copy(myPhotos = all.filter { it.shareable }, privatePhotos = all.count { !it.shareable })
+        }
+    }
+
+    /** 사진 고르기/빼기 ([MAX_DRIVE_PHOTOS]장까지). */
+    fun togglePhoto(uri: String) = _state.update {
+        when {
+            uri in it.pickedPhotos -> it.copy(pickedPhotos = it.pickedPhotos - uri)
+            it.pickedPhotos.size >= MAX_DRIVE_PHOTOS -> it
+            else -> it.copy(pickedPhotos = it.pickedPhotos + uri)
         }
     }
 
@@ -127,8 +166,11 @@ class ShareDriveViewModel @Inject constructor(private val core: EodiCore) : View
         viewModelScope.launch {
             try {
                 val r = core.shareDriveRoute(c.tripStartMs, s.title, s.body, best, s.weather)
+                // 고른 사진만 앱 안에 줄여 복사(EXIF 없이)해 단다. 다시 올릴 때 안 고르면 뗀다
+                val paths = s.pickedPhotos.mapIndexedNotNull { i, uri -> gallery.copyForPost(uri, "${r.id}-$i") }
+                core.setDriveRoutePhotos(r.id, paths)
                 _state.update { it.copy(submitting = false) }
-                onDone(r)
+                onDone(r.copy(photos = paths))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -173,11 +215,14 @@ fun ShareDriveRouteSheet(onDone: (DriveRoute?) -> Unit, viewModel: ShareDriveVie
                 onTitle = viewModel::setTitle,
                 onBody = viewModel::setBody,
                 onBest = viewModel::setBest,
+                onTogglePhoto = viewModel::togglePhoto,
                 onSubmit = { viewModel.submit { onDone(it) } },
                 onBack = viewModel::back,
             )
         }
     }
+    // 사진 붙이기를 처음 쓸 때 한 번만 갤러리 권한을 묻는다
+    AskGalleryOnce(enabled = state.picked != null, onGranted = viewModel::reloadPhotos)
 }
 
 @Composable
@@ -213,6 +258,7 @@ private fun ShareDriveForm(
     onTitle: (String) -> Unit,
     onBody: (String) -> Unit,
     onBest: (BestTime) -> Unit,
+    onTogglePhoto: (String) -> Unit,
     onSubmit: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -251,6 +297,13 @@ private fun ShareDriveForm(
         FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             state.bestOptions.forEach { b -> TogglePill(bestTimeLabel(b), state.best == b, { onBest(b) }) }
         }
+        if (state.myPhotos.isNotEmpty()) {
+            Text(stringResource(R.string.share_drive_photos_label, MAX_DRIVE_PHOTOS), style = type.label, color = c.textTertiary)
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(state.myPhotos, key = { it.id }) { ph -> MyPhotoPick(ph.uri, ph.uri in state.pickedPhotos, { onTogglePhoto(ph.uri) }) }
+            }
+        }
+        if (state.privatePhotos > 0) Text(stringResource(R.string.share_my_photos_private, state.privatePhotos), style = type.caption, color = c.textTertiary)
         if (trip.trimmed) {
             Row(
                 Modifier.fillMaxWidth().background(c.hereSoft, RoundedCornerShape(EodiTheme.space.radiusS)).padding(horizontal = 18.dp, vertical = 12.dp),
@@ -272,3 +325,6 @@ private fun ShareDriveForm(
         )
     }
 }
+
+/** 드라이브 코스 하나에 붙일 수 있는 사진 수 (Rust `gallery::MAX_ROUTE_PHOTOS`와 같다). */
+private const val MAX_DRIVE_PHOTOS = 4
