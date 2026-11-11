@@ -8,6 +8,9 @@
 //! - 이름이 있는 머문 곳만, 도착 순서대로.
 //! - 그날 경로의 출발 · 도착 머문 곳(대개 집, `mapdata::route_ends`)은 뺀다 — 밤새 머문 시간이 섞여 "14시간 머묾"이 된다.
 //!   그렇게 빼서 남는 곳이 없으면 이름 있는 곳을 그대로 쓴다.
+//! - 장면 사진(`show_photo`): 집 · 회사(기억 모듈이 정한 곳, 250m 안)이거나 분류가 회사 · 건물 계열이면 사진 없이 지도만 —
+//!   회사 건물에 가까운 카페 음료 사진이 뜨는 식으로 맥락이 어긋나기 쉽다.
+//! - 끝 화면 "그 코스로 안내"(`can_guide`)는 대표 에피소드가 있고 출퇴근이 아닐 때만.
 //!
 //! # 구간 (장면 i)
 //! - 앞 장면 도착 뒤(첫 장면은 그날 처음부터) ~ 이 장면 도착 전에 출발한 주행들의 경로를 이어 붙인 것.
@@ -27,7 +30,7 @@ use crate::agent::dates::civil_from_days;
 use crate::community::drive::{flight, FlightFrame};
 use crate::geo::{haversine_m, Point};
 use crate::mapdata::{coord, distance_text, duration_text, end_tag, route_ends, trip_points, Bounds, MapBounds};
-use crate::memory::StopFact;
+use crate::memory::{current_anchors, EpisodeKind, StopFact, ANCHOR_RADIUS_M};
 use crate::recap::{ep_rank, episodes_between, season_of, years_between};
 use crate::store::{parse_day, CoreError, DayDetail, EodiStore, DAY_MS};
 
@@ -58,6 +61,8 @@ pub struct ReplayScene {
     pub leg_flight: Vec<FlightFrame>,
     /// 도착 시각의 하늘 (지도 색 · 하늘 그라데이션을 고른다)
     pub sky: SkyPhase,
+    /// 이 곳의 사진을 띄울지 (집 · 회사 · 회사 건물 분류면 false → 지도만)
+    pub show_photo: bool,
 }
 
 /// 하늘 색 때 (현지 시각 기준). 새벽 05:00~, 낮 07:00~, 노을 16:30~, 푸른 시간 18:30~, 밤 19:30~05:00.
@@ -108,6 +113,8 @@ pub struct DayReplay {
     pub distance_m: f64,
     /// 코스 안내에 쓸 그날 대표 에피소드 (없으면 None)
     pub episode_id: Option<i64>,
+    /// 끝 화면에 "그 코스로 안내"를 보일지: 대표 에피소드가 있고 출퇴근길이 아니다
+    pub can_guide: bool,
     /// 하루 전체 장면(시작 · 끝 화면)의 하늘 = 마지막 들른 곳의 때 (들른 곳이 없으면 노을)
     pub sky: SkyPhase,
 }
@@ -120,16 +127,19 @@ impl EodiStore {
         let d = parse_day(&detail.day).unwrap_or(0);
         let conn = self.snapshot()?;
         let ep = best_episode(&conn, d)?;
+        let a = current_anchors(&conn)?;
+        let anchors: Vec<Point> = [a.home, a.office].into_iter().flatten().collect();
         let today = self.local_day(now_ms);
-        Ok(build_replay(&detail, self.tz_minutes(), today, ep))
+        Ok(build_replay(&detail, self.tz_minutes(), today, ep, &anchors))
     }
 }
 
-/// 그날 대표 에피소드: (id, 규칙 이름, 지역).
+/// 그날 대표 에피소드: (id, 규칙 이름, 지역, 출퇴근길인가).
 pub(crate) struct EpisodeInfo {
     pub id: i64,
     pub label: String,
     pub region: String,
+    pub commute: bool,
 }
 
 fn best_episode(conn: &Connection, d: i64) -> Result<Option<EpisodeInfo>, CoreError> {
@@ -137,10 +147,30 @@ fn best_episode(conn: &Connection, d: i64) -> Result<Option<EpisodeInfo>, CoreEr
     Ok(eps
         .iter()
         .max_by_key(|e| ep_rank(e))
-        .map(|e| EpisodeInfo { id: e.facts.id, label: e.facts.rule_label.clone(), region: e.facts.region.clone() }))
+        .map(|e| EpisodeInfo {
+            id: e.facts.id,
+            label: e.facts.rule_label.clone(),
+            region: e.facts.region.clone(),
+            commute: matches!(e.facts.kind, EpisodeKind::CommuteToWork | EpisodeKind::CommuteHome),
+        }))
 }
 
-pub(crate) fn build_replay(d: &DayDetail, tz_minutes: i32, today: i64, ep: Option<EpisodeInfo>) -> DayReplay {
+/// 사진이 맥락과 어긋나기 쉬운 분류 낱말 (회사 · 건물 계열). 이름이 정확히 "집" · "회사"인 곳(내비 목적지 이름)도 같다.
+const NO_PHOTO_CATEGORY: [&str; 7] = ["회사", "기업", "빌딩", "오피스", "사무", "연구소", "공장"];
+
+/// 장면에 사진을 띄울지: 집 · 회사(250m 안)도, 회사 · 건물 분류도 아니다.
+pub(crate) fn photo_fits(name: &str, category: &str, at: Point, anchors: &[Point]) -> bool {
+    let name = name.trim();
+    if name == "집" || name == "회사" {
+        return false;
+    }
+    if NO_PHOTO_CATEGORY.iter().any(|w| category.contains(w)) {
+        return false;
+    }
+    anchors.iter().all(|&a| haversine_m(a, at) > ANCHOR_RADIUS_M)
+}
+
+pub(crate) fn build_replay(d: &DayDetail, tz_minutes: i32, today: i64, ep: Option<EpisodeInfo>, anchors: &[Point]) -> DayReplay {
     let day = parse_day(&d.day).unwrap_or(0);
     let (y, m, dd) = civil_from_days(day);
     let (_, tm, td) = civil_from_days(today);
@@ -219,6 +249,7 @@ pub(crate) fn build_replay(d: &DayDetail, tz_minutes: i32, today: i64, ep: Optio
             leg_frames,
             leg_flight,
             sky: sky_phase(s.arrive_ms, tz_minutes),
+            show_photo: photo_fits(&p.name, &p.category, Point { lat: s.center.lat, lon: s.center.lon }, anchors),
         });
     }
     let all: Vec<Vec<(f64, f64)>> = d.trips.iter().map(trip_points).filter(|p| p.len() >= 2).collect();
@@ -255,6 +286,7 @@ pub(crate) fn build_replay(d: &DayDetail, tz_minutes: i32, today: i64, ep: Optio
         summary_line,
         stats_line: stats.join(" · "),
         distance_m,
+        can_guide: ep.as_ref().is_some_and(|e| !e.commute),
         episode_id: ep.map(|e| e.id),
         sky: scenes_sky,
     }

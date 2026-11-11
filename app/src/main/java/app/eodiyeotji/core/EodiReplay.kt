@@ -27,6 +27,8 @@ data class ReplayScene(
     val legFlight: List<FlightFrame>,
     /** 도착 시각의 하늘 때 (Rust가 현지 시각으로 정한다) */
     val sky: SkyPhase,
+    /** 이 곳의 사진을 띄울지 (집 · 회사 · 회사 건물이면 false → 지도만, Rust가 정한다) */
+    val showPhoto: Boolean,
 )
 
 /** 하늘 때: 3D 지도 색 · 하늘 그라데이션을 고른다. */
@@ -51,6 +53,8 @@ data class DayReplay(
     val statsLine: String,
     val distanceM: Double,
     val episodeId: Long?,
+    /** 끝 화면 "그 코스로 안내"를 보일지 (대표 기록이 있고 출퇴근길이 아님, Rust가 정한다) */
+    val canGuide: Boolean,
     /** 시작 · 끝 화면 하늘 (마지막 들른 곳의 때) */
     val sky: SkyPhase,
 )
@@ -62,10 +66,10 @@ suspend fun EodiCore.dayReplay(day: String, nowMs: Long = System.currentTimeMill
 
 private fun RDayReplay.toModel() = DayReplay(
     day, dateText, yearsAgo.toInt(), stamp, title, subtitle,
-    scenes.map { ReplayScene(it.stop.toModel(), it.order.toInt(), it.timeText, it.stayText, it.doneGeojson, it.legFrames, it.legFlight.map { f -> FlightFrame(f.lat, f.lon, f.bearing, f.zoom) }, it.sky.toModel()) },
+    scenes.map { ReplayScene(it.stop.toModel(), it.order.toInt(), it.timeText, it.stayText, it.doneGeojson, it.legFrames, it.legFlight.map { f -> FlightFrame(f.lat, f.lon, f.bearing, f.zoom) }, it.sky.toModel(), it.showPhoto) },
     finalGeojson,
     bounds?.let { MapBoundsLatLon(it.minLat, it.minLon, it.maxLat, it.maxLon) },
-    summaryLine, statsLine, distanceM, episodeId, sky.toModel(),
+    summaryLine, statsLine, distanceM, episodeId, canGuide, sky.toModel(),
 )
 
 private fun RSkyPhase.toModel() = when (this) {

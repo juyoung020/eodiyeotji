@@ -43,4 +43,7 @@
     <string name="timeline_share">커뮤니티에 올리기</string>
     <string name="timeline_share_short">올리기</string>
     <string name="timeline_shared">여행 리뷰에 올렸어요</string>
+    <!-- 하루 상세 머리 버튼을 못 쓰는 날, 누르면 버튼 아래 한 줄로 이유 -->
+    <string name="timeline_share_unavailable">출퇴근 · 동네 볼일 기록은 올릴 수 없어요. 나들이 · 여행만 올릴 수 있어요</string>
+    <string name="timeline_replay_unavailable">이날은 다시 볼 들른 곳이 없어요</string>
 </resources>
