@@ -427,11 +427,13 @@ class AgentViewModel @Inject constructor(
                 if (cur.candidateFocus != index) return@updateTurn cur
                 val phase = if (finished) AnswerPhase.Done else cur.phase
                 if (picked == null) return@updateTurn if (finished) cur.copy(answer = fallback, phase = phase) else cur
+                val recs = cur.recommendations.map { r -> if (r.hit.episode.facts.id == hit.episode.facts.id && picked.course != null) r.copy(course = picked.course) else r }
                 cur.copy(
                     answer = picked.line,
                     phase = phase,
                     proposals = listOfNotNull(picked.proposal),
-                    recommendations = cur.recommendations.map { r -> if (r.hit.episode.facts.id == hit.episode.facts.id && picked.course != null) r.copy(course = picked.course) else r },
+                    recommendations = recs,
+                    selectedStop = sameStop(cur.recommendations.firstOrNull(), recs.firstOrNull(), cur.selectedStop),
                 )
             }
             // 코스가 오면 사진 줄 순서가 바뀔 수 있다 → 지도 번호를 다시 맞춘다
@@ -480,7 +482,7 @@ class AgentViewModel @Inject constructor(
                     val same = old?.hit?.episode?.facts?.id == event.hit.episode.facts.id
                     val rec = RecommendationUi(event.hit, event.course).let { if (same && old != null) it.copy(map = old.map, mapLoaded = old.mapLoaded, mapStops = old.mapStops) else it }
                     updateTurn(id) { t ->
-                        val selected = if (same) t.selectedStop else rec.stops.indexOfFirst { it.name == event.hit.bestStop?.name }.coerceAtLeast(0)
+                        val selected = if (same) sameStop(old, rec, t.selectedStop) else rec.stops.indexOfFirst { it.name == event.hit.bestStop?.name }.coerceAtLeast(0)
                         t.copy(recommendations = listOf(rec), selectedStop = selected, courses = emptyList(), courseFocus = 0)
                     }
                     ensureMap(id)
@@ -490,10 +492,14 @@ class AgentViewModel @Inject constructor(
                 updateTurn(id) { it.copy(courses = emptyList(), courseFocus = 0) }
                 updateTurn(id) { t ->
                     val rec = RecommendationUi(event.hit, event.course)
-                    val selected = if (first) rec.stops.indexOfFirst { it.name == event.hit.bestStop?.name }.coerceAtLeast(0) else t.selectedStop
                     // 같은 기억이 다시 오면(빠른 길 → LLM 확인) 새 것으로 바꿔 끼운다 — "다른 날"에 같은 날이 겹치지 않게
                     val epId = event.hit.episode.facts.id
                     val at = t.recommendations.indexOfFirst { it.hit.episode.facts.id == epId }
+                    val selected = when {
+                        first -> rec.stops.indexOfFirst { it.name == event.hit.bestStop?.name }.coerceAtLeast(0)
+                        at == 0 -> sameStop(t.recommendations[0], rec, t.selectedStop)
+                        else -> t.selectedStop
+                    }
                     val recs = if (at < 0) {
                         t.recommendations + rec
                     } else {
@@ -565,4 +571,13 @@ class AgentViewModel @Inject constructor(
         const val MSG_NO_SPEECH = "말씀을 듣지 못했어요. 마이크를 누르고 다시 말씀해 주세요."
         const val MSG_NO_MIC = "마이크 권한이 있어야 말로 물을 수 있어요."
     }
+}
+
+/**
+ * 추천 카드가 바뀌어도(코스가 뒤늦게 와 들른 곳 순서가 바뀜) 고른 곳은 그대로 둔다: [old]에서 [index]번째였던 곳을 [new]에서 이름으로 다시 찾는다.
+ * 순서 자리만 들고 있으면 "1번은 경포해변" 답 아래 "여기로 안내"가 순서가 바뀐 자리의 다른 곳(초당할머니순두부)을 가리켰다.
+ */
+private fun sameStop(old: RecommendationUi?, new: RecommendationUi?, index: Int): Int {
+    val name = old?.stops?.getOrNull(index)?.name ?: return index
+    return new?.stops?.indexOfFirst { it.name == name }?.takeIf { it >= 0 } ?: index
 }

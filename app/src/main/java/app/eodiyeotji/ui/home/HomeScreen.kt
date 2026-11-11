@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.home
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -192,7 +193,12 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                     CourseGuideBanner(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 20.dp), viewModel = guideViewModel)
                 }
             }
-            if (agentOpen) AgentPanel(onClose = { agentOpen = false; agentViewModel.clear() }, viewModel = agentViewModel) // 닫으면 대화를 비워 다음엔 새 질문부터
+            if (agentOpen) {
+                val closeAgent = { agentOpen = false; agentViewModel.clear() } // 닫으면 대화를 비워 다음엔 새 질문부터
+                // 뒤로 키도 X와 같이 닫는다 (전에는 뒤로 키가 먹지 않아 X로만 나갈 수 있었다). 안쪽 장소 창 등은 자기 뒤로 처리가 먼저다.
+                BackHandler(onBack = closeAgent)
+                AgentPanel(onClose = closeAgent, viewModel = agentViewModel)
+            }
         }
     }
 }

@@ -267,7 +267,7 @@ private fun ParkedAgent(
 ) {
     val today = remember { LocalDate.now() }
     val list = rememberLazyListState()
-    FollowLatest(list, history.size, turn?.id)
+    FollowLatest(list, history.size, turn)
     BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
         val wide = maxWidth >= WideBreakpoint
         Column(Modifier.fillMaxSize()) {
@@ -346,7 +346,7 @@ private fun CompactParkedAgent(
 ) {
     val today = remember { LocalDate.now() }
     val list = rememberLazyListState()
-    FollowLatest(list, history.size, turn?.id)
+    FollowLatest(list, history.size, turn)
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         if (turn == null) {
             EmptyState(onAsk, Modifier.weight(1f).fillMaxWidth())
@@ -375,11 +375,16 @@ private fun CompactParkedAgent(
     }
 }
 
-/** 새 차례가 생기면 그 차례(지난 대화 [pastCount]개 다음 줄)의 내 말풍선이 위에 오도록 스크롤한다. */
+/**
+ * 새 차례가 생기면 그 차례(지난 대화 [pastCount]개 다음 줄)가 위에 오도록 스크롤한다.
+ * 막 생긴 차례는 "찾는 중" 한 줄이라 목록 끝까지만 내려가 화면 맨 아래에 붙는다 → 답이 다 오고 버튼이 붙으면 한 번 더 맞춘다
+ * (안 그러면 긴 답 · "여기로 안내"가 화면 아래로 잘린 채 남았다).
+ */
 @Composable
-private fun FollowLatest(list: LazyListState, pastCount: Int, turnId: Long?) {
-    LaunchedEffect(turnId) {
-        if (turnId != null) list.animateScrollToItem(pastCount)
+private fun FollowLatest(list: LazyListState, pastCount: Int, turn: AgentTurn?) {
+    val settled = turn != null && (turn.phase == AnswerPhase.Done || turn.phase == AnswerPhase.Failed)
+    LaunchedEffect(turn?.id, settled, turn?.proposals?.size) {
+        if (turn != null) list.animateScrollToItem(pastCount)
     }
 }
 
