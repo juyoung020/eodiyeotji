@@ -321,6 +321,8 @@ data class CoursePost(
     val hearts: Int, val heartedByMe: Boolean,
     /** 다녀온 날(YYYY-MM-DD) · 계절("가을 · 단풍철") · 그날 날씨("맑음 · 14°C") */
     val visitedDay: String = "", val season: String = "", val weather: String? = null,
+    /** 들른 곳마다 글쓴이가 붙인 내 사진 (앱 안 사본 경로, [stops]와 같은 순서, 없는 곳은 빈 문자열). */
+    val stopPhotos: List<String> = emptyList(),
 )
 
 /**
@@ -353,7 +355,7 @@ private fun CommunitySort.toRust() = when (this) {
 
 internal fun RCoursePost.toModel() = CoursePost(
     id, title, body, author, mine, region, tags, stops.map { it.toModel() }, distanceM, durationMs, createdMs, hearts.toInt(), heartedByMe,
-    visitedDay, season, weather,
+    visitedDay, season, weather, stopPhotos,
 )
 
 internal fun RPlaceReview.toModel() = PlaceReview(

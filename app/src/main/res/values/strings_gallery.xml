@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 내 사진(갤러리) 연동: 들른 곳 사진 카드 · 크게 보기 · 올리기 창에서 사진 붙이기 -->
+<resources>
+    <string name="my_photo_open">내 사진 크게 보기</string>
+    <string name="my_photo_count">내 사진 %1$d장</string>
+    <string name="share_my_photos_hint">곳마다 내가 찍은 사진을 하나 골라 붙일 수 있어요 (고른 것만 올라가요)</string>
+    <string name="share_my_photos_none">이날 찍은 내 사진이 없어요</string>
+    <string name="share_my_photos_private">집·회사 근처 사진 %1$d장은 후보에서 뺐어요</string>
+    <string name="share_drive_photos_label">이 길에서 찍은 내 사진 (고른 것만, %1$d장까지)</string>
+    <string name="share_photo_attached">내 사진</string>
+</resources>

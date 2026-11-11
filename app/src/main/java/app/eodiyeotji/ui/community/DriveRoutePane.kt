@@ -1,5 +1,7 @@
 package app.eodiyeotji.ui.community
 
+import app.eodiyeotji.ui.gallery.MyPhotoStrip
+import app.eodiyeotji.ui.gallery.MyPhotoViewer
 import app.eodiyeotji.ui.common.agoText
 import androidx.compose.foundation.BorderStroke
 
@@ -39,6 +41,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -375,6 +378,13 @@ private fun DriveRouteDetailScreen(
                                     if (r.body.isNotBlank()) {
                                         Spacer(Modifier.height(12.dp))
                                         Text(r.body, style = EodiTheme.type.body, color = colors.textPrimary)
+                                    }
+                                    if (r.photos.isNotEmpty()) {
+                                        // 글쓴이가 이 길에서 찍어 붙인 사진 (누르면 크게)
+                                        var viewing by remember(r.id) { mutableStateOf<Int?>(null) }
+                                        Spacer(Modifier.height(14.dp))
+                                        MyPhotoStrip(r.photos, r.photos.size, onOpen = { viewing = it }, size = 120.dp, maxShown = 4)
+                                        viewing?.let { MyPhotoViewer(r.photos, it, r.title, onDismiss = { viewing = null }) }
                                     }
                                     FromToLine(r, Modifier.padding(top = 16.dp))
                                     Spacer(Modifier.height(16.dp))

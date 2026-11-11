@@ -18,10 +18,14 @@ import kotlinx.coroutines.coroutineScope
  * 그 곳 말풍선 카드에 사진이 들어간다.
  */
 @Immutable
-data class MapPhotoPin(val key: String, val name: String, val address: String, val lat: Double, val lon: Double)
+data class MapPhotoPin(
+    val key: String, val name: String, val address: String, val lat: Double, val lon: Double,
+    /** 그곳에서 찍은 내 사진 (`content://`). 있으면 장소 대표 사진 대신 이것을 쓴다. */
+    val myPhoto: String? = null,
+)
 
 /**
- * 정차한 곳마다 대표 사진(구글 Places 첫 사진)을 받아 온다 (키 → 사진). 사진이 없는 곳은 빠진다.
+ * 정차한 곳마다 대표 사진(내 사진이 있으면 그것, 없으면 구글 Places 첫 사진)을 받아 온다 (키 → 사진). 사진이 없는 곳은 빠진다.
  * 같은 곳은 기기에 저장된 결과·이미지 캐시를 쓴다. 카드 그림은 [buildMarkerIcons]가 이 사진으로 만든다.
  */
 internal suspend fun loadStayPhotos(
@@ -35,8 +39,13 @@ internal suspend fun loadStayPhotos(
     val px = (PHOTO_DECODE_DP * density).roundToInt()
     pins.map { pin ->
         async {
-            val photo = repo.photos(pin.name, pin.address, pin.lat, pin.lon).firstOrNull() ?: return@async null
-            val req = repo.imageRequest(photo).newBuilder(context)
+            val base = if (pin.myPhoto != null) {
+                ImageRequest.Builder(context).data(pin.myPhoto).build()
+            } else {
+                val photo = repo.photos(pin.name, pin.address, pin.lat, pin.lon).firstOrNull() ?: return@async null
+                repo.imageRequest(photo)
+            }
+            val req = base.newBuilder(context)
                 .size(px)
                 .allowHardware(false) // Canvas로 다시 그리려면 소프트웨어 비트맵이어야 한다
                 .build()

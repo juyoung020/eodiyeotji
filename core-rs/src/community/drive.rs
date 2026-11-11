@@ -178,6 +178,8 @@ pub struct DriveRoutePost {
     pub visited_day: String,
     pub season: String,
     pub weather: Option<String>,
+    /// 글쓴이가 붙인 내 사진 (앱 안 사본 경로, 없으면 빈 목록). `gallery` 모듈.
+    pub photos: Vec<String>,
 }
 
 /// 목록·추천 한 줄. [distance_km] = 지금 위치에서 길 위 가장 가까운 점까지(모르면 -1). [score]는 추천 점수(목록에선 0).
@@ -789,7 +791,7 @@ impl RouteRow {
 }
 
 const ROUTE_COLS: &str = "id, title, body, author, mine, region, start_name, end_name, line, highlights, best_time, distance_m,
-     duration_ms, created_ms, others_hearts + my_heart, my_heart, visited_day, weather";
+     duration_ms, created_ms, others_hearts + my_heart, my_heart, visited_day, weather, photos";
 
 fn route_from_row(r: &Row) -> rusqlite::Result<RouteRow> {
     let line = decode_line(&r.get::<_, String>(8)?);
@@ -819,6 +821,7 @@ fn route_from_row(r: &Row) -> rusqlite::Result<RouteRow> {
             season: season_label(visited_day.clone()),
             visited_day,
             weather: r.get(17)?,
+            photos: crate::gallery::decode_paths(&r.get::<_, String>(18)?),
         },
         line,
     })

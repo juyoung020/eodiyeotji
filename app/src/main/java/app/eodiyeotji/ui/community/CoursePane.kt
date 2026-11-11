@@ -193,6 +193,7 @@ internal fun CourseDetailScreen(
                                         val picked = selectedKey?.removePrefix("s")?.toIntOrNull()?.minus(1)
                                         StopStrip(
                                             p.stops,
+                                            photos = p.stopPhotos,
                                             onMore = {},
                                             selected = picked,
                                             onPick = { i -> if (i == picked) onOpenPlace(p.stops[i]) else selectedKey = "s${i + 1}" },
@@ -235,6 +236,7 @@ internal fun CourseDetailScreen(
                                 i + 1, s,
                                 reviews = d.stopReviews.getOrNull(i),
                                 author = p.author,
+                                localPhoto = p.stopPhotos.getOrNull(i)?.takeIf { it.isNotBlank() },
                                 selected = selectedKey == "s${i + 1}",
                                 onClick = { selectedKey = if (selectedKey == "s${i + 1}") null else "s${i + 1}" },
                                 onOpenPhoto = { onOpenPlace(s) },
@@ -289,7 +291,10 @@ internal fun CourseDetailScreen(
 }
 
 @Composable
-private fun StopRow(order: Int, s: StopFact, reviews: StopReviews?, author: String, selected: Boolean, onClick: () -> Unit, onOpenPhoto: () -> Unit) {
+private fun StopRow(
+    order: Int, s: StopFact, reviews: StopReviews?, author: String, selected: Boolean, onClick: () -> Unit, onOpenPhoto: () -> Unit,
+    localPhoto: String? = null,
+) {
     val c = EodiTheme.colors
     Surface(
         onClick = onClick,
@@ -301,7 +306,7 @@ private fun StopRow(order: Int, s: StopFact, reviews: StopReviews?, author: Stri
             Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 // 사진을 누르면 그곳 사진 크게 보기, 줄의 나머지를 누르면 지도에서 그곳 고르기
                 Box(Modifier.clip(RoundedCornerShape(16.dp)).clickable(role = Role.Image, onClick = onOpenPhoto)) {
-                    StopPhoto(s.name, s.address, s.lat, s.lon, order = order, size = 104.dp)
+                    StopPhoto(s.name, s.address, s.lat, s.lon, order = order, size = 104.dp, localPhoto = localPhoto)
                     OrderDot(order, Modifier.align(Alignment.TopStart).padding(6.dp))
                 }
                 Spacer(Modifier.width(18.dp))

@@ -8,6 +8,11 @@
             android:name=".record.DemoSeedReceiver"
             android:exported="true" />
 
+        <!-- 시연용 내 사진(갤러리) 넣기 (사용법은 gallery/GalleryDemoReceiver.kt) -->
+        <receiver
+            android:name=".gallery.GalleryDemoReceiver"
+            android:exported="true" />
+
         <!-- 열려 있는 검색 칸에 말 넣기 (사용법은 ui/search/SearchDebugReceiver.kt) -->
         <receiver
             android:name=".ui.search.SearchDebugReceiver"

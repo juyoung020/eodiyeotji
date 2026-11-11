@@ -55,6 +55,11 @@ import app.eodiyeotji.core.shareCourseWith
 import app.eodiyeotji.core.sharePreview
 import app.eodiyeotji.core.weatherFor
 import app.eodiyeotji.ui.theme.EodiTheme
+import app.eodiyeotji.core.MyPhoto
+import app.eodiyeotji.core.setCourseStopPhotos
+import app.eodiyeotji.gallery.GalleryRepository
+import app.eodiyeotji.ui.gallery.AskGalleryOnce
+import app.eodiyeotji.ui.gallery.MyPhotoPick
 import app.eodiyeotji.ui.common.distanceText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -88,13 +93,19 @@ data class ShareUiState(
     val weatherLoading: Boolean = false,
     val submitting: Boolean = false,
     val submitError: String? = null,
+    /** 곳마다 올릴 수 있는 내 사진 (도착 시각 → 사진, 집·회사 근처 사진은 빠짐) */
+    val myPhotos: Map<Long, List<MyPhoto>> = emptyMap(),
+    /** 집·회사 근처라 후보에서 뺀 내 사진 수 */
+    val privatePhotos: Int = 0,
+    /** 사용자가 고른 사진 (도착 시각 → uri). 기본은 아무것도 안 고름 */
+    val pickedPhotos: Map<Long, String> = emptyMap(),
 ) {
     val keptCount: Int get() = preview?.stops?.count { it.arriveMs !in excluded } ?: 0
     val canSubmit: Boolean get() = !submitting && title.isNotBlank() && keptCount > 0
 }
 
 @HiltViewModel
-class ShareCourseViewModel @Inject constructor(private val core: EodiCore) : ViewModel() {
+class ShareCourseViewModel @Inject constructor(private val core: EodiCore, private val gallery: GalleryRepository) : ViewModel() {
     private val _state = MutableStateFlow(ShareUiState())
     val state: StateFlow<ShareUiState> = _state.asStateFlow()
     private var job: Job? = null
@@ -113,9 +124,29 @@ class ShareCourseViewModel @Inject constructor(private val core: EodiCore) : Vie
                 return@launch
             }
             _state.update { it.copy(preview = p, title = p.title, weatherLoading = true) }
+            launch { loadPhotos(episodeId, p.day) }
             val w = core.weatherFor(p)
             _state.update { it.copy(weather = w, weatherLoading = false) }
         }
+    }
+
+    /** 그날 내 사진을 곳마다 읽는다 (권한이 없으면 빈 것 → 사진 칸이 안 보인다). 권한을 막 받았을 때도 부른다. */
+    fun reloadPhotos() {
+        val s = _state.value
+        val p = s.preview ?: return
+        viewModelScope.launch { loadPhotos(s.episodeId, p.day) }
+    }
+
+    private suspend fun loadPhotos(episodeId: Long, day: String) {
+        val all = gallery.stayPhotos(day)
+        val ok = all.mapValues { (_, v) -> v.photos.filter { it.shareable } }.filterValues { it.isNotEmpty() }
+        val hidden = all.values.sumOf { v -> v.photos.count { !it.shareable } }
+        _state.update { if (it.episodeId == episodeId) it.copy(myPhotos = ok, privatePhotos = hidden) else it }
+    }
+
+    /** 곳 하나에 붙일 사진 고르기 (같은 사진을 다시 누르면 뗀다, 곳마다 한 장). */
+    fun togglePhoto(arriveMs: Long, uri: String) = _state.update {
+        it.copy(pickedPhotos = if (it.pickedPhotos[arriveMs] == uri) it.pickedPhotos - arriveMs else it.pickedPhotos + (arriveMs to uri))
     }
 
     fun setTitle(v: String) = _state.update { it.copy(title = v.take(100)) }
@@ -131,7 +162,12 @@ class ShareCourseViewModel @Inject constructor(private val core: EodiCore) : Vie
         _state.update { it.copy(submitting = true, submitError = null) }
         viewModelScope.launch {
             try {
-                val post = core.shareCourseWith(s.episodeId, s.title, s.body, s.excluded.toList(), s.weather)
+                var post = core.shareCourseWith(s.episodeId, s.title, s.body, s.excluded.toList(), s.weather)
+                // 고른 사진만 앱 안에 줄여 복사(EXIF 없이)해 글의 들른 곳 사진으로 단다. 다시 올릴 때 안 고른 곳은 뗀다
+                val copies = s.pickedPhotos.filterKeys { it !in s.excluded }.mapNotNull { (t, uri) ->
+                    gallery.copyForPost(uri, "${post.post.id}-$t")?.let { t to it }
+                }.toMap()
+                post = core.setCourseStopPhotos(post.post.id, copies).copy(visit = post.visit, offers = post.offers)
                 _state.update { it.copy(submitting = false) }
                 onDone(post)
             } catch (e: CancellationException) {
@@ -161,6 +197,7 @@ fun ShareCourseSheet(episodeId: Long, onDone: (DriveCourse?) -> Unit, viewModel:
             else -> ShareSheetBody(
                 state = state,
                 preview = p,
+                onTogglePhoto = viewModel::togglePhoto,
                 onTitle = viewModel::setTitle,
                 onBody = viewModel::setBody,
                 onToggleStop = viewModel::toggleStop,
@@ -169,12 +206,15 @@ fun ShareCourseSheet(episodeId: Long, onDone: (DriveCourse?) -> Unit, viewModel:
             )
         }
     }
+    // 사진 붙이기를 처음 쓸 때 한 번만 갤러리 권한을 묻는다
+    AskGalleryOnce(enabled = state.preview != null, onGranted = viewModel::reloadPhotos)
 }
 
 @Composable
 private fun ShareSheetBody(
     state: ShareUiState,
     preview: SharePreview,
+    onTogglePhoto: (Long, String) -> Unit,
     onTitle: (String) -> Unit,
     onBody: (String) -> Unit,
     onToggleStop: (Long) -> Unit,
@@ -224,7 +264,7 @@ private fun ShareSheetBody(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Box(Modifier.alpha(if (on) 1f else 0.35f)) {
-                        StopPhoto(s.name, s.address, s.lat, s.lon, order = i + 1, size = 156.dp)
+                        StopPhoto(s.name, s.address, s.lat, s.lon, order = i + 1, size = 156.dp, localPhoto = state.pickedPhotos[s.arriveMs])
                         Box(
                             Modifier.align(Alignment.TopEnd).padding(8.dp).size(44.dp)
                                 .background(if (on) c.accent else c.surface, CircleShape),
@@ -238,6 +278,7 @@ private fun ShareSheetBody(
                 }
             }
         }
+        MyPhotoPicker(preview, state, onTogglePhoto)
         val kept = preview.stops.filter { it.arriveMs !in state.excluded }
         Text(
             listOf(stringResource(R.string.community_stops_count, kept.size), distanceText(preview.distanceM)).joinToString(" · "),
@@ -258,6 +299,32 @@ private fun ShareSheetBody(
             enabled = state.canSubmit,
         )
     }
+}
+
+/** 곳마다 내 사진 고르기 칸: 곳 이름 + 그곳 사진 줄 (뺀 곳은 흐리게, 고를 수 없음). 사진이 없으면 한 줄 안내. */
+@Composable
+private fun MyPhotoPicker(preview: SharePreview, state: ShareUiState, onToggle: (Long, String) -> Unit) {
+    val c = EodiTheme.colors
+    val type = EodiTheme.type
+    val stops = preview.stops.filter { state.myPhotos.containsKey(it.arriveMs) }
+    if (stops.isEmpty() && state.privatePhotos == 0) {
+        if (state.myPhotos.isEmpty()) Text(stringResource(R.string.share_my_photos_none), style = type.caption, color = c.textTertiary)
+        return
+    }
+    Text(stringResource(R.string.share_my_photos_hint), style = type.label, color = c.textTertiary)
+    stops.forEach { s ->
+        val on = s.arriveMs !in state.excluded
+        Row(Modifier.fillMaxWidth().alpha(if (on) 1f else 0.35f), verticalAlignment = Alignment.CenterVertically) {
+            Text(s.name, style = type.bodyStrong, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(180.dp))
+            Spacer(Modifier.width(12.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(state.myPhotos[s.arriveMs].orEmpty(), key = { it.id }) { ph ->
+                    MyPhotoPick(ph.uri, picked = state.pickedPhotos[s.arriveMs] == ph.uri, onToggle = { if (on) onToggle(s.arriveMs, ph.uri) })
+                }
+            }
+        }
+    }
+    if (state.privatePhotos > 0) PrivacyNote(stringResource(R.string.share_my_photos_private, state.privatePhotos))
 }
 
 @Composable

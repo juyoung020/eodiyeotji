@@ -38,6 +38,7 @@ fn route(id: &str, title: &str, region: &str, hearts: u32, start: End, end: End,
         visited_day: "2026-10-25".into(),
         season: "가을 · 단풍철".into(),
         weather: Some("맑음 · 14°C".into()),
+        photos: vec![],
     }
 }
 

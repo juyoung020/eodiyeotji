@@ -15,6 +15,8 @@ import app.eodiyeotji.core.DaySummary
 import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.DayEntry
 import app.eodiyeotji.core.shareCandidatesOn
+import app.eodiyeotji.core.StayMyPhotos
+import app.eodiyeotji.gallery.GalleryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.LocalDate
 import javax.inject.Inject
@@ -68,6 +70,8 @@ sealed interface DetailState {
         val shareEpisode: Long? = null,
         /** 머문 곳 줄의 제휴 쿠폰 (항목 키 → 쿠폰, 쿠폰 없는 곳은 빠짐) */
         val offers: Map<String, List<PartnerOffer>> = emptyMap(),
+        /** 머문 곳 줄의 내 사진 (항목 키 → 사진, 사진 없는 곳은 빠짐. 갤러리 권한이 없으면 비어 있다) */
+        val myPhotos: Map<String, StayMyPhotos> = emptyMap(),
     ) : DetailState
     data class Failed(val summary: DaySummary, val message: String) : DetailState
 }
@@ -102,6 +106,7 @@ data class TimelineUiState(
 @HiltViewModel
 class TimelineViewModel @Inject constructor(
     private val core: EodiCore,
+    private val gallery: GalleryRepository,
 ) : ViewModel() {
 
     private val reloadRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -225,7 +230,9 @@ class TimelineViewModel @Inject constructor(
             val share = async { loadShareEpisode(s.day) }
             val d = core.dayDetail(s.day)
             val offers = async { loadOffers(d.entries) }
-            DetailState.Loaded(d.summary, d.entries, map.await(), share.await(), offers.await()).also {
+            // 내 사진: 갤러리 읽기(IO) + 머문 곳 맞추기(Rust). 권한이 없으면 바로 빈 것
+            val photos = async { gallery.stayPhotos(s.day).mapKeys { (arrive, _) -> "s$arrive" } }
+            DetailState.Loaded(d.summary, d.entries, map.await(), share.await(), offers.await(), photos.await()).also {
                 if (BuildConfig.DEBUG) Log.d(TAG, "하루 상세 ${s.day}: ${(System.nanoTime() - t0) / 1_000_000}ms")
             }
         }
