@@ -1,6 +1,5 @@
 package app.eodiyeotji.ui.share
 
-import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -9,6 +8,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -65,13 +65,20 @@ internal fun CarHandoffButton(target: ShareTarget, modifier: Modifier, style: Sh
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var pairing by remember { mutableStateOf(false) }
+    val notice = LocalShareNotice.current
 
-    val send: () -> Unit = {
+    // 결과는 앱 안 알림으로 (Pleos 화면에서는 Toast가 보이지 않는다). 보내는 동안에는 다시 보내지 않는다.
+    fun send() {
+        if (busy) return
         busy = true
         scope.launch {
             val ok = runCatching { handoff.sendCard(deps.core().shareCardRaw(target)) }.getOrDefault(false)
             busy = false
-            Toast.makeText(context, if (ok) R.string.handoff_sent else R.string.handoff_send_failed, Toast.LENGTH_LONG).show()
+            if (ok) {
+                notice.notify(context, context.getString(R.string.handoff_sent))
+            } else {
+                notice.notify(context, context.getString(R.string.handoff_send_failed), context.getString(R.string.handoff_retry)) { send() }
+            }
         }
     }
     val onClick = { if (!busy) { if (link == null) pairing = true else send() } }
@@ -82,20 +89,32 @@ internal fun CarHandoffButton(target: ShareTarget, modifier: Modifier, style: Sh
             ShareIcon,
             onClick,
             modifier,
+            enabled = !busy,
         )
+        // 아이콘만으로는 무슨 버튼인지 몰라 짧은 글자("폰으로")를 같이 붙인다
         ShareButtonStyle.ICON -> {
             val c = EodiTheme.colors
             val label = stringResource(R.string.handoff_button)
             Surface(
                 onClick = onClick,
+                enabled = !busy,
                 shape = CircleShape,
                 color = c.surfaceHigh,
                 contentColor = c.textPrimary,
-                modifier = modifier.size(EodiTheme.space.touch).semantics { contentDescription = label },
+                modifier = modifier.height(EodiTheme.space.touch).semantics { contentDescription = label },
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    if (busy) CircularProgressIndicator(Modifier.size(32.dp), color = c.accent, strokeWidth = 3.dp)
-                    else Icon(ShareIcon, null, Modifier.size(32.dp), tint = c.accent)
+                Row(
+                    Modifier.padding(start = 20.dp, end = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (busy) CircularProgressIndicator(Modifier.size(30.dp), color = c.accent, strokeWidth = 3.dp)
+                    else Icon(ShareIcon, null, Modifier.size(30.dp), tint = c.accent)
+                    Text(
+                        stringResource(if (busy) R.string.handoff_sending else R.string.handoff_icon_label),
+                        style = EodiTheme.type.label,
+                        color = c.textPrimary,
+                    )
                 }
             }
         }
@@ -116,6 +135,7 @@ internal fun CarHandoffButton(target: ShareTarget, modifier: Modifier, style: Sh
 private fun PairPhoneWindow(onDone: (Boolean) -> Unit) {
     val context = LocalContext.current
     val handoff = remember(context) { EntryPointAccessors.fromApplication(context.applicationContext, ShareEntryPoint::class.java).handoff() }
+    val notice = LocalShareNotice.current
     var p by remember { mutableStateOf<HandoffPairing?>(null) }
     var failed by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -126,7 +146,7 @@ private fun PairPhoneWindow(onDone: (Boolean) -> Unit) {
         }
         p = made
         if (handoff.awaitPhone(made)) {
-            Toast.makeText(context, R.string.handoff_paired, Toast.LENGTH_SHORT).show()
+            notice.notify(context, context.getString(R.string.handoff_paired))
             onDone(true)
         } else {
             failed = true

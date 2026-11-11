@@ -20,7 +20,7 @@ class MainActivity : ComponentActivity() {
                 app.eodiyeotji.ui.offers.CouponScope {
                     app.eodiyeotji.ui.place.PlaceDetailScope {
                         // 그날로 돌아가기도 어느 화면에서든 LocalOpenReplay로 연다 (앱 화면 위를 전부 덮는다)
-                        app.eodiyeotji.ui.replay.ReplayScope { AppRoot() }
+                        app.eodiyeotji.ui.replay.ReplayScope { app.eodiyeotji.ui.share.ShareNoticeScope { AppRoot() } }
                     }
                 }
             }
