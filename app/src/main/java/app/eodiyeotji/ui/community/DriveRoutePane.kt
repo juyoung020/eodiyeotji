@@ -113,7 +113,7 @@ fun DriveRoutePane(viewModel: DriveRouteViewModel = hiltViewModel()) {
                     if (l.items.isEmpty()) {
                         CenterMessage(stringResource(R.string.drive_empty), icon = CommunityIcons.Road)
                     } else {
-                        DriveRouteGrid(l.items, onOpen = viewModel::open, onHeart = viewModel::toggleHeart)
+                        DriveRouteGrid(l.items, onOpen = { viewModel.open(it) }, onFly = { viewModel.open(it, fly = true) }, onHeart = viewModel::toggleHeart)
                     }
             }
         }
@@ -178,7 +178,7 @@ private fun DriveToolbar(sort: DriveRouteSort, onSort: (DriveRouteSort) -> Unit,
 
 /** 글 카드 격자: 넓은 창은 2~3칸 엇갈림 격자, 좁은 창은 가운데 한 줄 (코스 카드와 같은 규칙). */
 @Composable
-private fun DriveRouteGrid(items: List<DriveRouteItem>, onOpen: (DriveRouteItem) -> Unit, onHeart: (String) -> Unit) {
+private fun DriveRouteGrid(items: List<DriveRouteItem>, onOpen: (DriveRouteItem) -> Unit, onFly: (DriveRouteItem) -> Unit, onHeart: (String) -> Unit) {
     val state = rememberLazyStaggeredGridState()
     val firstKey = items.firstOrNull()?.route?.id
     LaunchedEffect(firstKey) { state.scrollToItem(0) }
@@ -195,7 +195,7 @@ private fun DriveRouteGrid(items: List<DriveRouteItem>, onOpen: (DriveRouteItem)
             modifier = Modifier.fillMaxSize(),
         ) {
             items(items, key = { it.route.id }, contentType = { "drive" }) { it ->
-                DriveRouteCard(it, onOpen = { onOpen(it) }, onHeart = { onHeart(it.route.id) })
+                DriveRouteCard(it, onOpen = { onOpen(it) }, onHeart = { onHeart(it.route.id) }, onAction = { onFly(it) })
             }
         }
     }
@@ -216,6 +216,8 @@ internal fun DriveRouteCard(
     rank: Int? = null,
     focused: Boolean = false,
     action: String = stringResource(R.string.drive_view),
+    /** 아래 오른쪽 글자 버튼. 목록에서는 "3D로 미리 달리기"라 상세를 열고 비행까지 바로 시작한다 (전에는 상세만 열려 한 번 더 눌러야 했다). */
+    onAction: () -> Unit = onOpen,
 ) {
     val colors = EodiTheme.colors
     val type = EodiTheme.type
@@ -266,7 +268,7 @@ internal fun DriveRouteCard(
                     HeartCount(r.hearts, r.heartedByMe, Modifier.padding(horizontal = 12.dp, vertical = 20.dp))
                 }
                 Spacer(Modifier.weight(1f))
-                TextAction(action, onOpen)
+                TextAction(action, onAction)
             }
         }
     }

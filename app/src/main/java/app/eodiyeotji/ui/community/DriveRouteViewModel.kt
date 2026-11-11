@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** 고른 드라이브 코스의 상세 (3D 지도 스타일·카메라·비행 장면·안내 구간은 뒤따라 채운다). */
@@ -48,6 +49,8 @@ data class DriveRouteDetail(
     val sights: List<FlightSight> = emptyList(),
     val legs: List<CourseLeg> = emptyList(),
     val flying: Boolean = false,
+    /** 카드의 "3D로 미리 달리기"로 열었음 → 지도 · 처음 카메라 · 비행 장면이 다 오면 비행을 시작한다 */
+    val flyWhenReady: Boolean = false,
     val naviFailed: Boolean = false,
 ) {
     /** 비행 시간: 길 1km에 약 0.9초, 20~30초. */
@@ -117,8 +120,9 @@ class DriveRouteViewModel @Inject constructor(
         }
     }
 
-    fun open(item: DriveRouteItem) {
-        _state.update { it.copy(detail = DriveRouteDetail(item)) }
+    /** 상세를 연다. [fly]면 비행 장면이 오는 대로 미리보기 비행을 시작한다 (카드의 "3D로 미리 달리기"). */
+    fun open(item: DriveRouteItem, fly: Boolean = false) {
+        _state.update { it.copy(detail = DriveRouteDetail(item, flyWhenReady = fly && !isDriving.value)) }
         val id = item.route.id
         viewModelScope.launch {
             // 지도 · 비행 장면 · 구간은 서로 상관없다 → 동시에
@@ -131,6 +135,7 @@ class DriveRouteViewModel @Inject constructor(
             val (frames, legs) = framesJob.await() to legsJob.await()
             val sights = sightsJob.await()
             updateDetail(id) { it.copy(style = style, frames = frames, sights = sights, legs = legs) }
+            startFlightWhenReady(id)
         }
     }
 
@@ -141,7 +146,20 @@ class DriveRouteViewModel @Inject constructor(
         cameraJob = viewModelScope.launch {
             val cam = runCatching { core.driveRouteCamera(id, widthDp, heightDp, MAP_PADDING_DP) }.getOrNull() ?: return@launch
             updateDetail(id) { it.copy(camera = cam) }
+            startFlightWhenReady(id)
         }
+    }
+
+    /**
+     * 카드에서 "3D로 미리 달리기"로 열었으면 스타일 · 처음 카메라 · 비행 장면이 다 온 뒤 비행을 켠다.
+     * 처음 카메라와 같은 순간에 켜면 지도가 처음 카메라로 옮기면서 첫 장면으로 내려가던 비행을 끊어 바로 멈췄다 → 한 박자 뒤에 켠다.
+     */
+    private suspend fun startFlightWhenReady(id: String) {
+        val d = _state.value.detail?.takeIf { it.item.route.id == id } ?: return
+        if (!d.flyWhenReady || d.style == null || d.camera == null || d.frames.size < 2) return
+        updateDetail(id) { it.copy(flyWhenReady = false) }
+        delay(FLY_AFTER_MS)
+        if (!isDriving.value) updateDetail(id) { it.copy(flying = true) }
     }
 
     fun closeDetail() {
@@ -209,6 +227,7 @@ class DriveRouteViewModel @Inject constructor(
     private companion object {
         const val TAG = "EodiDriveRoutes"
         const val MAP_PADDING_DP = 72f
+        const val FLY_AFTER_MS = 600L
     }
 }
 
