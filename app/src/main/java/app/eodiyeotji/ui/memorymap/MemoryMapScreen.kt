@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -65,6 +66,10 @@ import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
 import kotlinx.coroutines.withContext
 import kotlin.math.PI
 import kotlin.math.sin
@@ -83,7 +88,7 @@ import org.maplibre.android.style.layers.FillExtrusionLayer
 import org.maplibre.android.style.layers.LineLayer
 
 /** 밤하늘 바탕 (스타일 background와 같은 색 → 불러오는 동안 깜빡이지 않게). */
-private val NightSky = Color(0xFF070D1C)
+private val NightSky = Color(0xFF0D1A34)
 private val Gold = Color(0xFFFFD58A)
 private val Moon = Color(0xFFF3EEDF)
 
@@ -176,6 +181,11 @@ private fun MemoryMapStage(data: MemoryMap) {
     var playKey by remember { mutableIntStateOf(0) }
     val total = data.months.size
     val done = step >= total
+    // 재생 중 멈춤 · 건너뛰기 (오른쪽 위 버튼). 멈추면 달 넘기기 · 혜성 · 카메라가 그 자리에 선다.
+    var paused by remember(data) { mutableStateOf(false) }
+    var skipped by remember(data) { mutableStateOf(false) }
+    // 그리는 동안 카메라가 향하는 곳 (멈췄다 다시 갈 때 남은 시간 동안 이어서 간다)
+    var revealTo by remember(data) { mutableStateOf<CameraPosition?>(null) }
     // 달린 길 전체로 물러나기까지 끝나면 한 줄을 띄운다
     var captionShown by remember(data) { mutableStateOf(false) }
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
@@ -212,36 +222,44 @@ private fun MemoryMapStage(data: MemoryMap) {
         LaunchedEffect(s, playKey) {
             if (s == null || m == null) return@LaunchedEffect
             captionShown = false
+            paused = false
+            skipped = false
             val stepMs = monthMs(total)
-            val revealMs = (stepMs * total + 1_000).toInt()
-            data.bounds?.let { b ->
+            // 첫 화면부터 길이 보이게: 가장 오래된 달은 켠 채로 시작하고, 카메라가 내려앉는 동안 다음 달부터 혜성이 그린다
+            // (예전에는 카메라가 내려앉을 때까지 약 4초 동안 길 없는 지도만 보였다)
+            val first = if (total > 1) 1 else 0
+            step = first
+            val intro = launch {
+                val b = data.bounds ?: return@launch
                 val bb = LatLngBounds.from(b.maxLat, b.maxLon, b.minLat, b.minLon)
                 val pad = intArrayOf(120, 200, 120, 260)
                 // 기울기째로 맞추면 먼 쪽까지 계산해 길이 아주 작아진다 → 위에서 맞춘 줌에 기울기만 더한다
                 val from = m.getCameraForLatLngBounds(bb, pad, REVEAL_BEARING_FROM, 0.0)?.let { CameraPosition.Builder(it).tilt(REVEAL_PITCH).build() }
                 val to = m.getCameraForLatLngBounds(bb, pad, REVEAL_BEARING_TO, 0.0)?.let { CameraPosition.Builder(it).tilt(REVEAL_PITCH).build() }
-                if (from != null && to != null) {
-                    m.cancelTransitions()
-                    // 별이 뜬 높은 하늘에서 한국 전체를 내려다보다가, 기울어지며 달린 곳으로 내려앉는다
-                    step = -1
-                    m.moveCamera(CameraUpdateFactory.newCameraPosition(KoreaCamera))
-                    // 첫 장면 타일이 다 그려진 뒤 내려앉는다 (빈 산·바다 위에서 출발하지 않게). 네트워크가 느려도 2초면 출발.
-                    val t0 = System.nanoTime()
-                    mapViewRef?.awaitFullyRendered(2_000)
-                    delay((700 - (System.nanoTime() - t0) / 1_000_000).coerceAtLeast(0))
-                    val near = CameraPosition.Builder(from).zoom(from.zoom + 0.8).build()
-                    m.animateCamera(CameraUpdateFactory.newCameraPosition(near), DESCEND_MS)
-                    delay(DESCEND_MS.toLong())
-                    m.easeCamera(CameraUpdateFactory.newCameraPosition(to), revealMs, true)
-                }
+                if (from == null || to == null) return@launch
+                m.cancelTransitions()
+                // 별이 뜬 높은 하늘에서 한국 전체를 내려다보다가, 기울어지며 달린 곳으로 내려앉는다
+                m.moveCamera(CameraUpdateFactory.newCameraPosition(KoreaCamera))
+                // 첫 장면 타일을 잠깐(최대 1초) 기다린 뒤 내려앉는다 (빈 산·바다 위에서 출발하지 않게)
+                mapViewRef?.awaitFullyRendered(1_000)
+                val near = CameraPosition.Builder(from).zoom(from.zoom + 0.8).build()
+                m.animateCamera(CameraUpdateFactory.newCameraPosition(near), DESCEND_MS)
+                playDelay(DESCEND_MS.toLong(), { paused }, { skipped })
+                if (skipped) return@launch
+                revealTo = to
+                m.easeCamera(CameraUpdateFactory.newCameraPosition(to), ((total - step).coerceAtLeast(0) * stepMs + 1_000).toInt(), true)
             }
-            step = -1
-            delay(300)
-            for (k in 0 until total) {
+            playDelay(stepMs, { paused }, { skipped })
+            for (k in first + 1 until total) {
+                if (skipped) break
                 step = k
-                delay(stepMs)
+                playDelay(stepMs, { paused }, { skipped })
             }
             step = total
+            paused = false
+            revealTo = null
+            // 건너뛰지 않았으면 카메라가 내려앉기를 마칠 때까지 (달이 적어 금방 다 그린 경우)
+            if (skipped) intro.cancel() else intro.join()
             delay(400)
             // 끝: 달린 길 범위에 맞춰(위에서 맞춘 줌 + 기울기) 물러나고, 한 줄을 띄운 뒤 숨 쉬듯 좌우로 천천히 돈다
             val end = data.bounds?.let { b ->
@@ -285,9 +303,14 @@ private fun MemoryMapStage(data: MemoryMap) {
             if (step !in 0 until total) return@LaunchedEffect
             // 혜성: 머리가 길의 처음(0)에서 끝(1)까지 달리고, 꼬리 뒤로는 금빛 길이 남는다
             val stepMs = monthMs(total)
-            val start = System.nanoTime()
+            // 멈춘 동안은 시간을 세지 않는다 (혜성이 그 자리에 선다)
+            var elapsedMs = 0f
+            var last = System.nanoTime()
             while (true) {
-                val t = ((System.nanoTime() - start) / 1_000_000f / stepMs).coerceAtMost(1f)
+                val now = System.nanoTime()
+                if (!paused) elapsedMs += (now - last) / 1_000_000f
+                last = now
+                val t = if (skipped) 1f else (elapsedMs / stepMs).coerceAtMost(1f)
                 val head = t * 1.05f
                 core?.setProperties(PropertyFactory.lineGradient(cometGradient(head, core = true)))
                 glow?.setProperties(PropertyFactory.lineGradient(cometGradient(head, core = false)))
@@ -307,19 +330,55 @@ private fun MemoryMapStage(data: MemoryMap) {
                 // 숨쉬기는 색의 투명도(상수)로 준다. 곳마다 다른 밝기(w)는 스타일의 circle-opacity에 그대로 두고 둘이 곱해진다.
                 // 곳마다 다른 식(data-driven)을 프레임마다 바꾸면 MapLibre가 그 소스 타일을 통째로 다시 만든다 (초당 12번).
                 halo?.setProperties(PropertyFactory.circleColor(Expression.rgba(255f, 181f, 71f, 0.45f + 0.55f * breath)))
-                coast?.setProperties(PropertyFactory.lineOpacity(0.35f + 0.3f * (0.5f + 0.5f * sin(sec * 2.0 * PI / 4.5).toFloat())))
+                coast?.setProperties(PropertyFactory.lineOpacity(0.55f + 0.3f * (0.5f + 0.5f * sin(sec * 2.0 * PI / 4.5).toFloat())))
                 delay(PULSE_FRAME_MS)
             }
         }
 
-        // 지금 그리는 달
-        AnimatedContent(
-            targetState = if (step in 0 until total) data.months[step] else null,
-            transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(250)) },
-            label = "month",
-            modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(EodiTheme.space.page).padding(top = 18.dp),
-        ) { label ->
-            if (label != null) Text(label, style = EodiTheme.type.bodyStrong, color = Gold)
+        // 멈췄다 다시 가면: 카메라도 남은 그리기 시간 동안 이어서 간다
+        LaunchedEffect(m, paused) {
+            if (m == null) return@LaunchedEffect
+            if (paused) {
+                m.cancelTransitions()
+            } else {
+                val to = revealTo ?: return@LaunchedEffect
+                val left = ((total - step).coerceAtLeast(0) * monthMs(total) + 1_000).toInt()
+                m.easeCamera(CameraUpdateFactory.newCameraPosition(to), left, true)
+            }
+        }
+
+        // 오른쪽 위: 지금 그리는 달 (칸 폭 고정 — 글자가 바뀌어도 "2025년 11"처럼 잘리지 않게) + 멈춤 · 건너뛰기
+        Row(
+            Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(EodiTheme.space.page),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            AnimatedContent(
+                targetState = if (step in 0 until total) data.months[step] else null,
+                transitionSpec = { (fadeIn(tween(250)) togetherWith fadeOut(tween(250))).using(SizeTransform(clip = false)) },
+                label = "month",
+                modifier = Modifier.width(MONTH_LABEL_W),
+            ) { label ->
+                Text(
+                    label.orEmpty(),
+                    style = EodiTheme.type.bodyStrong,
+                    color = Gold,
+                    maxLines = 1,
+                    softWrap = false,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            if (!done && style != null) {
+                RoundControl(
+                    if (paused) EodiIcons.Play else EodiIcons.Pause,
+                    stringResource(if (paused) R.string.memory_map_resume else R.string.memory_map_pause),
+                ) { paused = !paused }
+                RoundControl(SkipIcon, stringResource(R.string.memory_map_skip)) {
+                    paused = false
+                    skipped = true
+                }
+            }
         }
 
         // 마지막 한 줄
@@ -366,7 +425,44 @@ private suspend fun buildStyle(context: Context, data: MemoryMap): String = with
         .replace("\"__PILLARS__\"", data.pillarsGeojson)
 }
 
-private fun monthMs(total: Int): Long = (DRAW_TOTAL_MS / total.coerceAtLeast(1)).coerceIn(500L, 1_100L)
+/** 지금 그리는 달 칸 폭: "2025년 11월" + 여유. 글자가 바뀔 때 칸이 줄었다 늘며 잘리지 않게 고정. */
+private val MONTH_LABEL_W = 220.dp
+
+/** 재생 조작 동그라미 버튼 (뒤로 버튼과 같은 76dp 터치 크기). */
+@Composable
+private fun RoundControl(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(76.dp)
+            .clip(CircleShape)
+            .background(Color(0x40FFFFFF))
+            .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, contentDescription = null, tint = Moon, modifier = Modifier.size(34.dp)) }
+}
+
+/** 건너뛰기 (끝으로) — 채운 삼각형 + 막대 */
+private val SkipIcon: ImageVector by lazy {
+    ImageVector.Builder("Skip", 24.dp, 24.dp, 24f, 24f).apply {
+        path(fill = SolidColor(Color.Black)) {
+            moveTo(5.5f, 5f); lineTo(15f, 12f); lineTo(5.5f, 19f); close()
+            moveTo(16f, 5f); lineTo(19f, 5f); lineTo(19f, 19f); lineTo(16f, 19f); close()
+        }
+    }.build()
+}
+
+/** [ms] 동안 기다린다. 멈춘([paused]) 동안은 시간을 세지 않고, 건너뛰면([skipped]) 바로 돌아온다. */
+private suspend fun playDelay(ms: Long, paused: () -> Boolean, skipped: () -> Boolean) {
+    var left = ms
+    while (left > 0 && !skipped()) {
+        val d = minOf(left, 40L)
+        delay(d)
+        if (!paused()) left -= d
+    }
+}
+
+private fun monthMs(total: Int): Long =(DRAW_TOTAL_MS / total.coerceAtLeast(1)).coerceIn(500L, 1_100L)
 
 /**
  * 혜성 그라데이션 (line-progress 0~1): 머리[head] 앞은 투명, 머리는 흰빛, 꼬리로 갈수록 금빛, 그 뒤로는 남는 금빛 길.
