@@ -4,6 +4,7 @@ import app.eodiyeotji.ui.community.SubTextStyle
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.common.agoText
 import app.eodiyeotji.ui.common.durationText
+import app.eodiyeotji.ui.timeline.timeRangeText
 import app.eodiyeotji.ui.common.distanceText
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -88,7 +89,8 @@ internal fun RecommendationCard(
                 facts.region,
                 stringResource(R.string.agent_stops_count, stops.size),
                 distanceText(facts.distanceM),
-                durationText(facts.endMs - facts.startMs),
+                // 나가 있던 시간을 "384km · 9시간 14분"처럼 붙이면 운전 시간(하루 상세 "4시간 19분")으로 읽힌다 → 하루 안이면 "07:11 – 16:24"
+                if (facts.endMs - facts.startMs < DAY_MS) timeRangeText(facts.startMs, facts.endMs) else durationText(facts.endMs - facts.startMs),
             ).filter { it.isNotBlank() }.joinToString(" · ")
             val map = rec.map
             if (map != null) {
@@ -399,3 +401,5 @@ internal fun DrivingMemoryCard(rec: RecommendationUi, modifier: Modifier = Modif
         }
     }
 }
+
+private const val DAY_MS = 24 * 60 * 60 * 1000L

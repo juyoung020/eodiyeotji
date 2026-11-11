@@ -368,3 +368,13 @@ fn course_fast_path_latency() {
     println!("추천 + 후속 두 질문 p50={}µs max={}µs", times[times.len() / 2], times[times.len() - 1]);
     assert!(times[times.len() / 2] < 20_000);
 }
+
+#[test]
+fn distance_from_here_under_1km_is_said_in_meters_like_the_card() {
+    // 코스 카드는 "여기서 364m" → 말도 "0.4km"가 아니라 같은 값으로
+    assert_eq!(courses::here_text(0.364), "364m");
+    assert_eq!(courses::here_text(0.0), "0m");
+    assert_eq!(courses::here_text(1.0), "1.0km");
+    assert_eq!(courses::here_text(4.12), "4.1km");
+    assert_eq!(courses::here_text(36.4), "36km");
+}

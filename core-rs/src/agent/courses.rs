@@ -315,6 +315,11 @@ pub fn km_text(d: f64) -> String {
     if d < 10.0 { format!("{:.1}km", d.max(0.1)) } else { format!("{}km", d.round() as i64) }
 }
 
+/// "여기서 364m" / "여기서 2.3km": 1km 안은 m로 — 코스 카드("여기서 364m")와 같은 값이 말에도 나오게 ("0.4km"로 말하면 어긋나 보였다).
+pub(super) fn here_text(d: f64) -> String {
+    if d < 1.0 { format!("{}m", (d.max(0.0) * 1000.0).round() as i64) } else { km_text(d) }
+}
+
 fn duration_text(ms: i64) -> String {
     let min = ((ms + 30_000) / 60_000).max(1);
     match (min / 60, min % 60) {
@@ -367,11 +372,11 @@ fn list_answer(f: &Fetched, lead: &str, q: &[String], radius_km: f64, driving: b
     };
     let top = &f.list[0];
     if driving {
-        let d = if top.distance_km >= 0.0 { format!(" 여기서 {}, 하트 {}개예요.", km_text(top.distance_km), top.route.hearts) } else { format!(" 하트 {}개예요.", top.route.hearts) };
+        let d = if top.distance_km >= 0.0 { format!(" 여기서 {}, 하트 {}개예요.", here_text(top.distance_km), top.route.hearts) } else { format!(" 하트 {}개예요.", top.route.hearts) };
         return format!("{pre}{lead} 1위는 {}{}.{d} 안내할까요?", quoted(top), eyo(&top.route.title));
     }
     // 목록은 화면 카드가 보여 준다 → 말은 가장 인기 있는 길 하나만 짧게 (번호·괄호를 늘어놓지 않는다).
-    let d = if top.distance_km >= 0.0 { format!(" 여기서 {}, {} 코스예요.", km_text(top.distance_km), stats(top)) } else { format!(" {} 코스예요.", stats(top)) };
+    let d = if top.distance_km >= 0.0 { format!(" 여기서 {}, {} 코스예요.", here_text(top.distance_km), stats(top)) } else { format!(" {} 코스예요.", stats(top)) };
     if f.list.len() == 1 {
         return format!("{pre}{lead}{} {} 하나예요.{d} 안내할까요?", eun(lead), quoted(top));
     }
@@ -390,7 +395,7 @@ fn one_answer(i: usize, r: &DriveRouteRecommendation, go: bool, driving: bool) -
     }
     let seen = sights(r, 3);
     let seen = if seen.is_empty() { String::new() } else { format!(" 가는 길에 {seen}{} 보여요.", iga(&seen)) };
-    let here = if r.distance_km >= 0.0 { format!("고, 여기서 {}예요.", km_text(r.distance_km)) } else { "아요.".to_string() };
+    let here = if r.distance_km >= 0.0 { format!("고, 여기서 {}예요.", here_text(r.distance_km)) } else { "아요.".to_string() };
     format!(
         "{}번 {t}{} {}에서 {}까지 {}, {}쯤 걸리는 길이에요.{seen} {} 가장 좋{here} 안내할까요?",
         i + 1,
@@ -491,7 +496,7 @@ impl MemoryAgent {
                     s.courses.focus = next;
                     let st = s.courses.clone();
                     self.show_courses(s, t, st);
-                    let d = if r.distance_km >= 0.0 { format!(", 여기서 {}", km_text(r.distance_km)) } else { String::new() };
+                    let d = if r.distance_km >= 0.0 { format!(", 여기서 {}", here_text(r.distance_km)) } else { String::new() };
                     t.say(&format!("그럼 {}번 {}{} 어떠세요? 하트 {}개{d}예요. 안내할까요?", next + 1, quoted(&r), eun(&r.route.title), r.route.hearts));
                     self.propose_focus(s, t);
                     return;

@@ -330,7 +330,8 @@ fn day_map_carries_names_and_stay_order() {
 
     let m = store.day_map(DAY.into()).unwrap();
     assert!(m.geojson.contains(&format!(r#""key":"s{a_end}","arrive_ms":{a_end},"leave_ms":{},"open":false,"order":1,"name":"서울 \"중앙\" 시장\\"}}"#, at(11, 0))), "{}", m.geojson);
-    assert!(m.geojson.contains(r#""open":true,"order":2}"#), "이름 모르면 name 없음");
+    // 지금 머무는 곳(그날 도착 지점)은 들른 곳에 세지 않으므로 번호가 없다 (`store::visit_indices`), 이름을 모르면 name도 없다
+    assert!(m.geojson.contains(r#""open":true}"#), "{}", m.geojson);
     assert!(m.geojson.contains(r#","to":"서울 \"중앙\" 시장\\"}"#));
     assert!(m.geojson.contains(r#","from":"서울 \"중앙\" 시장\\"}"#));
     assert_eq!(m.geojson.matches(r#""from""#).count(), 1, "첫 출발지는 모른다");
@@ -585,7 +586,7 @@ fn map_names_keep_only_drawable_characters() {
     let d = store.day_detail(DAY.into()).unwrap();
     assert_eq!(name_of(&d.stays[0].place), Some("★맛집★ 😀"));
     let m = store.day_map(DAY.into()).unwrap();
-    assert!(m.geojson.contains(r#""order":1,"name":"맛집"}"#), "{}", m.geojson);
+    assert!(m.geojson.contains(r#""open":true,"name":"맛집"}"#), "{}", m.geojson);
     assert!(m.geojson.contains(r#","to":"맛집"}"#));
     assert!(!m.geojson.contains(r#""from""#), "거르고 남는 게 없으면 뺀다");
 }

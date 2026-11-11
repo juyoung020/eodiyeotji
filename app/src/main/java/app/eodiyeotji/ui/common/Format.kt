@@ -24,11 +24,14 @@ fun distanceText(meters: Double): String =
         stringResource(R.string.timeline_km, String.format(Locale.ROOT, "%,d", (meters / 1000.0).roundToInt()))
     }
 
-/** "32분", "2시간", "1시간 20분", 1분이 안 되면 "1분 미만". */
+/**
+ * "32분", "2시간", "1시간 20분", 30초가 안 되면 "1분 미만". 분은 반올림한다 — Rust 글(`mapdata::duration_text`: 지도 구간 글 ·
+ * 그날로 돌아가기 끝 화면)과 같은 규칙이라야 한 화면에서 "1시간 10분 · 101km"(지도)와 "101km · 1시간 9분"(타임라인)처럼 어긋나지 않는다.
+ */
 @Composable
 @ReadOnlyComposable
 fun durationText(millis: Long): String {
-    val totalMin = (millis / 60_000L).toInt()
+    val totalMin = ((millis.coerceAtLeast(0L) + 30_000L) / 60_000L).toInt()
     val h = totalMin / 60
     val m = totalMin % 60
     return when {

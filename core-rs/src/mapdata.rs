@@ -6,9 +6,10 @@
 //! # GeoJSON 형식 (FeatureCollection)
 //! - 주행: `LineString`, properties `{"kind":"trip","key":"t<start_ms>","start_ms":..,"end_ms":..,"distance_m":..}`
 //! - 머문 곳: `Point`, properties `{"kind":"stay","dwell":..,("tag":..,)"key":"s<arrive_ms>","arrive_ms":..,"leave_ms":..,"open":true|false}`
-//! - 장소 이름(`places` 모듈): 머문 곳 properties에 `"order"`(그날 머문 곳 순서, 도착 시각순 1부터)와
+//! - 장소 이름(`places` 모듈): 머문 곳 properties에 `"order"`(그날 들른 곳 순서, 도착 시각순 1부터 — 들른 곳
+//!   [`crate::store::visit_indices`]에만 있고, 그날 출발 · 도착 머문 곳(집)에는 없다)와
 //!   `"name"`(장소 이름, 모르면 키 자체가 없음), 주행 properties에 `"from"`·`"to"`(출발·도착 장소 이름, 모르면 없음).
-//!   지도가 핀 옆에 이름·순서를 띄운다. `order`는 `StaySummary.order`와 같다.
+//!   지도가 핀 옆에 이름·순서를 띄운다.
 //!   이름은 지도 글꼴로 그릴 수 있는 글자만 남긴 것이다 ([`map_safe_name`]; 거르고 남는 게 없으면 키가 없다).
 //!   화면에 쓸 전체 이름은 `day_detail`의 `PlaceLabel`에 그대로 있다.
 //! - 화면 표시용 글(지도는 이 글을 그대로 그린다, 앱에서 계산하지 않는다):
@@ -90,10 +91,14 @@ pub fn day_map(d: &DayDetail) -> DayMap {
         coord(&mut out, lat, lon);
         let _ = write!(out, r#"}},"properties":{{"kind":"endpoint","role":"{role}","key":"t{}","label":"{label}"}}}}"#, t.start_ms);
     }
+    // 핀 번호는 들른 곳에만 1부터 (하루 상세 "들른 곳 4곳" · 그날로 돌아가기 "세 번째 들른 곳"과 같은 기준, `store::visit_indices`).
+    // 그날 출발 · 도착 머문 곳(대개 집)까지 세면 들른 곳이 4곳인 날 집 핀에 "5"가 붙었다.
+    let visits = crate::store::visit_indices(&d.trips, &d.stays);
     for (i, s) in d.stays.iter().enumerate() {
         sep(&mut out, &mut first);
         let mut eb = Bounds::default();
-        stay_feature(&mut out, s, end_tag(&ends, i), &mut eb);
+        let order = visits.iter().position(|&v| v == i).map(|k| k as u32 + 1);
+        stay_feature(&mut out, s, end_tag(&ends, i), order, &mut eb);
         if let Some(r) = eb.get() {
             b.merge(r);
             entries.push(EntryBounds { key: format!("s{}", s.arrive_ms), bounds: r });
@@ -260,7 +265,7 @@ fn trip_feature(out: &mut String, t: &TripSummary, b: &mut Bounds) {
     out.push_str("}}");
 }
 
-fn stay_feature(out: &mut String, s: &StaySummary, tag: Option<&str>, b: &mut Bounds) {
+fn stay_feature(out: &mut String, s: &StaySummary, tag: Option<&str>, order: Option<u32>, b: &mut Bounds) {
     out.push_str(r#"{"type":"Feature","geometry":{"type":"Point","coordinates":"#);
     coord(out, s.center.lat, s.center.lon);
     b.add(s.center.lat, s.center.lon);
@@ -272,13 +277,15 @@ fn stay_feature(out: &mut String, s: &StaySummary, tag: Option<&str>, b: &mut Bo
     }
     let _ = write!(
         out,
-        r#""key":"s{}","arrive_ms":{},"leave_ms":{},"open":{},"order":{}"#,
+        r#""key":"s{}","arrive_ms":{},"leave_ms":{},"open":{}"#,
         s.arrive_ms,
         s.arrive_ms,
         s.leave_ms,
         s.leave_ms == s.arrive_ms,
-        s.order
     );
+    if let Some(n) = order {
+        let _ = write!(out, r#","order":{n}"#);
+    }
     if let Some(p) = &s.place {
         str_prop(out, "name", &p.name);
     }
@@ -535,6 +542,24 @@ mod tests {
         let far = trip(0, 60 * MIN, 50_000.0, vec![p(37.004, 127.0), p(37.4, 127.3)]);
         let d = detail(vec![far], vec![stay(37.0, 127.0, 180 * MIN, 900 * MIN, 1)]);
         assert_eq!(route_ends(&d), RouteEnds { start_stay: None, end_stay: Some(0) });
+    }
+
+    #[test]
+    fn only_visited_places_get_pin_numbers() {
+        // 집에서 출발 → 바다 → 식당 → 집 (2025-11-07 강릉 날처럼): 들른 곳 2곳만 1 · 2번, 집(출발·도착)엔 번호가 없다
+        let t1 = trip(0, 60 * MIN, 50_000.0, vec![p(37.0, 127.0), p(37.4, 127.3)]);
+        let t2 = trip(120 * MIN, 130 * MIN, 2_000.0, vec![p(37.4, 127.3), p(37.41, 127.31)]);
+        let t3 = trip(190 * MIN, 250 * MIN, 50_000.0, vec![p(37.41, 127.31), p(37.0, 127.0)]);
+        let sea = stay(37.4, 127.3, 60 * MIN, 120 * MIN, 1);
+        let food = stay(37.41, 127.31, 130 * MIN, 190 * MIN, 2);
+        let home = stay(37.0, 127.0, 250 * MIN, 900 * MIN, 3);
+        let d = detail(vec![t1, t2, t3], vec![sea, food, home]);
+        assert_eq!(crate::store::visit_count(&d.trips, &d.stays), 2);
+        let m = day_map(&d);
+        assert!(m.geojson.contains(r#""key":"s3600000","arrive_ms":3600000,"leave_ms":7200000,"open":false,"order":1"#), "{}", m.geojson);
+        assert!(m.geojson.contains(r#""key":"s7800000","arrive_ms":7800000,"leave_ms":11400000,"open":false,"order":2"#), "{}", m.geojson);
+        assert!(m.geojson.contains(r#""tag":"출발·도착","key":"s15000000","arrive_ms":15000000,"leave_ms":54000000,"open":false}"#), "{}", m.geojson);
+        assert_eq!(m.geojson.matches(r#""order":"#).count(), 2);
     }
 
     #[test]
