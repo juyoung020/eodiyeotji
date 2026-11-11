@@ -16,6 +16,10 @@ import android.provider.MediaStore
 import android.util.Log
 import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.StaySummary
+import app.eodiyeotji.place.PlacePhotoRepository
+import android.graphics.drawable.BitmapDrawable
+import coil.imageLoader
+import coil.request.SuccessResult
 import dagger.hilt.android.AndroidEntryPoint
 import java.io.File
 import java.text.SimpleDateFormat
@@ -33,7 +37,8 @@ import kotlinx.coroutines.launch
  * 하루 상세의 사진 카드 · 올리기 창의 사진 고르기를 보여 주려면 사진이 있어야 한다.
  *
  * 그날(기본 2025-11-07, 1년 전 강릉 여행) 실제 기록에서 머문 곳을 읽어, 곳마다 머문 시각 안에 찍고(EXIF DateTimeOriginal)
- * 그 곳 근처 위치(EXIF GPS)가 박힌 사진을 만든다. 그림은 단색 그라데이션 + 장소 이름·시각 글자 (내려받는 것 없음, 저장소에 바이너리 없음).
+ * 그 곳 근처 위치(EXIF GPS)가 박힌 사진을 만든다. 그림은 앱이 이미 받아 둔 그곳 장소 사진(구글, 기기 캐시)을 쓰고,
+ * 못 받으면 단색 그라데이션 + 장소 이름·시각 글자로 대신한다 (저장소에 바이너리 없음).
  * 곳마다 한 장은 위치 없이 넣어 "시각만으로 맞추기"도 보인다. 첫 주행 중에 찍은 사진도 한 장(드라이브 코스 후보).
  * 다시 보내면 예전 시연 사진(`eodi_demo_*`)을 지우고 새로 넣는다.
  *
@@ -45,6 +50,7 @@ import kotlinx.coroutines.launch
 @AndroidEntryPoint
 class GalleryDemoReceiver : BroadcastReceiver() {
     @Inject lateinit var core: EodiCore
+    @Inject lateinit var places: PlacePhotoRepository
 
     override fun onReceive(context: Context, intent: Intent) {
         val day = intent.getStringExtra("day") ?: DEFAULT_DAY
@@ -58,11 +64,15 @@ class GalleryDemoReceiver : BroadcastReceiver() {
                 var n = 0
                 stays.forEachIndexed { si, stay ->
                     val count = if (si == 1) 5 else 2
+                    val label = stay.place!!
+                    // 그곳 장소 사진 (곳마다 여러 장이면 장마다 다른 사진)
+                    val shots = runCatching { places.photos(label.name, label.address, stay.center.lat, stay.center.lon) }.getOrDefault(emptyList())
                     repeat(count) { k ->
+                        val real = shots.getOrNull(k % shots.size.coerceAtLeast(1))?.let { photo -> load(context, places.imageRequest(photo)) }
                         val t = shotTime(stay, k, count)
                         // 마지막 한 장은 위치 없이 (시각만으로 맞추는 경우)
                         val gps = if (k == count - 1) null else (stay.center.lat + 0.0003 * k) to (stay.center.lon - 0.0002 * k)
-                        insert(context, "eodi_demo_${stay.arriveMs}_$k", stay.place!!.name, t, gps, si * 3 + k)
+                        insert(context, "eodi_demo_${stay.arriveMs}_$k", label.name, t, gps, si * 3 + k, real)
                         n++
                     }
                 }
@@ -93,10 +103,16 @@ class GalleryDemoReceiver : BroadcastReceiver() {
         arrayOf("eodi_demo_%"),
     )
 
-    private fun insert(context: Context, name: String, title: String, takenMs: Long, gps: Pair<Double, Double>?, tone: Int) {
+    /** 화면과 같은 기기 캐시에서 장소 사진을 비트맵으로 (없으면 내려받음). 실패하면 null. */
+    private suspend fun load(context: Context, req: coil.request.ImageRequest): Bitmap? {
+        val r = context.imageLoader.execute(req.newBuilder(context).allowHardware(false).build())
+        return ((r as? SuccessResult)?.drawable as? BitmapDrawable)?.bitmap
+    }
+
+    private fun insert(context: Context, name: String, title: String, takenMs: Long, gps: Pair<Double, Double>?, tone: Int, real: Bitmap? = null) {
         val file = File(context.cacheDir, "$name.jpg")
         try {
-            val bmp = picture(title, takenMs, tone)
+            val bmp = real?.copy(Bitmap.Config.ARGB_8888, false) ?: picture(title, takenMs, tone)
             file.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 88, it) }
             bmp.recycle()
             ExifInterface(file.absolutePath).apply {
