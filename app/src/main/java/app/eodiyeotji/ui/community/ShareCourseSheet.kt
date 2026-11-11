@@ -314,9 +314,9 @@ private fun MyPhotoPicker(preview: SharePreview, state: ShareUiState, onToggle: 
     Text(stringResource(R.string.share_my_photos_hint), style = type.label, color = c.textTertiary)
     stops.forEach { s ->
         val on = s.arriveMs !in state.excluded
-        Row(Modifier.fillMaxWidth().alpha(if (on) 1f else 0.35f), verticalAlignment = Alignment.CenterVertically) {
-            Text(s.name, style = type.bodyStrong, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(180.dp))
-            Spacer(Modifier.width(12.dp))
+        // 곳 이름은 사진 줄 위 한 줄 (옆 좁은 칸에 두면 "초당할머니순두 / 부"처럼 글자 가운데서 줄이 바뀌었다)
+        Column(Modifier.fillMaxWidth().alpha(if (on) 1f else 0.35f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(s.name, style = type.bodyStrong, maxLines = 1, overflow = TextOverflow.Ellipsis)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(state.myPhotos[s.arriveMs].orEmpty(), key = { it.id }) { ph ->
                     MyPhotoPick(ph.uri, picked = state.pickedPhotos[s.arriveMs] == ph.uri, onToggle = { if (on) onToggle(s.arriveMs, ph.uri) })

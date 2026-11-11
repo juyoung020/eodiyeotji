@@ -358,7 +358,7 @@ private fun SceneCard(r: DayReplay, s: ReplayScene, paused: Boolean) {
                 Text(s.timeText, style = EodiTheme.type.hero, color = EodiTheme.colors.memory)
                 Text(s.stop.name, style = EodiTheme.type.hero, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(
-                    listOf(stringResource(R.string.replay_stop_order, s.order), s.stayText).filter { it.isNotBlank() }.joinToString(" · "),
+                    listOf(stopOrderText(s.order), s.stayText).filter { it.isNotBlank() }.joinToString(" · "),
                     style = EodiTheme.type.bodyStrong,
                     color = Color.White.copy(alpha = 0.92f),
                 )
@@ -439,4 +439,11 @@ private fun RoundButton(icon: androidx.compose.ui.graphics.vector.ImageVector, d
     ) {
         Icon(icon, contentDescription = description, tint = Color.White, modifier = Modifier.size(36.dp))
     }
+}
+
+/** "첫 번째 들른 곳" … "열 번째 들른 곳", 그 뒤는 "11번째 들른 곳". */
+@Composable
+private fun stopOrderText(order: Int): String {
+    val words = androidx.compose.ui.res.stringArrayResource(R.array.replay_stop_order_words)
+    return words.getOrNull(order - 1) ?: stringResource(R.string.replay_stop_order, order)
 }

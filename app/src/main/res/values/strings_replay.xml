@@ -13,4 +13,17 @@
     <string name="replay_failed">그날을 불러오지 못했어요</string>
     <string name="replay_no_places">이날은 이름 있는 들른 곳이 없어요</string>
     <string name="replay_stop_order">%1$d번째 들른 곳</string>
+    <!-- 1~10번째는 우리말 순서 말("1번째"는 어색하다), 그 뒤는 replay_stop_order -->
+    <string-array name="replay_stop_order_words">
+        <item>첫 번째 들른 곳</item>
+        <item>두 번째 들른 곳</item>
+        <item>세 번째 들른 곳</item>
+        <item>네 번째 들른 곳</item>
+        <item>다섯 번째 들른 곳</item>
+        <item>여섯 번째 들른 곳</item>
+        <item>일곱 번째 들른 곳</item>
+        <item>여덟 번째 들른 곳</item>
+        <item>아홉 번째 들른 곳</item>
+        <item>열 번째 들른 곳</item>
+    </string-array>
 </resources>

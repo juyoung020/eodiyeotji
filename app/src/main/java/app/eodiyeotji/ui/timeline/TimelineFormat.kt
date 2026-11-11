@@ -78,7 +78,11 @@ internal fun weekdayShort(day: String): String =
 /** 목록 날짜 타일 위 칸: 날짜(일) 숫자. */
 internal fun dayOfMonthText(day: String): String = LocalDate.parse(day).dayOfMonth.toString()
 
-/** "주행 2회 · 들른 곳 1곳 · 42.3km · 1시간 20분" (들른 곳이 없으면 그 칸은 뺀다). */
+/**
+ * "주행 2회 · 들른 곳 1곳 · 42.3km · 1시간 20분" (들른 곳이 없으면 그 칸은 뺀다).
+ * 긴 날은 두 줄로 넘어가는데, 한글은 글자 사이 어디서나 줄을 바꿀 수 있어 "4시간 19 / 분"처럼 값 가운데서 끊겼다
+ * → 값 하나는 글자 사이를 단어 잇기 문자(U+2060)로 묶어 " · " 자리에서만 줄이 바뀌게 한다.
+ */
 @Composable
 @ReadOnlyComposable
 internal fun daySummaryLine(s: DaySummary): String = buildList {
@@ -86,7 +90,7 @@ internal fun daySummaryLine(s: DaySummary): String = buildList {
     if (s.stayCount > 0) add(stringResource(R.string.timeline_stays, s.stayCount))
     add(distanceText(s.distanceM))
     add(durationText(s.driveMillis))
-}.joinToString(SEPARATOR)
+}.joinToString(SEPARATOR) { part -> part.replace(' ', '\u00A0').toList().joinToString("\u2060") }
 
 /** 목록 행 머문 곳 줄: "경포해변 · 초당순두부마을 · 안목해변" (Rust가 앞 3개까지 골라 준다). 없으면 null. */
 internal fun stopNamesText(s: DaySummary): String? =
@@ -127,9 +131,9 @@ internal fun tripStatsText(t: TripSummary): String =
 /** 머문 곳 둘째 줄: "음식점 · 1시간 23분" (분류가 없으면 시간만). 아직 머무는 곳은 분류, 없으면 주소, 둘 다 없으면 null. */
 @Composable
 @ReadOnlyComposable
-internal fun stayDetailText(s: StaySummary, place: PlaceLabel): String? {
+internal fun stayDetailText(s: StaySummary, place: PlaceLabel, showDuration: Boolean = true): String? {
     val category = place.category.ifBlank { null }
-    return if (s.isOpen) {
+    return if (s.isOpen || !showDuration) {
         category ?: place.address.ifBlank { null }
     } else {
         listOfNotNull(category, durationText(s.leaveMs - s.arriveMs)).joinToString(SEPARATOR)

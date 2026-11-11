@@ -768,11 +768,12 @@ private fun DayRow(
                         Text(stops, style = type.body, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
+                // 긴 날("주행 5회 · 들른 곳 4곳 · 384km · 4시간 18분")은 한 줄에 안 들어가 시간이 "4시간 1…"로 잘렸다 → 두 줄까지
                 Text(
                     daySummaryLine(s),
                     style = type.meta,
                     color = c.textTertiary,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -1177,12 +1178,15 @@ private fun StayRow(
     val c = EodiTheme.colors
     val place = stay.place?.takeIf { it.name.isNotBlank() }
     var viewing by remember(stay.arriveMs) { mutableStateOf<Int?>(null) }
+    // 그날 맨 처음 · 맨 끝에 머문 곳(대개 집)은 밤새 · 며칠 머문 시간까지 세져 "아파트 · 63시간 46분 / –08:11(사흘 뒤)"처럼 보인다
+    // → 지도 말풍선(`mapdata.rs stay_feature`)처럼 머문 시간을 빼고, 마지막 곳은 떠난 시각도 뺀다.
+    val overnight = !stay.isOpen && (rail.first || rail.last)
     val main: String
     val sub: String?
     when {
         place != null -> {
             main = place.name
-            sub = stayDetailText(stay, place)
+            sub = stayDetailText(stay, place, showDuration = !overnight)
         }
         stay.isOpen -> {
             main = stringResource(R.string.timeline_stay_open)
@@ -1197,7 +1201,11 @@ private fun StayRow(
         kind = if (stay.isOpen) EntryKind.Here else EntryKind.Stay,
         rail = rail,
         time = clockText(stay.arriveMs),
-        timeSub = if (stay.isOpen) stringResource(R.string.entry_now) else stringResource(R.string.entry_until, clockText(stay.leaveMs)),
+        timeSub = when {
+            stay.isOpen -> stringResource(R.string.entry_now)
+            overnight && rail.last -> ""
+            else -> stringResource(R.string.entry_until, clockText(stay.leaveMs))
+        },
         timeSubColor = if (stay.isOpen) c.here else c.textTertiary,
         main = main,
         sub = sub,
