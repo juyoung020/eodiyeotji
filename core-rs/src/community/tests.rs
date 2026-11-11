@@ -302,7 +302,10 @@ fn course_map_is_stay_points_in_order() {
     let m = store.course_map("d13".into()).unwrap();
     let v: Value = serde_json::from_str(&m.geojson).unwrap();
     let f = v["features"].as_array().unwrap();
-    assert_eq!(f.len(), 5);
+    // 들른 곳 5개 + 그 사이를 잇는 길 4개
+    assert_eq!(f.len(), 9);
+    assert_eq!(f[5]["properties"]["kind"], "trip");
+    assert_eq!(f[5]["geometry"]["coordinates"].as_array().unwrap().len(), 2);
     assert_eq!(f[0]["properties"]["kind"], "stay");
     assert_eq!(f[0]["properties"]["key"], "s1");
     assert_eq!(f[4]["properties"]["order"], 5);

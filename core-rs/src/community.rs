@@ -1472,6 +1472,16 @@ fn stops_map(id: &str, stops: &[StopFact]) -> DayMap {
             bounds: MapBounds { min_lat: s.lat, min_lon: s.lon, max_lat: s.lat, max_lon: s.lon },
         });
     }
+    // 들른 곳을 순서대로 잇는 길 (남의 코스는 GPS 경로가 없어 곳과 곳을 바로 잇는다). 지도는 "trip" 선으로 그린다.
+    for (i, w) in stops.windows(2).enumerate() {
+        let (a, z) = (&w[0], &w[1]);
+        let d = haversine_m(stop_point(a), stop_point(z));
+        let _ = write!(
+            out,
+            r#",{{"type":"Feature","geometry":{{"type":"LineString","coordinates":[[{:.6},{:.6}],[{:.6},{:.6}]]}},"properties":{{"kind":"trip","key":"c{}","start_ms":{},"end_ms":{},"distance_m":{:.1}}}}}"#,
+            a.lon, a.lat, z.lon, z.lat, i + 1, a.leave_ms, z.arrive_ms, d
+        );
+    }
     out.push_str("]}");
     let bounds = (!stops.is_empty()).then_some(MapBounds { min_lat: lo_lat, min_lon: lo_lon, max_lat: hi_lat, max_lon: hi_lon });
     DayMap { day: id.to_string(), geojson: out, bounds, entries }
