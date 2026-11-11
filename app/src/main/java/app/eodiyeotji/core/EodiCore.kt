@@ -469,8 +469,18 @@ data class MemoryQuery(
     val limit: Int = 10,
 )
 
-/** [matchedTags]: 질문과 맞은 AI 꼬리표 (LLM 하루 라벨링 태그, 최대 3개). */
-data class MemoryHit(val episode: Episode, val dayTitle: String?, val score: Double, val bestStop: StopFact?, val matchedTags: List<String> = emptyList())
+/**
+ * [matchedTags]: 질문과 맞은 AI 꼬리표 (LLM 하루 라벨링 태그, 최대 3개).
+ * [visitNote]: 에이전트 후보에서 같은 곳을 여러 날 다녀온 기억을 하나로 합쳤을 때 카드에 쓰는 한 줄 ("2번 다녀옴 · 10/11, 10/18", Rust가 만든다).
+ */
+data class MemoryHit(
+    val episode: Episode,
+    val dayTitle: String?,
+    val score: Double,
+    val bestStop: StopFact?,
+    val matchedTags: List<String> = emptyList(),
+    val visitNote: String = "",
+)
 
 data class CourseLeg(val waypoints: List<StopFact>, val destination: StopFact)
 

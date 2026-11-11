@@ -36,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -150,26 +151,57 @@ internal fun RecommendationCard(
 
 /**
  * 후보 칸: 흐릿한 질문의 후보 1 · 2 · 3번을 사진 카드로 나란히 (고른 후보는 강조 테두리).
- * 누르면 새 질문 없이 그 후보가 아래 자세한 카드 · 안내 버튼이 된다. 폰 세로 화면([compact])은 옆으로 넘겨 본다.
+ * 누르면 새 질문 없이 그 후보가 아래 자세한 카드 · 안내 버튼이 된다. 폰 세로 화면([compact])·후보 4개부터는 옆으로 넘겨 보고,
+ * 더 넘길 후보가 있으면 제목 줄의 "옆으로 넘겨 더 보기 ›"와 오른쪽 끝 흐림·꺾쇠로 알린다 (카드가 잘린 채 끝나 보이지 않게).
  */
 @Composable
 internal fun CandidateStrip(candidates: List<MemoryHit>, focus: Int, today: LocalDate, onSelect: (Int) -> Unit, compact: Boolean = false) {
+    val c = EodiTheme.colors
+    val scrolls = compact || candidates.size > 3
+    val scroll = rememberScrollState()
+    val more = scrolls && scroll.canScrollForward
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 stringResource(R.string.agent_candidates_title),
                 style = EodiTheme.type.titleSmall,
                 fontWeight = FontWeight.Bold,
-                color = EodiTheme.colors.textPrimary,
+                color = c.textPrimary,
             )
             Spacer(Modifier.width(12.dp))
-            Text(stringResource(R.string.agent_candidates_hint), style = EodiTheme.type.meta, color = EodiTheme.colors.textTertiary)
+            Text(
+                stringResource(R.string.agent_candidates_hint),
+                style = EodiTheme.type.meta,
+                color = c.textTertiary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (more) {
+                Text(stringResource(R.string.agent_candidates_more), style = EodiTheme.type.meta, fontWeight = FontWeight.SemiBold, color = c.accent, maxLines = 1)
+                Icon(EodiIcons.Chevron, null, tint = c.accent, modifier = Modifier.size(22.dp))
+            }
         }
-        if (compact || candidates.size > 3) {
+        if (scrolls) {
             // 후보가 많으면 옆으로 넘겨 본다 (개수 제한 없음)
             val w = if (compact) 220.dp else 300.dp
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.horizontalScroll(rememberScrollState()).height(IntrinsicSize.Min)) {
-                candidates.forEachIndexed { i, hit -> CandidateTile(hit, i + 1, i == focus, today, { onSelect(i) }, Modifier.width(w).fillMaxHeight()) }
+            Box(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.horizontalScroll(scroll).height(IntrinsicSize.Min)) {
+                    candidates.forEachIndexed { i, hit -> CandidateTile(hit, i + 1, i == focus, today, { onSelect(i) }, Modifier.width(w).fillMaxHeight()) }
+                }
+                if (more) {
+                    // 오른쪽 끝: 더 있다는 흐림 + 꺾쇠
+                    Box(
+                        contentAlignment = Alignment.CenterEnd,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .fillMaxHeight()
+                            .width(72.dp)
+                            .background(Brush.horizontalGradient(listOf(c.background.copy(alpha = 0f), c.background))),
+                    ) {
+                        Icon(EodiIcons.Chevron, null, tint = c.textPrimary, modifier = Modifier.padding(end = 4.dp).size(36.dp))
+                    }
+                }
             }
         } else {
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
@@ -229,6 +261,10 @@ private fun CandidateTile(hit: MemoryHit, rank: Int, selected: Boolean, today: L
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            // 같은 곳을 여러 날 다녀와 한 후보로 합쳐졌으면 "2번 다녀옴 · 10/11, 10/18" (Rust가 만든 글)
+            if (hit.visitNote.isNotBlank()) {
+                Text(hit.visitNote, style = EodiTheme.type.meta, fontWeight = FontWeight.SemiBold, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
             if (hit.matchedTags.isNotEmpty()) {
                 Text(
                     hit.matchedTags.take(2).joinToString("  ") { "#$it" },

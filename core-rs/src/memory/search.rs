@@ -274,7 +274,7 @@ pub(crate) fn search(conn: &Connection, q: &MemoryQuery) -> Result<Vec<MemoryHit
             if terms.is_empty() {
                 let recency = (-((newest - ep.facts.start_ms).max(0) as f64) / YEAR_MS).exp();
                 let best_stop = best_stop(&ep.facts.stops, &[]).map(|(i, _)| ep.facts.stops[i].clone());
-                return MemoryHit { episode: ep, day_title, score: recency, best_stop, matched_tags: vec![] };
+                return MemoryHit { episode: ep, day_title, score: recency, best_stop, matched_tags: vec![], visit_days: vec![], visit_note: String::new() };
             }
             let coverage = {
                 let f = &ep.facts;
@@ -316,7 +316,7 @@ pub(crate) fn search(conn: &Connection, q: &MemoryQuery) -> Result<Vec<MemoryHit
             let recency = 0.5 * (-((newest - ep.facts.start_ms).max(0) as f64) / YEAR_MS).exp();
             let score = s_fts + 1.5 * coverage + tag_hits as f64 + stop_score + kind_bonus + recency;
             let best_stop = best.map(|(i, _)| ep.facts.stops[i].clone());
-            MemoryHit { episode: ep, day_title, score, best_stop, matched_tags }
+            MemoryHit { episode: ep, day_title, score, best_stop, matched_tags, visit_days: vec![], visit_note: String::new() }
         })
         .collect();
     hits.sort_by(|a, b| b.score.total_cmp(&a.score).then(b.episode.facts.start_ms.cmp(&a.episode.facts.start_ms)));

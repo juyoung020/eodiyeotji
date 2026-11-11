@@ -38,7 +38,10 @@ class MemoryAgentPort @Inject constructor(
                 // 운전자가 말로 "응"이라고 해 이미 안내를 보냈다 → 답 글에 한 줄 덧붙인다
                 is BridgeEvent.ActionStarted ->
                     emit(AgentEvent.AnswerDelta(text(if (e.ok) R.string.agent_started_line else R.string.agent_start_failed_line)))
-                is BridgeEvent.Done -> emit(AgentEvent.Done)
+                is BridgeEvent.Done -> {
+                    e.notice?.let { emit(AgentEvent.Notice(it)) }
+                    emit(AgentEvent.Done)
+                }
                 is BridgeEvent.Error -> emit(AgentEvent.Error(e.message))
             }
         }

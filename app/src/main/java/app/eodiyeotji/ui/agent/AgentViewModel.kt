@@ -78,6 +78,8 @@ data class AgentTurn(
     val selectedStop: Int = 0,
     val action: ActionState = ActionState.Idle,
     val error: String? = null,
+    /** 답 아래 흐린 안내 한 줄 (연결 문제 등 — 오류가 아니다, 읽지 않는다). */
+    val notice: String? = null,
     /** 근처 추천 코스 목록 (순위순). 비어 있지 않으면 기억 카드 대신 코스 카드를 보인다. */
     val courses: List<RecommendedCourse> = emptyList(),
     /** 지금 안내를 제안한 코스의 자리 ([courses] 안). */
@@ -441,6 +443,7 @@ class AgentViewModel @Inject constructor(
                 if (first) loadMap(id, event.hit.episode.facts.day)
             }
             is AgentEvent.ActionProposal -> updateTurn(id) { it.copy(proposals = it.proposals + event) }
+            is AgentEvent.Notice -> updateTurn(id) { it.copy(notice = event.text) }
             AgentEvent.Done -> {
                 updateTurn(id) {
                     val t = if (it.coursesFresh) it else it.copy(courses = emptyList(), courseFocus = 0)

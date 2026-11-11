@@ -17,6 +17,7 @@ use super::llm::{LlmError, Params};
 use super::tools::{self, Ctx};
 use super::words::{self, Answer};
 use super::{prompts, AgentContext, AgentDone, AgentListener, AgentTiming, AnswerSource, MemoryAgent, NavProposal, Session};
+use crate::geo::Point;
 use crate::memory::{EpisodeKind, MemoryHit, MemoryQuery};
 
 pub const MAX_TOOL_ROUNDS: usize = 4;
@@ -26,13 +27,17 @@ const MAX_HISTORY_CHARS: usize = 12_000;
 const OLD_TOOL_KEEP: usize = 700;
 pub const SESSION_IDLE_MS: i64 = 10 * 60_000;
 
-/// LLM에 닿지 않고 기기 안 기록에서도 못 찾았을 때 (오류로 내보내 화면이 "다시 묻기"를 보인다).
-pub const SERVER_DOWN: &str = "AI 연결이 잠깐 끊겨 기기 안 기록만 찾아봤는데, 못 찾았어요. 다시 물어봐 주세요.";
+/// LLM 서버에 닿지 않아 기기 안 기록으로만 답했을 때의 안내 한 줄 ([AgentDone::notice], 답 문장과 따로 — 화면이 회색으로 보이고 읽지 않는다).
+pub const SERVER_DOWN: &str = "AI 연결이 잠깐 끊겨 기기 안 기록으로 찾았어요.";
 pub const CUT_OFF: &str = "답을 받다가 연결이 끊겼어요. 다시 물어봐 주세요.";
-pub const NOT_CONFIGURED: &str = "AI 연결이 아직 설정되지 않았어요.";
+/// LLM 주소가 없어 기기 안 기록으로만 답했을 때의 안내 한 줄 ([AgentDone::notice]).
+pub const NOT_CONFIGURED: &str = "AI 연결 없이 기기 안 기록으로 찾았어요.";
 pub const GIVE_UP: &str = "죄송해요, 지금은 찾지 못했어요. 조금 다르게 말씀해 주시겠어요?";
 const EMPTY_ANSWER: &str = "죄송해요, 답을 정리하지 못했어요. 다시 말씀해 주세요.";
+/// 기록에 없고 검색어도 없을 때 (오류가 아닌 보통 답).
 const NOT_FOUND: &str = "기록에서 비슷한 곳을 찾지 못했어요.";
+/// 못 찾았고 대신 볼 곳도 없을 때 덧붙이는 말.
+const ASK_AGAIN: &str = " 장소 이름이나 다녀온 때를 말씀해 주시면 다시 찾아볼게요.";
 
 /// 질문 한 번의 진행 상태.
 pub(crate) struct Turn<'a> {
@@ -51,6 +56,8 @@ pub(crate) struct Turn<'a> {
     memory_shown: bool,
     /// 이번 말이 후보 고르기("2번")였나 (답을 "2번, …예요"로)
     picked: bool,
+    /// 답과 따로 보일 안내 한 줄 (연결 문제 등, [AgentDone::notice])
+    notice: Option<String>,
 }
 
 impl Turn<'_> {
@@ -107,7 +114,7 @@ impl MemoryAgent {
     pub(crate) fn run_turn(&self, utterance: &str, ctx: &AgentContext, l: &dyn AgentListener) {
         let gen = self.cancel_gen.load(Ordering::SeqCst);
         let mut s = self.session.lock().unwrap_or_else(|e| e.into_inner());
-        let mut t = Turn { l, start: Instant::now(), answer: String::new(), first_text_ms: None, to_rec_ms: None, llm_calls: 0, llm_ms: 0, msgs: vec![], last_focus: None, course_shown: false, memory_shown: false, picked: false };
+        let mut t = Turn { l, start: Instant::now(), answer: String::new(), first_text_ms: None, to_rec_ms: None, llm_calls: 0, llm_ms: 0, msgs: vec![], last_focus: None, course_shown: false, memory_shown: false, picked: false, notice: None };
         if ctx.now_ms - s.last_activity_ms > SESSION_IDLE_MS {
             *s = Session::default();
             *self.pending.lock().unwrap_or_else(|e| e.into_inner()) = None;
@@ -205,9 +212,9 @@ impl MemoryAgent {
                     fast_hits.truncate(5);
                 }
             }
-            // "옛날에 · 예전에": 최근 [RECENT_DAYS]일 기록은 뒤로 (순서만 바꾸고 빼지는 않는다)
+            // "옛날에 · 예전에": 잘 맞는 기억 중 오래된 것부터, 최근 [RECENT_DAYS]일 기록은 뒤로 (순서만 바꾸고 빼지는 않는다)
             if parsed.long_ago && range.is_none() {
-                fast_hits.sort_by_key(|h| parse_ymd(&h.episode.facts.day, false).is_some_and(|d| today - d < RECENT_DAYS));
+                order_long_ago(&mut fast_hits, today);
             }
             // "엄마랑 · 가족이랑 · 혼자": 좌석 센서로 그때 탄 인원이 맞는 기억만 남긴다 (맞는 게 하나도 없으면 그대로 LLM에게)
             if let Some(want) = parsed.people {
@@ -220,42 +227,45 @@ impl MemoryAgent {
                     people_resolved = true;
                 }
             }
-            if let Some(top) = fast_hits.first() {
+            // 흐릿한 질문("옛날에 갔던 바다")은 답이 하나가 아닐 수 있다 → 후보 몇 곳을 같이 보인다 (1번이 가장 비슷한 곳).
+            // 같은 곳을 다른 날 다녀온 기억은 후보 하나로 합친다 ("2번 다녀옴 · 10/11, 10/18").
+            let short = shortlist(&fast_hits);
+            if let Some(top) = short.first() {
                 t.recommend(top, None);
                 s.tools.remember(&fast_hits);
                 s.focus = Some(top.clone());
-                // 흐릿한 질문("옛날에 갔던 바다")은 답이 하나가 아닐 수 있다 → 후보 몇 곳을 같이 보인다 (1번이 가장 비슷한 곳)
-                let short = shortlist(&fast_hits);
                 t.candidates(&short, 0);
                 s.candidates = short;
             }
         }
         let narrow_date = range.is_some_and(|r| r.to - r.from <= 2);
         // 확실한가: 결과가 있고, 사람·앞 대화 말이 없고, 1위가 2위보다 분명히 앞서고, 한 글자 낱말(산·강…)만으로 찾은 게 아닐 때
-        let clear_top = match fast_hits.as_slice() {
+        // (점수로 본다 — "옛날에"로 순서를 바꿔도 검색이 분명했으면 확실하다)
+        let mut scores: Vec<f64> = fast_hits.iter().map(|h| h.score).collect();
+        scores.sort_by(|a, b| b.total_cmp(a));
+        let clear_top = match scores.as_slice() {
             [] => false,
             [_] => true,
-            [a, b, ..] => a.score > b.score,
+            [a, b, ..] => a > b,
         };
+        // 답할 기억 = 후보 1번 (같은 곳 합치기·"옛날에" 순서가 들어간 것)
+        let lead: Option<MemoryHit> = if fast_hits.is_empty() { None } else { s.candidates.first().cloned() };
         let only_short_terms = !parsed.terms.is_empty() && parsed.terms.iter().all(|w| w.chars().count() < 2);
         let confident = clear_top && (!parsed.has_people || people_resolved) && (!parsed.rain || rain_resolved) && !parsed.has_reference && !only_short_terms && (!parsed.terms.is_empty() || narrow_date);
         let llm_usable = self.llm.is_some() && !self.server_down();
 
-        if confident && !(self.opts.llm_when_confident && llm_usable) {
-            self.fast_answer(&mut s, &mut t, &fast_hits[0], ctx, today);
+        if let (true, Some(top)) = (confident && !(self.opts.llm_when_confident && llm_usable), lead.as_ref()) {
+            self.fast_answer(&mut s, &mut t, top, ctx, today);
             return self.finish(&mut s, t, u, AnswerSource::FastPath);
         }
+        let ask = Asked { parsed: &parsed, range };
         if self.llm.is_none() {
-            t.say(NOT_CONFIGURED);
-            t.say(" ");
-            match fast_hits.first() {
-                Some(top) => self.fast_answer(&mut s, &mut t, top, ctx, today),
-                None => t.say(NOT_FOUND),
-            }
-            return self.finish(&mut s, t, u, AnswerSource::Fallback);
+            t.notice = Some(NOT_CONFIGURED.into());
+            return self.offline_answer(&mut s, t, u, lead.as_ref(), &ask, ctx, today);
         }
         if !llm_usable {
-            return self.offline_answer(&mut s, t, u, &fast_hits, ctx, today);
+            t.notice = Some(SERVER_DOWN.into());
+            return self.offline_answer(&mut s, t, u, lead.as_ref(), &ask, ctx, today);
         }
 
         // 4) LLM 도구 루프
@@ -279,7 +289,8 @@ impl MemoryAgent {
                     }
                     t.msgs.clear();
                     t.answer.clear();
-                    self.offline_answer(&mut s, t, u, &fast_hits, ctx, today)
+                    t.notice = Some(SERVER_DOWN.into());
+                    self.offline_answer(&mut s, t, u, lead.as_ref(), &ask, ctx, today)
                 } else {
                     l.on_error(CUT_OFF.into());
                 }
@@ -287,16 +298,54 @@ impl MemoryAgent {
         }
     }
 
-    /// LLM 서버에 닿지 않을 때: 기기 안 검색 결과가 있으면 그것으로 바로 답한다 (운전자에게 서버 사정은 필요 없다).
-    /// 없으면 다시 묻기를 권하는 오류 (화면은 "다시 묻기" 버튼을 보인다).
-    fn offline_answer(&self, s: &mut Session, mut t: Turn, u: &str, fast_hits: &[MemoryHit], ctx: &AgentContext, today: i64) {
-        match fast_hits.first() {
-            Some(top) => {
-                self.fast_answer(s, &mut t, top, ctx, today);
-                self.finish(s, t, u, AnswerSource::Fallback)
-            }
-            None => t.l.on_error(SERVER_DOWN.into()),
+    /// LLM 없이 답할 때 (주소 없음·서버에 닿지 않음): 기기 안 검색 결과가 있으면 그것으로 바로 답한다.
+    /// 없으면 오류가 아니라 보통 답 "○○ 기록은 없어요" + 같은 때 다녀온 곳 후보. 연결 사정은 [Turn::notice]로 따로 (답 문장에 섞지 않는다).
+    #[allow(clippy::too_many_arguments)]
+    fn offline_answer(&self, s: &mut Session, mut t: Turn, u: &str, lead: Option<&MemoryHit>, asked: &Asked, ctx: &AgentContext, today: i64) {
+        match lead {
+            Some(top) => self.fast_answer(s, &mut t, top, ctx, today),
+            None => self.not_found_answer(s, &mut t, asked, ctx),
         }
+        self.finish(s, t, u, AnswerSource::Fallback)
+    }
+
+    /// 기록에서 못 찾았을 때의 답 (LLM 없이): "스키 기록은 없어요." + 질문한 때(있으면)에 다녀온 곳 2~3곳을 대신 볼 후보로.
+    /// 후보는 화면 후보 칸에 나란히 보이고 "1번"·"2번"으로 고를 수 있다. 안내 제안은 하지 않는다 (찾던 곳이 아니므로).
+    fn not_found_answer(&self, s: &mut Session, t: &mut Turn, asked: &Asked, ctx: &AgentContext) {
+        let first = match asked.parsed.terms.first() {
+            Some(w) => format!("{w} 기록은 없어요."),
+            None => NOT_FOUND.to_string(),
+        };
+        let others = asked.range.map(|r| self.same_time_places(r, ctx.tz_offset_minutes)).unwrap_or_default();
+        if others.is_empty() {
+            t.say(&format!("{first}{ASK_AGAIN}"));
+            return;
+        }
+        let names: Vec<String> = others.iter().map(hit_place).collect();
+        t.say(&format!("{first} 그 무렵에는 {}에 다녀오셨어요.", names.join(", ")));
+        s.tools.remember(&others);
+        s.focus = Some(others[0].clone());
+        t.recommend(&others[0], None);
+        t.candidates(&others, 0);
+        s.candidates = others;
+    }
+
+    /// 그 기간에 다녀온 나들이·여행 중 서로 다른 곳 [ALTERNATIVES]개 (최근 것부터).
+    fn same_time_places(&self, r: DayRange, tz: i32) -> Vec<MemoryHit> {
+        let (from_ms, to_ms) = r.to_ms(tz);
+        let q = MemoryQuery { terms: vec![], from_ms: Some(from_ms), to_ms: Some(to_ms), kinds: vec![EpisodeKind::Outing, EpisodeKind::Trip], limit: CANDIDATE_SEARCH_LIMIT };
+        let hits = self.backend.search_memories(q).unwrap_or_default();
+        let mut out: Vec<MemoryHit> = vec![];
+        for h in hits {
+            if out.len() >= ALTERNATIVES {
+                break;
+            }
+            let name = hit_place(&h);
+            if !out.iter().any(|o| hit_place(o) == name) {
+                out.push(h);
+            }
+        }
+        out
     }
 
     /// 기억 하나로 갈 안내 제안: 들른 곳이 여럿이면 코스(카드도 코스로 바꾼다), 하나면 그곳.
@@ -332,13 +381,12 @@ impl MemoryAgent {
         let (proposal, course) = self.proposal_for(&mut s, &hit, ctx);
         *self.pending.lock().unwrap_or_else(|e| e.into_inner()) = proposal.clone();
         let rank = s.candidates.iter().position(|c| c.episode.facts.id == episode_id).unwrap_or(0) + 1;
-        let when = spoken_date(&hit.episode.facts.day, local_days(ctx.now_ms, ctx.tz_offset_minutes));
         let ask = match &proposal {
             Some(p) if matches!(p.action, super::NavAction::Course { .. }) => " 그 코스로 안내할까요?",
             Some(_) => " 그곳으로 안내할까요?",
             None => "",
         };
-        let line = format!("{rank}번은 {when} {}.{ask}", ieyo(&hit_place(&hit)));
+        let line = format!("{rank}번은 {}{ask}", describe(&hit, local_days(ctx.now_ms, ctx.tz_offset_minutes)));
         Some(super::CandidateChoice { proposal, course, line })
     }
 
@@ -381,9 +429,11 @@ impl MemoryAgent {
         let at = s.candidates.iter().position(|c| c.episode.facts.id == f.id);
         let text = match at {
             Some(0) if n > 1 && !t.picked => {
-                format!("비슷한 기억을 찾았어요. 가장 비슷한 1번은 {when} {}.{ask}", ieyo(&place))
+                format!("비슷한 기억을 찾았어요. 가장 비슷한 1번은 {}{ask}", describe(top, today))
             }
-            Some(i) if n > 1 => format!("{}번은 {when} {}.{ask}", i + 1, ieyo(&place)),
+            Some(i) if n > 1 => format!("{}번은 {}{ask}", i + 1, describe(top, today)),
+            // 같은 곳을 여러 번 다녀옴 (후보 하나로 합쳐짐): "태조감자국이에요. 1월 25일, 11월 1일 두 번 다녀오셨어요."
+            _ if top.visit_days.len() > 1 => format!("{}{ask}", describe(top, today)),
             _ if ctx.is_driving || f.stops.len() <= 1 => format!("{when}, {place}에 다녀오셨어요.{ask}"),
             _ => {
                 let names = f.stops.iter().take(3).map(|x| x.name.as_str()).filter(|n| !n.is_empty()).collect::<Vec<_>>().join(", ");
@@ -508,7 +558,7 @@ impl MemoryAgent {
         }
         let timing = AgentTiming { to_recommendation_ms: t.to_rec_ms, first_text_ms: t.first_text_ms, total_ms: t.start.elapsed().as_millis() as u64, llm_calls: t.llm_calls, llm_ms: t.llm_ms };
         alog!("[agent] 끝 ({source:?}): 카드 {:?}ms 첫 글자 {:?}ms 전체 {}ms LLM {}회 {}ms", timing.to_recommendation_ms, timing.first_text_ms, timing.total_ms, timing.llm_calls, timing.llm_ms);
-        t.l.on_done(AgentDone { answer: t.answer.trim().to_string(), source, timing });
+        t.l.on_done(AgentDone { answer: t.answer.trim().to_string(), source, timing, notice: t.notice });
     }
 
     pub(crate) fn warm_up_inner(&self) -> bool {
@@ -657,10 +707,98 @@ pub const CANDIDATE_SEARCH_LIMIT: u32 = 40;
 /// 1위 점수의 이 비율보다 낮은 결과는 후보로 보이지 않는다 (낱말 하나 겨우 걸린 엉뚱한 날이 끼지 않게).
 const CANDIDATE_MIN_RATIO: f64 = 0.4;
 
-/// 검색 결과 → 후보 목록: 1위와 점수가 가까운 기억 모두 (검색이 이미 하루에 하나로 묶어 둔다 → 같은 곳도 다른 날이면 다른 기억).
+/// "옛날에"일 때 1위 점수의 이 비율 이상이면 "잘 맞는 기억"으로 보고 오래된 것부터 놓는다.
+const LONG_AGO_STRONG_RATIO: f64 = 0.6;
+/// 같은 이름의 들른 곳이 이 거리(m) 안이면 같은 곳으로 본다 (주차 위치가 조금씩 다르다).
+const SAME_PLACE_M: f64 = 300.0;
+/// 기록에 없을 때 대신 보일 곳 수.
+const ALTERNATIVES: usize = 3;
+
+/// 질문에서 뽑은 것 (못 찾았을 때 답을 만들 때 쓴다).
+struct Asked<'a> {
+    parsed: &'a words::Parsed,
+    range: Option<DayRange>,
+}
+
+/// "옛날에 · 예전에" 순서: ① 잘 맞는 기억(1위 점수의 [LONG_AGO_STRONG_RATIO] 이상) 중 오래된 것부터 → ② 나머지는 점수순 →
+/// ③ 최근 [RECENT_DAYS]일 기록은 맨 뒤. 빼지는 않는다 (순서만).
+pub(crate) fn order_long_ago(hits: &mut [MemoryHit], today: i64) {
+    let top = hits.iter().map(|h| h.score).fold(f64::MIN, f64::max);
+    hits.sort_by_key(|h| {
+        let recent = parse_ymd(&h.episode.facts.day, false).is_some_and(|d| today - d < RECENT_DAYS);
+        let strong = !recent && h.score >= top * LONG_AGO_STRONG_RATIO;
+        (recent, !strong, if strong { h.episode.facts.start_ms } else { 0 })
+    });
+}
+
+/// 검색 결과 → 후보 목록: 가장 높은 점수와 가까운 기억 모두 (순서는 받은 그대로).
+/// 검색은 하루에 하나로 묶어 주므로 같은 곳을 다른 날 다녀오면 여러 기억이 된다 → 같은 곳(들른 곳 이름이 같고 [SAME_PLACE_M] 안)은
+/// 앞의 후보 하나로 합치고 다녀온 날을 [MemoryHit::visit_days]·[MemoryHit::visit_note]에 적는다.
 pub(crate) fn shortlist(hits: &[MemoryHit]) -> Vec<MemoryHit> {
-    let Some(top) = hits.first() else { return vec![] };
-    hits.iter().filter(|h| h.score >= top.score * CANDIDATE_MIN_RATIO).cloned().collect()
+    let top = hits.iter().map(|h| h.score).fold(f64::MIN, f64::max);
+    let mut out: Vec<MemoryHit> = vec![];
+    for h in hits.iter().filter(|h| h.score >= top * CANDIDATE_MIN_RATIO) {
+        match out.iter_mut().find(|o| same_place(o, h)) {
+            Some(o) => {
+                if o.visit_days.is_empty() {
+                    o.visit_days.push(o.episode.facts.day.clone());
+                }
+                o.visit_days.push(h.episode.facts.day.clone());
+            }
+            None => out.push(h.clone()),
+        }
+    }
+    for o in &mut out {
+        o.visit_days.sort();
+        o.visit_days.dedup();
+        if o.visit_days.len() > 1 {
+            o.visit_note = visit_note(&o.visit_days);
+        } else {
+            o.visit_days.clear();
+        }
+    }
+    out
+}
+
+/// 두 기억이 같은 곳인가: 질문과 가장 맞는 들른 곳의 이름이 같고 아주 가깝다.
+fn same_place(a: &MemoryHit, b: &MemoryHit) -> bool {
+    match (&a.best_stop, &b.best_stop) {
+        (Some(x), Some(y)) => !x.name.is_empty() && x.name == y.name && crate::geo::haversine_m(Point { lat: x.lat, lon: x.lon }, Point { lat: y.lat, lon: y.lon }) <= SAME_PLACE_M,
+        _ => false,
+    }
+}
+
+/// ["2026-10-11", "2026-10-18"] → "2번 다녀옴 · 10/11, 10/18" (날은 3개까지, 넘으면 "…").
+pub(crate) fn visit_note(days: &[String]) -> String {
+    let short: Vec<String> = days
+        .iter()
+        .take(3)
+        .map(|d| parse_ymd(d, false).map(|x| { let (_, m, dd) = dates::civil_from_days(x); format!("{m}/{dd}") }).unwrap_or_else(|| d.clone()))
+        .collect();
+    let more = if days.len() > 3 { " …" } else { "" };
+    format!("{}번 다녀옴 · {}{more}", days.len(), short.join(", "))
+}
+
+/// 후보 하나를 말로: "8월 7일 해운대해수욕장이에요." / 합친 후보면 "태조감자국이에요. 1월 25일, 11월 1일 두 번 다녀오셨어요."
+fn describe(h: &MemoryHit, today: i64) -> String {
+    let place = ieyo(&hit_place(h));
+    if h.visit_days.len() < 2 {
+        return format!("{} {place}.", spoken_date(&h.episode.facts.day, today));
+    }
+    let days: Vec<String> = h.visit_days.iter().take(3).map(|d| spoken_date(d, today)).collect();
+    let more = if h.visit_days.len() > 3 { " 등" } else { "" };
+    format!("{place}. {}{more} {}다녀오셨어요.", days.join(", "), times(h.visit_days.len()))
+}
+
+/// 2 → "두 번 ", 3 → "세 번 " (소리로 읽기 좋게).
+fn times(n: usize) -> String {
+    match n {
+        2 => "두 번 ".into(),
+        3 => "세 번 ".into(),
+        4 => "네 번 ".into(),
+        5 => "다섯 번 ".into(),
+        _ => format!("{n}번 "),
+    }
 }
 
 /// 후보를 부를 이름: 질문과 가장 맞는 들른 곳, 없으면 첫 곳, 없으면 제목.

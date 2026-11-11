@@ -54,17 +54,26 @@ impl Rec {
 const NOW: i64 = 1_794_013_200_000; // 2026-11-07 10:00 KST
 
 fn agent(name: &str) -> Arc<MemoryAgent> {
-    let path = std::env::temp_dir().join(format!("eodi-vague-{name}-{}.db", std::process::id()));
+    agent_at(name, NOW)
+}
+
+/// 시연 기록을 [now] 기준으로 심은 에이전트 (시연 기록은 "오늘"에 맞춰 날짜가 정해진다).
+fn agent_at(name: &str, now: i64) -> Arc<MemoryAgent> {
+    let path = std::env::temp_dir().join(format!("eodi-vague-{name}-{now}-{}.db", std::process::id()));
     let _ = std::fs::remove_file(&path);
     let s = EodiStore::open(path.to_string_lossy().into_owned(), 540).unwrap();
-    s.seed_demo_data(NOW).unwrap();
+    s.seed_demo_data(now).unwrap();
     let cfg = LlmConfig { base_url: String::new(), model: String::new(), api_key: String::new(), connect_timeout_ms: 500, read_timeout_ms: 500 };
     MemoryAgent::new(s, cfg)
 }
 
 fn ask(a: &MemoryAgent, q: &str) -> Arc<Rec> {
+    ask_at(a, q, NOW)
+}
+
+fn ask_at(a: &MemoryAgent, q: &str, now: i64) -> Arc<Rec> {
     let r = Arc::new(Rec::default());
-    a.ask(q.into(), AgentContext { now_ms: NOW, tz_offset_minutes: 540, current_location: None, is_driving: false }, r.clone());
+    a.ask(q.into(), AgentContext { now_ms: now, tz_offset_minutes: 540, current_location: None, is_driving: false }, r.clone());
     r
 }
 
@@ -140,6 +149,71 @@ fn matched_ai_tags_explain_the_hit() {
     let r = ask(&a, "애들이랑 갔던 계곡");
     let first = r.cards.lock().unwrap().first().cloned().unwrap();
     assert!(first.matched_tags.contains(&"계곡".to_string()), "{:?}", first.matched_tags);
+}
+
+/// UX 리뷰 6: "옛날에 놀러 갔던 바다" → 1년 전 경포해변(README 대표 장면)이 1번 (4개월 전 을왕리보다 위).
+#[test]
+fn long_ago_puts_the_year_old_gyeongpo_trip_first() {
+    // 시연 기록은 "오늘"에 맞춰 날짜가 정해진다 → 두 날짜(테스트 기준일·리뷰한 날)로 확인
+    for (now, day) in [(NOW, "2025-11-07"), (NOW + 4 * 86_400_000, "2025-11-11")] {
+        let a = agent_at("longago", now);
+        let r = ask_at(&a, "옛날에 놀러 갔던 바다", now);
+        let cands = r.cands.lock().unwrap().0.clone();
+        assert_eq!(cands[0].episode.facts.day, day);
+        assert_eq!(r.first_place(), "경포해변", "{}", r.text.lock().unwrap());
+        assert!(r.text.lock().unwrap().contains("작년 11월"), "{}", r.text.lock().unwrap());
+        // 나머지(덜 오래된 바다)도 빠지지 않는다
+        assert!(cands.len() >= 3, "{}", cands.len());
+    }
+}
+
+/// UX 리뷰 6: 같은 곳을 다른 날 다녀온 기억은 후보 하나로 ("2번 다녀옴 · 6/6, 8/22").
+#[test]
+fn same_place_on_different_days_is_one_candidate() {
+    let a = agent("merge");
+    let r = ask(&a, "옛날에 놀러 갔던 바다");
+    let cands = r.cands.lock().unwrap().0.clone();
+    let names: Vec<String> = cands.iter().filter_map(|h| h.best_stop.as_ref().map(|s| s.name.clone())).collect();
+    let unique: std::collections::HashSet<_> = names.iter().collect();
+    assert_eq!(unique.len(), names.len(), "후보마다 다른 곳: {names:?}");
+    let eulwang = cands.iter().find(|h| h.best_stop.as_ref().is_some_and(|s| s.name == "을왕리해수욕장")).expect("을왕리");
+    assert_eq!(eulwang.visit_days.len(), 2, "{:?}", eulwang.visit_days);
+    assert!(eulwang.visit_note.starts_with("2번 다녀옴 · "), "{}", eulwang.visit_note);
+    // 한 번 다녀온 곳은 표시가 없다
+    assert!(cands[0].visit_note.is_empty() && cands[0].visit_days.is_empty());
+
+    // 후보가 하나로 합쳐지면 답이 다녀온 날을 함께 말한다
+    a.new_session();
+    let r = ask(&a, "예전에 갔던 감자탕집");
+    let card = r.cards.lock().unwrap().first().cloned().unwrap();
+    assert_eq!(card.visit_note, "2번 다녀옴 · 1/25, 11/1");
+    let text = r.text.lock().unwrap().clone();
+    assert!(text.starts_with("태조감자국이에요. 1월 25일, 11월 1일 두 번 다녀오셨어요."), "{text}");
+    assert!(r.cands.lock().unwrap().0.is_empty(), "비교할 것이 없으면 후보 칸을 보이지 않는다");
+}
+
+/// UX 리뷰 2: 기록에 없는 질문은 오류가 아니라 보통 답 + 그 무렵 다녀온 곳 후보.
+#[test]
+fn not_found_is_a_plain_answer_with_places_from_that_time() {
+    let a = agent("notfound");
+    let r = ask(&a, "작년 겨울에 스키 타러 갔던 데 어디였지");
+    let text = r.text.lock().unwrap().clone();
+    assert!(text.starts_with("스키 기록은 없어요. 그 무렵에는 "), "{text}");
+    let cands = r.cands.lock().unwrap().0.clone();
+    assert!((2..=3).contains(&cands.len()), "{}", cands.len());
+    // 후보는 모두 그 겨울(2025-12 ~ 2026-02)
+    assert!(cands.iter().all(|h| ("2025-12-01".."2026-03-01").contains(&h.episode.facts.day.as_str())));
+    assert!(r.proposals.lock().unwrap().is_empty());
+    // 이어서 "2번"으로 볼 수 있다
+    let r2 = ask(&a, "2번");
+    assert_eq!(r2.first_id(), cands[1].episode.facts.id);
+}
+
+#[test]
+fn visit_note_lists_up_to_three_days() {
+    let d = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+    assert_eq!(super::runner::visit_note(&d(&["2026-10-11", "2026-10-18"])), "2번 다녀옴 · 10/11, 10/18");
+    assert_eq!(super::runner::visit_note(&d(&["2026-01-02", "2026-02-03", "2026-03-04", "2026-04-05"])), "4번 다녀옴 · 1/2, 2/3, 3/4 …");
 }
 
 #[test]
