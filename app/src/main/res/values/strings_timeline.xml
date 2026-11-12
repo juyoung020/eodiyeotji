@@ -23,6 +23,9 @@
 
     <string name="timeline_loading">기록을 불러오는 중…</string>
     <string name="timeline_empty_title">아직 기록이 없어요</string>
+    <string name="timeline_demo_seed">시연 기록 넣기</string>
+    <string name="timeline_demo_seeding">시연 기록 넣는 중…</string>
+    <string name="timeline_demo_hint">1년치 예시 기록과 커뮤니티 글로 바로 둘러볼 수 있어요</string>
     <string name="timeline_empty_body">시동을 걸고 출발하면 이동이 자동으로 기록돼요.\n따로 누를 버튼은 없어요. 주차하면 여기에 날짜별로 정리돼요.</string>
     <string name="timeline_failed">기록을 불러오지 못했어요\n%1$s</string>
     <string name="timeline_retry">다시 불러오기</string>

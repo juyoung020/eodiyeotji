@@ -261,7 +261,7 @@ class EodiCore @Inject constructor(
         )
     }
 
-    /** 시연용 1년치 기록 만들기 (디버그 빌드에서만 부른다). */
+    /** 시연용 1년치 기록 만들기 (디버그 도구 · 기록이 없는 첫 화면의 "시연 기록 넣기"). 이미 넣었으면 0. */
     suspend fun seedDemoData(todayMs: Long = System.currentTimeMillis()): Int = coreCall("seedDemoData") {
         store.seedDemoData(todayMs).toInt().also { _changes.tryEmit(Unit) }
     }

@@ -1436,9 +1436,13 @@ private fun NaviTag() {
 
 // ---------------------------------------------------------------- 상태 화면
 
-/** 기록이 없을 때. 시작 버튼은 일부러 없다 → 시동을 걸면 저절로 기록된다고만 알려 준다. */
+/**
+ * 기록이 없을 때. 기록 시작 버튼은 일부러 없다 → 시동을 걸면 저절로 기록된다고만 알려 준다.
+ * 아래 작은 "시연 기록 넣기"는 처음 설치한 사람(심사위원)이 1년치 예시 기록으로 바로 둘러보게 한다.
+ */
 @Composable
-private fun EmptyPane(modifier: Modifier = Modifier) {
+private fun EmptyPane(modifier: Modifier = Modifier, demo: DemoSeedViewModel = hiltViewModel()) {
+    val busy by demo.busy.collectAsStateWithLifecycle()
     StatePane(modifier) {
         EmptyRoadArt()
         Spacer(Modifier.height(40.dp))
@@ -1456,6 +1460,15 @@ private fun EmptyPane(modifier: Modifier = Modifier) {
             textAlign = TextAlign.Center,
             modifier = Modifier.widthIn(max = 720.dp),
         )
+        Spacer(Modifier.height(40.dp))
+        SecondaryPill(
+            stringResource(if (busy) R.string.timeline_demo_seeding else R.string.timeline_demo_seed),
+            EodiIcons.Sparkle,
+            onClick = demo::seed,
+            enabled = !busy,
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(stringResource(R.string.timeline_demo_hint), style = EodiTheme.type.meta, color = EodiTheme.colors.textTertiary, textAlign = TextAlign.Center)
     }
 }
 
