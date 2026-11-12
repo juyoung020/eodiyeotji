@@ -26,7 +26,6 @@ pub mod offers;
 pub mod parking;
 pub mod readings;
 pub mod biztrip;
-pub mod timeline_import;
 pub mod tourism;
 pub mod logbook;
 pub mod photos;

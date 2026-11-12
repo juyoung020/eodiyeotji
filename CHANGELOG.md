@@ -18,7 +18,6 @@
 ## [Unreleased]
 
 ### Added
-- 구글 타임라인 가져오기: 폰에서 내보낸 `Timeline.json`의 차 이동(`IN_PASSENGER_VEHICLE`)을 주행 기록으로 넣는다. 지나간 점 사이는 5초마다 곧게 이어 채우고, 이미 기록이 있는 날은 건너뛴다. 13년치 72MB 파일(차 이동 1,565번)을 에뮬레이터에서 1.6초에 넣었다. 지금은 디버그 리시버로 실행한다 (`core-rs/src/timeline_import.rs`, `app/src/debug/.../record/TimelineImportReceiver.kt`)
 - 늘 가던 날 카드: 정해진 요일마다 가던 곳(매주 · 매달 "몇째 주 무슨 요일")을 최근 180일 기록에서 찾아, 그날이 7일 안에 돌아오면 첫 화면에 "매달 둘째 목요일마다 판교테크노밸리 스타트업캠퍼스에 갔어요. 내일이 그날이에요." 카드와 [장소 보기] [여기로 안내]를 띄운다. 닫으면 그날 것만 닫히고 다음에 돌아오는 날 다시 나온다 (`core-rs/src/routine.rs`, `ui/recap/RecapParts.kt RoutineCard`)
 - 좌석 자세 값 확인용 디버그 리시버: 좌석마다 앞뒤 · 등받이 · 높이 · 기울기 · 안전벨트 값을 읽어 로그로 남긴다. Pleos 에뮬레이터 v2.1.0은 Virtual Console에 값을 넣어도 앱에 0만 준다 (`app/src/carDebug/.../record/SeatDebugReceiver.kt`)
 - 기획서 v2.1: 차량 AI 비서(Gleo AI · 테슬라 Grok · 구글 Ask Maps) 비교, 이어 묻기 · 한 문장 코스 · 늘 가던 날 반영, 좌석 자세는 운전자만 알아보는 것으로 줄임 (`docs/00_plan.md`, `submission/어디였지_접수양식_v2.docx`)
