@@ -115,7 +115,7 @@ private fun countBadge(text: String, density: Float): Bitmap {
     val c = Canvas(out)
     val rect = RectF(1f, 1f, w + 1f, h + 1f)
     c.drawRoundRect(rect, h / 2, h / 2, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() })
-    val b = 2f * density
+    val b = 1.5f * density
     val inner = RectF(rect.left + b, rect.top + b, rect.right - b, rect.bottom - b)
     c.drawRoundRect(inner, inner.height() / 2, inner.height() / 2, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF0064FF.toInt() })
     val fm = tp.fontMetrics
@@ -128,11 +128,11 @@ internal const val BADGE_PREFIX = "gpn"
 /** 이보다 많이 묶이면 "N+"로 */
 internal const val MAX_BADGE = 30
 
-/** 카드 크기(dp): 차 화면에서 무엇을 찍었는지 알아볼 만큼 */
-internal const val CARD_DP = 64f
-private const val BORDER_DP = 3f
-private const val RADIUS_DP = 12f
-internal const val SHADOW_DP = 6f
-private const val BADGE_DP = 28f
-private const val BADGE_TEXT_SP = 16f
+/** 카드 크기(dp): 한곳에 여러 장이 꽂혀도 지도를 덮지 않게 작게 */
+internal const val CARD_DP = 40f
+private const val BORDER_DP = 2f
+private const val RADIUS_DP = 8f
+internal const val SHADOW_DP = 4f
+private const val BADGE_DP = 20f
+private const val BADGE_TEXT_SP = 12f
 private const val DECODE_PARALLEL = 4

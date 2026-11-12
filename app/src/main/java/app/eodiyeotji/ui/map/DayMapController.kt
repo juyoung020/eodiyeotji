@@ -560,10 +560,10 @@ internal class DayMapController(
         const val PHOTO_BADGE = "eodi-my-photo-count"
 
         /** 사진 카드를 찍은 곳(핀) 아래로 내리는 거리(dp) · 배지 자리 · 묶는 반경(화면 px 기준) */
-        const val PHOTO_DROP_DP = 10f
-        const val PHOTO_BADGE_X_DP = 34f
-        const val PHOTO_BADGE_LIFT_DP = 6f
-        const val PHOTO_CLUSTER_RADIUS = 56
+        const val PHOTO_DROP_DP = 6f
+        const val PHOTO_BADGE_X_DP = 20f
+        const val PHOTO_BADGE_LIFT_DP = 4f
+        const val PHOTO_CLUSTER_RADIUS = 36
         const val PHOTO_CLUSTER_MAX_ZOOM = 17
         const val PHOTO_LEAVES_MAX = 200L
 
