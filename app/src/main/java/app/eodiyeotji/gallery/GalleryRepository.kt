@@ -43,13 +43,17 @@ import kotlinx.coroutines.withContext
 class GalleryRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val core: EodiCore,
+    private val phonePhotos: PhonePhotoStore,
 ) {
+    /** 읽을 사진이 있을 수 있는가: 갤러리 권한이 있거나, 연결된 폰이 보내 준 사진이 있다 (차 화면). */
+    private fun hasSource(): Boolean = canRead() || phonePhotos.any()
+
     /** 사진 읽기 권한이 있는가 (Android 14의 "일부 사진만 허용"은 고른 사진만 보인다). */
     fun canRead(): Boolean = READ_PERMISSIONS.any { granted(it) }
 
     /** 그날 들른 곳마다 내 사진 (도착 시각 → 사진). 권한이 없거나 못 읽으면 빈 것. */
     suspend fun stayPhotos(day: String): Map<Long, StayMyPhotos> = guard("하루 사진 $day", emptyMap()) {
-        if (!canRead()) return@guard emptyMap()
+        if (!hasSource()) return@guard emptyMap()
         val range = core.galleryWindow(day) ?: return@guard emptyMap()
         val items = read(range.first, range.last)
         if (items.isEmpty()) emptyMap() else core.galleryForDay(day, items)
@@ -57,7 +61,7 @@ class GalleryRepository @Inject constructor(
 
     /** 하루 상세용: 들른 곳마다 내 사진 + 지도에 꽂을 자리. 갤러리는 한 번만 읽는다. 권한이 없거나 못 읽으면 빈 것. */
     suspend fun dayPhotos(day: String): DayPhotos = guard("하루 사진·지도 $day", DayPhotos.EMPTY) {
-        if (!canRead()) return@guard DayPhotos.EMPTY
+        if (!hasSource()) return@guard DayPhotos.EMPTY
         val range = core.galleryWindow(day) ?: return@guard DayPhotos.EMPTY
         val items = read(range.first, range.last)
         if (items.isEmpty()) DayPhotos.EMPTY else DayPhotos(core.galleryForDay(day, items), core.galleryMapSpots(day, items))
@@ -65,9 +69,33 @@ class GalleryRepository @Inject constructor(
 
     /** 주행 하나 동안 찍은 사진 (드라이브 코스에 붙일 후보). */
     suspend fun tripPhotos(startMs: Long, endMs: Long): List<MyPhoto> = guard("주행 사진", emptyList()) {
-        if (!canRead()) return@guard emptyList()
+        if (!hasSource()) return@guard emptyList()
         val items = read(startMs - WINDOW_SLACK_MS, endMs + WINDOW_SLACK_MS)
         if (items.isEmpty()) emptyList() else core.galleryForTrip(startMs, endMs, items)
+    }
+
+    /**
+     * 폰: 그날 차로 다니며 찍은 사진 (들른 곳에 맞은 사진 + 주행 중 찍은 사진, 고르기는 Rust). 차로 보낼 후보다.
+     * 이 기기 갤러리에서만 고른다 (받은 사진을 되돌려 보내지 않게).
+     */
+    suspend fun carDayPhotos(day: String): List<GalleryItem> = guard("차로 보낼 사진 $day", emptyList()) {
+        if (!canRead()) return@guard emptyList()
+        val range = core.galleryWindow(day) ?: return@guard emptyList()
+        val items = readDevice(range.first, range.last)
+        if (items.isEmpty()) return@guard emptyList()
+        val picked = HashSet<Long>()
+        core.galleryForDay(day, items).values.forEach { s -> s.photos.forEach { picked += it.id } }
+        core.dayDetail(day).trips.forEach { t -> core.galleryForTrip(t.startMs, t.endMs, items).forEach { picked += it.id } }
+        items.filter { it.id in picked }
+    }
+
+    /** 폰: 차로 보낼 사본 — 긴 변 [CAR_MAX_PX]로 줄인 JPEG (차 화면에서 크게 봐도 선명한 크기). 못 읽으면 null. */
+    suspend fun encodeForCar(item: GalleryItem): ByteArray? = guard("차로 보낼 사본", null) {
+        val bmp = decodeScaled(Uri.parse(item.uri), CAR_MAX_PX) ?: return@guard null
+        val out = java.io.ByteArrayOutputStream(512 * 1024)
+        bmp.compress(Bitmap.CompressFormat.JPEG, CAR_QUALITY, out)
+        bmp.recycle()
+        out.toByteArray()
     }
 
     /**
@@ -83,7 +111,14 @@ class GalleryRepository @Inject constructor(
         out.absolutePath
     }
 
+    /** 기기 갤러리 + 폰이 보내 준 사진 (찍은 시각 최신부터). */
     private fun read(fromMs: Long, toMs: Long): List<GalleryItem> {
+        val device = if (canRead()) readDevice(fromMs, toMs) else emptyList()
+        val phone = phonePhotos.list(fromMs, toMs)
+        return if (phone.isEmpty()) device else (device + phone).sortedByDescending { it.takenMs }
+    }
+
+    private fun readDevice(fromMs: Long, toMs: Long): List<GalleryItem> {
         val base = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
         val projection = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DATE_TAKEN)
         val sel = "${MediaStore.Images.Media.DATE_TAKEN} BETWEEN ? AND ?"
@@ -143,6 +178,9 @@ class GalleryRepository @Inject constructor(
         private const val POST_DIR = "post_photos"
         private const val POST_MAX_PX = 1280
         private const val POST_QUALITY = 85
+        /** 차로 보내는 사본: 긴 변 1920px (1080p 화면에서 원본처럼 보인다), 한 장 300~500KB. */
+        private const val CAR_MAX_PX = 1920
+        private const val CAR_QUALITY = 82
         /** 한 번에 읽는 사진 수 상한 (하루 범위 안, 최신부터). */
         private const val MAX_READ = 400
         /** 주행 사진: Rust 여유(10분)보다 조금 넓게 읽는다. */

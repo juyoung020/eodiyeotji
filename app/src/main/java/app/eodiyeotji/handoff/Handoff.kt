@@ -9,6 +9,8 @@ import app.eodiyeotji.core.rust.ShareCard as RShareCard
 import app.eodiyeotji.core.rust.handoffNewPairing
 import app.eodiyeotji.core.rust.handoffOpen
 import app.eodiyeotji.core.EodiCore
+import app.eodiyeotji.gallery.GalleryRepository
+import app.eodiyeotji.gallery.PhonePhotoStore
 import app.eodiyeotji.core.rust.handoffOpenBytes
 import app.eodiyeotji.core.rust.handoffOpenCard
 import app.eodiyeotji.core.rust.handoffOpenPairing
@@ -26,8 +28,13 @@ import java.net.HttpURLConnection
 import java.net.URL
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,14 +47,20 @@ import org.json.JSONObject
  * - 전달: 공개 알림 중계 ntfy.sh의 주제 하나. 글은 모두 페어링 키로 잠겨 있어 중계 서버는 읽지 못한다.
  * - 차: [startPairing] → 코드를 화면에 띄우고 [awaitPhone]으로 폰 인사를 기다린다 → 공유 때 [sendCard].
  * - 폰: [pairWithCode] → 연결 → [listen]으로 차가 보낸 기록·카드를 받는다.
+ * - 사진(폰 → 차): 폰은 기록을 받을 때마다 그 기간에 차로 다니며 찍은 사진을 [sendPhotos]로 보내고, 차는 [receivePhotos]로 받아 둔다.
  * 네트워크는 모두 IO 스레드, 짧은 타임아웃.
  */
 @Singleton
 class HandoffRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val core: EodiCore,
+    private val gallery: GalleryRepository,
+    private val phonePhotos: PhonePhotoStore,
 ) {
     private val prefs = context.getSharedPreferences("handoff", Context.MODE_PRIVATE)
+    /** 폰: 사진 보내기는 받기 연결을 막지 않게 따로 돈다 (한 번에 하나). */
+    private val photoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val photoLock = Mutex()
     private val _link = MutableStateFlow(readLink())
 
     /** 연결된 상대 (없으면 null). */
@@ -127,6 +140,7 @@ class HandoffRepository @Inject constructor(
      */
     suspend fun syncNow(): Int = withContext(Dispatchers.IO) {
         val l = _link.value ?: return@withContext 0
+        receivePhotos(l)
         // 폰이 받았다고 알린 시각 읽기
         val ackSince = prefs.getString(K_ACK_SINCE, null) ?: "12h"
         val msgs = runCatching { Ntfy.poll(l.topic, ackSince) }.getOrDefault(emptyList())
@@ -166,7 +180,61 @@ class HandoffRepository @Inject constructor(
         n
     }
 
+    /**
+     * 차: 폰이 보낸 사진을 받아 둔다 ([PhonePhotoStore]). 사진 글은 제목이 [PHOTO_TITLE]이라 다른 글은 내려받지 않는다.
+     * 중계 서버가 첨부를 3시간만 두므로 그 안에 받지 못한 사진은 빠진다 (폰이 다음에 다시 보내지는 않는다).
+     */
+    private fun receivePhotos(l: HandoffLink) {
+        val since = prefs.getString(K_PHOTO_SINCE, null) ?: "3h"
+        val msgs = runCatching { Ntfy.poll(l.topic, since) }.getOrDefault(emptyList())
+        if (msgs.isEmpty()) return
+        var saved = 0
+        for (m in msgs.filter { it.title == PHOTO_TITLE }) {
+            val bytes = runCatching { handoffOpenBytes(l.key, m.body()) }.onFailure { Log.w(TAG, "사진 받기 실패: ${it.message}") }.getOrNull()
+                ?: continue
+            if (phonePhotos.save(bytes)) saved++
+        }
+        prefs.edit().putString(K_PHOTO_SINCE, msgs.last().id).apply()
+        if (saved > 0) {
+            Log.i(TAG, "폰 사진 받음: ${saved}장")
+            core.notifyChanged()
+        }
+    }
+
     // ---------- 폰 ----------
+
+    /**
+     * 폰: [fromMs] ~ [untilMs] 사이 날들에 차로 다니며 찍은 사진을 차로 보낸다 (고르기는 [GalleryRepository.carDayPhotos]).
+     * 한 번 보낸 사진은 다시 보내지 않는다. 한 번에 [MAX_PHOTOS_PER_RUN]장까지, 공개 중계 서버 한도를 넘지 않게 천천히.
+     */
+    private suspend fun sendPhotos(l: HandoffLink, fromMs: Long, untilMs: Long) = photoLock.withLock {
+        val zone = java.time.ZoneId.systemDefault()
+        val first = java.time.Instant.ofEpochMilli(maxOf(fromMs, untilMs - MAX_PHOTO_SPAN_MS)).atZone(zone).toLocalDate()
+        val last = java.time.Instant.ofEpochMilli(untilMs).atZone(zone).toLocalDate()
+        val sent = prefs.getStringSet(K_PHOTO_SENT, emptySet()).orEmpty().toMutableSet()
+        var n = 0
+        var day = first
+        while (!day.isAfter(last) && n < MAX_PHOTOS_PER_RUN) {
+            for (item in gallery.carDayPhotos(day.toString())) {
+                if (n >= MAX_PHOTOS_PER_RUN) break
+                if (!sent.add(item.takenMs.toString())) continue
+                val jpeg = gallery.encodeForCar(item) ?: continue
+                val body = handoffSealBytes(l.key, PhonePhotoStore.pack(item.takenMs, item.lat, item.lon, jpeg))
+                val ok = runCatching { Ntfy.publish(l.topic, body, title = PHOTO_TITLE) }
+                    .onFailure { Log.w(TAG, "사진 보내기 실패: ${it.message}") }.isSuccess
+                if (!ok) {
+                    sent.remove(item.takenMs.toString())
+                    delay(RATE_WAIT_MS)
+                    continue
+                }
+                n++
+                prefs.edit().putStringSet(K_PHOTO_SENT, sent.toSet()).apply()
+                delay(CHUNK_GAP_MS)
+            }
+            day = day.plusDays(1)
+        }
+        if (n > 0) Log.i(TAG, "차로 사진 보냄: ${n}장")
+    }
 
     /** 입력한 코드로 차와 연결한다. 성공하면 true. */
     suspend fun pairWithCode(code: String): Boolean = withContext(Dispatchers.IO) {
@@ -199,6 +267,8 @@ class HandoffRepository @Inject constructor(
     }
 
     private fun handle(l: HandoffLink, m: Ntfy.Msg, onParked: (ParkedCar) -> Unit, onMoving: (Long) -> Unit): RShareCard? {
+        // 내가 차로 보낸 사진은 내려받지 않는다
+        if (m.title == PHOTO_TITLE) return null
         val body = runCatching { m.body() }.getOrNull() ?: return null
         val bytes = runCatching { handoffOpenBytes(l.key, body) }.getOrNull() ?: return null
         // 짧은 글: 주차 위치 · 다시 출발 (한 번 연 글을 그대로 본다)
@@ -227,6 +297,8 @@ class HandoffRepository @Inject constructor(
                     val next = if (from <= have) maxOf(have, until) else have
                     prefs.edit().putLong(K_SYNC_HAVE, next).apply()
                     runCatching { Ntfy.publish(l.topic, handoffSeal(l.key, ACK + next)) }
+                    // 새로 받은 기간에 찍은 사진을 차로 보낸다
+                    photoScope.launch { runCatching { sendPhotos(l, from, until) }.onFailure { Log.w(TAG, "사진 보내기 실패", it) } }
                 }
                 .onFailure { Log.w(TAG, "기록 받기 실패", it) }
             return null
@@ -249,6 +321,13 @@ class HandoffRepository @Inject constructor(
         const val K_SYNC_AT = "sync_at"
         const val K_SYNC_HAVE = "sync_have"
         const val K_ACK_SINCE = "ack_since"
+        const val K_PHOTO_SINCE = "photo_since"
+        const val K_PHOTO_SENT = "photo_sent"
+        /** 사진 글의 제목 (받는 쪽이 사진 글만 골라 내려받는다) */
+        const val PHOTO_TITLE = "photo"
+        const val MAX_PHOTOS_PER_RUN = 30
+        /** 처음 연결해 몇 년치 기록을 받아도, 사진은 최근 이 기간 것만 보낸다 */
+        const val MAX_PHOTO_SPAN_MS = 31L * 24 * 3_600_000
         const val SYNC_MARK: Byte = 'S'.code.toByte()
         const val CHUNK_FIXES = 50_000
         const val MAX_CHUNKS_PER_RUN = 12
@@ -267,7 +346,7 @@ internal object Ntfy {
     private const val BASE = "https://ntfy.sh/"
     private const val TIMEOUT_MS = 6_000
 
-    data class Msg(val id: String, val message: String, val attachment: String?) {
+    data class Msg(val id: String, val message: String, val attachment: String?, val title: String = "") {
         fun body(): String = attachment?.let { get(it) } ?: message
     }
 
@@ -294,7 +373,7 @@ internal object Ntfy {
         return text.lineSequence().filter { it.isNotBlank() }.mapNotNull { line ->
             val o = runCatching { JSONObject(line) }.getOrNull() ?: return@mapNotNull null
             if (o.optString("event") != "message") return@mapNotNull null
-            Msg(o.optString("id"), o.optString("message"), o.optJSONObject("attachment")?.optString("url")?.takeIf { it.isNotBlank() })
+            Msg(o.optString("id"), o.optString("message"), o.optJSONObject("attachment")?.optString("url")?.takeIf { it.isNotBlank() }, o.optString("title"))
         }.toList()
     }
 
@@ -311,7 +390,7 @@ internal object Ntfy {
                     val line = r.readLine() ?: break
                     val o = runCatching { JSONObject(line) }.getOrNull() ?: continue
                     if (o.optString("event") != "message") continue
-                    onMsg(Msg(o.optString("id"), o.optString("message"), o.optJSONObject("attachment")?.optString("url")?.takeIf { it.isNotBlank() }))
+                    onMsg(Msg(o.optString("id"), o.optString("message"), o.optJSONObject("attachment")?.optString("url")?.takeIf { it.isNotBlank() }, o.optString("title")))
                 }
             }
         } finally {
