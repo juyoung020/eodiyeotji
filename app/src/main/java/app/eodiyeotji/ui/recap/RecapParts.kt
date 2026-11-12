@@ -112,7 +112,8 @@ fun RecapListTop(viewModel: RecapViewModel, onOpenDay: (String) -> Unit, modifie
         if (routine != null && !state.driving) {
             RoutineCard(routine, onNavigate = viewModel::navigateRoutine, onDismiss = viewModel::dismissRoutine)
         }
-        val otd = state.onThisDay
+        // 카드는 한 번에 하나만 (둘이 같이 뜨면 날짜 목록이 화면 밖으로 밀린다): 늘 가던 날을 닫으면 N년 전 오늘이 나온다
+        val otd = state.onThisDay.takeIf { routine == null }
         if (otd != null && !state.driving) {
             OnThisDayCard(
                 otd = otd,

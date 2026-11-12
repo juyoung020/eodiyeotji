@@ -957,7 +957,7 @@ private fun DayActions(summary: DaySummary, loaded: Boolean, onShare: (() -> Uni
             onClick = { openReplay(summary.day) }, onUnavailable = { reason = R.string.timeline_replay_unavailable },
         )
         // 커뮤니티에 올리기: 나들이 · 여행 기록이 있는 날만 (Rust `share_candidates_on`)
-        DimPill(
+        DimIcon(
             stringResource(R.string.timeline_share_short), CommunityIcons.Upload, available = onShare != null,
             onClick = { onShare?.invoke() }, onUnavailable = { if (loaded) reason = R.string.timeline_share_unavailable },
         )
@@ -981,6 +981,21 @@ private fun DimPill(text: String, icon: ImageVector, available: Boolean, onClick
         onClick = if (available) onClick else onUnavailable,
         modifier = if (available) modifier else modifier.alpha(0.42f),
     )
+}
+
+/** [DimPill]의 글자 없는 둥근 버튼 (머리 버튼 줄에서 글자 있는 버튼은 그날로 돌아가기 하나만 둔다). */
+@Composable
+private fun DimIcon(description: String, icon: ImageVector, available: Boolean, onClick: () -> Unit, onUnavailable: () -> Unit) {
+    val c = EodiTheme.colors
+    Surface(
+        onClick = if (available) onClick else onUnavailable,
+        shape = CircleShape,
+        color = c.surfaceHigh,
+        contentColor = c.textSecondary,
+        modifier = Modifier.size(76.dp).alpha(if (available) 1f else 0.42f).semantics { contentDescription = description },
+    ) {
+        Box(contentAlignment = Alignment.Center) { Icon(icon, null, modifier = Modifier.size(32.dp)) }
+    }
 }
 
 /** 하루 태그는 앞에서 이만큼만 (9개가 한 줄에 몰리면 읽히지 않는다). */
@@ -1008,37 +1023,45 @@ private fun TagRow(tags: List<String>) {
     }
 }
 
-/** 하루 통계 4칸: 주행 · 머문 곳 · 거리 · 운전 시간 (+ 좌석 센서가 있으면 탑승 인원). 값은 크게, 이름은 작게. */
+/**
+ * 하루 통계: 기본은 3칸(머문 곳 · 거리 · 운전 시간)만. 누르면 주행 횟수 · 탑승 인원 · 배터리 · 날씨까지 편다
+ * (7칸이 한 줄에 다 보이면 읽히지 않는다). 값은 크게, 이름은 작게.
+ */
 @Composable
 private fun StatRow(s: DaySummary) {
     val c = EodiTheme.colors
+    var all by remember(s.day) { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
-            .background(c.surfaceHigh, RoundedCornerShape(EodiTheme.space.radiusM))
+            .clip(RoundedCornerShape(EodiTheme.space.radiusM))
+            .background(c.surfaceHigh)
+            .clickable(onClickLabel = stringResource(if (all) R.string.stat_less else R.string.stat_more)) { all = !all }
             .padding(vertical = 16.dp),
     ) {
-        StatCell(stringResource(R.string.stat_trips_value, s.tripCount), stringResource(R.string.stat_trips_label), c.trip, weight = CountWeight)
-        StatDivider()
+        if (all) {
+            StatCell(stringResource(R.string.stat_trips_value, s.tripCount), stringResource(R.string.stat_trips_label), c.trip, weight = CountWeight)
+            StatDivider()
+        }
         StatCell(stringResource(R.string.stat_stays_value, s.stayCount), stringResource(R.string.stat_stays_label), c.stay, weight = CountWeight)
         StatDivider()
         StatCell(distanceText(s.distanceM), stringResource(R.string.stat_distance_label), null, weight = DistanceWeight)
         StatDivider()
         StatCell(durationText(s.driveMillis), stringResource(R.string.stat_drive_label), null, weight = DriveWeight)
         // 좌석 센서로 센 탑승 인원 (차만, 모르면 칸 없음)
-        if (s.people > 0) {
+        if (all && s.people > 0) {
             StatDivider()
             StatCell(stringResource(R.string.stat_people_value, s.people), stringResource(R.string.stat_people_label), null, weight = CountWeight)
         }
         // 배터리 · 연료 (차만): 쓴 양 %p. 이름 줄은 칸이 좁아 "쓴 배터리" 한 가지로 (충전 횟수를 붙이면 잘려 뜻이 바뀐다)
-        s.energy?.let { e ->
+        s.energy?.takeIf { all }?.let { e ->
             StatDivider()
             val label = stringResource(if (e.ev) R.string.stat_energy_ev_label else R.string.stat_energy_fuel_label)
             StatCell(stringResource(R.string.stat_energy_value, kotlin.math.round(e.usedPct).toInt()), label, null)
         }
         // 비 온 날 (차 와이퍼 기록)
-        if (s.rain) {
+        if (all && s.rain) {
             StatDivider()
             StatCell(stringResource(R.string.stat_rain_value), stringResource(R.string.stat_rain_label), null)
         }
