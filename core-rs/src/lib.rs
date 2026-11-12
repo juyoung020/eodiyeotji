@@ -33,6 +33,7 @@ pub mod place_detail;
 pub mod places;
 pub mod recap;
 pub mod replay;
+pub mod routine;
 pub mod saved;
 pub mod search_ui;
 pub mod share;

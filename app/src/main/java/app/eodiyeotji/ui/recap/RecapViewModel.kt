@@ -10,11 +10,14 @@ import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.MemoryMap
 import app.eodiyeotji.core.MonthRecap
 import app.eodiyeotji.core.OnThisDay
+import app.eodiyeotji.core.RoutineNudge
 import app.eodiyeotji.core.YearRecap
 import app.eodiyeotji.core.dismissOnThisDay
+import app.eodiyeotji.core.dismissRoutineNudge
 import app.eodiyeotji.core.memoryMap
 import app.eodiyeotji.core.monthRecap
 import app.eodiyeotji.core.onThisDay
+import app.eodiyeotji.core.routineNudge
 import app.eodiyeotji.core.yearRecap
 import app.eodiyeotji.pleos.CourseGuide
 import app.eodiyeotji.ui.agent.DrivingStatePort
@@ -45,11 +48,13 @@ sealed interface Load<out T> {
 /**
  * 첫 화면 위 "N년 전 오늘" 카드 · 요약 입구와 요약 화면 상태.
  * [onThisDay]는 오늘 닫았으면 null. [driving]이면 카드를 숨긴다 (운전 중에는 음성 한 줄만, `RecallCenter`).
+ * [routine]은 늘 가던 날이 다가온 곳 (없거나 닫았으면 null).
  */
 @Immutable
 data class RecapUiState(
     val today: LocalDate = LocalDate.now(),
     val onThisDay: OnThisDay? = null,
+    val routine: RoutineNudge? = null,
     val driving: Boolean = false,
     val open: Boolean = false,
     val mode: RecapMode = RecapMode.MONTH,
@@ -94,7 +99,28 @@ class RecapViewModel @Inject constructor(
         otdJob = viewModelScope.launch {
             val otd = runCatching { core.onThisDay() }.onFailure { if (it is CancellationException) throw it; Log.w(TAG, "N년 전 오늘 실패", it) }
                 .getOrNull()
-            _state.update { it.copy(today = LocalDate.now(), onThisDay = otd?.takeUnless { o -> o.dismissed }) }
+            val routine = runCatching { core.routineNudge() }.onFailure { if (it is CancellationException) throw it; Log.w(TAG, "늘 가던 날 실패", it) }
+                .getOrNull()
+            _state.update { it.copy(today = LocalDate.now(), onThisDay = otd?.takeUnless { o -> o.dismissed }, routine = routine) }
+        }
+    }
+
+    /** 이번에 돌아오는 날 것은 닫는다. 그다음으로 가까운 곳이 있으면 그것이 나온다 (닫은 뒤 다시 읽는다). */
+    fun dismissRoutine() {
+        val r = _state.value.routine ?: return
+        _state.update { it.copy(routine = null) }
+        viewModelScope.launch {
+            runCatching { core.dismissRoutineNudge(r) }.onFailure { Log.w(TAG, "닫기 저장 실패", it) }
+            loadOnThisDay()
+        }
+    }
+
+    /** "여기로 안내": 늘 가던 곳을 목적지로 내비에 보낸다. */
+    fun navigateRoutine() {
+        val p = _state.value.routine?.place ?: return
+        viewModelScope.launch {
+            val ok = runCatching { guide.startPlace(p.name, p.lat, p.lon, p.address) }.getOrDefault(false)
+            showNote(if (ok) R.string.routine_navi_started else R.string.routine_navi_failed)
         }
     }
 

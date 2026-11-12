@@ -59,6 +59,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
 import app.eodiyeotji.core.OnThisDay
 import app.eodiyeotji.core.RecapDay
+import app.eodiyeotji.core.RoutineNudge
 import app.eodiyeotji.recap.RecallCenter
 import app.eodiyeotji.ui.common.distanceText
 import app.eodiyeotji.ui.agent.memoryDateText
@@ -106,6 +107,11 @@ fun RecapListTop(viewModel: RecapViewModel, onOpenDay: (String) -> Unit, modifie
                 }
             }
         }
+        // 다가오는 날(늘 가던 날)이 지난 날(N년 전 오늘)보다 먼저
+        val routine = state.routine
+        if (routine != null && !state.driving) {
+            RoutineCard(routine, onNavigate = viewModel::navigateRoutine, onDismiss = viewModel::dismissRoutine)
+        }
         val otd = state.onThisDay
         if (otd != null && !state.driving) {
             OnThisDayCard(
@@ -149,6 +155,58 @@ private fun RecapNote(text: String) {
         color = c.surface,
         modifier = Modifier.background(c.textPrimary, CircleShape).padding(horizontal = 24.dp, vertical = 14.dp),
     )
+}
+
+/**
+ * "늘 가던 날" 카드: 금색 도장("늘 가던 날 · 내일") · 그곳 사진과 이름 · 한 줄("매달 둘째 목요일마다 …에 갔어요. 내일이 그날이에요.") ·
+ * 덧붙임(횟수 · 보통 도착 시각) · [장소 보기] [여기로 안내] · 이번에는 닫기(×). 고르기 · 문장은 Rust(`routine.rs`).
+ */
+@Composable
+fun RoutineCard(nudge: RoutineNudge, onNavigate: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    val c = EodiTheme.colors
+    val openPlace = LocalOpenPlace.current
+    val p = nudge.place
+    Surface(
+        shape = RoundedCornerShape(EodiTheme.space.radiusL),
+        color = c.surface,
+        modifier = modifier.fillMaxWidth().border(2.dp, c.memory, RoundedCornerShape(EodiTheme.space.radiusL)),
+    ) {
+        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                MemoryStamp(stringResource(R.string.routine_stamp, nudge.whenText), large = true)
+                Spacer(Modifier.weight(1f))
+                Box(
+                    Modifier.size(64.dp).clip(CircleShape).background(c.surfaceHigh).clickable(role = Role.Button, onClick = onDismiss),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(EodiIcons.Close, contentDescription = stringResource(R.string.routine_dismiss), tint = c.textSecondary, modifier = Modifier.size(32.dp))
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                StopPhotoBox(p.name, p.address, p.lat, p.lon, null, Modifier.size(132.dp), radius = 20.dp, iconSize = 36.dp, loadingColor = c.surfaceHigh, onClick = { openPlace(p) })
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(p.name, style = EodiTheme.type.title, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(nudge.detail, style = EodiTheme.type.meta, color = c.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            Text(nudge.line, style = EodiTheme.type.body, color = c.textPrimary, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                FilledTonalButton(onClick = { openPlace(p) }, shape = CircleShape, modifier = Modifier.weight(1f).heightIn(min = 76.dp)) {
+                    Text(stringResource(R.string.routine_open_place), style = EodiTheme.type.label, fontWeight = FontWeight.Bold, maxLines = 1)
+                }
+                Button(
+                    onClick = onNavigate,
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = c.onAccent),
+                    modifier = Modifier.weight(1f).heightIn(min = 76.dp),
+                ) {
+                    Icon(EodiIcons.Navi, contentDescription = null, modifier = Modifier.size(30.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.routine_navigate), style = EodiTheme.type.label, fontWeight = FontWeight.Bold, maxLines = 1)
+                }
+            }
+        }
+    }
 }
 
 /**

@@ -10,6 +10,7 @@ import app.eodiyeotji.core.rust.RecapDay as RRecapDay
 import app.eodiyeotji.core.rust.RecapPlace as RRecapPlace
 import app.eodiyeotji.core.rust.RecapRegion as RRecapRegion
 import app.eodiyeotji.core.rust.RecapTotals as RRecapTotals
+import app.eodiyeotji.core.rust.RoutineNudge as RRoutineNudge
 import app.eodiyeotji.core.rust.YearRecap as RYearRecap
 
 /*
@@ -39,6 +40,24 @@ data class OnThisDay(
     val spoken: Boolean,
     /** 그날로 돌아가기로 다시 볼 것이 있다 */
     val replayable: Boolean = true,
+)
+
+/** "늘 가던 날" (첫 화면 카드, core-rs/src/routine.rs). 정해진 요일마다 가던 곳의 그날이 다가왔다. */
+@Immutable
+data class RoutineNudge(
+    /** 같은 곳 표시. 닫을 때 그대로 넘긴다 */
+    val key: String,
+    val place: StopFact,
+    /** "매달 첫째 · 셋째 수요일" */
+    val pattern: String,
+    /** 돌아오는 그날 "YYYY-MM-DD" */
+    val day: String,
+    /** "오늘" · "내일" · "다음 주 수요일" */
+    val whenText: String,
+    /** "최근 6개월 동안 11번 · 보통 오전 9시 반쯤 도착" */
+    val detail: String,
+    /** 카드 한 줄 */
+    val line: String,
 )
 
 /** 지나갈 때 회상 하나. */
@@ -134,6 +153,14 @@ suspend fun EodiCore.onThisDay(nowMs: Long = System.currentTimeMillis()): OnThis
 /** 오늘은 "N년 전 오늘" 카드를 닫는다. */
 suspend fun EodiCore.dismissOnThisDay(nowMs: Long = System.currentTimeMillis()) = coreCall("dismissOnThisDay") { rust.dismissOnThisDay(nowMs) }
 
+/** 늘 가던 날이 7일 안에 돌아오는 곳 하나 (없으면 null, 고르기 · 문장은 Rust). */
+suspend fun EodiCore.routineNudge(nowMs: Long = System.currentTimeMillis()): RoutineNudge? = coreCall("routineNudge") {
+    rust.routineNudge(nowMs)?.toModel()
+}
+
+/** 이번에 돌아오는 날 것은 닫는다 (다음에 돌아오는 날 다시 나온다). */
+suspend fun EodiCore.dismissRoutineNudge(nudge: RoutineNudge) = coreCall("dismissRoutineNudge") { rust.dismissRoutineNudge(nudge.key, nudge.day) }
+
 /** 오늘 "N년 전 오늘"을 읽었다. */
 /** 첫 화면 기억 지도 소개 카드를 띄울까 (기록 30일 이상 · 아직 안 닫음, Rust가 정한다). */
 suspend fun EodiCore.memoryMapIntro(nowMs: Long = System.currentTimeMillis()): Boolean = coreCall("memoryMapIntro") { rust.memoryMapIntro(nowMs) }
@@ -173,6 +200,8 @@ private fun ROnThisDay.toModel() = OnThisDay(
     yearsAgo.toInt(), day, title, summary, episodeId, kind.recapKind(), label, region, distanceM,
     stops.map { it.toModel() }, photos.map { it.toModel() }, line, dismissed, spoken, replayable,
 )
+
+private fun RRoutineNudge.toModel() = RoutineNudge(key, place.toModel(), pattern, day, whenText, detail, line)
 
 private fun RRecall.toModel() = Recall(key, place.toModel(), distanceM, day, dayTitle, episodeId, yearsAgo.toInt(), whenText, line)
 

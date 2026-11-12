@@ -356,11 +356,11 @@ impl EodiStore {
 
 // ---------------------------------------------------------------- meta
 
-fn get_meta(conn: &Connection, key: &str) -> rusqlite::Result<Option<i64>> {
+pub(crate) fn get_meta(conn: &Connection, key: &str) -> rusqlite::Result<Option<i64>> {
     conn.prepare_cached("SELECT value FROM meta WHERE key = ?1")?.query_row([key], |r| r.get(0)).optional()
 }
 
-fn set_meta(conn: &Connection, key: &str, value: i64) -> rusqlite::Result<()> {
+pub(crate) fn set_meta(conn: &Connection, key: &str, value: i64) -> rusqlite::Result<()> {
     conn.prepare_cached("INSERT OR REPLACE INTO meta (key, value) VALUES (?1, ?2)")?.execute(params![key, value])?;
     Ok(())
 }
@@ -368,7 +368,7 @@ fn set_meta(conn: &Connection, key: &str, value: i64) -> rusqlite::Result<()> {
 // ---------------------------------------------------------------- 공통
 
 /// 지금 쓰는 집 · 회사 (기억 모듈이 정한 값, memory_anchor kind 2 · 3).
-fn anchors(conn: &Connection) -> rusqlite::Result<Vec<Point>> {
+pub(crate) fn anchors(conn: &Connection) -> rusqlite::Result<Vec<Point>> {
     let mut st = conn.prepare_cached("SELECT lat, lon FROM memory_anchor WHERE kind IN (2, 3)")?;
     let rows = st.query_map([], |r| Ok(Point { lat: r.get(0)?, lon: r.get(1)? }))?;
     rows.collect()
@@ -379,7 +379,7 @@ fn stop_point(s: &StopFact) -> Point {
 }
 
 /// 기억할 만한 들른 곳인가: 이름이 있고 집 · 회사가 아니다.
-fn notable(s: &StopFact, anchors: &[Point]) -> bool {
+pub(crate) fn notable(s: &StopFact, anchors: &[Point]) -> bool {
     !s.name.trim().is_empty() && anchors.iter().all(|&a| haversine_m(a, stop_point(s)) > ANCHOR_M)
 }
 
@@ -432,7 +432,7 @@ fn batchim(w: &str) -> Option<u32> {
 }
 
 /// 이/가
-fn ga(w: &str) -> &'static str {
+pub(crate) fn ga(w: &str) -> &'static str {
     if batchim(w).is_some_and(|b| b != 0) { "이" } else { "가" }
 }
 

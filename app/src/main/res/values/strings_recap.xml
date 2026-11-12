@@ -10,6 +10,14 @@
     <string name="recap_navi_failed">내비에 코스를 보내지 못했어요</string>
     <string name="recap_place_count">들른 곳 %1$d곳</string>
 
+    <!-- 늘 가던 날 (문장은 Rust routine.rs) -->
+    <string name="routine_stamp">늘 가던 날 · %1$s</string>
+    <string name="routine_navigate">여기로 안내</string>
+    <string name="routine_open_place">장소 보기</string>
+    <string name="routine_dismiss">이번에는 닫기</string>
+    <string name="routine_navi_started">내비로 안내를 시작했어요</string>
+    <string name="routine_navi_failed">내비에 목적지를 보내지 못했어요</string>
+
     <!-- 지나갈 때 회상 -->
     <string name="recap_channel_name">지나갈 때 떠오르는 기억</string>
     <string name="recap_recall_notification_title">%1$s의 기억</string>
