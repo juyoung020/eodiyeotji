@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
 import app.eodiyeotji.core.MemoryHit
 import app.eodiyeotji.ui.map.DayMap
+import app.eodiyeotji.ui.map.MapPhotoPin
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -110,10 +111,16 @@ internal fun RecommendationCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                // 카드 지도 말풍선에도 장소 사진 (들른 곳 + 한 문장 코스로 뺀 곳, 키 = 하루 지도 머문 곳 키)
+                val skipped = rec.course?.skipped.orEmpty()
+                val pins = remember(stops, skipped) {
+                    (stops + skipped).filter { it.name.isNotBlank() }.map { MapPhotoPin("s${it.arriveMs}", it.name, it.address, it.lat, it.lon) }
+                }
                 DayMap(
                     data = map,
                     selectedKey = null,
                     onSelectKey = {},
+                    photoPins = pins,
                     modifier = Modifier.fillMaxWidth().height(340.dp).clip(RoundedCornerShape(20.dp)),
                 )
             } else if (hero != null) {

@@ -3,6 +3,8 @@ package app.eodiyeotji.ui.map
 import android.graphics.RectF
 import android.util.Log
 import androidx.compose.runtime.Immutable
+import android.animation.ValueAnimator
+import android.view.animation.OvershootInterpolator
 import androidx.core.view.doOnLayout
 import app.eodiyeotji.core.DayMapData
 import org.maplibre.android.camera.CameraPosition
@@ -126,6 +128,9 @@ internal class DayMapController(
     private var myPhotos: MyPhotoIcons? = null
     private var photoSource: GeoJsonSource? = null
     private var addedPhotoImages: Set<String> = emptySet()
+    /** 한 문장 코스 장면 진행 (0 = 그날 달린 길 그대로, 1 = 뺀 곳 ✕ 카드 · 점선 새 코스 · 흐린 옛길). 보통은 1. */
+    private var planT = 1f
+    private var planAnim: ValueAnimator? = null
 
     init {
         mapView.addOnDidFailLoadingMapListener { msg ->
@@ -433,19 +438,62 @@ internal class DayMapController(
         s.getLayer(STAY_SEL)?.let { (it as CircleLayer).setFilter(all(isStay, pick)) }
         s.getLayer(STAY_SEL_HALO)?.let { (it as CircleLayer).setFilter(all(isStay, pick)) }
         // 한 문장 코스로 다시 짰으면 그날 달린 길(faded)은 더 흐리게
-        val tripDim = switchCase(isFaded, literal(FADED_OPACITY * dim), literal(dim))
-        s.getLayer(TRIP_SHADOW)?.setProperties(lineOpacity(tripDim))
-        s.getLayer(TRIP_CASING)?.setProperties(lineOpacity(tripDim))
-        s.getLayer(TRIP_LINE)?.setProperties(lineOpacity(tripDim))
-        s.getLayer(TRIP_ARROW)?.setProperties(iconOpacity(switchCase(isFaded, literal(0f), keepPicked)))
+        applyPlan(s)
         s.getLayer(TRIP_LABEL)?.setProperties(iconOpacity(keepPicked))
         s.getLayer(END_DOT)?.setProperties(circleOpacity(dim), circleStrokeOpacity(dim))
         s.getLayer(END_FLAG)?.setProperties(iconOpacity(dim))
-        s.getLayer(STAY)?.setProperties(circleOpacity(switchCase(isSkipped, literal(SKIPPED_OPACITY * dim), literal(dim))), circleStrokeOpacity(dim))
         s.getLayer(STAY_HALO)?.setProperties(circleOpacity(HALO_OPACITY * dim))
         // 숫자는 고른 핀(강조 원 위)만 진하게, 나머지는 원과 같이 흐리게
         s.getLayer(STAY_NUM)?.setProperties(textOpacity(keepPicked))
         applyFilters(s)
+    }
+
+    /**
+     * 한 문장 코스 장면의 [planT]에 따라: 그날 달린 길(faded)이 흐려지고, 점선 새 코스가 나타나고, 뺀 곳 ✕ 카드가 튀어나온다.
+     * 애니메이션 한 프레임마다 부르므로 이 속성들만 바꾼다.
+     */
+    private fun applyPlan(s: Style) {
+        val t = planT
+        val dim = if (selected == null) 1f else DIMMED_OPACITY
+        val keepPicked = if (selected == null) literal(1f) else switchCase(pick(), literal(1f), literal(dim))
+        val faded = dim * (1f - (1f - FADED_OPACITY) * t)
+        val tripDim = switchCase(isFaded, literal(faded), literal(dim))
+        s.getLayer(TRIP_SHADOW)?.setProperties(lineOpacity(tripDim))
+        s.getLayer(TRIP_CASING)?.setProperties(lineOpacity(tripDim))
+        s.getLayer(TRIP_LINE)?.setProperties(lineOpacity(tripDim))
+        s.getLayer(TRIP_ARROW)?.setProperties(iconOpacity(switchCase(isFaded, literal(1f - t), keepPicked)))
+        s.getLayer(PLAN_CASING)?.setProperties(lineOpacity(t))
+        s.getLayer(PLAN_LINE)?.setProperties(lineOpacity(t))
+        val skippedPin = dim * (1f - (1f - SKIPPED_OPACITY) * t)
+        s.getLayer(STAY)?.setProperties(circleOpacity(switchCase(isSkipped, literal(skippedPin), literal(dim))), circleStrokeOpacity(dim))
+        // ✕ 카드: 작게 시작해 살짝 넘치며 제 크기로 (OvershootInterpolator가 t를 1 너머까지 보낸다)
+        val pop = switchCase(isSkipped, literal(t.coerceIn(0f, 1f)), literal(1f))
+        val grow = switchCase(isSkipped, literal(SKIPPED_POP_FROM + (1f - SKIPPED_POP_FROM) * t), literal(1f))
+        for (id in arrayOf(STAY_CARD, STAY_CARD_SEL, STAY_MINI)) s.getLayer(id)?.setProperties(iconOpacity(pop), iconSize(grow))
+    }
+
+    /** 뺀 곳이 있는 지도가 새로 들어오면 그날 길을 잠깐 보인 뒤 한 문장 코스로 바뀌는 장면을 한 번 튼다. */
+    private fun startPlanScene(d: DayMapData?) {
+        planAnim?.cancel()
+        if (d == null || !d.geojson.contains(PLAN_MARK)) {
+            planT = 1f
+            return
+        }
+        planT = 0f
+        planAnim = ValueAnimator.ofFloat(0f, 1f).apply {
+            startDelay = PLAN_DELAY_MS
+            duration = PLAN_MS
+            interpolator = OvershootInterpolator(1.6f)
+            addUpdateListener { a ->
+                if (!mapView.isAttachedToWindow) {
+                    a.cancel()
+                    return@addUpdateListener
+                }
+                planT = a.animatedValue as Float
+                style?.let { applyPlan(it) }
+            }
+            start()
+        }
     }
 
     private fun applyData() {
@@ -454,7 +502,11 @@ internal class DayMapController(
         if (d !== appliedData) {
             src.setGeoJson(d?.geojson ?: EMPTY_GEOJSON)
             appliedData = d
-            style?.let { applyFilters(it) }
+            startPlanScene(d)
+            style?.let {
+                applyFilters(it)
+                applyPlan(it)
+            }
         }
         if (d != null && d.day != fittedDay) {
             fittedDay = d.day
@@ -621,6 +673,12 @@ internal class DayMapController(
         /** 뺀 곳 핀 색 (회색) */
         const val SKIPPED_COLOR = 0xFF9AA3AE.toInt()
         const val SKIPPED_SORT = -1f
+        /** ✕ 카드가 튀어나오기 시작하는 크기 */
+        const val SKIPPED_POP_FROM = 0.4f
+        /** 한 문장 코스 장면: 그날 길을 이만큼 보인 뒤([PLAN_DELAY_MS]) 이 시간([PLAN_MS]) 동안 바뀐다 */
+        const val PLAN_DELAY_MS = 700L
+        const val PLAN_MS = 900L
+        const val PLAN_MARK = "\"kind\":\"plan\""
         const val HALO_OPACITY = 0.22f
         const val SEL_HALO_OPACITY = 0.28f
         const val FIT_PADDING_DP = 56f
