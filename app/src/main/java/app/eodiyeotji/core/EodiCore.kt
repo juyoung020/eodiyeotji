@@ -132,6 +132,18 @@ class EodiCore @Inject constructor(
     /** 하루를 출장 / 출장 아님으로 정한다 (null = 자동 판정으로). */
     suspend fun setBizMark(day: String, mark: Boolean?) = coreCall("setBizMark") { store.setBizMark(day, mark) }
 
+    /** 거래처 목록 (최근 90일에 자주 간 순, core-rs/src/bizclient.rs). 거래처에 들른 주행은 요일 · 시각과 상관없이 출장이다. */
+    suspend fun bizClients(nowMs: Long = System.currentTimeMillis()): List<app.eodiyeotji.core.rust.BizClient> =
+        coreCall("bizClients") { store.bizClients(nowMs) }
+
+    /** 거래처로 권할 곳: 최근 90일 평일에 3일 이상 들른, 집 · 회사가 아닌 곳. */
+    suspend fun bizClientSuggestions(nowMs: Long = System.currentTimeMillis()): List<app.eodiyeotji.core.rust.BizClient> =
+        coreCall("bizClientSuggestions") { store.bizClientSuggestions(nowMs) }
+
+    /** 이곳을 거래처로 정하거나([on]) 뺀다. */
+    suspend fun setBizClient(c: app.eodiyeotji.core.rust.BizClient, on: Boolean, nowMs: Long = System.currentTimeMillis()) =
+        coreCall("setBizClient") { store.setBizClient(c.name, c.address, c.lat, c.lon, on, nowMs) }
+
     /** 출장 정산서 → 엑셀용 CSV 글 (UTF-8 BOM). */
     fun bizReportCsv(month: app.eodiyeotji.core.rust.BizMonth): String =
         app.eodiyeotji.core.rust.bizReportCsv(month, java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000)

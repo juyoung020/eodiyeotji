@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.eodiyeotji.core.EodiCore
+import app.eodiyeotji.core.rust.BizClient
 import app.eodiyeotji.core.rust.BizMonth
 import app.eodiyeotji.ui.recap.Load
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,6 +23,9 @@ data class BizUiState(
     val open: Boolean = false,
     val ym: YearMonth = YearMonth.now(),
     val month: Load<BizMonth> = Load.Loading,
+    /** 거래처 목록 · 거래처로 권할 곳 (Rust `bizclient.rs`) */
+    val clients: List<BizClient> = emptyList(),
+    val suggestions: List<BizClient> = emptyList(),
 )
 
 /** 출장 관리. 계산은 모두 Rust(`biztrip.rs`): 여기서는 부르고 상태에 담기만 한다. */
@@ -53,6 +57,14 @@ class BizViewModel @Inject constructor(private val core: EodiCore) : ViewModel()
         }
     }
 
+    /** 거래처로 정하거나([on]) 뺀다. 출장 목록이 바로 달라지므로 다시 읽는다. */
+    fun setClient(c: BizClient, on: Boolean) {
+        viewModelScope.launch {
+            runCatching { core.setBizClient(c, on) }
+            load(keep = true)
+        }
+    }
+
     fun csv(m: BizMonth): String = core.bizReportCsv(m)
 
     private fun load(keep: Boolean = false) {
@@ -67,7 +79,9 @@ class BizViewModel @Inject constructor(private val core: EodiCore) : ViewModel()
             } catch (e: Exception) {
                 Load.Failed
             }
-            _state.update { if (it.ym == ym) it.copy(month = m) else it }
+            val clients = runCatching { core.bizClients() }.getOrDefault(emptyList())
+            val suggestions = runCatching { core.bizClientSuggestions() }.getOrDefault(emptyList())
+            _state.update { if (it.ym == ym) it.copy(month = m, clients = clients, suggestions = suggestions) else it }
         }
     }
 }

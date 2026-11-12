@@ -42,7 +42,9 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
 import app.eodiyeotji.core.rust.BizMonth
+import app.eodiyeotji.core.rust.BizClient
 import app.eodiyeotji.core.rust.BizTrip
+import androidx.compose.foundation.horizontalScroll
 import app.eodiyeotji.ui.common.durationText
 import app.eodiyeotji.ui.community.CenterMessage
 import app.eodiyeotji.ui.community.LoadingBox
@@ -112,6 +114,7 @@ fun BizOverlay(viewModel: BizViewModel, onOpenDay: (String) -> Unit) {
                     is Load.Ready -> Column(inner, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text(stringResource(R.string.biz_hint), style = EodiTheme.type.meta, color = c.textSecondary)
                         SummaryRow(m.value)
+                        ClientSection(state.clients, state.suggestions, viewModel::setClient)
                         if (m.value.trips.isEmpty()) {
                             CenterMessage(stringResource(R.string.biz_empty), Modifier.padding(top = 32.dp))
                         }
@@ -200,13 +203,43 @@ private fun TripCard(t: BizTrip, onOpenDay: () -> Unit, onReplay: () -> Unit, on
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(wonText(t.costWon), style = EodiTheme.type.title, fontWeight = FontWeight.Bold, color = c.accent)
                 Text(
-                    stringResource(if (t.marked) R.string.biz_marked else R.string.biz_auto),
+                    stringResource(if (t.marked) R.string.biz_marked else if (t.client) R.string.biz_client_visit else R.string.biz_auto),
                     style = EodiTheme.type.meta,
                     color = c.textTertiary,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     SecondaryPill(stringResource(R.string.replay_open), EodiIcons.Play, onReplay)
                     SecondaryPill(stringResource(R.string.biz_not_biz), EodiIcons.Close, onNotBiz)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 거래처 줄: 정해 둔 거래처(누르면 뺀다)와 권하는 곳(평일에 자주 간 곳, 누르면 거래처로). 고르기 · 날 수는 Rust(`bizclient.rs`).
+ * 거래처에 들른 주행은 요일 · 시각 · 거리와 상관없이 출장으로 묶인다 (근무 시간이 다른 사람 · 영업직).
+ */
+@Composable
+private fun ClientSection(clients: List<BizClient>, suggestions: List<BizClient>, onSet: (BizClient, Boolean) -> Unit) {
+    val c = EodiTheme.colors
+    Surface(shape = RoundedCornerShape(28.dp), color = c.surface, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(stringResource(R.string.biz_clients_title), style = EodiTheme.type.titleSmall, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.biz_clients_hint), style = EodiTheme.type.meta, color = c.textSecondary)
+            if (clients.isNotEmpty()) {
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    clients.forEach { cl ->
+                        SecondaryPill(stringResource(R.string.biz_client_chip, cl.name.ifBlank { stringResource(R.string.biz_client_unnamed) }, cl.visitDays.toInt()), EodiIcons.Close, { onSet(cl, false) })
+                    }
+                }
+            }
+            if (suggestions.isNotEmpty()) {
+                Text(stringResource(R.string.biz_clients_suggest), style = EodiTheme.type.meta, color = c.textSecondary)
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    suggestions.forEach { s ->
+                        SecondaryPill(stringResource(R.string.biz_client_suggest_chip, s.name, s.visitDays.toInt()), EodiIcons.Pin, { onSet(s, true) })
+                    }
                 }
             }
         }

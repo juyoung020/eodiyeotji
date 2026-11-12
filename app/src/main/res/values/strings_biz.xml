@@ -30,4 +30,12 @@
     <string name="biz_marked">직접 지정</string>
     <string name="biz_not_biz">출장 아님</string>
     <string name="biz_about">약 %1$s</string>
+    <!-- 거래처 목록 (Rust bizclient.rs) -->
+    <string name="biz_clients_title">거래처</string>
+    <string name="biz_clients_hint">거래처에 들른 주행은 요일 · 시각 · 거리와 상관없이 출장으로 묶어요. 근무 시간이 다르거나 회사에 잘 들르지 않아도 돼요.</string>
+    <string name="biz_clients_suggest">평일에 자주 간 곳이에요. 누르면 거래처로 정해요.</string>
+    <string name="biz_client_chip">%1$s · %2$d일</string>
+    <string name="biz_client_suggest_chip">%1$s · 평일 %2$d일</string>
+    <string name="biz_client_unnamed">이름 없는 곳</string>
+    <string name="biz_client_visit">거래처 방문</string>
 </resources>

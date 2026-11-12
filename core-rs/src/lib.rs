@@ -25,6 +25,7 @@ pub mod nav;
 pub mod offers;
 pub mod parking;
 pub mod readings;
+pub mod bizclient;
 pub mod biztrip;
 pub mod tourism;
 pub mod logbook;

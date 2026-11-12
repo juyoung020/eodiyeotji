@@ -4,6 +4,8 @@
 //! - 평일(월~금) 하루의 에피소드 중 출퇴근이 아닌 것, 그리고
 //! - 집과 회사 둘 다에서 [BIZ_MIN_KM] 넘게 떨어진 곳에 들렀고,
 //! - 07:00~20:00 사이에 출발한 것.
+//! - **거래처**(`bizclient.rs`)에 들른 주행은 위 요일 · 시각 · 거리 조건과 상관없이 출장이다 (주말 · 야간 · 회사 근처도).
+//!   근무 시간이 사람마다 다르고, 영업직은 회사에 오래 머물지 않아 회사를 못 찾는 문제를 이것으로 푼다.
 //! - 사용자가 하루를 "출장" / "출장 아님"으로 바꿀 수 있다 ([EodiStore::set_biz_mark]). 바꾼 날은 자동 판정보다 앞선다
 //!   ("출장"으로 정한 날은 그날 출퇴근이 아닌 에피소드를 모두 출장으로 본다 — 가까운 고객사 방문도 넣을 수 있게).
 //!
@@ -90,6 +92,8 @@ pub struct BizTrip {
     pub cost_won: i64,
     /// 사용자가 직접 출장으로 정했나 (false = 자동으로 찾음)
     pub marked: bool,
+    /// 거래처에 들른 주행인가 (`bizclient.rs`)
+    pub client: bool,
 }
 
 /// 한 달 출장.
@@ -117,6 +121,11 @@ impl EodiStore {
         let anchors = self.home_office()?;
         let home = anchors.home.map(|a| Point { lat: a.lat, lon: a.lon });
         let office = anchors.office.map(|a| Point { lat: a.lat, lon: a.lon });
+        let clients = {
+            let conn = self.snapshot()?;
+            crate::bizclient::client_spots(&conn)?
+        };
+        let is_client = |s: &crate::memory::StopFact| crate::bizclient::client_at(&clients, s).is_some();
         let (odo, energy) = {
             let conn = self.snapshot()?;
             let (lo, hi) = (self.day_start_ms(first) - MATCH_MS, self.day_start_ms(next) + MATCH_MS);
@@ -131,7 +140,9 @@ impl EodiStore {
             let day = crate::store::format_day(d);
             let mark = marks.get(&day).copied();
             let wd = crate::memory::episode::weekday_index(d);
-            if mark == Some(false) || (mark.is_none() && !(1..=5).contains(&wd)) {
+            let weekday = (1..=5).contains(&wd);
+            // 주말은 직접 정한 날이거나 거래처가 있을 때만 본다
+            if mark == Some(false) || (mark.is_none() && !weekday && clients.is_empty()) {
                 continue;
             }
             for e in self.episodes_for_day(day.clone())? {
@@ -160,11 +171,21 @@ impl EodiStore {
                         _ => true,
                     })
                 };
-                let auto = f.stops.iter().any(away) && (WORK_FROM_H..WORK_TO_H).contains(&hour) && from_base()?;
-                if mark != Some(true) && !auto {
+                let visits_client = f.stops.iter().any(is_client);
+                let auto = weekday && f.stops.iter().any(away) && (WORK_FROM_H..WORK_TO_H).contains(&hour) && from_base()?;
+                if mark != Some(true) && !auto && !visits_client {
                     continue;
                 }
-                trips.push(trip(&e, &day, wd, away, &odo, &energy, mark == Some(true)));
+                let keep = |s: &crate::memory::StopFact| away(s) || is_client(s);
+                let mut t = trip(&e, &day, wd, keep, &odo, &energy, mark == Some(true));
+                if visits_client {
+                    t.client = true;
+                    // 거래처 이름이 있으면 제목에 쓴다 ("한빛전자 방문")
+                    if let Some(c) = f.stops.iter().find_map(|s| crate::bizclient::client_at(&clients, s)).filter(|c| !c.name.is_empty()) {
+                        t.title = format!("{} 방문", c.name);
+                    }
+                }
+                trips.push(t);
             }
         }
         let total_km = trips.iter().map(|t| t.distance_km).sum();
@@ -248,6 +269,7 @@ fn trip(
         ev,
         cost_won: cost,
         marked,
+        client: false,
     }
 }
 
