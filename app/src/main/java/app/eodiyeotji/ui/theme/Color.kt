@@ -142,9 +142,9 @@ internal val DarkColors = EodiColors(
  * 앱이 다크여도 지도 위 색은 라이트 지도에 맞춘 값 하나를 쓴다 (라이트 토큰과 같은 색 가족).
  */
 internal object MapInk {
-    val trip = Color(0xFF0064FF)
+    val trip = Color(0xFFF2A100)
     val casing = Color(0xFFFFFFFF)
-    val stay = Color(0xFFE0522A)
+    val stay = Color(0xFF22304B)
     val here = Color(0xFF00A35A)
     val selectedStroke = Color(0xFFFFFFFF)
     val onMarker = Color(0xFFFFFFFF)
