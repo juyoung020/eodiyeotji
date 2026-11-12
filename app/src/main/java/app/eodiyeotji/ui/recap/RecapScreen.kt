@@ -315,13 +315,14 @@ private fun RecapCardFrame(modifier: Modifier, content: @Composable () -> Unit) 
 
 @Composable
 private fun TotalsStrip(t: RecapTotals) {
+    // 0인 칸("0번 나들이")은 빼고 있는 것만 크게 (운전 시간 · 달린 날은 늘 둔다)
     StatStrip(
-        listOf(
+        listOfNotNull(
             durationText(t.driveMillis) to stringResource(R.string.recap_stat_time),
             stringResource(R.string.recap_count_days, t.driveDays) to stringResource(R.string.recap_stat_days),
-            stringResource(R.string.recap_count_times, t.outings) to stringResource(R.string.recap_stat_outings),
-            stringResource(R.string.recap_count_times, t.trips) to stringResource(R.string.recap_stat_trips),
-            stringResource(R.string.recap_count_places, t.newPlaces) to stringResource(R.string.recap_stat_new),
+            (stringResource(R.string.recap_count_times, t.outings) to stringResource(R.string.recap_stat_outings)).takeIf { t.outings > 0 },
+            (stringResource(R.string.recap_count_times, t.trips) to stringResource(R.string.recap_stat_trips)).takeIf { t.trips > 0 },
+            (stringResource(R.string.recap_count_places, t.newPlaces) to stringResource(R.string.recap_stat_new)).takeIf { t.newPlaces > 0 },
         ),
     )
 }

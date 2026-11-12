@@ -167,7 +167,7 @@ class TimelineViewModel @Inject constructor(
                 emit(DetailState.Loading(s))
             }
             shownDay = s.day
-            emit(loadDetail(s))
+            loadDetail(s) { emit(it) }
             pendingEntry?.takeIf { it.first == s.day }?.let {
                 selectedEntry.value = it.second
                 pendingEntry = null
@@ -224,26 +224,34 @@ class TimelineViewModel @Inject constructor(
         DaysState.Failed(e.message ?: e.javaClass.simpleName)
     }
 
-    private suspend fun loadDetail(s: DaySummary): DetailState = try {
+    /**
+     * 하루 상세를 읽어 [emit]으로 내보낸다. 목록 · 지도가 먼저 오면 바로 한 번 내보내고(첫 화면),
+     * 갤러리 읽기(기기 사진 목록, 처음엔 수백 ms)가 끝나면 내 사진을 채워 한 번 더 내보낸다.
+     */
+    private suspend fun loadDetail(s: DaySummary, emit: suspend (DetailState) -> Unit) = try {
         // 주행·머문 곳은 Rust가 시간순으로 섞어서 준다 (Kotlin에서 정렬하지 않는다).
-        // 목록·지도·올릴 기록은 서로 기다릴 필요가 없다 → 동시에 읽는다 (차례로 읽으면 세 번 기다린 합이 첫 화면 시간이 된다)
+        // 목록·지도·올릴 기록·사진은 서로 기다릴 필요가 없다 → 동시에 읽는다 (차례로 읽으면 기다린 합이 첫 화면 시간이 된다)
         val t0 = System.nanoTime()
         coroutineScope {
+            // 내 사진: 갤러리 읽기(IO) + 머문 곳 맞추기(Rust). 권한이 없으면 바로 빈 것. 가장 느리므로 가장 먼저 띄운다
+            val photos = async { gallery.dayPhotos(s.day) }
             val map = async { loadMap(s.day) }
             val share = async { loadShareEpisode(s.day) }
             val d = core.dayDetail(s.day)
             val offers = async { loadOffers(d.entries) }
-            // 내 사진: 갤러리 읽기(IO) + 머문 곳 맞추기(Rust). 권한이 없으면 바로 빈 것
-            val photos = async { gallery.dayPhotos(s.day) }
-            val p = photos.await()
-            DetailState.Loaded(d.summary, d.entries, map.await(), share.await(), offers.await(), p.stays.mapKeys { (arrive, _) -> "s$arrive" }, p.spots).also {
-                if (BuildConfig.DEBUG) Log.d(TAG, "하루 상세 ${s.day}: ${(System.nanoTime() - t0) / 1_000_000}ms")
+            val base = DetailState.Loaded(d.summary, d.entries, map.await(), share.await(), offers.await())
+            if (!photos.isCompleted) {
+                emit(base)
+                if (BuildConfig.DEBUG) Log.d(TAG, "하루 상세 ${s.day} 첫 화면: ${(System.nanoTime() - t0) / 1_000_000}ms")
             }
+            val p = photos.await()
+            emit(if (p.stays.isEmpty() && p.spots.isEmpty()) base else base.copy(myPhotos = p.stays.mapKeys { (arrive, _) -> "s$arrive" }, mapPhotos = p.spots))
+            if (BuildConfig.DEBUG) Log.d(TAG, "하루 상세 ${s.day}: ${(System.nanoTime() - t0) / 1_000_000}ms")
         }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        DetailState.Failed(s, e.message ?: e.javaClass.simpleName)
+        emit(DetailState.Failed(s, e.message ?: e.javaClass.simpleName))
     }
 
     /** 지도 데이터는 목록과 따로 실패할 수 있다 → 실패하면 지도만 비우고 목록은 보여 준다. */

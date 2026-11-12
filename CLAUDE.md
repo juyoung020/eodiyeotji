@@ -80,7 +80,9 @@ cargo clippy --all-targets -- -D warnings   # 경고 0 유지
 ./gradlew installCarDebug          # Pleos 에뮬레이터에 설치 → app/build/outputs/apk/car/debug/app-car-debug.apk
 ./gradlew assemblePhoneDebug       # 폰 판 → app/build/outputs/apk/phone/debug/app-phone-debug.apk
 ./gradlew assembleCarRelease       # R8 + Rust --release(LTO). 폰은 assemblePhoneRelease
+./gradlew installCarRelease        # 시연 · 성능 확인은 이 판으로 (디버그 키로 서명 → 디버그 위에 깔아도 기록 유지)
 ```
+- **시연은 release 판으로 한다.** 에뮬레이터 측정(11/12): 첫 화면 디버그 1.85초 → release 0.4초, 버벅인 프레임 10.5% → 5.8%. 디버그 전용 도구(시연 데이터 넣기 · 에이전트 디버그 화면)가 필요하면 디버그를 다시 깐다.
 - 공통 코드는 `app/src/main`, 판마다 다른 연결(위치·주행 신호·내비·음성·주행 상태)은 `app/src/car`·`app/src/phone`이 맡는다.
   공통 코드는 `app.eodiyeotji.platform`의 인터페이스만 보고, 어느 구현을 쓸지는 각 판의 `platform/PlatformModule.kt`(Hilt)가 정한다.
   Pleos SDK·`android.car`를 부르는 코드는 `src/car`에만 둔다.

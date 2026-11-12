@@ -5,6 +5,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
@@ -27,7 +28,11 @@ private fun style(size: Int, line: Int, weight: FontWeight, tracking: TextUnit =
     letterSpacing = tracking,
     fontFeatureSettings = if (tabular) TABULAR else null,
     lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
+    // 줄바꿈은 어절(띄어쓰기) 단위로: 글자 단위로 끊으면 "스타트업캠퍼 / 스"처럼 낱말 끝 한 글자가 다음 줄로 떨어진다 (Android 13+)
+    lineBreak = KOREAN_LINE_BREAK,
 )
+
+private val KOREAN_LINE_BREAK = LineBreak(LineBreak.Strategy.Balanced, LineBreak.Strictness.Normal, LineBreak.WordBreak.Phrase)
 
 /** 화면 코드가 쓰는 의미 단위 글자 스타일. */
 @Immutable

@@ -57,11 +57,17 @@ class HandoffRepository @Inject constructor(
     private val gallery: GalleryRepository,
     private val phonePhotos: PhonePhotoStore,
 ) {
-    private val prefs = context.getSharedPreferences("handoff", Context.MODE_PRIVATE)
+    /** 설정 파일은 처음 읽을 때 디스크를 연다 (에뮬레이터에서 0.5초) → 화면 스레드에서 만들어지는 이 객체에서는 미루고 IO에서 읽는다. */
+    private val prefs by lazy { context.getSharedPreferences("handoff", Context.MODE_PRIVATE) }
     /** 폰: 사진 보내기는 받기 연결을 막지 않게 따로 돈다 (한 번에 하나). */
     private val photoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val photoLock = Mutex()
-    private val _link = MutableStateFlow(readLink())
+    private val _link = MutableStateFlow<HandoffLink?>(null)
+
+    init {
+        // 저장된 연결은 IO에서 읽어 채운다 (그 사이 몇 ms 동안은 "연결 없음"으로 보인다)
+        photoScope.launch { if (_link.value == null) _link.value = readLink() }
+    }
 
     /** 연결된 상대 (없으면 null). */
     val link: StateFlow<HandoffLink?> = _link.asStateFlow()
