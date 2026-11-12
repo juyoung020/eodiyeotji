@@ -7,6 +7,11 @@
         <receiver
             android:name=".record.NaviDebugReceiver"
             android:exported="true" />
+
+        <!-- 에뮬레이터에서 adb로 좌석 자세 값 확인 (사용법은 record/SeatDebugReceiver.kt) -->
+        <receiver
+            android:name=".record.SeatDebugReceiver"
+            android:exported="true" />
     </application>
 
 </manifest>
