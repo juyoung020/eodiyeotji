@@ -13,8 +13,8 @@ uniffi = "0.32"
 thiserror = "2"
 rusqlite = { version = "0.41.1", features = ["bundled"] }
 # 기억 에이전트(src/agent): OpenAI 호환 LLM 서버(개발: llama.cpp llama-server) HTTP 호출·JSON.
-# 로컬 서버는 평문 http라 TLS를 빼서 작게 둔다. 출시용 https 서버를 쓰려면 ureq의 "tls" 기능을 켠다.
-ureq = { version = "2.12", default-features = false }
+# LLM은 중계 서버(https, server/relay → 개발 PC의 Qwen)로도 부른다 → ureq "tls"(rustls). 같은 PC의 http도 그대로 된다.
+ureq = { version = "2.12", default-features = false, features = ["tls"] }
 serde_json = "1"
 # 차 → 폰 넘기기(src/handoff.rs): 카드 묶기 · 암호화 · 페어링 코드 · QR
 serde = { version = "1", features = ["derive"] }

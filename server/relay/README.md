@@ -7,6 +7,15 @@
 | `/kakao/v2/local/...` | 카카오 로컬 (장소 이름) |
 | `/kakaonavi/v1/...` | 카카오모빌리티 길찾기 (코스 도로 경로 · 폰 길 안내) |
 | `/google/v1/places:searchText`, `/google/v1/places/*/photos/*/media` | 구글 Places (사진, 30일 캐시) |
+| `/llm/v1/chat/completions`, `/llm/v1/models` | 개발 PC의 Qwen (Cloudflare 터널, 비밀번호 `LLM_ORIGIN_KEY`) |
+
+## Qwen 켜 두기 (심사 기간 · PT 동안 개발 PC를 켜 둔다)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\llm\start-llm.ps1     # 창 1: Qwen (local.properties의 LLM_ORIGIN_KEY로 비밀번호)
+powershell -ExecutionPolicy Bypass -File scripts\llm\expose-llm.ps1    # 창 2: 터널 + 중계 서버에 새 주소 알림
+```
+두 창을 닫지 않는다. 터널 주소는 켤 때마다 바뀌지만 창 2가 중계 서버 비밀값 `LLM_ORIGIN`을 고치므로 앱은 그대로다.
 
 정해 둔 길만 통과하고, 앱의 `X-Eodi-App` 값(또는 사진 주소의 `app=`)이 맞아야 한다. 진짜 비용 한도는 각 API 콘솔의 하루 한도로 건다.
 

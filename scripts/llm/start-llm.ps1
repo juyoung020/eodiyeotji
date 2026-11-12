@@ -19,11 +19,18 @@ param(
     [string]$Model = 'C:\llm\models\Qwen3.5-9B-MTP-Q5_K_M.gguf',
     [string]$Server = 'C:\llm\build\bin\llama-server.exe',
     [int]$Port = 8181,
-    [int]$Context = 32768
+    [int]$Context = 32768,
+    # 중계 서버로 밖에 열 때(expose-llm.ps1) 쓰는 비밀번호. 비우면 local.properties의 LLM_ORIGIN_KEY, 그것도 없으면 비밀번호 없이
+    [string]$ApiKey = ''
 )
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path $Model)) { throw "모델 파일이 없습니다: $Model (위 설명의 curl 명령으로 받으세요)" }
 if (-not (Test-Path $Server)) { throw "llama-server.exe가 없습니다: $Server" }
+if (-not $ApiKey) {
+    $lp = Join-Path $PSScriptRoot '..\..\local.properties'
+    if (Test-Path $lp) { $ApiKey = (Get-Content $lp | Where-Object { $_ -match '^LLM_ORIGIN_KEY=' } | Select-Object -First 1) -replace '^LLM_ORIGIN_KEY=', '' }
+}
+$keyArgs = if ($ApiKey) { @('--api-key', $ApiKey) } else { @() }
 $env:CUDA_SCALE_LAUNCH_QUEUES = '4x'
 Write-Host "LLM 서버 시작: http://127.0.0.1:$Port/v1  (에뮬레이터: http://10.0.2.2:$Port/v1)"
 & $Server -m $Model --alias qwen3.5-9b `
@@ -34,4 +41,4 @@ Write-Host "LLM 서버 시작: http://127.0.0.1:$Port/v1  (에뮬레이터: http
     --spec-type draft-mtp --spec-draft-n-max 3 `
     --jinja --reasoning-format deepseek `
     --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 `
-    -np 2
+    -np 2 @keyArgs

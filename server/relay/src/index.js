@@ -3,7 +3,8 @@
 // - 정해 둔 길만 통과시킨다 (남이 아무 요청이나 대신 보내는 데 쓰지 못하게).
 // - 앱이 보내는 X-Eodi-App 값이 맞아야 한다 (APK 안에 있는 값이라 막는 힘은 약하다 → 진짜 한도는 각 API 콘솔의 하루 한도).
 // - 구글 사진은 Cloudflare 캐시에 30일 둔다 → 같은 사진은 구글에 다시 묻지 않는다 (하루 한도 절약).
-// 비밀값(wrangler secret): KAKAO_REST_API_KEY, GOOGLE_PLACES_API_KEY, APP_TOKEN
+// - /llm/ 은 개발 PC의 Qwen(llama-server)으로 Cloudflare 터널을 거쳐 넘긴다 (터널 주소는 LLM_ORIGIN, 바뀌면 scripts/llm/expose-llm.ps1이 고친다).
+// 비밀값(wrangler secret): KAKAO_REST_API_KEY, GOOGLE_PLACES_API_KEY, APP_TOKEN, LLM_ORIGIN, LLM_ORIGIN_KEY
 
 const ROUTES = [
   // 카카오 로컬: 장소 이름 (카테고리 · 키워드 · 좌표→주소)
@@ -20,9 +21,11 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === '/health') return json({ ok: true });
-    if (env.APP_TOKEN && request.headers.get('X-Eodi-App') !== env.APP_TOKEN && url.searchParams.get('app') !== env.APP_TOKEN) {
+    const bearer = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+    if (env.APP_TOKEN && request.headers.get('X-Eodi-App') !== env.APP_TOKEN && url.searchParams.get('app') !== env.APP_TOKEN && bearer !== env.APP_TOKEN) {
       return json({ error: 'forbidden' }, 403);
     }
+    if (url.pathname.startsWith('/llm/')) return llm(request, env, url);
     const route = ROUTES.find((r) => url.pathname.startsWith(r.prefix));
     if (!route) return json({ error: 'not found' }, 404);
     const path = url.pathname.slice(route.prefix.length);
@@ -65,6 +68,24 @@ export default {
     return out;
   },
 };
+
+// Qwen (OpenAI 호환): 대화 · 모델 목록만. 응답(스트리밍 포함)은 그대로 흘려보낸다.
+async function llm(request, env, url) {
+  const path = url.pathname.slice('/llm/'.length);
+  if (!/^v1\/(chat\/completions|models)$/.test(path)) return json({ error: 'not allowed' }, 404);
+  if (!env.LLM_ORIGIN) return json({ error: 'llm offline' }, 503);
+  const headers = new Headers({ 'Content-Type': request.headers.get('Content-Type') || 'application/json' });
+  if (env.LLM_ORIGIN_KEY) headers.set('Authorization', `Bearer ${env.LLM_ORIGIN_KEY}`);
+  const init = { method: request.method, headers };
+  if (request.method === 'POST') init.body = request.body;
+  let res;
+  try {
+    res = await fetch(`${env.LLM_ORIGIN.trim().replace(/\/$/, '')}/${path}`, init);
+  } catch (e) {
+    return json({ error: 'llm unreachable' }, 502);
+  }
+  return pass(res);
+}
 
 function pass(res) {
   const out = new Response(res.body, res);

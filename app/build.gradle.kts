@@ -29,9 +29,10 @@ val llmProps: Properties = Properties().also { props ->
 }
 fun llmSetting(name: String, default: String): String =
     (llmProps.getProperty(name) ?: System.getenv(name) ?: default).trim().filter { it != '"' && it != '\\' }
-val llmBaseUrl = llmSetting("LLM_BASE_URL", "http://10.0.2.2:8181/v1")
+// 중계 서버가 있으면 기본은 중계의 /llm (개발 PC의 Qwen을 터널로, scripts/llm/expose-llm.ps1) → 심사위원 기기에서도 AI가 답한다.
+val llmBaseUrl = llmSetting("LLM_BASE_URL", if (relayUrl.isNotEmpty()) "${relayUrl.trimEnd('/')}/llm/v1" else "http://10.0.2.2:8181/v1")
 val llmModel = llmSetting("LLM_MODEL", "qwen3.5-9b")
-val llmApiKey = llmSetting("LLM_API_KEY", "")
+val llmApiKey = llmSetting("LLM_API_KEY", if (relayUrl.isNotEmpty()) relayToken else "")
 
 plugins {
     alias(libs.plugins.android.application)
