@@ -45,8 +45,8 @@ android {
         applicationId = "app.eodiyeotji"
         minSdk = 28
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 6
+        versionName = "0.6.0"
         // 에뮬레이터(x86_64)와 실기기(차·폰 arm64)만 만든다
         ndk { abiFilters += listOf("x86_64", "arm64-v8a") }
         buildConfigField("String", "KAKAO_REST_API_KEY", "\"$kakaoRestApiKey\"")
