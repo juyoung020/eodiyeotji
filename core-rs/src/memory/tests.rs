@@ -452,7 +452,7 @@ fn demo_year_has_commutes_outings_and_the_gangneung_trip() {
     assert_eq!(f.rule_label, "강릉 여행");
     assert_eq!(f.region, "강원 강릉시");
     let names: Vec<&str> = f.stops.iter().map(|s| s.name.as_str()).collect();
-    assert_eq!(names, ["횡성휴게소", "경포해변", "초당할머니순두부", "안목해변 카페거리"]);
+    assert_eq!(names, ["횡성휴게소", "경포해변", "초당할머니순두부", "안목해변 카페거리", "안목항 바다횟집"]);
     assert!(f.stops.iter().all(|s| s.first_visit));
     assert_eq!((f.from_name.as_str(), f.to_name.as_str()), ("집", "집"));
     let gd = days.iter().find(|d| d.day == "2025-11-06").unwrap();
@@ -505,13 +505,14 @@ fn demo_year_has_commutes_outings_and_the_gangneung_trip() {
     let r = store.course_route(f.id, Some(pt(HOME)), false).unwrap();
     assert_eq!(r.legs.len(), 2);
     assert_eq!(r.legs[0].waypoints.len(), 2);
-    assert_eq!(r.legs[1].destination.name, "안목해변 카페거리");
+    assert_eq!(r.legs[1].destination.name, "안목항 바다횟집");
     let opt = store.course_route(f.id, Some(pt(HOME)), true).unwrap();
     assert!(opt.distance_m <= r.distance_m + 1.0);
-    // 안목해변에서 다시 돌면 안목부터 가까운 순
+    // 안목해변에서 다시 돌면 안목 근처(카페거리 · 횟집)부터 가까운 순
     let from_anmok = GeoPoint { lat: 37.7722, lon: 128.9474 };
     let opt = store.course_route(f.id, Some(from_anmok), true).unwrap();
-    assert_eq!(opt.stops[0].name, "안목해변 카페거리");
+    let near: Vec<&str> = opt.stops[..2].iter().map(|s| s.name.as_str()).collect();
+    assert!(near.contains(&"안목해변 카페거리") && near.contains(&"안목항 바다횟집"), "{near:?}");
     assert_eq!(opt.stops.last().unwrap().name, "횡성휴게소");
 }
 
@@ -641,4 +642,25 @@ fn perf_memory_demo_year() {
     store.set_home_office(None, Some(GeoPoint { lat: 37.5, lon: 127.0 })).unwrap();
     println!("set_home_office → 1년치 에피소드 재계산 {:.1}ms", s.elapsed().as_secs_f64() * 1e3);
     assert!(pct(&mut times, 0.99) < 20.0);
+}
+
+/// 보충 판 3: 횟집 없이 심어 둔 예전 시연 기록에도 1년 전 강릉 날만 다시 만들어 저녁 횟집이 들어간다 (다른 날은 그대로).
+#[test]
+fn demo_top_up_adds_the_gangneung_seafood_dinner_to_old_data() {
+    let (_db, store, _, _) = seeded("topup3");
+    let names = |s: &EodiStore| -> Vec<String> {
+        s.episodes_for_day("2025-11-06".into()).unwrap().iter().flat_map(|e| e.facts.stops.iter().map(|x| x.name.clone())).collect()
+    };
+    let other_before = store.episodes_for_day("2026-08-08".into()).unwrap().len();
+    // 예전 판처럼: 횟집 근처 점을 지우고 보충 판을 2로 되돌린다
+    {
+        let conn = store.lock().unwrap();
+        conn.execute("DELETE FROM fix WHERE abs(lat - 37.7690) < 0.0015 AND abs(lon - 128.9520) < 0.0015", []).unwrap();
+        conn.execute("UPDATE meta SET value = 2 WHERE key = 'demo_topup'", []).unwrap();
+    }
+    assert!(store.seed_demo_data(demo_today()).unwrap() > 0, "강릉 날을 다시 만든다");
+    assert_eq!(names(&store), ["횡성휴게소", "경포해변", "초당할머니순두부", "안목해변 카페거리", "안목항 바다횟집"]);
+    assert_eq!(store.episodes_for_day("2025-11-06".into()).unwrap().len(), 1, "강릉 여행 하나");
+    assert_eq!(store.episodes_for_day("2026-08-08".into()).unwrap().len(), other_before, "다른 날은 그대로");
+    assert_eq!(store.seed_demo_data(demo_today()).unwrap(), 0, "한 번만");
 }

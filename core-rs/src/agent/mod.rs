@@ -54,6 +54,8 @@ mod course_tests;
 #[cfg(test)]
 mod vague_tests;
 #[cfg(test)]
+mod scene_tests;
+#[cfg(test)]
 mod eval;
 #[cfg(test)]
 mod tests;
@@ -342,8 +344,14 @@ impl MemoryAgent {
     }
 
     /// 후보 카드 지도(하루 지도 GeoJSON)의 핀 번호를 카드 사진 줄 [stops] 순서로 맞춘 GeoJSON (`stopmap` 모듈).
-    pub fn number_map_stops(&self, geojson: String, stops: Vec<StopFact>) -> String {
-        stopmap::number_stops(&geojson, &stops)
+    /// [skipped]: 한 문장 코스로 뺀 곳 (흐린 핀 + 새 코스 선).
+    pub fn number_map_stops(&self, geojson: String, stops: Vec<StopFact>, skipped: Vec<StopFact>) -> String {
+        stopmap::number_stops(&geojson, &stops, &skipped)
+    }
+
+    /// 한 문장 코스 카드 지도를 처음 비출 범위 (뺀 곳과 그 앞 · 뒤 들른 곳, `stopmap::skip_focus`). 뺀 곳이 없으면 None.
+    pub fn skip_focus_bounds(&self, stops: Vec<StopFact>, skipped: Vec<StopFact>) -> Option<crate::mapdata::MapBounds> {
+        stopmap::skip_focus(&stops, &skipped)
     }
 
     /// 지금 대기 중인 제안.

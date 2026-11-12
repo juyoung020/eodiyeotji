@@ -484,11 +484,14 @@ data class MemoryHit(
     val bestStop: StopFact?,
     val matchedTags: List<String> = emptyList(),
     val visitNote: String = "",
+    /** 그때 함께 탄 사람 수 (좌석 센서). 이어 묻기 "거기 몇 명이서 갔어"로 물었을 때만 있다. */
+    val people: Int? = null,
 )
 
 data class CourseLeg(val waypoints: List<StopFact>, val destination: StopFact)
 
-data class CourseRoute(val stops: List<StopFact>, val legs: List<CourseLeg>, val distanceM: Double)
+/** [skipped]: 한 문장 코스("순두부집만 빼고")로 뺀 곳 (보통은 비어 있다). */
+data class CourseRoute(val stops: List<StopFact>, val legs: List<CourseLeg>, val distanceM: Double, val skipped: List<StopFact> = emptyList())
 
 data class TripSummary(
     val startMs: Long,

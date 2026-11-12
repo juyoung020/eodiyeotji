@@ -186,9 +186,9 @@ fn same_place_on_different_days_is_one_candidate() {
     a.new_session();
     let r = ask(&a, "예전에 갔던 감자탕집");
     let card = r.cards.lock().unwrap().first().cloned().unwrap();
-    assert_eq!(card.visit_note, "2번 다녀옴 · 1/25, 11/1");
+    assert_eq!(card.visit_note, "2번 다녀옴 · 2/7, 10/18");
     let text = r.text.lock().unwrap().clone();
-    assert!(text.starts_with("태조감자국이에요. 1월 25일, 11월 1일 두 번 다녀오셨어요."), "{text}");
+    assert!(text.starts_with("태조감자국이에요. 2월 7일, 10월 18일 두 번 다녀오셨어요."), "{text}");
     assert!(r.cands.lock().unwrap().0.is_empty(), "비교할 것이 없으면 후보 칸을 보이지 않는다");
 }
 

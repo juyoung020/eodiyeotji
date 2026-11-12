@@ -202,6 +202,8 @@ pub struct MemoryHit {
     pub visit_days: Vec<String>,
     /// 화면 후보 카드에 그대로 쓰는 한 줄 ("2번 다녀옴 · 10/11, 10/18"). 합치지 않았으면 빈 문자열.
     pub visit_note: String,
+    /// 그때 함께 탄 사람 수 (좌석 센서, 운전자 포함). 이어 묻기("거기 몇 명이서 갔어")로 물었을 때만 채운다.
+    pub people: Option<u32>,
 }
 
 /// 코스 한 구간 (내비 경유지 2개 + 목적지).
@@ -219,6 +221,8 @@ pub struct CourseRoute {
     pub legs: Vec<CourseLeg>,
     /// 예상 직선거리 합 (m)
     pub distance_m: f64,
+    /// "○○만 빼고"로 코스에서 뺀 곳 (그날 순서대로). 지도에 빠진 곳으로 흐리게 보인다. 보통은 비어 있다.
+    pub skipped: Vec<StopFact>,
 }
 
 fn bad_day(day: &str) -> CoreError {
@@ -298,20 +302,8 @@ impl EodiStore {
         let pts: Vec<Point> = stops.iter().map(|s| Point { lat: s.lat, lon: s.lon }).collect();
         let origin = from.map(Point::from);
         let order: Vec<usize> = if optimize { course::best_order(origin, &pts) } else { (0..pts.len()).collect() };
-        let distance_m = course::path_length_m(origin, &pts, &order);
         let ordered: Vec<StopFact> = order.iter().map(|&i| stops[i].clone()).collect();
-        let ordered_pts: Vec<Point> = order.iter().map(|&i| pts[i]).collect();
-        // split_legs는 순서를 지키며 앞에서부터 (경유지 ≤2 + 목적지)로 자른다 → 같은 순서로 StopFact를 붙인다.
-        let mut it = ordered.iter().cloned();
-        let legs = course::split_legs(&ordered_pts)
-            .into_iter()
-            .map(|l| {
-                let waypoints: Vec<StopFact> = it.by_ref().take(l.waypoints.len()).collect();
-                let destination = it.next().expect("split_legs keeps every stop");
-                CourseLeg { waypoints, destination }
-            })
-            .collect();
-        Ok(CourseRoute { stops: ordered, legs, distance_m })
+        Ok(route_through(from, ordered))
     }
 
     /// 시연용 1년치 기록을 만든다 (출퇴근 + 주말 나들이 + 여행, 장소 이름 포함). 반환: 만든 주행 수.
@@ -337,3 +329,21 @@ impl EodiStore {
 
 #[cfg(test)]
 mod tests;
+
+/// 정한 순서 그대로 [stops]를 도는 코스: 내비 구간(경유지 ≤ 2 + 목적지)과 [from]에서 잰 직선거리 합.
+pub(crate) fn route_through(from: Option<GeoPoint>, stops: Vec<StopFact>) -> CourseRoute {
+    let pts: Vec<Point> = stops.iter().map(|s| Point { lat: s.lat, lon: s.lon }).collect();
+    let order: Vec<usize> = (0..pts.len()).collect();
+    let distance_m = course::path_length_m(from.map(Point::from), &pts, &order);
+    // split_legs는 순서를 지키며 앞에서부터 (경유지 ≤2 + 목적지)로 자른다 → 같은 순서로 StopFact를 붙인다.
+    let mut it = stops.iter().cloned();
+    let legs = course::split_legs(&pts)
+        .into_iter()
+        .map(|l| {
+            let waypoints: Vec<StopFact> = it.by_ref().take(l.waypoints.len()).collect();
+            let destination = it.next().expect("split_legs keeps every stop");
+            CourseLeg { waypoints, destination }
+        })
+        .collect();
+    CourseRoute { stops, legs, distance_m, skipped: vec![] }
+}

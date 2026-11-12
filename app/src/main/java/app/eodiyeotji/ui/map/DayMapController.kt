@@ -51,6 +51,7 @@ import org.maplibre.android.style.layers.PropertyFactory.iconSize
 import org.maplibre.android.style.layers.PropertyFactory.lineBlur
 import org.maplibre.android.style.layers.PropertyFactory.lineCap
 import org.maplibre.android.style.layers.PropertyFactory.lineColor
+import org.maplibre.android.style.layers.PropertyFactory.lineDasharray
 import org.maplibre.android.style.layers.PropertyFactory.lineJoin
 import org.maplibre.android.style.layers.PropertyFactory.lineOpacity
 import org.maplibre.android.style.layers.PropertyFactory.lineWidth
@@ -218,6 +219,12 @@ internal class DayMapController(
         addLine(LineLayer(TRIP_LINE, SOURCE_ID).withFilter(isTrip).withProperties(*roundLine, lineWidth(widthByZoom(LINE_W))))
         addLine(LineLayer(TRIP_SEL_CASING, SOURCE_ID).withFilter(NOTHING).withProperties(*roundLine, lineWidth(widthByZoom(SEL_CASING_W))))
         addLine(LineLayer(TRIP_SEL, SOURCE_ID).withFilter(NOTHING).withProperties(*roundLine, lineWidth(widthByZoom(SEL_LINE_W))))
+        // 한 문장 코스로 다시 짠 길: 흰 테두리 + 점선 (그날 달린 길은 흐리게 뒤에 남는다)
+        addLine(LineLayer(PLAN_CASING, SOURCE_ID).withFilter(isPlan).withProperties(*roundLine, lineWidth(widthByZoom(CASING_W))))
+        addLine(
+            LineLayer(PLAN_LINE, SOURCE_ID).withFilter(isPlan)
+                .withProperties(lineJoin(Property.LINE_JOIN_ROUND), lineCap(Property.LINE_CAP_BUTT), lineWidth(widthByZoom(LINE_W)), lineDasharray(arrayOf(2f, 1.2f))),
+        )
         // 진행 방향 화살표: 선을 따라 일정 간격, 다른 글자와 자리 다툼 없이 (아주 멀리서는 숨김, 선 굵기 따라 크기)
         addLine(
             SymbolLayer(TRIP_ARROW, SOURCE_ID).withFilter(isTrip).withProperties(
@@ -299,7 +306,8 @@ internal class DayMapController(
         val calloutLayout = arrayOf(
             iconAnchor(Property.ICON_ANCHOR_BOTTOM),
             iconOffset(arrayOf(0f, -CALLOUT_PIN_LIFT_DP)),
-            symbolSortKey(coalesce(get("order"), literal(NO_ORDER_SORT))),
+            // 한 문장 코스로 뺀 곳 카드가 가장 먼저 자리를 잡는다 (빠진 걸 보여 주는 게 그 지도의 요점)
+            symbolSortKey(switchCase(isSkipped, literal(SKIPPED_SORT), coalesce(get("order"), literal(NO_ORDER_SORT)))),
         )
         // 내 사진 카드: 찍은 곳 바로 아래에 매단다(머문 곳 말풍선은 핀 위라 서로 비켜 간다). 가까운 사진은 지도가 묶고
         // 대표(가장 이른) 사진 + 장수 배지. 늘 보이게 하되 다른 표시의 자리를 뺏지 않는다.
@@ -379,11 +387,13 @@ internal class DayMapController(
     }
 
     private fun applyPalette(s: Style, p: MapPalette) {
-        val stayColor = switchCase(isOpen, color(p.openStay), color(p.stay))
+        val stayColor = switchCase(isSkipped, color(SKIPPED_COLOR), isOpen, color(p.openStay), color(p.stay))
         s.getLayer(TRIP_CASING)?.setProperties(lineColor(p.casing))
         s.getLayer(TRIP_LINE)?.setProperties(lineColor(p.trip))
         s.getLayer(TRIP_SEL_CASING)?.setProperties(lineColor(p.casing))
         s.getLayer(TRIP_SEL)?.setProperties(lineColor(p.trip))
+        s.getLayer(PLAN_CASING)?.setProperties(lineColor(p.casing))
+        s.getLayer(PLAN_LINE)?.setProperties(lineColor(p.trip))
         s.getLayer(STAY_HALO)?.setProperties(circleColor(p.openStay))
         s.getLayer(STAY)?.setProperties(circleColor(stayColor), circleStrokeColor(p.casing))
         s.getLayer(STAY_SEL)?.setProperties(circleColor(stayColor), circleStrokeColor(p.selectedStroke))
@@ -422,14 +432,16 @@ internal class DayMapController(
         s.getLayer(TRIP_SEL)?.let { (it as LineLayer).setFilter(all(isTrip, pick)) }
         s.getLayer(STAY_SEL)?.let { (it as CircleLayer).setFilter(all(isStay, pick)) }
         s.getLayer(STAY_SEL_HALO)?.let { (it as CircleLayer).setFilter(all(isStay, pick)) }
-        s.getLayer(TRIP_SHADOW)?.setProperties(lineOpacity(dim))
-        s.getLayer(TRIP_CASING)?.setProperties(lineOpacity(dim))
-        s.getLayer(TRIP_LINE)?.setProperties(lineOpacity(dim))
-        s.getLayer(TRIP_ARROW)?.setProperties(iconOpacity(keepPicked))
+        // 한 문장 코스로 다시 짰으면 그날 달린 길(faded)은 더 흐리게
+        val tripDim = switchCase(isFaded, literal(FADED_OPACITY * dim), literal(dim))
+        s.getLayer(TRIP_SHADOW)?.setProperties(lineOpacity(tripDim))
+        s.getLayer(TRIP_CASING)?.setProperties(lineOpacity(tripDim))
+        s.getLayer(TRIP_LINE)?.setProperties(lineOpacity(tripDim))
+        s.getLayer(TRIP_ARROW)?.setProperties(iconOpacity(switchCase(isFaded, literal(0f), keepPicked)))
         s.getLayer(TRIP_LABEL)?.setProperties(iconOpacity(keepPicked))
         s.getLayer(END_DOT)?.setProperties(circleOpacity(dim), circleStrokeOpacity(dim))
         s.getLayer(END_FLAG)?.setProperties(iconOpacity(dim))
-        s.getLayer(STAY)?.setProperties(circleOpacity(dim), circleStrokeOpacity(dim))
+        s.getLayer(STAY)?.setProperties(circleOpacity(switchCase(isSkipped, literal(SKIPPED_OPACITY * dim), literal(dim))), circleStrokeOpacity(dim))
         s.getLayer(STAY_HALO)?.setProperties(circleOpacity(HALO_OPACITY * dim))
         // 숫자는 고른 핀(강조 원 위)만 진하게, 나머지는 원과 같이 흐리게
         s.getLayer(STAY_NUM)?.setProperties(textOpacity(keepPicked))
@@ -555,6 +567,8 @@ internal class DayMapController(
         const val STAY_MINI = "eodi-stay-mini"
         const val STAY_CARD = "eodi-stay-card"
         const val STAY_CARD_SEL = "eodi-stay-card-sel"
+        const val PLAN_CASING = "eodi-plan-casing"
+        const val PLAN_LINE = "eodi-plan"
         const val PHOTO_SOURCE_ID = "eodi-my-photo"
         const val PHOTO = "eodi-my-photo-card"
         const val PHOTO_BADGE = "eodi-my-photo-count"
@@ -601,6 +615,12 @@ internal class DayMapController(
         const val MAX_BOTTOM_PAD_FRACTION = 0.3f
 
         const val DIMMED_OPACITY = 0.35f
+        /** 한 문장 코스로 다시 짰을 때 그날 달린 길 · 뺀 곳 핀의 투명도 */
+        const val FADED_OPACITY = 0.3f
+        const val SKIPPED_OPACITY = 0.6f
+        /** 뺀 곳 핀 색 (회색) */
+        const val SKIPPED_COLOR = 0xFF9AA3AE.toInt()
+        const val SKIPPED_SORT = -1f
         const val HALO_OPACITY = 0.22f
         const val SEL_HALO_OPACITY = 0.28f
         const val FIT_PADDING_DP = 56f
@@ -616,5 +636,8 @@ internal class DayMapController(
         val isEnd: Expression = eq(get("kind"), literal("endpoint"))
         val isOpen: Expression = eq(get("open"), literal(true))
         val hasOrder: Expression = has("order")
+        val isPlan: Expression = eq(get("kind"), literal("plan"))
+        val isFaded: Expression = has("faded")
+        val isSkipped: Expression = has("skipped")
     }
 }

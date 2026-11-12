@@ -5,6 +5,7 @@ import app.eodiyeotji.BuildConfig
 import app.eodiyeotji.core.CourseLeg
 import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.LatLon
+import app.eodiyeotji.core.MapBoundsLatLon
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.core.rust.AgentContext
 import app.eodiyeotji.core.rust.AgentListener
@@ -138,10 +139,17 @@ class AgentBridge @Inject constructor(
      * 후보 카드 지도의 핀 번호를 카드 사진 줄([stops]) 순서로 맞춘 GeoJSON (Rust `agent::stopmap`).
      * 실패하면 받은 글 그대로.
      */
-    suspend fun numberMapStops(geojson: String, stops: List<StopFact>): String = withContext(Dispatchers.Default) {
-        runCatching { agent.numberMapStops(geojson, stops.map { RStopFact(it.name, it.category, it.address, it.arriveMs, it.leaveMs, it.lat, it.lon, it.firstVisit) }) }
+    suspend fun numberMapStops(geojson: String, stops: List<StopFact>, skipped: List<StopFact> = emptyList()): String = withContext(Dispatchers.Default) {
+        fun List<StopFact>.rust() = map { RStopFact(it.name, it.category, it.address, it.arriveMs, it.leaveMs, it.lat, it.lon, it.firstVisit) }
+        runCatching { agent.numberMapStops(geojson, stops.rust(), skipped.rust()) }
             .onFailure { Log.w(TAG, "지도 번호 맞추기 실패", it) }
             .getOrDefault(geojson)
+    }
+
+    /** 한 문장 코스 카드 지도를 처음 비출 범위 (뺀 곳과 그 앞 · 뒤 들른 곳, Rust `stopmap::skip_focus`). 뺀 곳이 없으면 null. */
+    suspend fun skipFocusBounds(stops: List<StopFact>, skipped: List<StopFact>): MapBoundsLatLon? = withContext(Dispatchers.Default) {
+        fun List<StopFact>.rust() = map { RStopFact(it.name, it.category, it.address, it.arriveMs, it.leaveMs, it.lat, it.lon, it.firstVisit) }
+        runCatching { agent.skipFocusBounds(stops.rust(), skipped.rust()) }.getOrNull()?.let { MapBoundsLatLon(it.minLat, it.minLon, it.maxLat, it.maxLon) }
     }
 
     /** 화면의 "아니오". */

@@ -50,7 +50,8 @@ class MemoryAgentPort @Inject constructor(
     override suspend fun selectCandidate(episodeId: Long, context: AgentContext): CandidatePick? =
         bridge.selectCandidate(episodeId, context.isDriving, context.currentLocation)?.let { c -> CandidatePick(c.proposal?.let(::button), c.course, c.line) }
 
-    override suspend fun numberMapStops(geojson: String, stops: List<StopFact>): String = bridge.numberMapStops(geojson, stops)
+    override suspend fun numberMapStops(geojson: String, stops: List<StopFact>, skipped: List<StopFact>): String = bridge.numberMapStops(geojson, stops, skipped)
+    override suspend fun skipFocusBounds(stops: List<StopFact>, skipped: List<StopFact>) = bridge.skipFocusBounds(stops, skipped)
 
     /** 제안을 기억해 두고 화면 버튼 모양으로. */
     private fun button(p: AgentProposal): AgentEvent.ActionProposal {
@@ -66,7 +67,7 @@ class MemoryAgentPort @Inject constructor(
     private fun buttonTitle(action: AgentNavAction) = when (action) {
         is AgentNavAction.Course -> text(R.string.agent_proposal_course)
         is AgentNavAction.SharedCourse -> text(R.string.agent_proposal_shared, action.title)
-        is AgentNavAction.Place -> text(R.string.agent_proposal_place, action.stop.name)
+        is AgentNavAction.Place -> text(R.string.agent_proposal_place, action.stop.name, roJosa(action.stop.name))
         is AgentNavAction.Search -> text(R.string.agent_proposal_search)
     }
 

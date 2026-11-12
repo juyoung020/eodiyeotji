@@ -161,13 +161,7 @@ class FakeAgentPort @Inject constructor() : AgentPort {
         const val CONFIRM_MS = 600L
         val CHUNK_SIZES = intArrayOf(2, 3, 2, 4, 3)
 
-        /** 조사 "로/으로" (받침이 있고 ㄹ이 아니면 "으로"). */
-        fun ro(word: String): String {
-            val c = word.lastOrNull() ?: return "로"
-            if (c !in '가'..'힣') return "로"
-            val batchim = (c - '가') % 28
-            return if (batchim == 0 || batchim == 8) "로" else "으로"
-        }
+        fun ro(word: String): String = roJosa(word)
 
         fun stop(name: String, category: String, address: String, day: LocalDate, arrive: String, leave: String, lat: Double, lon: Double, first: Boolean = false): StopFact {
             val zone = ZoneId.of("Asia/Seoul")

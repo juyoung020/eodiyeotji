@@ -113,11 +113,51 @@ pub struct Parsed {
     pub rain: bool,
     /// "옛날에 · 예전에 · 오래전": 최근 기록보다 지난 기록을 앞에
     pub long_ago: bool,
+    /// "몇 명이서 · 누구랑 갔어": 그때 함께 탄 인원을 묻는다 (좌석 센서로 답한다)
+    pub head_count: bool,
+    /// "순두부집만 빼고 · 휴게소 제외하고": 코스에서 뺄 곳 낱말 ("순두부", "휴게소")
+    pub skip: Vec<String>,
+}
+
+/// 코스에서 빼라는 말 (앞 낱말이 뺄 곳)
+const SKIP_WORDS: &[&str] = &["빼고", "빼서", "빼", "빼줘", "빼구", "제외하고", "제외", "건너뛰고"];
+
+/// 인원을 묻는 말인가 ("몇 명이서", "몇명", "몇이서", "몇 사람", "누구랑", "누구와").
+fn asks_head_count(u: &str) -> bool {
+    let c: String = u.chars().filter(|c| !c.is_whitespace()).collect();
+    ["몇명", "몇이서", "몇사람", "몇분이", "누구랑", "누구와", "누구하고"].iter().any(|k| c.contains(k))
+}
+
+/// "순두부집만" → "순두부", "휴게소는" → "휴게소"
+fn skip_word(w: &str) -> Option<String> {
+    let w = w.strip_suffix("만").unwrap_or(w);
+    let stem = strip_josa(w);
+    let stem = stem.strip_suffix("만").map(str::to_string).unwrap_or(stem);
+    let word = place_word(&stem);
+    (word.chars().count() >= 2 && !is_noise(&word)).then_some(word)
 }
 
 pub fn parse(utterance: &str) -> Parsed {
-    let mut p = Parsed::default();
-    for w in tokens(utterance) {
+    let mut p = Parsed { head_count: asks_head_count(utterance), ..Parsed::default() };
+    let words = tokens(utterance);
+    // "○○(만) 빼고": 뺄 곳 낱말은 검색어로도 남긴다 (그 기억을 찾는 데 도움이 된다), 빼라는 말 자체는 버린다
+    for (i, w) in words.iter().enumerate() {
+        let glued = SKIP_WORDS.iter().filter(|k| k.chars().count() >= 2).find_map(|k| w.strip_suffix(k).filter(|h| !h.is_empty()));
+        let target = if SKIP_WORDS.contains(&w.as_str()) { i.checked_sub(1).map(|j| words[j].as_str()) } else { glued };
+        if let Some(word) = target.and_then(skip_word) {
+            push(&mut p.skip, &word);
+        }
+    }
+    for w in words {
+        if SKIP_WORDS.contains(&w.as_str()) || SKIP_WORDS.iter().any(|k| k.chars().count() >= 2 && w.ends_with(k) && w.chars().count() > k.chars().count()) {
+            if let Some(head) = SKIP_WORDS.iter().find_map(|k| w.strip_suffix(k)).and_then(skip_word) {
+                push(&mut p.terms, &head);
+            }
+            continue;
+        }
+        if p.head_count && (w.starts_with('몇') || w.starts_with("명") || w.starts_with("누구")) {
+            continue;
+        }
         let stem = strip_josa(&w);
         if REFERENCE.contains(&w.as_str()) || REFERENCE.contains(&stem.as_str()) {
             p.has_reference = true;

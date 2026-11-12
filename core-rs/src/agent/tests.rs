@@ -123,7 +123,7 @@ impl MemoryBackend for FakeBackend {
                 let matches = |t: &str| fields.iter().any(|f| f.contains(t) || (f.chars().count() >= 2 && t.contains(f)));
                 let score = if q.terms.is_empty() { 1.0 } else { q.terms.iter().filter(|t| !t.is_empty() && matches(t)).count() as f64 };
                 let best = e.facts.stops.iter().find(|s| q.terms.iter().any(|t| s.name.contains(t.as_str()) || s.category.contains(t.as_str()))).or(e.facts.stops.first()).cloned();
-                (score > 0.0).then(|| MemoryHit { episode: e.clone(), day_title: e.title.clone(), score, best_stop: best, matched_tags: vec![], visit_days: vec![], visit_note: String::new() })
+                (score > 0.0).then(|| MemoryHit { episode: e.clone(), day_title: e.title.clone(), score, best_stop: best, matched_tags: vec![], visit_days: vec![], visit_note: String::new(), people: None })
             })
             .collect();
         hits.sort_by(|a, b| b.score.total_cmp(&a.score).then(b.episode.facts.start_ms.cmp(&a.episode.facts.start_ms)));
@@ -154,7 +154,7 @@ impl MemoryBackend for FakeBackend {
             legs.push(CourseLeg { waypoints: s[i..end - 1].to_vec(), destination: s[end - 1].clone() });
             i = end;
         }
-        Ok(CourseRoute { stops: s, legs, distance_m: 18_400.0 })
+        Ok(CourseRoute { stops: s, legs, distance_m: 18_400.0, skipped: vec![] })
     }
     fn pending_day_enrichments(&self, limit: u32) -> Result<Vec<DayFacts>, CoreError> {
         let saved = self.saved.lock().unwrap();

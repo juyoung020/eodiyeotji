@@ -90,7 +90,7 @@ sealed interface AgentNavAction {
 
 internal fun RStopFact.toModel() = StopFact(name, category, address, arriveMs, leaveMs, lat, lon, firstVisit)
 
-internal fun RCourseRoute.toModel() = CourseRoute(stops.map { it.toModel() }, legs.map { it.toModel() }, distanceM)
+internal fun RCourseRoute.toModel() = CourseRoute(stops.map { it.toModel() }, legs.map { it.toModel() }, distanceM, skipped.map { it.toModel() })
 
 private fun RCourseLeg.toModel() = CourseLeg(waypoints.map { it.toModel() }, destination.toModel())
 
@@ -110,7 +110,7 @@ private fun REpisode.toModel() = Episode(
     title, tags,
 )
 
-internal fun RMemoryHit.toModel() = MemoryHit(episode.toModel(), dayTitle, score, bestStop?.toModel(), matchedTags, visitNote)
+internal fun RMemoryHit.toModel() = MemoryHit(episode.toModel(), dayTitle, score, bestStop?.toModel(), matchedTags, visitNote, people?.toInt())
 
 internal fun RNavAction.toModel(): AgentNavAction = when (this) {
     is RNavAction.Course -> AgentNavAction.Course(episodeId, title, legs.map { it.toModel() })

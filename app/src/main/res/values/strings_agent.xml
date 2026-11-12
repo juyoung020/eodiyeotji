@@ -70,7 +70,7 @@
     <string name="agent_send_failed">내비에 안내를 보내지 못했어요.</string>
     <string name="agent_proposal_course">이 코스로 안내</string>
     <string name="agent_proposal_shared">‘%1$s’ 코스로 안내</string>
-    <string name="agent_proposal_place">%1$s로 안내</string>
+    <string name="agent_proposal_place">%1$s%2$s 안내</string>
     <string name="agent_proposal_search">내비에서 찾기</string>
 
     <!-- 버튼을 누르면 에이전트에 이어서 묻는 말 -->
@@ -87,4 +87,8 @@
     <string name="agent_course_from_here">여기서 %1$s</string>
     <string name="agent_course_focus">안내 제안 중</string>
     <string name="agent_pick_course">%1$d번으로 안내</string>
+    <string name="agent_people_count">%1$d명이 함께 탔어요</string>
+    <string name="agent_people_alone">혼자 탔어요</string>
+    <string name="agent_people_source">좌석 기록</string>
+    <string name="agent_skipped_label">빼고 가요</string>
 </resources>

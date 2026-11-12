@@ -58,6 +58,8 @@ pub(crate) struct Turn<'a> {
     picked: bool,
     /// 답과 따로 보일 안내 한 줄 (연결 문제 등, [AgentDone::notice])
     notice: Option<String>,
+    /// 질문이 기억 속 한 곳을 콕 집었나 ("강릉 횟집") → 코스 말고 그곳으로 안내를 제안한다
+    place_asked: bool,
 }
 
 impl Turn<'_> {
@@ -114,7 +116,7 @@ impl MemoryAgent {
     pub(crate) fn run_turn(&self, utterance: &str, ctx: &AgentContext, l: &dyn AgentListener) {
         let gen = self.cancel_gen.load(Ordering::SeqCst);
         let mut s = self.session.lock().unwrap_or_else(|e| e.into_inner());
-        let mut t = Turn { l, start: Instant::now(), answer: String::new(), first_text_ms: None, to_rec_ms: None, llm_calls: 0, llm_ms: 0, msgs: vec![], last_focus: None, course_shown: false, memory_shown: false, picked: false, notice: None };
+        let mut t = Turn { l, start: Instant::now(), answer: String::new(), first_text_ms: None, to_rec_ms: None, llm_calls: 0, llm_ms: 0, msgs: vec![], last_focus: None, course_shown: false, memory_shown: false, picked: false, notice: None, place_asked: false };
         if ctx.now_ms - s.last_activity_ms > SESSION_IDLE_MS {
             *s = Session::default();
             *self.pending.lock().unwrap_or_else(|e| e.into_inner()) = None;
@@ -181,6 +183,14 @@ impl MemoryAgent {
         // 3) 빠른 길: 규칙으로 날짜·검색어 → 기기 검색 (수 ms)
         let parsed = words::parse(u);
         let range = dates::parse_korean_range(u, today);
+
+        // 2-2) 이어 묻기 "거기 몇 명이서 갔어": 지금 이야기하는 기억의 좌석 센서 인원으로 바로 답한다 (새 곳 이름이 없을 때)
+        if self.opts.fast_path && parsed.head_count && (parsed.has_reference || parsed.terms.is_empty()) && range.is_none() {
+            if let Some(focus) = s.focus.clone() {
+                self.head_count_answer(&mut s, &mut t, &focus, ctx);
+                return self.finish(&mut s, t, u, AnswerSource::FastPath);
+            }
+        }
         let mut fast_hits: Vec<MemoryHit> = vec![];
         // 사람 말이 있어도 좌석 센서로 맞는 기억을 골랐으면 LLM 없이 바로 답한다
         let mut people_resolved = false;
@@ -237,6 +247,24 @@ impl MemoryAgent {
                 t.candidates(&short, 0);
                 s.candidates = short;
             }
+        }
+        // 3-1) 한 문장 코스 "작년 강릉 여행 그대로, 순두부집만 빼고 안내해 줘": 그 기억의 코스에서 뺄 곳을 빼고 다시 짠다
+        if self.opts.fast_path && !parsed.skip.is_empty() {
+            if let Some(top) = s.candidates.first().cloned().filter(|_| !fast_hits.is_empty()) {
+                if self.skip_course(&mut s, &mut t, &top, &parsed.skip, ctx, today) {
+                    return self.finish(&mut s, t, u, AnswerSource::FastPath);
+                }
+            }
+        }
+        // 기억 속 한 곳을 콕 집은 질문인가: 질문 낱말이 고른 곳의 이름 · 분류에 들고, 지역 이름(강릉)이 아니다
+        if let Some(top) = s.candidates.first().filter(|_| !fast_hits.is_empty()) {
+            let f = &top.episode.facts;
+            t.place_asked = f.stops.len() > 1
+                && top.best_stop.as_ref().is_some_and(|b| {
+                    parsed.terms.iter().any(|w| {
+                        w.chars().count() >= 2 && !f.region.contains(w.as_str()) && (b.name.contains(w.as_str()) || b.category.contains(w.as_str()))
+                    })
+                });
         }
         let narrow_date = range.is_some_and(|r| r.to - r.from <= 2);
         // 확실한가: 결과가 있고, 사람·앞 대화 말이 없고, 1위가 2위보다 분명히 앞서고, 한 글자 낱말(산·강…)만으로 찾은 게 아닐 때
@@ -410,6 +438,78 @@ impl MemoryAgent {
         t.l.on_action_proposal(p);
     }
 
+    /// "거기 몇 명이서 갔어": 지금 이야기하는 기억 때 좌석 센서 인원. 카드에 인원을 붙여 다시 보이고, 안내 제안을 이어 묻는다.
+    fn head_count_answer(&self, s: &mut Session, t: &mut Turn, focus: &MemoryHit, ctx: &AgentContext) {
+        let f = &focus.episode.facts;
+        let n = self.backend.people_between(f.start_ms, f.end_ms).filter(|&k| k > 0);
+        let mut hit = focus.clone();
+        hit.people = n;
+        let course = s.tools.courses.get(&f.id).map(|(r, _)| r.clone());
+        t.recommend(&hit, course);
+        s.focus = Some(hit.clone());
+        if let Some(i) = s.candidates.iter().position(|c| c.episode.facts.id == f.id) {
+            s.candidates[i].people = n;
+        }
+        // 기다리는 안내 제안을 이 답에도 다시 보인다 (버튼이 답 바로 아래에 있게). 없으면 새로 만든다.
+        let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        if pending.is_none() {
+            pending = self.memory_proposal(s, t, &hit, ctx);
+            if let Some(p) = &pending {
+                *self.pending.lock().unwrap_or_else(|e| e.into_inner()) = Some(p.clone());
+            }
+        }
+        if let Some(p) = &pending {
+            t.l.on_action_proposal(p.clone());
+        }
+        let ask = if pending.is_some() { " 거기로 안내할까요?" } else { "" };
+        let place = hit_place(&hit);
+        let text = match n {
+            None => format!("그때 몇 분이 타셨는지는 기록이 없어요.{ask}"),
+            Some(1) => format!("{place}엔 혼자 가셨어요.{ask}"),
+            Some(k) => format!("{place}엔 {k}명이서 가셨어요. 그날 좌석 {k}자리가 찼어요.{ask}"),
+        };
+        t.say(&text);
+    }
+
+    /// "작년 강릉 여행 그대로, 순두부집만 빼고": 그날 순서 그대로의 코스에서 [skip] 낱말에 맞는 곳(이름 · 분류)을 빼고 다시 짠다.
+    /// 뺀 곳은 [crate::memory::CourseRoute::skipped]로 지도에 흐리게 남는다. 다 빠지면 false (다른 길로 푼다).
+    #[allow(clippy::too_many_arguments)]
+    fn skip_course(&self, s: &mut Session, t: &mut Turn, top: &MemoryHit, skip: &[String], ctx: &AgentContext, today: i64) -> bool {
+        let f = &top.episode.facts;
+        let Ok(full) = self.backend.course_route(f.id, ctx.current_location, false) else { return false };
+        let title = top.episode.title.clone().or(top.day_title.clone()).unwrap_or(f.rule_label.clone());
+        let when = spoken_date(&f.day, today);
+        let matches = |x: &crate::memory::StopFact| skip.iter().any(|w| x.name.contains(w.as_str()) || x.category.contains(w.as_str()));
+        let (gone, keep): (Vec<_>, Vec<_>) = full.stops.iter().cloned().partition(|x| matches(x));
+        if keep.is_empty() {
+            return false;
+        }
+        s.focus = Some(top.clone());
+        s.tools.remember(std::slice::from_ref(top));
+        let (route, text) = if gone.is_empty() {
+            let text = format!("{when} '{title}' 코스에는 '{}'에 맞는 곳이 없어요. 그대로 안내할까요?", skip.join(", "));
+            (full, text)
+        } else {
+            let mut r = crate::memory::route_through(ctx.current_location, keep);
+            r.skipped = gone.clone();
+            let gone_names = gone.iter().map(|x| x.name.as_str()).collect::<Vec<_>>().join(", ");
+            let names = r.stops.iter().map(|x| x.name.as_str()).collect::<Vec<_>>().join(", ");
+            let text = format!(
+                "{when} '{title}' 코스에서 {} 빼고 {}곳으로 다시 짰어요. {names} 순서예요. 이대로 안내할까요?",
+                eul(&gone_names),
+                r.stops.len()
+            );
+            (r, text)
+        };
+        s.tools.courses.insert(f.id, (route.clone(), false));
+        t.recommend(top, Some(route.clone()));
+        let p = tools::course_proposal(&mut s.proposal_seq, f.id, &title, &route);
+        t.say(&text);
+        *self.pending.lock().unwrap_or_else(|e| e.into_inner()) = Some(p.clone());
+        t.l.on_action_proposal(p);
+        true
+    }
+
     /// 틀 문장 답 + 안내 제안 (LLM 없이).
     fn fast_answer(&self, s: &mut Session, t: &mut Turn, top: &MemoryHit, ctx: &AgentContext, today: i64) {
         let f = &top.episode.facts;
@@ -418,7 +518,19 @@ impl MemoryAgent {
             .or_else(|| f.stops.first().map(|x| x.name.clone()).filter(|n| !n.is_empty()))
             .unwrap_or(title.clone());
         let when = spoken_date(&f.day, today);
-        let proposal = self.memory_proposal(s, t, top, ctx);
+        // 한 곳을 콕 집은 질문("강릉 횟집")은 하루 코스가 아니라 그곳 하나로
+        let spot = top.best_stop.clone().filter(|b| t.place_asked && !b.name.is_empty());
+        if let Some(b) = spot.as_ref().filter(|_| s.candidates.len() <= 1) {
+            let p = tools::place_proposal(&mut s.proposal_seq, b.clone());
+            t.say(&format!("{when} {title} 때 들른 {}. 그곳으로 안내할까요?", ieyo(&b.name)));
+            *self.pending.lock().unwrap_or_else(|e| e.into_inner()) = Some(p.clone());
+            t.l.on_action_proposal(p);
+            return;
+        }
+        let proposal = match spot {
+            Some(b) => Some(tools::place_proposal(&mut s.proposal_seq, b)),
+            None => self.memory_proposal(s, t, top, ctx),
+        };
         let ask = match &proposal {
             Some(p) if matches!(p.action, super::NavAction::Course { .. }) => " 그 코스로 안내할까요?",
             Some(_) => " 그곳으로 안내할까요?",
@@ -697,6 +809,12 @@ fn context_block(ctx: &AgentContext, range: Option<DayRange>, s: &Session, fast_
 const RECENT_DAYS: i64 = 30;
 
 /// "경포해변" → "경포해변이에요", "을왕리 조개구이촌" → "을왕리 조개구이촌이에요", "카페" → "카페예요" (받침 따라).
+/// "순두부" → "순두부를", "경포해변" → "경포해변을"
+fn eul(word: &str) -> String {
+    let batchim = word.chars().last().is_some_and(|c| ('가'..='힣').contains(&c) && !(c as u32 - 0xAC00).is_multiple_of(28));
+    format!("{word}{}", if batchim { "을" } else { "를" })
+}
+
 fn ieyo(word: &str) -> String {
     let batchim = word.chars().last().is_some_and(|c| ('가'..='힣').contains(&c) && !(c as u32 - 0xAC00).is_multiple_of(28));
     format!("{word}{}", if batchim { "이에요" } else { "예요" })

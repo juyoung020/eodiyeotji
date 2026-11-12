@@ -23,7 +23,7 @@
     <string name="agent_send_failed">경로를 찾지 못했어요.</string>
     <string name="agent_proposal_course">이 코스로 안내</string>
     <string name="agent_proposal_shared">‘%1$s’ 코스로 안내</string>
-    <string name="agent_proposal_place">%1$s로 안내</string>
+    <string name="agent_proposal_place">%1$s%2$s 안내</string>
     <string name="agent_proposal_search">가까운 곳 찾아 안내</string>
 
     <string name="course_navigate">이 코스로 안내</string>

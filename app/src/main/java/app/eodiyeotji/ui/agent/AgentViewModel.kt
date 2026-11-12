@@ -533,6 +533,7 @@ class AgentViewModel @Inject constructor(
     private fun ensureMap(id: Long) {
         val head = turn.value?.takeIf { it.id == id }?.recommendations?.firstOrNull() ?: return
         val stops = head.stops
+        val skipped = head.course?.skipped.orEmpty()
         if (head.mapLoaded && head.mapStops == stops) return
         val key = id to stops
         if (mapKey == key) return
@@ -541,7 +542,11 @@ class AgentViewModel @Inject constructor(
         val day = head.hit.episode.facts.day
         viewModelScope.launch {
             val map = try {
-                core.dayMap(day).let { it.copy(geojson = agent.numberMapStops(it.geojson, stops)) }
+                core.dayMap(day).let { m ->
+                    // 한 문장 코스면 뺀 곳 둘레를 먼저 비춘다 (하루 전체로는 뺀 곳이 점처럼 작다)
+                    val focus = if (skipped.isEmpty()) null else agent.skipFocusBounds(stops, skipped)
+                    m.copy(geojson = agent.numberMapStops(m.geojson, stops, skipped), bounds = focus ?: m.bounds)
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

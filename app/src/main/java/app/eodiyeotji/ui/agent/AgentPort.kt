@@ -26,7 +26,10 @@ interface AgentPort {
     suspend fun selectCandidate(episodeId: Long, context: AgentContext): CandidatePick? = null
 
     /** 후보 카드 지도(하루 지도 GeoJSON)의 핀 번호를 카드 사진 줄 [stops] 순서(1부터)로 맞춘다. 기본은 그대로. */
-    suspend fun numberMapStops(geojson: String, stops: List<StopFact>): String = geojson
+    suspend fun numberMapStops(geojson: String, stops: List<StopFact>, skipped: List<StopFact> = emptyList()): String = geojson
+
+    /** 한 문장 코스("○○만 빼고") 카드 지도를 처음 비출 범위. 기본은 없음(하루 전체). */
+    suspend fun skipFocusBounds(stops: List<StopFact>, skipped: List<StopFact>): app.eodiyeotji.core.MapBoundsLatLon? = null
 }
 
 /**

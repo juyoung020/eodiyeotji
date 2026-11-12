@@ -37,3 +37,11 @@ internal fun kindText(kind: EpisodeKind): String = stringResource(
         EpisodeKind.TRIP -> R.string.agent_kind_trip
     },
 )
+
+/** 조사 "로/으로" (받침이 있고 ㄹ이 아니면 "으로"): "안목항 바다횟집" → "으로", "경포해변" → "으로", "카페" → "로". */
+internal fun roJosa(word: String): String {
+    val c = word.lastOrNull() ?: return "로"
+    if (c !in '가'..'힣') return "로"
+    val batchim = (c - '가') % 28
+    return if (batchim == 0 || batchim == 8) "로" else "으로"
+}

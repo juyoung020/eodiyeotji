@@ -3,6 +3,8 @@ package app.eodiyeotji.ui.map
 import android.graphics.Bitmap
 import android.graphics.BitmapShader
 import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
@@ -31,6 +33,8 @@ internal data class StayMark(
     /** 그날 경로의 출발·도착 지점이면 "출발"/"도착" */
     val tag: String?,
     val open: Boolean,
+    /** 한 문장 코스("순두부집만 빼고")로 뺀 곳: 흑백 사진 + 빨간 ✕ + "빼고 가요" */
+    val skipped: Boolean = false,
 )
 
 /** 주행 가운데 글 ("12분 · 4.9km"), [key]는 그 주행 키. */
@@ -68,6 +72,7 @@ internal fun parseMapMarks(geojson: String): MapMarks {
                 dwell = f.str("dwell").orEmpty(),
                 tag = f.str("tag"),
                 open = f.hasNonNullValueForProperty("open") && f.getBooleanProperty("open"),
+                skipped = f.hasNonNullValueForProperty("skipped") && f.getBooleanProperty("skipped"),
             )
             "trip_label" -> labels += LabelMark(f.str("key") ?: continue, f.str("label") ?: continue)
             "endpoint" -> ends += EndMark(f.str("role") ?: continue, f.str("label") ?: continue)
@@ -162,7 +167,7 @@ private class Drawer(private val p: MapPalette, private val d: Float) {
     private fun accent(open: Boolean) = if (open) p.openStay else p.stay
 
     /** 사진을 가운데 잘라 둥근 네모에 꽉 채운다 (centerCrop). */
-    private fun Canvas.photo(src: Bitmap, r: RectF, radius: Float) {
+    private fun Canvas.photo(src: Bitmap, r: RectF, radius: Float, gray: Boolean = false) {
         val scale = max(r.width() / src.width, r.height() / src.height)
         val m = Matrix().apply {
             setScale(scale, scale)
@@ -170,8 +175,22 @@ private class Drawer(private val p: MapPalette, private val d: Float) {
         }
         val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
             shader = BitmapShader(src, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply { setLocalMatrix(m) }
+            if (gray) {
+                colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })
+                alpha = SKIPPED_PHOTO_ALPHA
+            }
         }
         drawRoundRect(r, radius, radius, paint)
+    }
+
+    /** 뺀 곳: 사진 위 빨간 동그라미 ✕ */
+    private fun Canvas.cross(r: RectF) {
+        val rad = r.width() * 0.26f
+        drawCircle(r.centerX(), r.centerY(), rad, fill(SKIP_RED))
+        val k = rad * 0.45f
+        val stroke = fill(android.graphics.Color.WHITE).apply { style = Paint.Style.STROKE; strokeWidth = 3.2f * d; strokeCap = Paint.Cap.ROUND }
+        drawLine(r.centerX() - k, r.centerY() - k, r.centerX() + k, r.centerY() + k, stroke)
+        drawLine(r.centerX() + k, r.centerY() - k, r.centerX() - k, r.centerY() + k, stroke)
     }
 
     /** 사진 왼쪽 위 순서 동그라미 (핀 숫자와 같은 색·숫자 → 카드와 핀을 잇는다) */
@@ -191,8 +210,8 @@ private class Drawer(private val p: MapPalette, private val d: Float) {
         val pad = CARD_PAD_DP * d
         val ps = CARD_PHOTO_DP * d
         val h = ps + pad * 2
-        val namePaint = textPaint(NAME_DP, p.label)
-        val dwellPaint = textPaint(DWELL_DP, accent(s.open))
+        val namePaint = textPaint(NAME_DP, if (s.skipped) SKIP_GRAY else p.label).apply { isStrikeThruText = s.skipped }
+        val dwellPaint = textPaint(DWELL_DP, if (s.skipped) SKIP_RED else accent(s.open))
         val tagPaint = textPaint(TAG_DP, p.casing)
         val tagW = s.tag?.let { tagPaint.measureText(it) + TAG_PAD_DP * 2 * d + TAG_GAP_DP * d } ?: 0f
         val maxText = TEXT_MAX_DP * d
@@ -207,7 +226,10 @@ private class Drawer(private val p: MapPalette, private val d: Float) {
 
         val pr = RectF(m + pad, m + pad, m + pad + ps, m + pad + ps)
         val pRadius = (CARD_RADIUS_DP - CARD_PAD_DP + 2f) * d
-        if (photo != null) {
+        if (s.skipped) {
+            if (photo != null) c.photo(photo, pr, pRadius, gray = true) else c.drawRoundRect(pr, pRadius, pRadius, fill(SKIP_GRAY))
+            c.cross(pr)
+        } else if (photo != null) {
             c.photo(photo, pr, pRadius)
             s.order?.let { c.badge(it, pr.left + BADGE_DP * d + 3 * d, pr.top + BADGE_DP * d + 3 * d, s.open, BADGE_DP) }
         } else if (s.tag != null && !s.open) {
@@ -266,7 +288,8 @@ private class Drawer(private val p: MapPalette, private val d: Float) {
         c.drawPath(bubble(m, m, m + size, m + size, MINI_RADIUS_DP * d), shadowed(p.casing))
         val border = MINI_BORDER_DP * d
         val r = RectF(m + border, m + border, m + size - border, m + size - border)
-        c.photo(photo, r, (MINI_RADIUS_DP - MINI_BORDER_DP) * d)
+        c.photo(photo, r, (MINI_RADIUS_DP - MINI_BORDER_DP) * d, gray = s.skipped)
+        if (s.skipped) c.cross(r)
         s.order?.let { c.badge(it, r.left + MINI_BADGE_DP * d + 2 * d, r.top + MINI_BADGE_DP * d + 2 * d, s.open, MINI_BADGE_DP) }
         return out
     }
@@ -303,6 +326,9 @@ private class Drawer(private val p: MapPalette, private val d: Float) {
 
     private companion object {
         const val SHADOW = 0x40000000
+        const val SKIP_RED = 0xFFE5484D.toInt()
+        const val SKIP_GRAY = 0xFF8A93A0.toInt()
+        const val SKIPPED_PHOTO_ALPHA = 150
         const val SHADOW_DP = 4f
         const val MARGIN_DP = 6f
         const val TAIL_HALF_DP = 10f

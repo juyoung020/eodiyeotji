@@ -6,7 +6,14 @@ import app.eodiyeotji.ui.common.agoText
 import app.eodiyeotji.ui.common.durationText
 import app.eodiyeotji.ui.timeline.timeRangeText
 import app.eodiyeotji.ui.common.distanceText
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.text.style.TextDecoration
+import app.eodiyeotji.core.StopFact
+import app.eodiyeotji.ui.community.CommunityIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -137,8 +144,12 @@ internal fun RecommendationCard(
                 // 이 나들이·여행을 사진 카드로 공유 (폰 판만 보인다, ui/share)
                 if (ComposableImageShare.supported) ShareImageButton(ShareTarget.Episode(facts.id), style = ShareButtonStyle.ICON)
             }
+            // 이어 묻기 "거기 몇 명이서 갔어": 좌석 센서 인원 알약이 카드에 붙는다 (처음 보일 때 펼쳐지며)
+            rec.hit.people?.let { PeopleChip(it) }
             // 왜 이 기억인지: 질문과 맞은 AI 꼬리표 (하루 라벨링 때 LLM이 붙인 태그)
             if (rec.hit.matchedTags.isNotEmpty()) AiTagRow(rec.hit.matchedTags)
+            // 한 문장 코스 "순두부집만 빼고": 뺀 곳 줄 (지도에서는 회색 핀 · ✕)
+            rec.course?.skipped?.takeIf { it.isNotEmpty() }?.let { SkippedRow(it) }
             if (stops.isNotEmpty()) {
                 StopStrip(
                     stops,
@@ -148,6 +159,52 @@ internal fun RecommendationCard(
                 )
             }
         }
+    }
+}
+
+/** "👥 4명이 함께 탔어요 · 좌석 기록" 알약. 처음 그려질 때 펼쳐지며 나타난다. */
+@Composable
+private fun PeopleChip(people: Int) {
+    val c = EodiTheme.colors
+    val shown = remember { MutableTransitionState(false) }.apply { targetState = true }
+    AnimatedVisibility(visibleState = shown, enter = fadeIn() + expandVertically()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.background(c.accentSoft, RoundedCornerShape(50)).padding(horizontal = 16.dp, vertical = 8.dp),
+        ) {
+            Icon(CommunityIcons.People, null, tint = c.accent, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(
+                if (people == 1) stringResource(R.string.agent_people_alone) else stringResource(R.string.agent_people_count, people),
+                style = EodiTheme.type.body,
+                fontWeight = FontWeight.Bold,
+                color = c.accent,
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.agent_people_source), style = EodiTheme.type.meta, color = c.textSecondary)
+        }
+    }
+}
+
+/** 한 문장 코스로 뺀 곳: "빼고 가요  초당할머니순두부" (가운데 줄). */
+@Composable
+private fun SkippedRow(skipped: List<StopFact>) {
+    val c = EodiTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(28.dp).background(c.error, CircleShape)) {
+            Icon(EodiIcons.Close, null, tint = c.surface, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(stringResource(R.string.agent_skipped_label), style = EodiTheme.type.meta, fontWeight = FontWeight.Bold, color = c.error)
+        Spacer(Modifier.width(10.dp))
+        Text(
+            skipped.joinToString(", ") { it.name },
+            style = EodiTheme.type.meta,
+            color = c.textSecondary,
+            textDecoration = TextDecoration.LineThrough,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

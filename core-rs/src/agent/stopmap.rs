@@ -6,18 +6,50 @@
 //! [number_stops]는 지도 GeoJSON의 머문 곳 번호를 사진 줄 순서(1부터)로 다시 매긴다.
 //! - 사진 줄에 없는 머문 곳(집, 같은 날 다른 나들이)은 번호를 뺀다 (지도는 번호 없는 핀으로 그린다).
 //! - 사진 줄에는 있는데 지도에 머문 곳이 없는 곳(오래 머물지 않은 마지막 도착지)은 번호 핀을 더한다 → 번호가 빠지지 않는다.
+//!
+//! 한 문장 코스("순두부집만 빼고")로 [skipped]가 있으면:
+//! - 뺀 곳의 머문 곳에 `"skipped":true`, 정차 글 대신 "빼고 가요" (지도는 회색 핀 · 흐린 카드로 그린다).
+//! - 새 코스 순서대로 들른 곳을 잇는 선 `{"kind":"plan"}`을 더하고, 그날 실제로 달린 주행 선에는 `"faded":true`를 붙인다.
 
 use serde_json::{json, Map, Value};
 
 use crate::geo::{haversine_m, Point};
-use crate::mapdata::map_safe_name;
+use crate::mapdata::{map_safe_name, MapBounds};
 use crate::memory::StopFact;
+
+/// 한 문장 코스 지도를 처음 비출 범위: 뺀 곳마다 그곳과 그날 바로 앞 · 뒤에 들른 곳 (남은 코스 [stops] 중 도착 시각으로).
+/// 하루 전체(서울 ↔ 강릉)를 비추면 뺀 곳이 점처럼 작아 보이지 않는다. 뺀 곳이 없으면 None.
+pub fn skip_focus(stops: &[StopFact], skipped: &[StopFact]) -> Option<MapBounds> {
+    let mut pts: Vec<(f64, f64)> = Vec::new();
+    for s in skipped {
+        pts.push((s.lat, s.lon));
+        if let Some(p) = stops.iter().filter(|x| x.arrive_ms < s.arrive_ms).max_by_key(|x| x.arrive_ms) {
+            pts.push((p.lat, p.lon));
+        }
+        if let Some(n) = stops.iter().filter(|x| x.arrive_ms > s.arrive_ms).min_by_key(|x| x.arrive_ms) {
+            pts.push((n.lat, n.lon));
+        }
+    }
+    let first = pts.first()?;
+    let mut b = MapBounds { min_lat: first.0, min_lon: first.1, max_lat: first.0, max_lon: first.1 };
+    for &(lat, lon) in &pts {
+        b.min_lat = b.min_lat.min(lat);
+        b.max_lat = b.max_lat.max(lat);
+        b.min_lon = b.min_lon.min(lon);
+        b.max_lon = b.max_lon.max(lon);
+    }
+    Some(b)
+}
+
+/// 뺀 곳 카드의 정차 글 자리에 쓰는 말
+pub const SKIPPED_LABEL: &str = "빼고 가요";
 
 /// 도착 시각이 다르더라도 이만큼(m) 안의 머문 곳은 같은 곳으로 본다 (코스로 다시 짠 들른 곳 등).
 const SAME_PLACE_M: f64 = 150.0;
 
 /// 하루 지도 GeoJSON의 머문 곳 번호(`order`)를 [stops] 순서(1부터)로 바꾼 GeoJSON. 읽을 수 없는 글이면 그대로 돌려준다.
-pub fn number_stops(geojson: &str, stops: &[StopFact]) -> String {
+/// [skipped]가 있으면 뺀 곳 표시와 새 코스 선을 더한다 (모듈 설명).
+pub fn number_stops(geojson: &str, stops: &[StopFact], skipped: &[StopFact]) -> String {
     let Ok(mut root) = serde_json::from_str::<Value>(geojson) else { return geojson.to_string() };
     let Some(features) = root.get_mut("features").and_then(Value::as_array_mut) else { return geojson.to_string() };
 
@@ -61,10 +93,48 @@ pub fn number_stops(geojson: &str, stops: &[StopFact]) -> String {
         }
     }
 
+    // 뺀 곳: 남은 머문 곳 중 같은 곳 (도착 시각 → 거리)
+    let gone: Vec<usize> = skipped
+        .iter()
+        .filter_map(|s| {
+            let at = Point { lat: s.lat, lon: s.lon };
+            let j = stays.iter().position(|&(_, a, _)| a == s.arrive_ms).filter(|&j| !taken[j]).or_else(|| {
+                stays
+                    .iter()
+                    .enumerate()
+                    .filter(|(j, _)| !taken[*j])
+                    .map(|(j, &(_, _, p))| (j, haversine_m(at, p)))
+                    .filter(|&(_, m)| m <= SAME_PLACE_M)
+                    .min_by(|a, b| a.1.total_cmp(&b.1))
+                    .map(|(j, _)| j)
+            })?;
+            taken[j] = true;
+            Some(j)
+        })
+        .collect();
+
     for &(i, _, _) in &stays {
         if let Some(p) = features[i].get_mut("properties").and_then(Value::as_object_mut) {
             p.remove("order");
         }
+    }
+    for &j in &gone {
+        if let Some(p) = features[stays[j].0].get_mut("properties").and_then(Value::as_object_mut) {
+            p.insert("skipped".into(), json!(true));
+            p.insert("dwell".into(), json!(SKIPPED_LABEL));
+            p.remove("tag");
+        }
+    }
+    if !skipped.is_empty() && stops.len() >= 2 {
+        for f in features.iter_mut() {
+            if f.pointer("/properties/kind").and_then(Value::as_str) == Some("trip") {
+                if let Some(p) = f.get_mut("properties").and_then(Value::as_object_mut) {
+                    p.insert("faded".into(), json!(true));
+                }
+            }
+        }
+        let line: Vec<Value> = stops.iter().map(|s| json!([(s.lon * 1e6).round() / 1e6, (s.lat * 1e6).round() / 1e6])).collect();
+        features.push(json!({"type": "Feature", "geometry": {"type": "LineString", "coordinates": line}, "properties": {"kind": "plan", "key": "plan"}}));
     }
     for (k, m) in matched.iter().enumerate() {
         let order = k as u64 + 1;
@@ -147,7 +217,7 @@ mod tests {
             stay(9_000, 37.44, 126.38, 3, "조개구이"),
         ]);
         let stops = [stop("조개구이", 9_000, 37.44, 126.38), stop("을왕리해수욕장", 5_000, 37.45, 126.37)];
-        let out = number_stops(&g, &stops);
+        let out = number_stops(&g, &stops, &[]);
         assert_eq!(
             orders(&out),
             vec![("집".into(), None), ("을왕리해수욕장".into(), Some(2)), ("조개구이".into(), Some(1))]
@@ -161,7 +231,7 @@ mod tests {
         let g = day(&[stay(5_000, 37.45, 126.37, 1, "해변")]);
         // 해변: 도착 시각이 달라도 50m 안 → 같은 곳. 카페: 지도에 머문 곳이 없음 → 번호 핀을 더한다.
         let stops = [stop("해변", 7_000, 37.4504, 126.37), stop("카페", 9_000, 37.40, 126.30)];
-        let out = number_stops(&g, &stops);
+        let out = number_stops(&g, &stops, &[]);
         assert_eq!(orders(&out), vec![("해변".into(), Some(1)), ("카페".into(), Some(2))]);
         let v: Value = serde_json::from_str(&out).unwrap();
         let cafe = v["features"].as_array().unwrap().last().unwrap();
@@ -170,10 +240,42 @@ mod tests {
     }
 
     #[test]
+    fn skipped_stop_is_marked_and_new_course_line_is_added() {
+        let g = day(&[
+            stay(1_000, 37.80, 128.90, 1, "해변"),
+            stay(5_000, 37.79, 128.91, 2, "순두부"),
+            stay(9_000, 37.77, 128.94, 3, "카페"),
+        ]);
+        let stops = [stop("해변", 1_000, 37.80, 128.90), stop("카페", 9_000, 37.77, 128.94)];
+        let out = number_stops(&g, &stops, &[stop("순두부", 5_000, 37.79, 128.91)]);
+        assert_eq!(orders(&out), vec![("해변".into(), Some(1)), ("순두부".into(), None), ("카페".into(), Some(2))]);
+        let v: Value = serde_json::from_str(&out).unwrap();
+        let fs = v["features"].as_array().unwrap();
+        let tofu = fs.iter().find(|f| f["properties"]["name"] == "순두부").unwrap();
+        assert_eq!(tofu["properties"]["skipped"], true);
+        assert_eq!(tofu["properties"]["dwell"], SKIPPED_LABEL);
+        let plan = fs.iter().find(|f| f["properties"]["kind"] == "plan").expect("새 코스 선");
+        assert_eq!(plan["geometry"]["coordinates"].as_array().unwrap().len(), 2);
+        assert!(fs.iter().filter(|f| f["properties"]["kind"] == "trip").all(|f| f["properties"]["faded"] == true));
+        // 뺀 곳이 없으면 선도 흐림도 없다
+        let plain = number_stops(&g, &stops, &[]);
+        assert!(!plain.contains(r#""kind":"plan""#) && !plain.contains("faded"));
+    }
+
+    #[test]
+    fn skip_focus_frames_the_skipped_stop_and_its_neighbours() {
+        let stops = [stop("휴게소", 1_000, 37.47, 128.03), stop("해변", 2_000, 37.80, 128.90), stop("카페", 4_000, 37.77, 128.94)];
+        let b = skip_focus(&stops, &[stop("순두부", 3_000, 37.79, 128.91)]).unwrap();
+        // 휴게소(멀리)는 빼고 해변 · 순두부 · 카페만
+        assert_eq!((b.min_lat, b.max_lat, b.min_lon, b.max_lon), (37.77, 37.80, 128.90, 128.94));
+        assert!(skip_focus(&stops, &[]).is_none());
+    }
+
+    #[test]
     fn far_stay_is_not_taken_and_bad_json_is_returned_as_is() {
         let g = day(&[stay(5_000, 37.45, 126.37, 1, "먼곳")]);
-        let out = number_stops(&g, &[stop("딴곳", 9_000, 37.0, 127.0)]);
+        let out = number_stops(&g, &[stop("딴곳", 9_000, 37.0, 127.0)], &[]);
         assert_eq!(orders(&out), vec![("먼곳".into(), None), ("딴곳".into(), Some(1))]);
-        assert_eq!(number_stops("not json", &[]), "not json");
+        assert_eq!(number_stops("not json", &[], &[]), "not json");
     }
 }

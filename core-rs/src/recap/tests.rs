@@ -101,7 +101,7 @@ fn one_year_ago_today_is_the_gangneung_trip() {
     assert_eq!(otd.line, "1년 전 오늘은 강릉 여행을 다녀왔어요");
     let photos: Vec<&str> = otd.photos.iter().map(|s| s.name.as_str()).collect();
     assert_eq!(photos, ["경포해변", "초당할머니순두부", "안목해변 카페거리"], "휴게소는 사진 뒤로");
-    assert_eq!(otd.stops.len(), 4);
+    assert_eq!(otd.stops.len(), 5);
     assert!(otd.distance_m > 300_000.0, "서울 ↔ 강릉 왕복: {}", otd.distance_m);
     assert!(!otd.dismissed && !otd.spoken);
     assert!(otd.replayable);

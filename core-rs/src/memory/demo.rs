@@ -10,7 +10,7 @@
 //!   북촌+인사동, 롯데월드몰, 스타필드 하남, 이케아 광명, 북한산, 을왕리(여름), 남이섬+쁘띠프랑스(가을), 성북동 감자탕·광화문 국밥(겨울), 가평 계곡 물놀이(여름, 가족) — 계절에 맞는
 //!   것 중 덜 간 곳부터, 같은 곳은 1년에 2번까지), 그 밖에는 이마트·주유소 볼일.
 //! - 여행: 정확히 1년 전 같은 날짜에 강릉 가족 당일 여행 (집 → 횡성휴게소 → 경포해변 → 초당할머니순두부 →
-//!   안목해변 카페거리 → 집), 8월 첫 금요일부터 2박 3일 부산 (해운대·감천문화마을·자갈치시장·광안리),
+//!   안목해변 카페거리 → 안목항 바다횟집 → 집), 8월 첫 금요일부터 2박 3일 부산 (해운대·감천문화마을·자갈치시장·광안리),
 //!   10월 18일 이후 첫 토요일부터 1박 2일 설악산 단풍 (내린천휴게소 → 설악산 소공원 → 속초 숙소 → 속초관광수산시장).
 //! - 위치 점: 시내 1초, 고속도로(직선 30km 넘는 구간) 4초 간격, 도로처럼 휘는 길 + GPS 흔들림 2m. 주행마다 시작·끝 신호.
 //!   2026-11-06 기준 1년치 약 39만 점, 주행 745개 (PC 릴리즈 빌드 0.3초, 디버그 1초).
@@ -87,6 +87,7 @@ const POIS: &[Poi] = &[
     ("현대자동차 남양연구소", "연구소", "경기 화성시 남양읍 장덕리 772-1", 37.2012, 126.8295),
     ("판교테크노밸리 스타트업캠퍼스", "업무시설", "경기 성남시 분당구 삼평동 694", 37.4110, 127.0990),
     ("대전컨벤션센터", "컨벤션센터", "대전 유성구 도룡동 4-19", 36.3755, 127.3880),
+    ("안목항 바다횟집", "횟집", "강원 강릉시 견소동 274", 37.7690, 128.9520),
 ];
 
 const HOME: usize = 0;
@@ -134,6 +135,7 @@ const MAKGUKSU: usize = 41;
 const NAMYANG: usize = 42;
 const PANGYO: usize = 43;
 const DCC: usize = 44;
+const SEAFOOD: usize = 45;
 
 type Via = &'static [(f64, f64)];
 
@@ -701,15 +703,21 @@ impl Gen<'_> {
     fn gangneung(&mut self, d: i64) {
         let m = self.rng.below(20);
         let t = self.at(d, 7, m);
-        let legs: [Leg; 5] =
-            [(HOENGSEONG, GN_OUT1, 25), (GYEONGPO, GN_OUT2, 110), (CHODANG, NO_VIA, 60), (ANMOK, NO_VIA, 80), (HOME, GN_BACK, 0)];
+        let legs: [Leg; 6] = [
+            (HOENGSEONG, GN_OUT1, 25),
+            (GYEONGPO, GN_OUT2, 110),
+            (CHODANG, NO_VIA, 60),
+            (ANMOK, NO_VIA, 80),
+            (SEAFOOD, NO_VIA, 70),
+            (HOME, GN_BACK, 0),
+        ];
         self.route(t, HOME, &legs);
         // 강릉 날은 라벨을 미리 넣지 않는다 (앱이 LLM으로 라벨링하는 모습을 보인다). 참고용으로만 남긴다.
         self.label(
             d,
             "가족과 강릉 바다·순두부 당일치기",
-            "아침 일찍 영동고속도로를 달려 경포해변을 걷고, 초당할머니순두부에서 점심, 안목해변 카페거리에서 커피를 마셨다.",
-            &["바다", "해변", "해수욕장", "가족", "여행", "순두부", "맛집", "카페", "강릉"],
+            "아침 일찍 영동고속도로를 달려 경포해변을 걷고, 초당할머니순두부에서 점심, 안목해변 카페거리에서 커피, 안목항 바다횟집에서 회로 저녁을 먹었다.",
+            &["바다", "해변", "해수욕장", "가족", "여행", "순두부", "맛집", "카페", "횟집", "회", "강릉"],
         );
     }
 
@@ -837,8 +845,41 @@ pub(crate) fn top_up(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError>
             occupied.insert(d);
         }
     }
+    // 3) 1년 전 강릉 여행에 저녁 횟집이 없으면 그날만 다시 만든다 (그날은 시연 기록뿐이다 — 오늘 이전 1년 전 날)
+    let gn = p.gangneung;
+    let (gs, ge) = (store.day_start_ms(gn), store.day_start_ms(gn + 1));
+    let at = poi(SEAFOOD);
+    let (has_day, has_seafood): (bool, bool) = {
+        let conn = store.snapshot()?;
+        let day = conn.query_row("SELECT 1 FROM fix WHERE t_ms >= ?1 AND t_ms < ?2 LIMIT 1", [gs, ge], |_| Ok(())).optional()?.is_some();
+        let near: i64 = conn.query_row(
+            "SELECT count(*) FROM fix WHERE t_ms >= ?1 AND t_ms < ?2 AND abs(lat - ?3) < 0.0015 AND abs(lon - ?4) < 0.0015",
+            params![gs, ge, at.lat, at.lon],
+            |r| r.get(0),
+        )?;
+        (day, near > 0)
+    };
+    if has_day && !has_seafood {
+        {
+            let conn = store.lock()?;
+            for t in ["fix", "drive_event", "navi_hint", "drive_people", "drive_energy", "drive_reading"] {
+                conn.execute(&format!("DELETE FROM {t} WHERE t_ms >= ?1 AND t_ms < ?2"), [gs, ge])?;
+            }
+            conn.execute(
+                "UPDATE day_memory SET title = NULL, summary = '', tags = '', enriched_sig = NULL, retry_at_ms = 0 WHERE day = ?1",
+                [gn],
+            )?;
+            conn.execute("UPDATE episode SET title = NULL, tags = '' WHERE day = ?1", [gn])?;
+        }
+        g.people_now = 4;
+        g.rain_now = true;
+        g.soc = before("drive_energy", "", gs)?.unwrap_or(82.0).max(60.0);
+        g.odo = before("drive_reading", &format!(" AND kind = {}", crate::readings::ReadingKind::Odometer.code()), gs)?.unwrap_or(18_240.0);
+        g.gangneung(gn);
+    }
     let made = g.trips;
-    let new_days: HashSet<i64> = g.labels.keys().copied().collect();
+    // 강릉 날은 라벨을 미리 넣지 않는다 (처음 만들 때와 같이 앱이 라벨링한다)
+    let new_days: HashSet<i64> = g.labels.keys().copied().filter(|&d| d != gn).collect();
     let meta = [("demo_topup", TOPUP_VERSION)];
     write_out(store, &mut g, &meta, p.first, p.last, |d| new_days.contains(&d), &shifts)?;
     Ok(made)
@@ -924,8 +965,9 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
 }
 
 /// 시연 기록 보충 판 (새 장면을 더할 때마다 올린다). 1 = 평일 출장 · 감자탕 · 국밥 · 가족 계곡 나들이,
-/// 2 = 1판에서 일부 날만 다시 계산하던 것을 시연 기간 전체로 (덧붙일 것은 1판과 같다 — 이미 있으면 건너뛴다).
-const TOPUP_VERSION: i64 = 2;
+/// 2 = 1판에서 일부 날만 다시 계산하던 것을 시연 기간 전체로 (덧붙일 것은 1판과 같다 — 이미 있으면 건너뛴다),
+/// 3 = 1년 전 강릉 여행에 저녁 횟집(안목항 바다횟집)을 더한다 (그날 시연 기록만 지우고 새로 만든다).
+const TOPUP_VERSION: i64 = 3;
 
 /// 만든 주행을 DB에 쓰고, 장소 이름 · 하루 요약 · 기억을 다시 만들고, 라벨이 필요한 날 중 [label_day]가 참인 날의 LLM 라벨을 미리 넣는다.
 /// [shifts]: (덧붙인 주행 끝, 쓴 배터리 %p, 달린 km) — 보충 때 그 뒤 기록을 옮긴다.

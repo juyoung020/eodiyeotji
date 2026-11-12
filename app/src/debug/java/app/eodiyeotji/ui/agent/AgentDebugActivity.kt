@@ -28,6 +28,7 @@ import javax.inject.Inject
  * ```
  * adb shell am start -n app.eodiyeotji/.ui.agent.AgentDebugActivity                 # 처음 화면
  * adb shell am start -n app.eodiyeotji/.ui.agent.AgentDebugActivity --ei ask 1      # 예시 질문 1~3 바로 묻기
+ * adb shell am start -n app.eodiyeotji/.ui.agent.AgentDebugActivity --es q "거기 몇 명이서 갔어"  # 아무 질문이나 (이어 묻기)
  * adb shell am start -n app.eodiyeotji/.ui.agent.AgentDebugActivity --ez driving true  # 주행 화면
  * adb shell am start -n app.eodiyeotji/.ui.agent.AgentDebugActivity --ez entry true    # 입구 버튼만
  * ```
@@ -80,6 +81,7 @@ class AgentDebugActivity : ComponentActivity() {
             3 -> viewModel.ask(getString(R.string.agent_example_3))
             4 -> viewModel.ask(getString(R.string.agent_followup_other_days))
         }
+        intent.getStringExtra(EXTRA_Q)?.takeIf { it.isNotBlank() }?.let { viewModel.ask(it) }
     }
 
     private companion object {
@@ -87,5 +89,6 @@ class AgentDebugActivity : ComponentActivity() {
         const val EXTRA_DRIVING = "driving"
         const val EXTRA_ENTRY = "entry"
         const val EXTRA_CLEAR = "clear"
+        const val EXTRA_Q = "q"
     }
 }
