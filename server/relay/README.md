@@ -16,7 +16,7 @@
 cd server/relay
 npm install
 npx wrangler login                     # 처음 한 번 (브라우저에서 허용)
-npx wrangler deploy                    # → https://eodi-relay.<계정>.workers.dev
+npx wrangler deploy                    # → https://eodi-relay.memo2025.workers.dev (지금 열려 있는 주소)
 npx wrangler secret put KAKAO_REST_API_KEY
 npx wrangler secret put GOOGLE_PLACES_API_KEY
 npx wrangler secret put APP_TOKEN      # local.properties의 RELAY_TOKEN과 같은 값
