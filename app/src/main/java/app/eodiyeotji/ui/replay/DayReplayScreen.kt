@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,7 +38,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,6 +56,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -68,8 +73,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
 import app.eodiyeotji.core.DayReplay
+import app.eodiyeotji.core.MapPhotoSpot
 import app.eodiyeotji.core.ReplayScene
 import app.eodiyeotji.ui.agent.AgentIcons
+import app.eodiyeotji.ui.gallery.MyPhotoImage
 import app.eodiyeotji.ui.map.ReplayFlightMap
 import app.eodiyeotji.ui.map.ReplayMap
 import app.eodiyeotji.ui.memorymap.CinematicSky
@@ -78,6 +85,8 @@ import app.eodiyeotji.ui.place.PlaceThumbnail
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.theme.MemoryStamp
+import kotlin.math.cos
+import kotlin.math.hypot
 
 /** 그날로 돌아가기 열기 (날 "YYYY-MM-DD"). 앱 전체에서 하나 ([ReplayScope]가 넣는다). 운전 중에는 열리지 않는다. */
 val LocalOpenReplay = staticCompositionLocalOf<(String) -> Unit> { {} }
@@ -104,6 +113,13 @@ private val Night = Color(0xFF0D1015)
 private const val INTRO_MS = 3_200L
 private const val SCENE_MS = 3_600L
 private const val FLIGHT_MS = 2_600L
+/** 길 위 사진 한 장마다 비행을 늘리는 시간, 사진이 떠 있는 비행 구간 (찍은 자리 앞 · 뒤) */
+private const val PHOTO_MS = 2_200L
+private const val MAX_LEG_PHOTOS = 3
+private const val PHOTO_BEFORE = 0.14f
+private const val PHOTO_AFTER = 0.2f
+private const val ROAD_PHOTO_NEAR_M = 1_500.0
+private const val ROAD_PHOTO_PX = 1280
 private const val KEN_BURNS_MS = 4_800
 private const val FADE_MS = 900
 private const val SWIPE_PX = 120f
@@ -121,7 +137,7 @@ private fun DayReplayScreen(state: ReplayUiState, onClose: () -> Unit, onNavigat
             .pointerInput(Unit) { detectTapGestures { } },
     ) {
         when {
-            r != null -> Player(r, onClose, onNavigate)
+            r != null -> Player(r, state.roadPhotos, onClose, onNavigate)
             state.failed -> Center(stringResource(R.string.replay_failed))
             else -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                 CircularProgressIndicator(color = EodiTheme.colors.memory)
@@ -153,7 +169,7 @@ private fun Center(text: String) {
  * 날아간 뒤(전체 화면, [FLIGHT_MS]) 사진으로 넘어간다. 누르면 멈춤/다시 재생, 옆으로 밀거나 화살표로 이전 · 다음.
  */
 @Composable
-private fun Player(r: DayReplay, onClose: () -> Unit, onNavigate: () -> Unit) {
+private fun Player(r: DayReplay, roadPhotos: List<MapPhotoSpot>, onClose: () -> Unit, onNavigate: () -> Unit) {
     val n = r.scenes.size
     val last = n + 1
     var step by remember(r) { mutableIntStateOf(0) }
@@ -164,6 +180,12 @@ private fun Player(r: DayReplay, onClose: () -> Unit, onNavigate: () -> Unit) {
     val scene = r.scenes.getOrNull(step - 1)
     // 이 장면으로 오는 비행이 끝났나 (끝나면 사진으로 넘어간다)
     var arrived by remember(r, step) { mutableStateOf(false) }
+    // 이 구간 길 위에서 찍은 내 사진: 비행이 그 자리를 지날 때 잠깐 띄운다 (사진이 있으면 그만큼 천천히 난다)
+    val legPhotos = remember(r, roadPhotos) { roadPhotosByLeg(r, roadPhotos) }[step - 1].orEmpty()
+    val flightT = remember(r, step) { mutableFloatStateOf(0f) }
+    val passing by remember(legPhotos, flightT) {
+        derivedStateOf { legPhotos.lastOrNull { flightT.floatValue >= it.at - PHOTO_BEFORE && flightT.floatValue <= it.at + PHOTO_AFTER } }
+    }
     LaunchedEffect(r, step, paused, arrived) {
         if (!paused && step < last && (step == 0 || arrived)) {
             kotlinx.coroutines.delay(if (step == 0) INTRO_MS else SCENE_MS)
@@ -197,11 +219,12 @@ private fun Player(r: DayReplay, onClose: () -> Unit, onNavigate: () -> Unit) {
             ReplayFlightMap(
                 bounds = r.bounds,
                 scene = scene,
-                flightMs = FLIGHT_MS,
+                flightMs = FLIGHT_MS + legPhotos.size.coerceAtMost(MAX_LEG_PHOTOS) * PHOTO_MS,
                 paused = paused,
                 onArrive = { arrived = true },
                 modifier = Modifier.fillMaxSize(),
                 sky = r.sky,
+                onProgress = { flightT.floatValue = it },
             )
             Crossfade(targetState = scene?.sky ?: r.sky, animationSpec = tween(FLIGHT_MS.toInt() / 2), label = "replay-sky") { CinematicSky(it) }
             // 위: 시작 화면 · 사진 장면 (비행 중에는 비워 지도가 보인다, -1)
@@ -211,6 +234,9 @@ private fun Player(r: DayReplay, onClose: () -> Unit, onNavigate: () -> Unit) {
                     s > 0 -> r.scenes.getOrNull(s - 1)?.let { SceneCard(r, it, paused) }
                     else -> Box(Modifier.fillMaxSize())
                 }
+            }
+            Crossfade(targetState = passing.takeIf { step > 0 && !arrived }, animationSpec = tween(FADE_MS), label = "replay-road-photo") { p ->
+                if (p != null) RoadPhotoCard(p.spot, wide) else Box(Modifier.fillMaxSize())
             }
             // 손짓 판: 누르면 멈춤/다시 재생, 옆으로 밀면 이전 · 다음 (지도 위도 덮는다)
             var drag by remember { mutableStateOf(0f) }
@@ -271,6 +297,71 @@ private fun Player(r: DayReplay, onClose: () -> Unit, onNavigate: () -> Unit) {
 }
 
 /** 시작 화면: 도장 · 날짜 · 하루 제목이 차례로 떠오른다. */
+/** 비행 중 길 위 사진: 금색 테두리 카드 + "09:35에 찍은 사진" (지도를 다 가리지 않게 한쪽에). */
+@Composable
+private fun RoadPhotoCard(spot: MapPhotoSpot, wide: Boolean) {
+    Box(Modifier.fillMaxSize().padding(horizontal = 64.dp, vertical = 96.dp), contentAlignment = if (wide) Alignment.CenterStart else Alignment.BottomCenter) {
+        Column {
+            MyPhotoImage(
+                spot.uri,
+                Modifier
+                    .fillMaxWidth(if (wide) 0.42f else 0.8f)
+                    .aspectRatio(4f / 3f)
+                    .shadow(18.dp, RoundedCornerShape(20.dp))
+                    .border(5.dp, EodiTheme.colors.memory, RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(20.dp)),
+                sizePx = ROAD_PHOTO_PX,
+            )
+            Text(
+                stringResource(R.string.replay_road_photo, clock(spot.takenMs)),
+                color = Color.White,
+                style = EodiTheme.type.title.copy(shadow = Shadow(Color.Black.copy(alpha = 0.7f), blurRadius = 12f)),
+                modifier = Modifier.padding(top = 14.dp, start = 6.dp),
+            )
+        }
+    }
+}
+
+private class LegPhoto(val spot: MapPhotoSpot, val at: Float)
+
+/**
+ * 길 위 사진을 가장 가까운 비행 구간에 붙인다: 장면 번호(0부터) → 그 구간의 사진 (지나는 순).
+ * 어느 구간과도 [ROAD_PHOTO_NEAR_M]보다 멀면 뺀다.
+ */
+private fun roadPhotosByLeg(r: DayReplay, photos: List<MapPhotoSpot>): Map<Int, List<LegPhoto>> {
+    val out = HashMap<Int, MutableList<LegPhoto>>()
+    for (p in photos) {
+        var leg = -1
+        var at = 0f
+        var near = ROAD_PHOTO_NEAR_M
+        val kx = 111_320.0 * cos(Math.toRadians(p.lat))
+        r.scenes.forEachIndexed { i, s ->
+            val f = s.legFlight
+            for (k in 0 until f.size - 1) {
+                // 선분 위 가장 가까운 점 (좁은 범위라 평면으로 본다)
+                val ax = (f[k].lon - p.lon) * kx
+                val ay = (f[k].lat - p.lat) * 110_540.0
+                val dx = (f[k + 1].lon - f[k].lon) * kx
+                val dy = (f[k + 1].lat - f[k].lat) * 110_540.0
+                val len2 = dx * dx + dy * dy
+                val u = if (len2 == 0.0) 0.0 else (-(ax * dx + ay * dy) / len2).coerceIn(0.0, 1.0)
+                val d = hypot(ax + dx * u, ay + dy * u)
+                if (d < near) {
+                    near = d
+                    leg = i
+                    at = ((k + u) / (f.size - 1)).toFloat()
+                }
+            }
+        }
+        if (leg >= 0) out.getOrPut(leg) { ArrayList() } += LegPhoto(p, at)
+    }
+    out.values.forEach { l -> l.sortBy { it.at } }
+    return out
+}
+
+private fun clock(ms: Long): String =
+    java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault()).let { "%02d:%02d".format(it.hour, it.minute) }
+
 @Composable
 private fun IntroCard(r: DayReplay) {
     val a1 = remember { Animatable(0f) }

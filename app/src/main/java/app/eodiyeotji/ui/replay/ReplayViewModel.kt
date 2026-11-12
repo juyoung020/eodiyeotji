@@ -9,7 +9,9 @@ import androidx.lifecycle.viewModelScope
 import app.eodiyeotji.R
 import app.eodiyeotji.core.DayReplay
 import app.eodiyeotji.core.EodiCore
+import app.eodiyeotji.core.MapPhotoSpot
 import app.eodiyeotji.core.dayReplay
+import app.eodiyeotji.gallery.GalleryRepository
 import app.eodiyeotji.place.PlacePhotoRepository
 import app.eodiyeotji.pleos.CourseGuide
 import coil.imageLoader
@@ -33,6 +35,8 @@ data class ReplayUiState(
     val replay: DayReplay? = null,
     val failed: Boolean = false,
     val driving: Boolean = false,
+    /** 그날 달리는 중에 찍은 내 사진 (들른 곳 사진은 뺀다): 비행이 그 자리를 지날 때 띄운다 */
+    val roadPhotos: List<MapPhotoSpot> = emptyList(),
     @StringRes val note: Int? = null,
 )
 
@@ -45,6 +49,7 @@ class ReplayViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val core: EodiCore,
     private val photos: PlacePhotoRepository,
+    private val gallery: GalleryRepository,
     private val guide: CourseGuide,
     driving: DrivingStatePort,
     private val mood: app.eodiyeotji.platform.MoodLight,
@@ -74,6 +79,10 @@ class ReplayViewModel @Inject constructor(
                 _state.update { if (it.day == day) it.copy(replay = r) else it }
                 // 무드등을 그날 하늘빛으로 (정차 중에만 열리는 화면, 닫으면 되돌린다)
                 launch { runCatching { mood.tint(moodColor(r.sky)) } }
+                launch {
+                    val road = gallery.dayPhotos(day).spots.filter { it.stayArriveMs == null }
+                    _state.update { if (it.day == day) it.copy(roadPhotos = road) else it }
+                }
                 prefetchPhotos(r)
             } catch (e: CancellationException) {
                 throw e

@@ -143,6 +143,8 @@ fun ReplayFlightMap(
     onArrive: () -> Unit,
     modifier: Modifier = Modifier,
     sky: SkyPhase = SkyPhase.GOLDEN,
+    /** 비행 진행(0~1)을 알린다 (길 위 사진을 제때 띄우는 데 쓴다) */
+    onProgress: (Float) -> Unit = {},
 ) {
     val ready = rememberReplayMap(sky, "replay-flight", bounds) ?: run {
         Box(modifier.background(ReplaySunsetLand))
@@ -151,6 +153,7 @@ fun ReplayFlightMap(
     val (mapView, controller) = ready
     val m = controller.map
     val arrive by rememberUpdatedState(onArrive)
+    val progress by rememberUpdatedState(onProgress)
     val pausedNow by rememberUpdatedState(paused)
     var anim by remember { mutableStateOf<ValueAnimator?>(null) }
     DisposableEffect(m, scene) {
@@ -181,6 +184,7 @@ fun ReplayFlightMap(
             interpolator = AccelerateDecelerateInterpolator()
             addUpdateListener { v ->
                 val t = v.animatedValue as Float
+                progress(t)
                 m.moveCamera(CameraUpdateFactory.newCameraPosition(frameAt(frames, t, FLIGHT_PITCH)))
                 if (legs.isNotEmpty()) {
                     val k = (t * (legs.size - 1)).toInt().coerceIn(0, legs.size - 1)

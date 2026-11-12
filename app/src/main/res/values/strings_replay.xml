@@ -3,6 +3,7 @@
     <!-- 그날로 돌아가기 (ui/replay) -->
     <string name="replay_open">그날로 돌아가기</string>
     <string name="replay_open_day_list">그날 기록 보기</string>
+    <string name="replay_road_photo">%1$s에 찍은 사진</string>
     <string name="replay_close">닫기</string>
     <string name="replay_prev">이전 장소</string>
     <string name="replay_next">다음 장소</string>
