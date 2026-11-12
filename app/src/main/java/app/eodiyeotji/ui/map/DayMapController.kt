@@ -108,8 +108,10 @@ internal class DayMapController(
     private val density: Float,
     private val onSelectKey: (String?) -> Unit,
     private val onStyleFailed: () -> Unit,
-    /** 내 사진 카드를 눌렀을 때: 그 카드(묶였으면 묶인 사진 전부)의 사진 번호, 찍은 시각순 */
+    /** 사진 말풍선을 눌렀을 때 (크게 보기): 그 핀(묶였으면 묶인 사진 전부)의 사진 번호, 찍은 시각순 */
     private val onOpenPhotos: (List<Int>) -> Unit = {},
+    /** 카메라 핀을 눌렀을 때: 그 핀의 사진 번호들과 자리 → 부르는 쪽이 말풍선을 그려 [setPhotoBubble]로 돌려준다. 빈 목록 = 선택 해제 */
+    private val onSelectPhotos: (idx: List<Int>, lat: Double, lon: Double) -> Unit = { _, _, _ -> },
 ) {
     private var map: MapLibreMap? = null
     private var style: Style? = null
@@ -128,6 +130,8 @@ internal class DayMapController(
     private var myPhotos: MyPhotoIcons? = null
     private var photoSource: GeoJsonSource? = null
     private var addedPhotoImages: Set<String> = emptySet()
+    private var bubble: PhotoBubble? = null
+    private var bubbleSource: GeoJsonSource? = null
     /** 한 문장 코스 장면 진행 (0 = 그날 달린 길 그대로, 1 = 뺀 곳 ✕ 카드 · 점선 새 코스 · 흐린 옛길). 보통은 1. */
     private var planT = 1f
     private var planAnim: ValueAnimator? = null
@@ -163,6 +167,7 @@ internal class DayMapController(
         addedImages = emptySet()
         photoSource = null
         addedPhotoImages = emptySet()
+        bubbleSource = null
         m.setStyle(Style.Builder().fromJson(json)) { s -> onStyleLoaded(s) }
     }
 
@@ -184,11 +189,47 @@ internal class DayMapController(
         style?.let { applyIcons(it) }
     }
 
-    /** 내 사진 카드 ([buildMyPhotoIcons]). null이면 뺀다. */
+    /** 고른 핀의 사진 말풍선 ([buildPhotoBubble]). null이면 뺀다. */
+    fun setPhotoBubble(b: PhotoBubble?) {
+        if (b === bubble) return
+        bubble = b
+        style?.let { applyBubble(it) }
+        b?.let { revealBubble(it) }
+    }
+
+    /** 말풍선이 지도 밖으로 잘리지 않게, 모자란 만큼만 지도를 민다 (핀 위로 말풍선 높이, 좌우로 반 너비). */
+    private fun revealBubble(b: PhotoBubble) {
+        val m = map ?: return
+        val p = m.projection.toScreenLocation(LatLng(b.lat, b.lon))
+        val margin = 12f * density
+        val needTop = b.image.height + (PIN_SEL_DP / 2 + 2f) * density + margin
+        val half = b.image.width / 2f + margin
+        val toX = p.x.coerceIn(half, (mapView.width - half).coerceAtLeast(half))
+        val toY = p.y.coerceIn(needTop.coerceAtMost(mapView.height - margin), mapView.height - margin)
+        if (toX == p.x && toY == p.y) return
+        val center = m.projection.fromScreenLocation(android.graphics.PointF(mapView.width / 2f + (p.x - toX), mapView.height / 2f + (p.y - toY)))
+        m.easeCamera(CameraUpdateFactory.newLatLng(center), REVEAL_MS)
+    }
+
+    private fun applyBubble(s: Style) {
+        val b = bubble
+        if (b == null) {
+            bubbleSource?.setGeoJson(EMPTY_GEOJSON)
+            return
+        }
+        s.addImage(BUBBLE, b.image)
+        bubbleSource?.setGeoJson(
+            """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[${b.lon},${b.lat}]},"properties":{}}]}""",
+        )
+    }
+
+    /** 내 사진 핀 ([buildMyPhotoIcons]). null이면 뺀다. */
     fun setMyPhotos(p: MyPhotoIcons?) {
         if (p === myPhotos) return
         val first = myPhotos == null && p != null
         myPhotos = p
+        // 사진 목록이 바뀌면 떠 있던 말풍선은 닫는다 (번호가 달라진다)
+        setPhotoBubble(null)
         style?.let { applyMyPhotos(it) }
         // 사진이 지도보다 늦게 오면 카드 자리만큼 아래를 비워 다시 맞춘다
         if (first) data?.takeIf { fittedDay == it.day }?.let { fitCamera(it) }
@@ -314,8 +355,8 @@ internal class DayMapController(
             // 한 문장 코스로 뺀 곳 카드가 가장 먼저 자리를 잡는다 (빠진 걸 보여 주는 게 그 지도의 요점)
             symbolSortKey(switchCase(isSkipped, literal(SKIPPED_SORT), coalesce(get("order"), literal(NO_ORDER_SORT)))),
         )
-        // 내 사진 카드: 찍은 곳 바로 아래에 매단다(머문 곳 말풍선은 핀 위라 서로 비켜 간다). 가까운 사진은 지도가 묶고
-        // 대표(가장 이른) 사진 + 장수 배지. 늘 보이게 하되 다른 표시의 자리를 뺏지 않는다.
+        // 내 사진: 찍은 곳에 작은 카메라 핀. 가까운 사진은 지도가 한 핀으로 묶고 장수 배지를 붙인다.
+        // 늘 보이게 하되 다른 표시의 자리를 뺏지 않는다. 고른 핀은 금색으로 커지고 그 위에 사진 말풍선이 뜬다.
         val photos = GeoJsonSource(
             PHOTO_SOURCE_ID,
             EMPTY_GEOJSON,
@@ -324,18 +365,12 @@ internal class DayMapController(
         )
         s.addSource(photos)
         photoSource = photos
-        val photoLayout = arrayOf(iconAllowOverlap(true), iconIgnorePlacement(true), iconAnchor(Property.ICON_ANCHOR_TOP))
-        s.addLayer(
-            SymbolLayer(PHOTO, PHOTO_SOURCE_ID).withProperties(
-                *photoLayout,
-                iconOffset(arrayOf(0f, PHOTO_DROP_DP)),
-                iconImage(concat(literal(CARD_PREFIX), Expression.toString(coalesce(get("rep"), get("idx"))))),
-            ),
-        )
+        val photoLayout = arrayOf(iconAllowOverlap(true), iconIgnorePlacement(true), iconAnchor(Property.ICON_ANCHOR_CENTER))
+        s.addLayer(SymbolLayer(PHOTO, PHOTO_SOURCE_ID).withProperties(*photoLayout, iconImage(PIN)))
         s.addLayer(
             SymbolLayer(PHOTO_BADGE, PHOTO_SOURCE_ID).withFilter(has("point_count")).withProperties(
                 *photoLayout,
-                iconOffset(arrayOf(PHOTO_BADGE_X_DP, PHOTO_DROP_DP - PHOTO_BADGE_LIFT_DP)),
+                iconOffset(arrayOf(PHOTO_BADGE_X_DP, -PHOTO_BADGE_LIFT_DP)),
                 iconImage(concat(literal(BADGE_PREFIX), Expression.toString(Expression.min(get("point_count"), literal(MAX_BADGE))))),
             ),
         )
@@ -365,9 +400,25 @@ internal class DayMapController(
             ),
         )
 
+        // 고른 사진 핀과 말풍선은 맨 위에 (머문 곳 말풍선에 가리지 않게)
+        val picked = GeoJsonSource(PHOTO_PICK_SOURCE_ID, EMPTY_GEOJSON)
+        s.addSource(picked)
+        bubbleSource = picked
+        s.addLayer(SymbolLayer(PHOTO_SEL, PHOTO_PICK_SOURCE_ID).withProperties(*photoLayout, iconImage(PIN_SEL)))
+        s.addLayer(
+            SymbolLayer(PHOTO_BUBBLE, PHOTO_PICK_SOURCE_ID).withProperties(
+                iconAllowOverlap(true),
+                iconIgnorePlacement(true),
+                iconAnchor(Property.ICON_ANCHOR_BOTTOM),
+                iconOffset(arrayOf(0f, -(PIN_SEL_DP / 2 + 2f))),
+                iconImage(BUBBLE),
+            ),
+        )
+
         palette?.let { applyPalette(s, it) }
         applyIcons(s)
         applyMyPhotos(s)
+        applyBubble(s)
         applySelection(s)
         applyData()
     }
@@ -523,11 +574,7 @@ internal class DayMapController(
         val side = min(CALLOUT_HALF_WIDTH_DP * density, mapView.width * MAX_SIDE_PAD_FRACTION).coerceAtLeast(base)
         val top = min((FIT_PADDING_DP + CALLOUT_TOP_EXTRA_DP) * density, mapView.height * MAX_TOP_PAD_FRACTION).coerceAtLeast(base)
         // 아래: 핀 아래 매다는 내 사진 카드(있을 때)가 잘리지 않게
-        val bottom = if (myPhotos != null) {
-            min((PHOTO_DROP_DP + CARD_DP + SHADOW_DP * 2 + 8f) * density, mapView.height * MAX_BOTTOM_PAD_FRACTION).coerceAtLeast(base)
-        } else {
-            base
-        }
+        val bottom = base
         return intArrayOf(side.toInt(), top.toInt(), side.toInt(), bottom.toInt())
     }
 
@@ -570,10 +617,19 @@ internal class DayMapController(
         val p = m.projection.toScreenLocation(latLng)
         val r = TOUCH_RADIUS_DP * density
         val box = RectF(p.x - r, p.y - r, p.x + r, p.y + r)
-        // 내 사진 카드가 맨 먼저 (카드는 핀 아래에 매달려 있어 핀·말풍선과 자리가 겹치지 않는다)
-        m.queryRenderedFeatures(p, PHOTO_BADGE, PHOTO).firstOrNull()?.let { f ->
-            openPhotos(f)
+        // 사진 말풍선을 누르면 크게 보기, 카메라 핀을 누르면 그 자리에 말풍선
+        if (bubble != null && m.queryRenderedFeatures(p, PHOTO_BUBBLE).isNotEmpty()) {
+            bubble?.let { onOpenPhotos(it.idx) }
             return true
+        }
+        m.queryRenderedFeatures(box, PHOTO_BADGE, PHOTO).firstOrNull()?.let { f ->
+            selectPhotos(f)
+            return true
+        }
+        // 다른 곳을 누르면 말풍선을 닫는다
+        if (bubble != null) {
+            setPhotoBubble(null)
+            onSelectPhotos(emptyList(), 0.0, 0.0)
         }
         val key = m.queryRenderedFeatures(p, STAY_CARD_SEL, STAY_CARD, STAY_MINI).firstNotNullOfOrNull { it.keyOrNull() }
             ?: m.queryRenderedFeatures(box, STAY_SEL, STAY).firstNotNullOfOrNull { it.keyOrNull() }
@@ -582,15 +638,16 @@ internal class DayMapController(
         return true
     }
 
-    /** 누른 사진 카드의 사진 번호들 (묶음이면 묶인 사진 전부). */
-    private fun openPhotos(f: org.maplibre.geojson.Feature) {
+    /** 누른 카메라 핀의 사진 번호들 (묶음이면 묶인 사진 전부)과 핀 자리를 알린다. */
+    private fun selectPhotos(f: org.maplibre.geojson.Feature) {
         val src = photoSource ?: return
+        val at = f.geometry() as? org.maplibre.geojson.Point ?: return
         val idx = if (f.hasProperty("point_count")) {
             src.getClusterLeaves(f, PHOTO_LEAVES_MAX, 0).features().orEmpty().mapNotNull { it.idxOrNull() }
         } else {
             listOfNotNull(f.idxOrNull())
         }
-        if (idx.isNotEmpty()) onOpenPhotos(idx.sorted())
+        if (idx.isNotEmpty()) onSelectPhotos(idx.sorted(), at.latitude(), at.longitude())
     }
 
     private fun org.maplibre.geojson.Feature.idxOrNull(): Int? =
@@ -624,11 +681,13 @@ internal class DayMapController(
         const val PHOTO_SOURCE_ID = "eodi-my-photo"
         const val PHOTO = "eodi-my-photo-card"
         const val PHOTO_BADGE = "eodi-my-photo-count"
+        const val PHOTO_PICK_SOURCE_ID = "eodi-my-photo-picked"
+        const val PHOTO_SEL = "eodi-my-photo-picked-pin"
+        const val PHOTO_BUBBLE = "eodi-my-photo-bubble"
 
         /** 사진 카드를 찍은 곳(핀) 아래로 내리는 거리(dp) · 배지 자리 · 묶는 반경(화면 px 기준) */
-        const val PHOTO_DROP_DP = 6f
-        const val PHOTO_BADGE_X_DP = 20f
-        const val PHOTO_BADGE_LIFT_DP = 4f
+        const val PHOTO_BADGE_X_DP = 14f
+        const val PHOTO_BADGE_LIFT_DP = 14f
         const val PHOTO_CLUSTER_RADIUS = 36
         const val PHOTO_CLUSTER_MAX_ZOOM = 17
         const val PHOTO_LEAVES_MAX = 200L

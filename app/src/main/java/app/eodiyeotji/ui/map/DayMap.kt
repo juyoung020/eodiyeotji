@@ -161,6 +161,8 @@ private fun DayMapContent(
     val currentPhotos by rememberUpdatedState(myPhotos)
     // 크게 보는 내 사진 (사진 번호들, 처음 볼 장)
     var viewing by remember { mutableStateOf<List<MapPhotoSpot>?>(null) }
+    // 고른 카메라 핀: 사진 번호들과 핀 자리 (없으면 null) → 말풍선을 그려 지도에 얹는다
+    var picked by remember { mutableStateOf<Triple<List<Int>, Double, Double>?>(null) }
     var style by remember { mutableStateOf<MapStyleSpec?>(null) }
 
     val mapView = rememberMapViewWithLifecycle(
@@ -177,6 +179,7 @@ private fun DayMapContent(
             density = density,
             onSelectKey = { currentOnSelect(it) },
             onOpenPhotos = { idx -> viewing = idx.mapNotNull { currentPhotos.getOrNull(it) }.takeIf { it.isNotEmpty() } },
+            onSelectPhotos = { idx, lat, lon -> picked = if (idx.isEmpty()) null else Triple(idx, lat, lon) },
             // 불러오기에 실패해도 앱은 멈추지 않는다: 온라인 밑그림(네트워크) 탓이면 오프라인만으로,
             // 오프라인 스타일이 깨졌으면 바탕색 스타일로 바꾸고 안내만 띄운다
             onStyleFailed = {
@@ -249,9 +252,21 @@ private fun DayMapContent(
         emitter.cancel()
         value = HashMap(got)
     }
-    // 내 사진 카드: 사진을 줄여 받아 카드 그림으로 (배경), 오면 지도에 얹는다
+    // 내 사진: 찍은 곳마다 카메라 핀 (사진은 읽지 않는다)
     LaunchedEffect(controller, myPhotos) {
-        controller.setMyPhotos(withContext(Dispatchers.Default) { buildMyPhotoIcons(context.applicationContext, myPhotos, density) })
+        picked = null
+        controller.setMyPhotos(withContext(Dispatchers.Default) { buildMyPhotoIcons(myPhotos, density) })
+    }
+    // 고른 핀의 사진 말풍선: 그 한 장만 줄여 읽어 그린다 (배경)
+    LaunchedEffect(controller, picked) {
+        val p = picked
+        if (p == null) {
+            controller.setPhotoBubble(null)
+            return@LaunchedEffect
+        }
+        val spots = p.first.mapNotNull { myPhotos.getOrNull(it) }
+        val image = withContext(Dispatchers.Default) { buildPhotoBubble(context.applicationContext, spots, density, mapView.height) }
+        controller.setPhotoBubble(image?.let { PhotoBubble(p.second, p.third, p.first, it) })
     }
     LaunchedEffect(controller, marks, stayPhotos, palette) {
         val m = marks
