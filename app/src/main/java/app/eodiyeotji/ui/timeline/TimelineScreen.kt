@@ -520,6 +520,7 @@ private fun CompactDayDetail(
                     onSelectKey = onMapSelect,
                     modifier = Modifier.fillMaxWidth().height(mapHeight),
                     photoPins = photoPins,
+                    myPhotos = loaded?.mapPhotos.orEmpty(),
                 )
                 Box(Modifier.fillMaxWidth().weight(1f)) {
                     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -669,7 +670,8 @@ private fun DayList(
         }
         if (footer != null) {
             item(key = "footer", contentType = "footer") {
-                Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) { footer() }
+                // 맨 아래까지 내려도 떠 있는 "오늘로" 버튼에 가리지 않게 그 높이만큼 띄운다
+                Box(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = BackToTodayClearance), contentAlignment = Alignment.Center) { footer() }
             }
         }
     }
@@ -862,6 +864,7 @@ private fun DayDetailCard(
                 onSelectKey = onMapSelect,
                 modifier = Modifier.fillMaxWidth().weight(MapWeight),
                 photoPins = photoPins,
+                myPhotos = loaded?.mapPhotos.orEmpty(),
             )
             Box(Modifier.fillMaxWidth().weight(1f - MapWeight)) {
                 when (detail) {
@@ -1243,7 +1246,10 @@ private fun StayRow(
 }
 
 private val StayThumb = 96.dp
-private val MyPhotoThumb = 76.dp
+private val MyPhotoThumb = 96.dp
+
+/** 떠 있는 "오늘로" 버튼(64dp + 아래 20dp)을 비켜 목록 끝을 올리는 높이 */
+private val BackToTodayClearance = 96.dp
 
 private enum class EntryKind { Trip, Stay, Here }
 

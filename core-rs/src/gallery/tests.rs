@@ -200,3 +200,20 @@ fn v16_database_gets_photo_columns() {
     let routes = store.drive_routes(crate::community::drive::DriveRouteSort::Recent, None, 0).unwrap();
     assert!(!routes.is_empty() && routes.iter().all(|r| r.route.photos.is_empty()));
 }
+
+#[test]
+fn map_spots_pin_photos_where_taken_or_at_the_stay() {
+    let stays = [win(10 * HOUR, 11 * HOUR, 37.0, 127.0), win(14 * HOUR, 15 * HOUR, 37.5, 127.5)];
+    let photos = [
+        photo(1, 10 * HOUR + 5 * MIN, None),                      // 위치 없음 → 첫 곳 가운데
+        photo(2, 12 * HOUR, Some((37.2, 127.2))),                 // 길 위에서 찍음 → 찍은 곳
+        photo(3, 12 * HOUR + MIN, None),                          // 위치도 맞는 곳도 없음 → 빠짐
+        photo(4, 14 * HOUR + 10 * MIN, Some((37.5005, 127.5))),   // 둘째 곳 근처 → 찍은 곳 그대로
+        photo(5, 3 * HOUR, Some((37.0, 127.0))),                  // 하루 범위 밖 → 빠짐
+    ];
+    let v = map_spots(&stays, &photos);
+    assert_eq!(v.iter().map(|s| s.id).collect::<Vec<_>>(), vec![1, 2, 4]);
+    assert_eq!((v[0].at.lat, v[0].stay_arrive_ms), (37.0, Some(10 * HOUR)));
+    assert_eq!((v[1].at.lat, v[1].stay_arrive_ms), (37.2, None));
+    assert_eq!((v[2].at.lat, v[2].stay_arrive_ms), (37.5005, Some(14 * HOUR)));
+}

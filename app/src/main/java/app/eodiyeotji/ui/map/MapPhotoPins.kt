@@ -20,12 +20,12 @@ import kotlinx.coroutines.coroutineScope
 @Immutable
 data class MapPhotoPin(
     val key: String, val name: String, val address: String, val lat: Double, val lon: Double,
-    /** 그곳에서 찍은 내 사진 (`content://`). 있으면 장소 대표 사진 대신 이것을 쓴다. */
+    /** 그곳에서 찍은 내 사진 (`content://`). 장소 사진이 없을 때만 말풍선에 쓴다 (내 사진은 따로 사진 카드로 꽂힌다). */
     val myPhoto: String? = null,
 )
 
 /**
- * 정차한 곳마다 대표 사진(내 사진이 있으면 그것, 없거나 못 읽으면 구글 Places 첫 사진)을 받아 온다 (키 → 사진). 사진이 없는 곳은 빠진다.
+ * 정차한 곳마다 대표 사진(구글 Places 첫 사진, 없으면 그곳에서 찍은 내 사진)을 받아 온다 (키 → 사진). 사진이 없는 곳은 빠진다.
  * 같은 곳은 기기에 저장된 결과·이미지 캐시를 쓴다. 카드 그림은 [buildMarkerIcons]가 이 사진으로 만든다.
  */
 internal suspend fun loadStayPhotos(
@@ -39,9 +39,8 @@ internal suspend fun loadStayPhotos(
     val px = (PHOTO_DECODE_DP * density).roundToInt()
     pins.map { pin ->
         async {
-            // 내 사진(content://)을 못 읽으면(권한 회수·지운 사진·잠깐의 미디어 저장소 오류) 장소 사진으로 대신한다
-            val bmp = pin.myPhoto?.let { decode(context, ImageRequest.Builder(context).data(it).build(), px, pin.name) }
-                ?: placePhoto(context, repo, pin, px)
+            val bmp = placePhoto(context, repo, pin, px)
+                ?: pin.myPhoto?.let { decode(context, ImageRequest.Builder(context).data(it).build(), px, pin.name) }
                 ?: return@async null
             onPhoto(pin.key, bmp)
             pin.key to bmp

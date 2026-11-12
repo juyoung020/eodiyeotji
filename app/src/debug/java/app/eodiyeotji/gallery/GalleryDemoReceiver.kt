@@ -62,24 +62,35 @@ class GalleryDemoReceiver : BroadcastReceiver() {
                 // 마지막 머문 곳은 집(귀가)이라 시연 사진을 넣지 않는다
                 val stays = detail.stays.dropLast(1).filter { it.place?.name?.isNotBlank() == true }
                 var n = 0
+                // 곳마다 남은 장소 사진 (지도 말풍선이 첫 사진을 쓰므로 내 사진은 둘째부터, 같은 사진을 두 번 쓰지 않는다)
+                val spare = HashMap<Long, List<coil.request.ImageRequest>>()
                 stays.forEachIndexed { si, stay ->
-                    val count = if (si == 1) 5 else 2
                     val label = stay.place!!
-                    // 그곳 장소 사진 (곳마다 여러 장이면 장마다 다른 사진)
-                    val shots = runCatching { places.photos(label.name, label.address, stay.center.lat, stay.center.lon) }.getOrDefault(emptyList())
+                    val all = runCatching { places.photos(label.name, label.address, stay.center.lat, stay.center.lon) }.getOrDefault(emptyList())
+                    val shots = (if (all.size > 1) all.drop(1) else all).map { places.imageRequest(it) }
+                    val want = if (si == 1) 5 else 2
+                    // 장소 사진이 모자라면 그만큼만 (똑같은 사진이 여러 장 꽂혀 가짜처럼 보이지 않게). 하나도 없으면 단색 그림 한 장
+                    // 둘째 곳은 길 위 사진에 쓸 한 장을 남겨 둔다
+                    val keep = if (si == 1 && shots.size > 2) 1 else 0
+                    val count = if (shots.isEmpty()) 1 else want.coerceAtMost(shots.size - keep)
                     repeat(count) { k ->
-                        val real = shots.getOrNull(k % shots.size.coerceAtLeast(1))?.let { photo -> load(context, places.imageRequest(photo)) }
+                        val real = shots.getOrNull(k)?.let { load(context, it) }
                         val t = shotTime(stay, k, count)
-                        // 마지막 한 장은 위치 없이 (시각만으로 맞추는 경우)
-                        val gps = if (k == count - 1) null else (stay.center.lat + 0.0003 * k) to (stay.center.lon - 0.0002 * k)
+                        // 그곳 둘레에 흩어 찍은 자리 (마지막 한 장은 위치 없이 → 시각만으로 맞추는 경우)
+                        val gps = if (count > 1 && k == count - 1) null else spread(stay.center.lat, stay.center.lon, k)
                         insert(context, "eodi_demo_${stay.arriveMs}_$k", label.name, t, gps, si * 3 + k, real)
                         n++
                     }
+                    spare[stay.arriveMs] = shots.drop(count)
                 }
-                // 첫 주행 중 (창밖 풍경)
-                detail.trips.firstOrNull { it.endMs - it.startMs > 20 * 60_000L }?.let { trip ->
-                    val t = (trip.startMs + trip.endMs) / 2
-                    insert(context, "eodi_demo_drive_${trip.startMs}", "창밖 풍경", t, null, 11)
+                // 달리는 길 위에서 찍은 사진: 둘째 곳으로 가는 주행의 끝 무렵(바다가 보이기 시작할 때), 그곳의 남은 사진으로
+                stays.getOrNull(1)?.let { dest ->
+                    val trip = detail.trips.lastOrNull { it.endMs <= dest.arriveMs && it.path.size > 4 } ?: return@let
+                    val at = trip.path[(trip.path.size * 0.8).toInt().coerceAtMost(trip.path.lastIndex)]
+                    val t = trip.startMs + (trip.endMs - trip.startMs) * 8 / 10
+                    // 남은 사진이 없으면 길 위 사진은 넣지 않는다 (단색 그림이 지도 대표 카드가 되지 않게)
+                    val real = spare[dest.arriveMs]?.firstOrNull()?.let { load(context, it) } ?: return@let
+                    insert(context, "eodi_demo_drive_${trip.startMs}", "가는 길", t, at.lat to at.lon, 11, real)
                     n++
                 }
                 Log.i(TAG, "시연 사진: $day 머문 곳 ${stays.size}곳에 ${n}장 넣음 (예전 것 ${removed}장 지움)")
@@ -89,6 +100,13 @@ class GalleryDemoReceiver : BroadcastReceiver() {
                 pending.finish()
             }
         }
+    }
+
+    /** 머문 곳 둘레에 흩어 찍은 자리 (약 40~120 m, 장마다 다른 방향). */
+    private fun spread(lat: Double, lon: Double, k: Int): Pair<Double, Double> {
+        val angle = k * 2.4
+        val r = 0.0004 + 0.0003 * (k % 3)
+        return (lat + r * kotlin.math.sin(angle)) to (lon + r * 1.25 * kotlin.math.cos(angle))
     }
 
     /** 머문 시간을 고르게 나눈 시각 (떠나기 전까지). */

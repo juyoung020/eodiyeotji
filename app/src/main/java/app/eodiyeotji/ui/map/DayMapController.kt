@@ -28,6 +28,7 @@ import org.maplibre.android.style.expressions.Expression.not
 import org.maplibre.android.style.expressions.Expression.stop
 import org.maplibre.android.style.expressions.Expression.switchCase
 import org.maplibre.android.style.expressions.Expression.zoom
+import org.maplibre.android.style.expressions.Expression.accumulated
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.Layer
 import org.maplibre.android.style.layers.LineLayer
@@ -64,6 +65,7 @@ import org.maplibre.android.style.layers.PropertyFactory.textIgnorePlacement
 import org.maplibre.android.style.layers.PropertyFactory.textOpacity
 import org.maplibre.android.style.layers.PropertyFactory.textSize
 import org.maplibre.android.style.layers.SymbolLayer
+import org.maplibre.android.style.sources.GeoJsonOptions
 import org.maplibre.android.style.sources.GeoJsonSource
 import kotlin.math.min
 
@@ -103,6 +105,8 @@ internal class DayMapController(
     private val density: Float,
     private val onSelectKey: (String?) -> Unit,
     private val onStyleFailed: () -> Unit,
+    /** 내 사진 카드를 눌렀을 때: 그 카드(묶였으면 묶인 사진 전부)의 사진 번호, 찍은 시각순 */
+    private val onOpenPhotos: (List<Int>) -> Unit = {},
 ) {
     private var map: MapLibreMap? = null
     private var style: Style? = null
@@ -118,6 +122,9 @@ internal class DayMapController(
     private var palette: MapPalette? = null
     private var icons: MarkerIcons? = null
     private var addedImages: Set<String> = emptySet()
+    private var myPhotos: MyPhotoIcons? = null
+    private var photoSource: GeoJsonSource? = null
+    private var addedPhotoImages: Set<String> = emptySet()
 
     init {
         mapView.addOnDidFailLoadingMapListener { msg ->
@@ -148,6 +155,8 @@ internal class DayMapController(
         source = null
         appliedData = null
         addedImages = emptySet()
+        photoSource = null
+        addedPhotoImages = emptySet()
         m.setStyle(Style.Builder().fromJson(json)) { s -> onStyleLoaded(s) }
     }
 
@@ -167,6 +176,16 @@ internal class DayMapController(
         if (i === icons) return
         icons = i
         style?.let { applyIcons(it) }
+    }
+
+    /** 내 사진 카드 ([buildMyPhotoIcons]). null이면 뺀다. */
+    fun setMyPhotos(p: MyPhotoIcons?) {
+        if (p === myPhotos) return
+        val first = myPhotos == null && p != null
+        myPhotos = p
+        style?.let { applyMyPhotos(it) }
+        // 사진이 지도보다 늦게 오면 카드 자리만큼 아래를 비워 다시 맞춘다
+        if (first) data?.takeIf { fittedDay == it.day }?.let { fitCamera(it) }
     }
 
     fun setSelection(key: String?) {
@@ -282,6 +301,31 @@ internal class DayMapController(
             iconOffset(arrayOf(0f, -CALLOUT_PIN_LIFT_DP)),
             symbolSortKey(coalesce(get("order"), literal(NO_ORDER_SORT))),
         )
+        // 내 사진 카드: 찍은 곳 바로 아래에 매단다(머문 곳 말풍선은 핀 위라 서로 비켜 간다). 가까운 사진은 지도가 묶고
+        // 대표(가장 이른) 사진 + 장수 배지. 늘 보이게 하되 다른 표시의 자리를 뺏지 않는다.
+        val photos = GeoJsonSource(
+            PHOTO_SOURCE_ID,
+            EMPTY_GEOJSON,
+            GeoJsonOptions().withCluster(true).withClusterRadius(PHOTO_CLUSTER_RADIUS).withClusterMaxZoom(PHOTO_CLUSTER_MAX_ZOOM)
+                .withClusterProperty("rep", Expression.min(accumulated(), get("rep")), get("idx")),
+        )
+        s.addSource(photos)
+        photoSource = photos
+        val photoLayout = arrayOf(iconAllowOverlap(true), iconIgnorePlacement(true), iconAnchor(Property.ICON_ANCHOR_TOP))
+        s.addLayer(
+            SymbolLayer(PHOTO, PHOTO_SOURCE_ID).withProperties(
+                *photoLayout,
+                iconOffset(arrayOf(0f, PHOTO_DROP_DP)),
+                iconImage(concat(literal(CARD_PREFIX), Expression.toString(coalesce(get("rep"), get("idx"))))),
+            ),
+        )
+        s.addLayer(
+            SymbolLayer(PHOTO_BADGE, PHOTO_SOURCE_ID).withFilter(has("point_count")).withProperties(
+                *photoLayout,
+                iconOffset(arrayOf(PHOTO_BADGE_X_DP, PHOTO_DROP_DP - PHOTO_BADGE_LIFT_DP)),
+                iconImage(concat(literal(BADGE_PREFIX), Expression.toString(Expression.min(get("point_count"), literal(MAX_BADGE))))),
+            ),
+        )
         s.addLayer(
             SymbolLayer(STAY_MINI, SOURCE_ID).withFilter(NOTHING).withProperties(
                 *calloutLayout,
@@ -310,8 +354,18 @@ internal class DayMapController(
 
         palette?.let { applyPalette(s, it) }
         applyIcons(s)
+        applyMyPhotos(s)
         applySelection(s)
         applyData()
+    }
+
+    private fun applyMyPhotos(s: Style) {
+        val p = myPhotos
+        val now = p?.images?.keys.orEmpty()
+        (addedPhotoImages - now).forEach { s.removeImage(it) }
+        p?.images?.forEach { (id, bmp) -> s.addImage(id, bmp) }
+        addedPhotoImages = now
+        photoSource?.setGeoJson(p?.geojson ?: EMPTY_GEOJSON)
     }
 
     /** 새 그림을 스타일에 넣고(같은 이름은 덮어씀) 이제 안 쓰는 그림은 뺀다. */
@@ -404,7 +458,13 @@ internal class DayMapController(
         val base = FIT_PADDING_DP * density
         val side = min(CALLOUT_HALF_WIDTH_DP * density, mapView.width * MAX_SIDE_PAD_FRACTION).coerceAtLeast(base)
         val top = min((FIT_PADDING_DP + CALLOUT_TOP_EXTRA_DP) * density, mapView.height * MAX_TOP_PAD_FRACTION).coerceAtLeast(base)
-        return intArrayOf(side.toInt(), top.toInt(), side.toInt(), base.toInt())
+        // 아래: 핀 아래 매다는 내 사진 카드(있을 때)가 잘리지 않게
+        val bottom = if (myPhotos != null) {
+            min((PHOTO_DROP_DP + CARD_DP + SHADOW_DP * 2 + 8f) * density, mapView.height * MAX_BOTTOM_PAD_FRACTION).coerceAtLeast(base)
+        } else {
+            base
+        }
+        return intArrayOf(side.toInt(), top.toInt(), side.toInt(), bottom.toInt())
     }
 
     /** 그날 경로·핀 전체가 보이게 맞춘다. 범위가 한 점이면 너무 확대되지 않게 [MAX_FIT_ZOOM]에서 멈춘다. */
@@ -446,12 +506,31 @@ internal class DayMapController(
         val p = m.projection.toScreenLocation(latLng)
         val r = TOUCH_RADIUS_DP * density
         val box = RectF(p.x - r, p.y - r, p.x + r, p.y + r)
+        // 내 사진 카드가 맨 먼저 (카드는 핀 아래에 매달려 있어 핀·말풍선과 자리가 겹치지 않는다)
+        m.queryRenderedFeatures(p, PHOTO_BADGE, PHOTO).firstOrNull()?.let { f ->
+            openPhotos(f)
+            return true
+        }
         val key = m.queryRenderedFeatures(p, STAY_CARD_SEL, STAY_CARD, STAY_MINI).firstNotNullOfOrNull { it.keyOrNull() }
             ?: m.queryRenderedFeatures(box, STAY_SEL, STAY).firstNotNullOfOrNull { it.keyOrNull() }
             ?: m.queryRenderedFeatures(box, TRIP_LABEL, END_FLAG, END_DOT, TRIP_SEL, TRIP_LINE).firstNotNullOfOrNull { it.keyOrNull() }
         onSelectKey(key)
         return true
     }
+
+    /** 누른 사진 카드의 사진 번호들 (묶음이면 묶인 사진 전부). */
+    private fun openPhotos(f: org.maplibre.geojson.Feature) {
+        val src = photoSource ?: return
+        val idx = if (f.hasProperty("point_count")) {
+            src.getClusterLeaves(f, PHOTO_LEAVES_MAX, 0).features().orEmpty().mapNotNull { it.idxOrNull() }
+        } else {
+            listOfNotNull(f.idxOrNull())
+        }
+        if (idx.isNotEmpty()) onOpenPhotos(idx.sorted())
+    }
+
+    private fun org.maplibre.geojson.Feature.idxOrNull(): Int? =
+        if (hasNonNullValueForProperty("idx")) getNumberProperty("idx").toInt() else null
 
     private fun org.maplibre.geojson.Feature.keyOrNull(): String? =
         if (hasNonNullValueForProperty("key")) getStringProperty("key") else null
@@ -476,6 +555,17 @@ internal class DayMapController(
         const val STAY_MINI = "eodi-stay-mini"
         const val STAY_CARD = "eodi-stay-card"
         const val STAY_CARD_SEL = "eodi-stay-card-sel"
+        const val PHOTO_SOURCE_ID = "eodi-my-photo"
+        const val PHOTO = "eodi-my-photo-card"
+        const val PHOTO_BADGE = "eodi-my-photo-count"
+
+        /** 사진 카드를 찍은 곳(핀) 아래로 내리는 거리(dp) · 배지 자리 · 묶는 반경(화면 px 기준) */
+        const val PHOTO_DROP_DP = 10f
+        const val PHOTO_BADGE_X_DP = 34f
+        const val PHOTO_BADGE_LIFT_DP = 6f
+        const val PHOTO_CLUSTER_RADIUS = 56
+        const val PHOTO_CLUSTER_MAX_ZOOM = 17
+        const val PHOTO_LEAVES_MAX = 200L
 
         /** 앱 assets 글꼴 이름 (scripts/map/README.md 스타일 약속). */
         const val FONT_MEDIUM = "NotoSans-Medium"
@@ -508,6 +598,7 @@ internal class DayMapController(
         const val CALLOUT_HALF_WIDTH_DP = 130f
         const val MAX_SIDE_PAD_FRACTION = 0.22f
         const val MAX_TOP_PAD_FRACTION = 0.35f
+        const val MAX_BOTTOM_PAD_FRACTION = 0.3f
 
         const val DIMMED_OPACITY = 0.35f
         const val HALO_OPACITY = 0.22f

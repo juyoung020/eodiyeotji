@@ -43,6 +43,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.eodiyeotji.R
 import app.eodiyeotji.core.DayMapData
+import app.eodiyeotji.core.MapPhotoSpot
+import app.eodiyeotji.ui.gallery.MyPhotoViewer
 import app.eodiyeotji.core.MapBoundsLatLon
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.theme.MapInk
@@ -104,6 +106,8 @@ fun DayMap(
     onSelectKey: (String?) -> Unit,
     modifier: Modifier = Modifier,
     photoPins: List<MapPhotoPin> = emptyList(),
+    /** 그날 내 사진: 찍은 곳에 작은 사진 카드로 꽂고, 누르면 크게 본다 */
+    myPhotos: List<MapPhotoSpot> = emptyList(),
 ) {
     val description = stringResource(R.string.map_content_description)
     val inPreview = LocalInspectionMode.current
@@ -122,7 +126,7 @@ fun DayMap(
         Box(modifier.background(EodiTheme.colors.surfaceHigh).semantics { contentDescription = description })
         return
     }
-    DayMapContent(data, selectedKey, onSelectKey, photoPins, options, modifier.semantics { contentDescription = description })
+    DayMapContent(data, selectedKey, onSelectKey, photoPins, myPhotos, options, modifier.semantics { contentDescription = description })
 }
 
 @Composable
@@ -131,6 +135,7 @@ private fun DayMapContent(
     selectedKey: String?,
     onSelectKey: (String?) -> Unit,
     photoPins: List<MapPhotoPin>,
+    myPhotos: List<MapPhotoSpot>,
     baseOptions: MapLibreMapOptions,
     modifier: Modifier,
 ) {
@@ -153,6 +158,9 @@ private fun DayMapContent(
     }
 
     val currentOnSelect by rememberUpdatedState(onSelectKey)
+    val currentPhotos by rememberUpdatedState(myPhotos)
+    // 크게 보는 내 사진 (사진 번호들, 처음 볼 장)
+    var viewing by remember { mutableStateOf<List<MapPhotoSpot>?>(null) }
     var style by remember { mutableStateOf<MapStyleSpec?>(null) }
 
     val mapView = rememberMapViewWithLifecycle(
@@ -168,6 +176,7 @@ private fun DayMapContent(
             mapView = mapView,
             density = density,
             onSelectKey = { currentOnSelect(it) },
+            onOpenPhotos = { idx -> viewing = idx.mapNotNull { currentPhotos.getOrNull(it) }.takeIf { it.isNotEmpty() } },
             // 불러오기에 실패해도 앱은 멈추지 않는다: 온라인 밑그림(네트워크) 탓이면 오프라인만으로,
             // 오프라인 스타일이 깨졌으면 바탕색 스타일로 바꾸고 안내만 띄운다
             onStyleFailed = {
@@ -240,6 +249,10 @@ private fun DayMapContent(
         emitter.cancel()
         value = HashMap(got)
     }
+    // 내 사진 카드: 사진을 줄여 받아 카드 그림으로 (배경), 오면 지도에 얹는다
+    LaunchedEffect(controller, myPhotos) {
+        controller.setMyPhotos(withContext(Dispatchers.Default) { buildMyPhotoIcons(context.applicationContext, myPhotos, density) })
+    }
     LaunchedEffect(controller, marks, stayPhotos, palette) {
         val m = marks
         controller.setIcons(m?.let { withContext(Dispatchers.Default) { buildMarkerIcons(it, stayPhotos, palette, density) } })
@@ -262,6 +275,9 @@ private fun DayMapContent(
             )
             null -> Unit
         }
+    }
+    viewing?.let { v ->
+        MyPhotoViewer(v.map { it.uri }, 0, stringResource(R.string.map_my_photo_title), onDismiss = { viewing = null })
     }
 }
 

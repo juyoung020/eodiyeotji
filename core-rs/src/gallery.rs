@@ -65,6 +65,19 @@ pub struct StayPhotos {
     pub total: u32,
 }
 
+/// 지도에 꽂을 내 사진 한 장: 찍은 곳(EXIF 위치, 없으면 맞춘 머문 곳 가운데). [stay_arrive_ms]는 맞춘 머문 곳(없으면 None, 길 위에서 찍은 사진).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct MapPhotoSpot {
+    pub id: i64,
+    pub uri: String,
+    pub taken_ms: i64,
+    pub at: GeoPoint,
+    pub stay_arrive_ms: Option<i64>,
+}
+
+/// 하루 지도에 꽂는 내 사진 최대 수 (넘으면 최신 사진을 뺀다 — 앞 시각 순으로 담는다).
+pub const MAX_MAP_SPOTS: usize = 120;
+
 /// 갤러리에서 읽을 시간 범위 (찍은 시각, 이 안의 사진만 Rust로 넘긴다). 머문 곳이 없으면 비어 있다(`from_ms > to_ms`).
 #[derive(Debug, Clone, Copy, PartialEq, uniffi::Record)]
 pub struct GalleryWindow {
@@ -126,28 +139,37 @@ pub(crate) fn match_stays(stays: &[StayWindow], photos: &[GalleryPhoto], anchors
     let mut got: Vec<Vec<(bool, &GalleryPhoto)>> = vec![Vec::new(); stays.len()];
     for p in photos {
         let at = photo_point(p);
-        let best = stays
-            .iter()
-            .enumerate()
-            .filter_map(|(i, s)| {
-                let off = s.outside_ms(p.taken_ms)?;
-                let dist = match at {
-                    Some(a) => {
-                        let d = haversine_m(a, s.center);
-                        if d > MATCH_RADIUS_M {
-                            return None;
-                        }
-                        d
-                    }
-                    None => 0.0,
-                };
-                Some((i, off, dist))
-            })
-            .min_by(|a, b| a.1.cmp(&b.1).then(a.2.total_cmp(&b.2)));
-        if let Some((i, _, _)) = best {
+        if let Some(i) = best_stay(stays, p, at) {
             got[i].push((at.is_some(), p));
         }
     }
+    collect_stays(stays, got, anchors)
+}
+
+/// 사진 한 장이 들어갈 머문 곳 번호 (모듈 설명의 기준, 없으면 None).
+fn best_stay(stays: &[StayWindow], p: &GalleryPhoto, at: Option<Point>) -> Option<usize> {
+    stays
+        .iter()
+        .enumerate()
+        .filter_map(|(i, s)| {
+            let off = s.outside_ms(p.taken_ms)?;
+            let dist = match at {
+                Some(a) => {
+                    let d = haversine_m(a, s.center);
+                    if d > MATCH_RADIUS_M {
+                        return None;
+                    }
+                    d
+                }
+                None => 0.0,
+            };
+            Some((i, off, dist))
+        })
+        .min_by(|a, b| a.1.cmp(&b.1).then(a.2.total_cmp(&b.2)))
+        .map(|(i, _, _)| i)
+}
+
+fn collect_stays(stays: &[StayWindow], got: Vec<Vec<(bool, &GalleryPhoto)>>, anchors: &[Point]) -> Vec<StayPhotos> {
     let mut out: Vec<StayPhotos> = stays
         .iter()
         .zip(got)
@@ -166,6 +188,30 @@ pub(crate) fn match_stays(stays: &[StayWindow], photos: &[GalleryPhoto], anchors
         .collect();
     out.sort_by_key(|s| s.arrive_ms);
     out
+}
+
+/// 그날 사진을 지도에 꽂을 자리로: 위치가 있는 사진은 찍은 곳에(길 위에서 찍었어도), 위치가 없으면 맞춘 머문 곳 가운데에.
+/// 둘 다 없는 사진(위치 없음 · 머문 곳과 시각도 안 맞음)은 빠진다. 찍은 시각순, [MAX_MAP_SPOTS]장까지.
+/// 하루 범위([day_window]) 밖 사진도 빠진다 (Kotlin이 넓게 읽어 넘겨도 그날 것만).
+pub(crate) fn map_spots(stays: &[StayWindow], photos: &[GalleryPhoto]) -> Vec<MapPhotoSpot> {
+    let w = day_window(stays);
+    let mut v: Vec<&GalleryPhoto> = photos.iter().filter(|p| p.taken_ms >= w.from_ms && p.taken_ms <= w.to_ms).collect();
+    v.sort_by(|a, b| a.taken_ms.cmp(&b.taken_ms).then(a.id.cmp(&b.id)));
+    v.into_iter()
+        .filter_map(|p| {
+            let at = photo_point(p);
+            let stay = best_stay(stays, p, at);
+            let point = at.or_else(|| stay.map(|i| stays[i].center))?;
+            Some(MapPhotoSpot {
+                id: p.id,
+                uri: p.uri.clone(),
+                taken_ms: p.taken_ms,
+                at: GeoPoint { lat: point.lat, lon: point.lon },
+                stay_arrive_ms: stay.map(|i| stays[i].arrive_ms),
+            })
+        })
+        .take(MAX_MAP_SPOTS)
+        .collect()
 }
 
 /// 주행 하나([from_ms]~[to_ms] + 여유) 동안 찍은 사진 (드라이브 코스에 붙일 후보). 최신순, [MAX_PER_STAY]장까지.
@@ -207,6 +253,10 @@ pub(crate) fn window_for_day(store: &EodiStore, day: String) -> Result<GalleryWi
 pub(crate) fn photos_for_day(store: &EodiStore, day: String, photos: &[GalleryPhoto]) -> Result<Vec<StayPhotos>, CoreError> {
     let (stays, anchors) = stay_windows(store, day)?;
     Ok(match_stays(&stays, photos, &anchors))
+}
+
+pub(crate) fn map_spots_for_day(store: &EodiStore, day: String, photos: &[GalleryPhoto]) -> Result<Vec<MapPhotoSpot>, CoreError> {
+    Ok(map_spots(&stay_windows(store, day)?.0, photos))
 }
 
 pub(crate) fn photos_for_window(store: &EodiStore, from_ms: i64, to_ms: i64, photos: &[GalleryPhoto]) -> Result<Vec<MatchedPhoto>, CoreError> {

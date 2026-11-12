@@ -325,6 +325,15 @@ impl EodiStore {
         crate::gallery::photos_for_day(self, day, &photos)
     }
 
+    /// 그날 사진을 지도에 꽂을 자리 (찍은 곳, 위치 없으면 맞춘 머문 곳). 찍은 시각순.
+    pub fn gallery_map_spots(
+        &self,
+        day: String,
+        photos: Vec<crate::gallery::GalleryPhoto>,
+    ) -> Result<Vec<crate::gallery::MapPhotoSpot>, crate::store::CoreError> {
+        crate::gallery::map_spots_for_day(self, day, &photos)
+    }
+
     /// 주행 하나 동안 찍은 사진 (드라이브 코스에 붙일 후보, 최신순).
     pub fn gallery_for_trip(
         &self,

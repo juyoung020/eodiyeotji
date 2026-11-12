@@ -5,6 +5,7 @@
     <!-- 기기에 오프라인 지도 파일이 없을 때 지도 구석에 작게 띄운다. 경로와 핀은 그대로 그려진다 -->
     <string name="map_offline_missing">오프라인 지도 파일 없음</string>
     <!-- 지도 데이터 출처 (OpenStreetMap 라이선스 표시) -->
+    <string name="map_my_photo_title">내 사진</string>
     <string name="map_attribution" translatable="false">© OpenStreetMap 기여자 · Protomaps</string>
     <!-- 오프라인 지도 밖을 온라인 밑그림(OpenFreeMap · OpenMapTiles)으로 채울 때 -->
     <string name="map_attribution_online" translatable="false">© OpenStreetMap 기여자 · OpenMapTiles · OpenFreeMap · Protomaps</string>

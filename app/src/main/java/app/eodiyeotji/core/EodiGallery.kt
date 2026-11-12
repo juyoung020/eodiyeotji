@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import app.eodiyeotji.core.rust.GalleryPhoto as RGalleryPhoto
 import app.eodiyeotji.core.rust.GeoPoint as RGeoPoint
 import app.eodiyeotji.core.rust.MatchedPhoto as RMatchedPhoto
+import app.eodiyeotji.core.rust.MapPhotoSpot as RMapPhotoSpot
 import app.eodiyeotji.core.rust.StopPhotoRef as RStopPhotoRef
 
 /*
@@ -35,6 +36,15 @@ suspend fun EodiCore.galleryForDay(day: String, items: List<GalleryItem>): Map<L
     }
 }
 
+/** 지도에 꽂을 내 사진 (찍은 곳, 위치가 없으면 맞춘 머문 곳 가운데). [stayArriveMs]가 null이면 길 위에서 찍은 사진. */
+@Immutable
+data class MapPhotoSpot(val id: Long, val uri: String, val takenMs: Long, val lat: Double, val lon: Double, val stayArriveMs: Long?)
+
+/** 그날 사진을 지도에 꽂을 자리로 (찍은 시각순). */
+suspend fun EodiCore.galleryMapSpots(day: String, items: List<GalleryItem>): List<MapPhotoSpot> = coreCall("galleryMapSpots") {
+    rust.galleryMapSpots(day, items.map { it.toR() }).map { it.toModel() }
+}
+
 /** 주행 하나 동안 찍은 사진 (드라이브 코스 후보, 최신순). */
 suspend fun EodiCore.galleryForTrip(startMs: Long, endMs: Long, items: List<GalleryItem>): List<MyPhoto> = coreCall("galleryForTrip") {
     rust.galleryForTrip(startMs, endMs, items.map { it.toR() }).map { it.toModel() }
@@ -51,5 +61,7 @@ suspend fun EodiCore.setDriveRoutePhotos(id: String, paths: List<String>) = core
 }
 
 private fun GalleryItem.toR() = RGalleryPhoto(id, uri, takenMs, if (lat != null && lon != null) RGeoPoint(lat, lon) else null)
+
+private fun RMapPhotoSpot.toModel() = MapPhotoSpot(id, uri, takenMs, at.lat, at.lon, stayArriveMs)
 
 private fun RMatchedPhoto.toModel() = MyPhoto(photo.id, photo.uri, photo.takenMs, shareable)

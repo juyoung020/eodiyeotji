@@ -15,6 +15,7 @@ import app.eodiyeotji.core.DaySummary
 import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.DayEntry
 import app.eodiyeotji.core.shareCandidatesOn
+import app.eodiyeotji.core.MapPhotoSpot
 import app.eodiyeotji.core.StayMyPhotos
 import app.eodiyeotji.gallery.GalleryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -72,6 +73,8 @@ sealed interface DetailState {
         val offers: Map<String, List<PartnerOffer>> = emptyMap(),
         /** 머문 곳 줄의 내 사진 (항목 키 → 사진, 사진 없는 곳은 빠짐. 갤러리 권한이 없으면 비어 있다) */
         val myPhotos: Map<String, StayMyPhotos> = emptyMap(),
+        /** 지도에 꽂을 내 사진 (찍은 곳, 찍은 시각순) */
+        val mapPhotos: List<MapPhotoSpot> = emptyList(),
     ) : DetailState
     data class Failed(val summary: DaySummary, val message: String) : DetailState
 }
@@ -231,8 +234,9 @@ class TimelineViewModel @Inject constructor(
             val d = core.dayDetail(s.day)
             val offers = async { loadOffers(d.entries) }
             // 내 사진: 갤러리 읽기(IO) + 머문 곳 맞추기(Rust). 권한이 없으면 바로 빈 것
-            val photos = async { gallery.stayPhotos(s.day).mapKeys { (arrive, _) -> "s$arrive" } }
-            DetailState.Loaded(d.summary, d.entries, map.await(), share.await(), offers.await(), photos.await()).also {
+            val photos = async { gallery.dayPhotos(s.day) }
+            val p = photos.await()
+            DetailState.Loaded(d.summary, d.entries, map.await(), share.await(), offers.await(), p.stays.mapKeys { (arrive, _) -> "s$arrive" }, p.spots).also {
                 if (BuildConfig.DEBUG) Log.d(TAG, "하루 상세 ${s.day}: ${(System.nanoTime() - t0) / 1_000_000}ms")
             }
         }

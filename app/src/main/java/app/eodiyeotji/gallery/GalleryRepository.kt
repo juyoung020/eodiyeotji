@@ -17,7 +17,9 @@ import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.GalleryItem
 import app.eodiyeotji.core.MyPhoto
 import app.eodiyeotji.core.StayMyPhotos
+import app.eodiyeotji.core.MapPhotoSpot
 import app.eodiyeotji.core.galleryForDay
+import app.eodiyeotji.core.galleryMapSpots
 import app.eodiyeotji.core.galleryForTrip
 import app.eodiyeotji.core.galleryWindow
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -51,6 +53,14 @@ class GalleryRepository @Inject constructor(
         val range = core.galleryWindow(day) ?: return@guard emptyMap()
         val items = read(range.first, range.last)
         if (items.isEmpty()) emptyMap() else core.galleryForDay(day, items)
+    }
+
+    /** 하루 상세용: 들른 곳마다 내 사진 + 지도에 꽂을 자리. 갤러리는 한 번만 읽는다. 권한이 없거나 못 읽으면 빈 것. */
+    suspend fun dayPhotos(day: String): DayPhotos = guard("하루 사진·지도 $day", DayPhotos.EMPTY) {
+        if (!canRead()) return@guard DayPhotos.EMPTY
+        val range = core.galleryWindow(day) ?: return@guard DayPhotos.EMPTY
+        val items = read(range.first, range.last)
+        if (items.isEmpty()) DayPhotos.EMPTY else DayPhotos(core.galleryForDay(day, items), core.galleryMapSpots(day, items))
     }
 
     /** 주행 하나 동안 찍은 사진 (드라이브 코스에 붙일 후보). */
@@ -151,5 +161,12 @@ class GalleryRepository @Inject constructor(
             else add(Manifest.permission.READ_EXTERNAL_STORAGE)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) add("android.permission.READ_MEDIA_VISUAL_USER_SELECTED")
         }
+    }
+}
+
+/** 하루 상세의 내 사진: 들른 곳마다(도착 시각 → 사진) · 지도에 꽂을 자리(찍은 시각순). */
+data class DayPhotos(val stays: Map<Long, StayMyPhotos>, val spots: List<MapPhotoSpot>) {
+    companion object {
+        val EMPTY = DayPhotos(emptyMap(), emptyList())
     }
 }

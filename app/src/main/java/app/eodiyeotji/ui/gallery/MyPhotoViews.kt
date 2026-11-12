@@ -112,7 +112,7 @@ fun MyPhotoViewer(sources: List<String>, start: Int, title: String?, onDismiss: 
     val pager = rememberPagerState(initialPage = start.coerceIn(0, (sources.size - 1).coerceAtLeast(0))) { sources.size }
     val px = with(LocalDensity.current) { 900.dp.roundToPx() }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.92f)).clickable(onClick = onDismiss)) {
+        Box(Modifier.fillMaxSize().background(Color.Black).clickable(onClick = onDismiss)) {
             HorizontalPager(pager, Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 72.dp), key = { sources[it] }) { i ->
                 MyPhotoImage(sources[i], Modifier.fillMaxSize(), sizePx = px, crop = false)
             }
