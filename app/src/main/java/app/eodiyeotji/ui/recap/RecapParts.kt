@@ -87,26 +87,18 @@ import dagger.hilt.components.SingletonComponent
 fun RecapListTop(viewModel: RecapViewModel, onOpenDay: (String) -> Unit, modifier: Modifier = Modifier, onOpenBiz: (() -> Unit)? = null) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        // 입구: 한 줄에 두 개씩 같은 너비로 (네 개가 한 줄이면 잘린다). 테두리는 모두 같고,
-        // 금색 반짝임(AI)은 AI가 실제로 글을 쓰는 요약 · 결산에만 — 기억 지도는 지도, 출장 관리는 건물 아이콘.
-        // (기억 지도 소개 배너는 이 버튼과 같은 일이라 두지 않는다)
+        // 입구: 한 줄 한 띠에 글자만 (아이콘 · 테두리 알약 네 개가 두 줄을 차지하던 것을 줄였다). 주행 중에는 요약 · 결산만.
         val month = stringResource(R.string.recap_month_entry, state.today.monthValue)
         val year = stringResource(R.string.recap_year_entry)
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            EntryPill(month, EodiIcons.Sparkle, ai = true, modifier = Modifier.weight(1f)) { viewModel.openRecap(RecapMode.MONTH) }
-            EntryPill(year, EodiIcons.Sparkle, ai = true, modifier = Modifier.weight(1f)) { viewModel.openRecap(RecapMode.YEAR) }
-        }
-        if (!state.driving) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                EntryPill(stringResource(R.string.memory_map_entry), EodiIcons.Map, ai = false, modifier = Modifier.weight(1f)) { viewModel.openMemoryMap() }
-                // 출장 관리 (평일 업무 출장 · 경비 · 정산서)
-                if (onOpenBiz != null) {
-                    EntryPill(stringResource(R.string.biz_entry), PlacesIcons.Office, ai = false, modifier = Modifier.weight(1f), onClick = onOpenBiz)
-                } else {
-                    Spacer(Modifier.weight(1f))
-                }
+        val entries = buildList<Pair<String, () -> Unit>> {
+            add(month to { viewModel.openRecap(RecapMode.MONTH) })
+            add(year to { viewModel.openRecap(RecapMode.YEAR) })
+            if (!state.driving) {
+                add(stringResource(R.string.memory_map_entry) to { viewModel.openMemoryMap() })
+                if (onOpenBiz != null) add(stringResource(R.string.biz_entry) to onOpenBiz)
             }
         }
+        EntryStrip(entries)
         // 다가오는 날(늘 가던 날)이 지난 날(N년 전 오늘)보다 먼저
         val routine = state.routine
         if (routine != null && !state.driving) {
@@ -144,6 +136,26 @@ internal fun EntryPill(text: String, icon: ImageVector, ai: Boolean, modifier: M
         Icon(icon, contentDescription = null, tint = if (ai) c.memoryInk else c.accent, modifier = Modifier.size(28.dp))
         Spacer(Modifier.width(10.dp))
         Text(text, style = EodiTheme.type.label, fontWeight = FontWeight.Bold, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** 날짜 목록 맨 위 입구 띠: 같은 너비 글자 버튼을 가는 선으로 나눈 한 줄. */
+@Composable
+private fun EntryStrip(entries: List<Pair<String, () -> Unit>>) {
+    val c = EodiTheme.colors
+    Row(
+        Modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(EodiTheme.space.radiusM)).background(c.surfaceHigh),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        entries.forEachIndexed { i, (text, onClick) ->
+            if (i > 0) Box(Modifier.width(2.dp).fillMaxHeight().padding(vertical = 18.dp).background(c.outline))
+            Box(
+                Modifier.weight(1f).heightIn(min = 76.dp).clickable(role = Role.Button, onClick = onClick).padding(horizontal = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(text, style = EodiTheme.type.label, fontWeight = FontWeight.Bold, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
     }
 }
 

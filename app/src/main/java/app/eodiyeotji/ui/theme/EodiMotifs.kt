@@ -108,11 +108,9 @@ fun MemoryStamp(text: String, modifier: Modifier = Modifier, large: Boolean = fa
     val c = EodiTheme.colors
     Row(
         modifier.background(c.memory, CircleShape)
-            .padding(start = if (large) 16.dp else 12.dp, end = if (large) 22.dp else 16.dp, top = if (large) 8.dp else 5.dp, bottom = if (large) 8.dp else 5.dp),
+            .padding(start = if (large) 20.dp else 14.dp, end = if (large) 20.dp else 14.dp, top = if (large) 8.dp else 5.dp, bottom = if (large) 8.dp else 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(EodiIcons.Sparkle, contentDescription = null, tint = c.onMemory, modifier = Modifier.size(if (large) 28.dp else 22.dp))
-        Spacer(Modifier.width(6.dp))
         Text(
             text,
             style = if (large) EodiTheme.type.label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) else EodiTheme.type.eyebrow,
