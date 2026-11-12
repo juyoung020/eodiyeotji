@@ -8,6 +8,11 @@
             android:name=".record.DemoSeedReceiver"
             android:exported="true" />
 
+        <!-- 구글 타임라인 파일 가져오기 (사용법은 record/TimelineImportReceiver.kt) -->
+        <receiver
+            android:name=".record.TimelineImportReceiver"
+            android:exported="true" />
+
         <!-- 시연용 내 사진(갤러리) 넣기 (사용법은 gallery/GalleryDemoReceiver.kt) -->
         <receiver
             android:name=".gallery.GalleryDemoReceiver"
