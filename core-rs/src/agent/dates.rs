@@ -130,6 +130,11 @@ pub fn parse_korean_range(text: &str, today: i64) -> Option<DayRange> {
     let nospace: String = t.chars().filter(|c| !c.is_whitespace()).collect();
     let (ty, tm, _td) = civil_from_days(today);
 
+    // 0) 숫자로 쓴 날짜 "2025-11-07", "2025.11.7", "2025/11/07" (손으로 치는 검색)
+    if let Some(d) = t.split_whitespace().find_map(numeric_day) {
+        return Some(DayRange::day(d));
+    }
+
     // 1) 상대 날짜
     let rel = [("그저께", -2), ("그제", -2), ("엊그제", -2), ("어제", -1), ("오늘", 0)];
     for (w, off) in rel {
@@ -217,12 +222,22 @@ pub fn parse_korean_range(text: &str, today: i64) -> Option<DayRange> {
 }
 
 /// 날짜 표현에 쓰이는 낱말 (검색어에서 뺀다).
+/// "2025-11-07" · "2025.11.7" · "2025/11/07" → 그날 (연 · 월 · 일 셋 다 있을 때만).
+pub(crate) fn numeric_day(w: &str) -> Option<i64> {
+    let w: String = w.trim_end_matches(['.', ',']).chars().map(|c| if c == '.' || c == '/' { '-' } else { c }).collect();
+    (w.matches('-').count() == 2 && w.chars().all(|c| c.is_ascii_digit() || c == '-')).then(|| parse_ymd(&w, false)).flatten()
+}
+
 pub fn is_date_word(w: &str) -> bool {
     const WORDS: [&str; 30] = [
         "작년", "올해", "재작년", "지난해", "금년", "지난주", "저번주", "이번주", "지난달", "저번달", "이번달", "어제", "그저께", "그제",
         "엊그제", "오늘", "최근", "요즘", "요새", "주말", "지난", "저번", "이번", "전", "봄", "여름", "가을", "겨울", "이브", "날",
     ];
     if WORDS.contains(&w) || HOLIDAYS.iter().any(|(h, _, _)| *h == w || h.starts_with(w) && w.chars().count() >= 3) {
+        return true;
+    }
+    // 숫자로 쓴 날짜 "2025-11-07", "2025.11.7" (검색어가 아니라 날짜)
+    if numeric_day(w).is_some() {
         return true;
     }
     // 숫자 + 단위 (8월, 14일, 2025년, 3주, 2달, 1년)
@@ -256,3 +271,19 @@ fn leading_number(s: &str) -> Option<i64> {
     let d: String = s.chars().take_while(|c| c.is_ascii_digit()).collect();
     d.parse().ok()
 }
+
+#[cfg(test)]
+mod numeric_tests {
+    use super::*;
+
+    #[test]
+    fn numeric_dates_are_one_day() {
+        let today = days_from_civil(2026, 11, 12);
+        let d = days_from_civil(2025, 11, 7);
+        for q in ["2025-11-07", "2025.11.7", "2025/11/07 강릉", "2025.11.07."] {
+            assert_eq!(parse_korean_range(q, today), Some(DayRange::day(d)), "{q}");
+        }
+        assert_eq!(parse_korean_range("010-1234-5678", today), None);
+    }
+}
+

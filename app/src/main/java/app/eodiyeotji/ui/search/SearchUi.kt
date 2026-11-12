@@ -382,7 +382,7 @@ fun SearchResults(
                 else -> {
                     val ai = answer.askAi
                     if (ai != null && ai.primary) full("ai-top") { AskAiCard(ai, primary = true, onAsk = ask) }
-                    if (answer.dateLabel != null || BuildConfig.DEBUG) {
+                    if (answer.dateLabel != null || answer.total > 0) {
                         full("meta") { MetaLine(answer.dateLabel, answer.total, answer.elapsedMicros) }
                     }
                     if (answer.groups.isEmpty()) {
@@ -490,9 +490,9 @@ private fun MetaLine(dateLabel: String?, total: Int, elapsedMicros: Long) {
             Text(stringResource(R.string.search_date_range, dateLabel), style = EodiTheme.type.label, color = c.accent, maxLines = 1)
             Spacer(Modifier.width(20.dp))
         }
-        if (BuildConfig.DEBUG) {
-            val ms = String.format(java.util.Locale.ROOT, "%.1f", elapsedMicros / 1000.0)
-            Text(stringResource(R.string.search_count, total, ms), style = EodiTheme.type.caption, color = c.textTertiary, maxLines = 1)
+        // 결과 수만 (걸린 시간 같은 개발용 숫자는 보이지 않는다, 0건이면 아래 빈 화면이 말한다)
+        if (total > 0) {
+            Text(stringResource(R.string.search_count, total), style = EodiTheme.type.caption, color = c.textTertiary, maxLines = 1)
         }
     }
 }

@@ -940,8 +940,13 @@ private fun DrivingAgent(
                     val failed = turn.phase == AnswerPhase.Failed
                     Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.fillMaxWidth()) {
                         BigButton(
-                            // 답을 못 받았으면 같은 자리 큰 버튼이 "다시 묻기" (한 번 누르면 된다)
-                            label = stringResource(if (failed) R.string.agent_retry else R.string.agent_navigate),
+                            // 답을 못 받았으면 같은 자리 큰 버튼이 "다시 묻기" (한 번 누르면 된다).
+                            // 안내는 어디로 가는지 버튼에 바로 ("안목항 바다횟집으로 안내" / "이 코스로 안내") — 주행 중엔 화면을 한 번 흘끗 본다
+                            label = when {
+                                failed -> stringResource(R.string.agent_retry)
+                                proposal != null -> proposal.title
+                                else -> stringResource(R.string.agent_navigate)
+                            },
                             icon = if (failed) null else EodiIcons.Navi,
                             primary = true,
                             enabled = failed || (proposal != null && !running && turn.action !is ActionState.Done),

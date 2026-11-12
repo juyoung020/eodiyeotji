@@ -446,21 +446,26 @@ internal fun DrivingMemoryCard(rec: RecommendationUi, modifier: Modifier = Modif
     val c = EodiTheme.colors
     val facts = rec.hit.episode.facts
     val today = remember { LocalDate.now() }
-    val first = rec.stops.firstOrNull()
+    // 답이 가리킨 곳(질문과 가장 맞는 들른 곳)이 사진 · 큰 글씨, 그날 제목은 아래 작게 — 답 문장과 카드가 같은 곳을 보이게
+    val spot = rec.hit.bestStop?.takeIf { it.name.isNotBlank() } ?: rec.stops.firstOrNull()
+    val day = rec.hit.episode.title ?: rec.hit.dayTitle ?: facts.ruleLabel
     Surface(shape = RoundedCornerShape(28.dp), color = c.surfaceHigh, modifier = modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(20.dp)) {
-            StopPhotoBox(first?.name.orEmpty(), first?.address.orEmpty(), first?.lat ?: 0.0, first?.lon ?: 0.0, null, Modifier.size(128.dp), radius = 22.dp)
+            StopPhotoBox(spot?.name.orEmpty(), spot?.address.orEmpty(), spot?.lat ?: 0.0, spot?.lon ?: 0.0, null, Modifier.size(128.dp), radius = 22.dp)
             Spacer(Modifier.width(28.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 MemoryStamp(agoText(LocalDate.parse(facts.day), today), large = true)
                 Text(
-                    rec.hit.episode.title ?: rec.hit.dayTitle ?: facts.ruleLabel,
+                    spot?.name ?: day,
                     style = EodiTheme.type.drivingHeadline,
                     fontWeight = FontWeight.Bold,
                     color = c.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (spot != null && spot.name != day) {
+                    Text(day, style = EodiTheme.type.drivingBody, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
     }

@@ -24,7 +24,7 @@
     <string name="search_empty_title">맞는 기록이 없어요</string>
     <string name="search_empty_body">다른 말로 찾거나, 문장으로 AI에게 물어보세요.</string>
     <string name="search_more">%1$d개 더 있어요 · 말을 더 넣어 좁혀 보세요</string>
-    <string name="search_count">%1$d건 · %2$sms</string>
+    <string name="search_count">%1$d건</string>
 
     <string name="search_open">열기</string>
     <string name="search_map">지도</string>

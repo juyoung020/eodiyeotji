@@ -346,3 +346,13 @@ fn v5_database_gets_recent_table() {
     st.remember_search("바다".into(), 1).unwrap();
     assert_eq!(st.search_suggestions().unwrap().recent, s(&["바다"]));
 }
+
+/// 숫자로 쓴 날짜는 낱말이 아니라 기간이다 → 그날 기록이 나온다 (1년 전 강릉 여행 날).
+#[test]
+fn numeric_date_finds_that_day() {
+    let q = parse_query("2025-11-06", today());
+    assert!(q.terms.is_empty(), "{q:?}");
+    assert_eq!(q.range, Some(DayRange::day(civil(2025, 11, 6))));
+    let a = find("2025.11.6");
+    assert!(a.total > 0, "그날 기록: {a:?}");
+}

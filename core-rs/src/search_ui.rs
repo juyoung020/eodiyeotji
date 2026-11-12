@@ -265,6 +265,10 @@ pub(crate) fn parse_query(text: &str, today: i64) -> Query {
         .then(|| toks[0].clone())
         .filter(|w| w.chars().all(char::is_alphanumeric));
     let range = around_last_year(t, today).or_else(|| dates::parse_korean_range(t, today));
+    // "2025.11.6"은 점에서 낱말이 갈려 "2025" · "11"이 검색어로 남는다 → 숫자로 쓴 날짜가 있으면 숫자만인 낱말은 뺀다
+    if t.split_whitespace().any(|w| dates::numeric_day(w).is_some()) {
+        terms.retain(|w| !w.chars().all(|c| c.is_ascii_digit()));
+    }
     let nospace: String = t.chars().filter(|c| !c.is_whitespace()).collect();
     let question = t.ends_with('?')
         || t.ends_with('？')
