@@ -1,6 +1,6 @@
 [package]
 name = "eodi-core"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "어디였지 앱의 네이티브 코어: 경로 처리, 머문 곳 감지, 코스 분할"
 

@@ -17,6 +17,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-12
+
 ### Added
 - 여행 코스 지도의 곳 사이 길이 실제 도로를 따른다: 처음엔 직선을 먼저 그리고, 카카오모빌리티 길찾기(폰 길 안내와 같은 키)로 받은 도로 경로가 오면 바꾼다. 받은 길은 Rust가 줄여(10m) 코스 id 기준으로 기기에 두어 다음부터 바로 도로로 그리고, 키가 없거나 못 받으면 직선 그대로다 (DB 버전 19, `core-rs/src/community/road.rs`, `EodiCommunity.kt courseRoadMap`)
 - 핫플 · 가고 싶은 곳(코어): 이용자가 적은 초반에도 갈 곳이 보이도록 SNS에서 이름난 곳 12곳(시연용 예시)을 목록으로 두고, 곳마다 어디였지 이용자가 실제로 다녀온 수(리뷰 · 코스 작성자) · 별점 · 내가 간 날 · 음식/카페/여행 분류를 붙인다. ♥나 폰 공유로 받은 곳은 가고 싶은 곳에 저장하고, 공유받은 글에서 주소 · 출처(인스타그램 · 지도 앱) · 장소 이름 힌트를 나눈다. 화면 · 에이전트 연결은 아직 없다 (DB 버전 17, `core-rs/src/hotplace.rs`, `docs/소통/2026-11-11_권혁신_핫플_가고싶은곳.md`)
@@ -210,5 +212,6 @@
 - AI·팀원 공통 작업 규칙 (`CLAUDE.md`)
 - 변경 이력 파일 (`CHANGELOG.md`)
 
-[Unreleased]: https://github.com/juyoung020/eodiyeotji/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/juyoung020/eodiyeotji/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/juyoung020/eodiyeotji/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/juyoung020/eodiyeotji/releases/tag/v0.1.0
