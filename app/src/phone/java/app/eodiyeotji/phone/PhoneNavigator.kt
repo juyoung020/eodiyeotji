@@ -109,7 +109,7 @@ class PhoneNavigator @Inject constructor(
     /** "근처 ○○ 찾아 안내": 지금 위치 가까운 순으로 카카오 장소 검색 → 첫 곳으로 안내. */
     override suspend fun openPlaceSearch(keyword: String): Boolean = withContext(Dispatchers.IO) {
         val here = currentFix() ?: return@withContext false
-        val url = "https://dapi.kakao.com/v2/local/search/keyword.json?query=${URLEncoder.encode(keyword, "UTF-8")}" +
+        val url = "${app.eodiyeotji.place.ApiAccess.kakaoBase}/v2/local/search/keyword.json?query=${URLEncoder.encode(keyword, "UTF-8")}" +
             "&x=${here.lon}&y=${here.lat}&sort=distance&size=1"
         val doc = runCatching { JSONObject(PlatformHttp.get(url, kakaoHeaders())) }.getOrNull() ?: return@withContext false
         val p = doc.optJSONArray("documents")?.optJSONObject(0) ?: return@withContext false
@@ -176,7 +176,7 @@ class PhoneNavigator @Inject constructor(
     /** 지금 목적지 → 남은 곳들 길 (보여 주기만): 실패하면 장소끼리 곧은 선. */
     private suspend fun upcomingPath(stops: List<RouteStop>): List<GeoPoint>? = withContext(Dispatchers.IO) {
         val pts = stops.map { GeoPoint(it.lat, it.lon) }
-        val url = navDirectionsUrl(pts.first(), pts.drop(1))
+        val url = app.eodiyeotji.place.ApiAccess.kakaoNavi(navDirectionsUrl(pts.first(), pts.drop(1)))
         runCatching { NavSession(PlatformHttp.get(url, kakaoHeaders())).route().points }.getOrNull() ?: pts
     }
 
@@ -218,7 +218,7 @@ class PhoneNavigator @Inject constructor(
             _ui.value = _ui.value?.copy(loading = false, error = "지금 위치를 알 수 없어요")
             return null
         }
-        val url = navDirectionsUrl(GeoPoint(here.lat, here.lon), stops.map { GeoPoint(it.lat, it.lon) })
+        val url = app.eodiyeotji.place.ApiAccess.kakaoNavi(navDirectionsUrl(GeoPoint(here.lat, here.lon), stops.map { GeoPoint(it.lat, it.lon) }))
         val r0 = withContext(Dispatchers.IO) { runCatching { NavSession(PlatformHttp.get(url, kakaoHeaders())) } }
         val s = r0.getOrNull()
         if (s == null) {
@@ -246,7 +246,7 @@ class PhoneNavigator @Inject constructor(
         return LocationFix(l.latitude, l.longitude, l.time, l.accuracy)
     }
 
-    private fun kakaoHeaders() = mapOf("Authorization" to "KakaoAK ${BuildConfig.KAKAO_REST_API_KEY}")
+    private fun kakaoHeaders() = app.eodiyeotji.place.ApiAccess.kakaoHeaders
 
     private fun RouteStop.poi() = NaviPoi(name, address, lat, lon)
 

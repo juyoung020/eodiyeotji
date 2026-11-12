@@ -21,14 +21,13 @@ import kotlinx.coroutines.coroutineScope
  */
 @Singleton
 class PlaceCandidates @Inject constructor() {
-    private val key = BuildConfig.KAKAO_REST_API_KEY
     private val http: HttpGetter = PlatformHttp
 
-    val available: Boolean get() = key.isNotBlank()
+    val available: Boolean get() = ApiAccess.kakaoAvailable
 
     suspend fun near(lat: Double, lon: Double): List<PlaceLabel> {
         if (!available) return emptyList()
-        val headers = mapOf("Authorization" to "KakaoAK $key")
+        val headers = ApiAccess.kakaoHeaders
         // 막는 HTTP는 떼어 놓고 기다림만 [TIMEOUT_MS]에서 끊는다 (오프라인 DNS 대기로 이름 고치기 창이 멈추지 않게)
         val found: List<PlaceCandidate> = coroutineScope {
             CODES.map { code ->
@@ -50,7 +49,7 @@ class PlaceCandidates @Inject constructor() {
     }
 
     private fun url(code: String, lat: Double, lon: Double) =
-        "${KakaoLocalProvider.BASE}/v2/local/search/category.json?category_group_code=$code" +
+        "${ApiAccess.kakaoBase}/v2/local/search/category.json?category_group_code=$code" +
             "&x=${coord(lon)}&y=${coord(lat)}&radius=$RADIUS_M&sort=distance&size=5"
 
     private fun coord(v: Double) = String.format(Locale.ROOT, "%.6f", v)

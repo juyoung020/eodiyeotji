@@ -36,7 +36,6 @@ class PlacePhotoRepository @Inject constructor(
     private val core: EodiCore,
     @ApplicationContext private val context: Context,
 ) {
-    private val key = BuildConfig.GOOGLE_PLACES_API_KEY
 
     suspend fun photos(stop: StopFact): List<PlacePhoto> = photos(stop.name, stop.address, stop.lat, stop.lon)
 
@@ -46,7 +45,7 @@ class PlacePhotoRepository @Inject constructor(
      * 같은 곳을 여러 화면(지도 카드·목록 사진)이 동시에 물으면 구글에는 한 번만 묻는다.
      */
     suspend fun photos(name: String, address: String, lat: Double, lon: Double): List<PlacePhoto> {
-        if (key.isBlank() || name.isBlank()) return emptyList()
+        if (!ApiAccess.googleAvailable || name.isBlank()) return emptyList()
         val id = String.format(Locale.ROOT, "%s@%.4f,%.4f", name, lat, lon)
         val job = inflight.getOrPut(id) {
             scope.async {
@@ -69,7 +68,7 @@ class PlacePhotoRepository @Inject constructor(
     fun imageRequest(photo: PlacePhoto): ImageRequest {
         val id = "${photo.name.substringBefore("/photos/")}/${photo.author}/${photo.widthPx}x${photo.heightPx}"
         return ImageRequest.Builder(context)
-            .data(String.format(Locale.ROOT, "%s/%s/media?maxWidthPx=%d&maxHeightPx=%d&key=%s", BASE, photo.name, PHOTO_PX, PHOTO_PX, key))
+            .data(ApiAccess.googleMediaUrl(photo.name, PHOTO_PX))
             .diskCacheKey("gphoto:$id:$PHOTO_PX")
             .memoryCacheKey("gphoto:$id:$PHOTO_PX")
             .build()
@@ -89,15 +88,14 @@ class PlacePhotoRepository @Inject constructor(
                 ),
             )
         PlatformHttp.postJson(
-            "$BASE/places:searchText",
+            "${ApiAccess.googleBase}/places:searchText",
             body.toString(),
-            mapOf("X-Goog-Api-Key" to key, "X-Goog-FieldMask" to "places.id,places.photos"),
+            ApiAccess.googleHeaders("places.id,places.photos"),
         )
     }
 
     private companion object {
         const val TAG = "EodiPhoto"
-        const val BASE = "https://places.googleapis.com/v1"
         const val BIAS_RADIUS_M = 300.0
 
         /** 새로 받을 때의 긴 변(px): 카드 위쪽 넓게 보기·공유 카드까지 충분한 크기. 모든 화면이 이 한 장을 같이 쓴다. */

@@ -80,16 +80,15 @@ suspend fun EodiCore.courseMap(postId: String): DayMapData = coreCall("courseMap
  * 요청들은 동시에 보내고 [ROAD_WAIT_MS]까지만 기다린다.
  */
 suspend fun EodiCore.courseRoadMap(postId: String): DayMapData? {
-    val key = BuildConfig.KAKAO_REST_API_KEY
-    if (key.isBlank()) return null
+    if (!app.eodiyeotji.place.ApiAccess.kakaoAvailable) return null
     val urls = coreCall("courseRoadRequests") { rust.courseRoadRequests(postId) }
     if (urls.isEmpty()) return null
-    val headers = mapOf("Authorization" to "KakaoAK $key")
+    val headers = app.eodiyeotji.place.ApiAccess.kakaoHeaders
     val bodies = coroutineScope {
         urls.map { u ->
             async {
                 blockingWithTimeout(ROAD_WAIT_MS) {
-                    runCatching { PlatformHttp.get(u, headers) }.onFailure { Log.w(ROAD_TAG, "코스 길 못 받음: ${it.message}") }.getOrNull()
+                    runCatching { PlatformHttp.get(app.eodiyeotji.place.ApiAccess.kakaoNavi(u), headers) }.onFailure { Log.w(ROAD_TAG, "코스 길 못 받음: ${it.message}") }.getOrNull()
                 }
             }
         }.awaitAll()

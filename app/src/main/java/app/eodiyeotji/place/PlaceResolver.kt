@@ -75,15 +75,14 @@ class PlaceResolver @Inject constructor(
     private val failures = ConcurrentHashMap<Long, Int>()
 
     private val providers: MutableList<PlaceProvider> = CopyOnWriteArrayList<PlaceProvider>().apply {
-        val key = BuildConfig.KAKAO_REST_API_KEY
-        if (key.isNotBlank()) add(KakaoLocalProvider(key))
+        if (ApiAccess.kakaoAvailable) add(KakaoLocalProvider("", base = ApiAccess.kakaoBase, headers = ApiAccess.kakaoHeaders))
         add(NominatimProvider("eodiyeotji/${BuildConfig.VERSION_NAME} (Hyundai in-car app contest prototype)"))
     }
 
     fun start() {
         if (!started.compareAndSet(false, true)) return
-        if (BuildConfig.KAKAO_REST_API_KEY.isBlank()) {
-            Log.w(TAG, "KAKAO_REST_API_KEY 없음 → 실제 가게 이름 대신 OSM 이름만 씀. local.properties에 KAKAO_REST_API_KEY=키 를 넣고 다시 빌드")
+        if (!ApiAccess.kakaoAvailable) {
+            Log.w(TAG, "카카오 없음 (RELAY_URL · KAKAO_REST_API_KEY 둘 다 없음) → 실제 가게 이름 대신 OSM 이름만 씀")
         }
         scope.launch { watchNetwork() }
         scope.launch {

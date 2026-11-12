@@ -43,13 +43,16 @@ import kotlinx.coroutines.withTimeoutOrNull
  * 늦춘다 (같은 지점은 Rust가 저장해 다시 묻지 않음). 한도 초과(429, 또는 카카오의 400 + code -10)가 오면 [PlaceResolver]가 쉰다.
  */
 class KakaoLocalProvider(
-    private val restKey: String,
+    restKey: String,
     private val http: HttpGetter = PlatformHttp,
     private val bucket: TokenBucket = TokenBucket(BURST, PER_SECOND),
+    /** 주소 바탕: 카카오 직접([BASE]) 또는 중계 서버 ([ApiAccess.kakaoBase]) */
+    private val base: String = BASE,
+    /** 요청 머리글: 기본은 카카오 키, 중계면 [ApiAccess.kakaoHeaders] */
+    private val headers: Map<String, String> = mapOf("Authorization" to "KakaoAK $restKey"),
 ) : PlaceProvider {
     override val name = "kakao"
 
-    private val headers = mapOf("Authorization" to "KakaoAK $restKey")
     private val inFlight = Semaphore(MAX_IN_FLIGHT)
 
     /** 요청은 여기서 돈다 → 늦는 응답을 기다리지 않고 돌아갈 수 있다 (남은 것은 취소, 결과는 버림). */
@@ -58,10 +61,10 @@ class KakaoLocalProvider(
     override suspend fun lookup(q: PlaceQuery): Lookup {
         // 토큰을 먼저 다 받고 한꺼번에 보낸다 (밀린 지점이 많을 때만 여기서 기다림 → 아래 DECIDE_AFTER_MS는 보낸 뒤부터)
         repeat(REQUESTS_PER_POINT) { bucket.acquire() }
-        val pois =ALL_CODES.map { code -> fetch(categoryUrl(q, code)) { KakaoParse.nearestPlace(it) } }
-        val markets = fetch(marketUrl(q)) { KakaoParse.places(it) }
-        val landmarks = fetch(landmarkUrl(q)) { KakaoParse.places(it) }
-        val addr = fetch(coord2addressUrl(q)) { KakaoParse.coord2address(it) }
+        val pois = ALL_CODES.map { code -> fetch(categoryUrl(q, code, base)) { KakaoParse.nearestPlace(it) } }
+        val markets = fetch(marketUrl(q, base)) { KakaoParse.places(it) }
+        val landmarks = fetch(landmarkUrl(q, base)) { KakaoParse.places(it) }
+        val addr = fetch(coord2addressUrl(q, base)) { KakaoParse.coord2address(it) }
         val all: List<Deferred<*>> = pois + markets + landmarks + addr
         try {
             // 보통 수십 ms 안에 다 온다. 늦는 응답이 있어도 DECIDE_AFTER_MS 뒤에는 온 것으로 고른다
@@ -85,7 +88,7 @@ class KakaoLocalProvider(
     /** 연결 미리 열기 (DNS·TLS): 주행 중에 불러 두면 주행이 끝난 뒤 첫 요청이 빨라진다. 결과·오류는 무시. */
     override suspend fun warmUp() {
         (1..WARM_CONNECTIONS).map {
-            io.launch { runCatching { http.head(BASE) } }
+            io.launch { runCatching { http.head(base) } }
         }.joinAll()
     }
 
@@ -123,21 +126,21 @@ class KakaoLocalProvider(
 
         private val MARKET_QUERY = URLEncoder.encode("전통시장", "UTF-8")
 
-        fun categoryUrl(q: PlaceQuery, code: String) =
-            "$BASE/v2/local/search/category.json?category_group_code=$code" +
+        fun categoryUrl(q: PlaceQuery, code: String, base: String = BASE) =
+            "$base/v2/local/search/category.json?category_group_code=$code" +
                 "&x=${coord(q.lon)}&y=${coord(q.lat)}&radius=$RADIUS_M&sort=distance&size=$PAGE_SIZE"
 
-        fun marketUrl(q: PlaceQuery) =
-            "$BASE/v2/local/search/keyword.json?query=$MARKET_QUERY" +
+        fun marketUrl(q: PlaceQuery, base: String = BASE) =
+            "$base/v2/local/search/keyword.json?query=$MARKET_QUERY" +
                 "&x=${coord(q.lon)}&y=${coord(q.lat)}&radius=${KakaoParse.MARKET_RADIUS_M.toInt()}&sort=distance&size=$PAGE_SIZE"
 
         /** 넓은 명소: 반경 안의 관광명소를 넉넉히 받아(10개) 고궁·해변·공원 같은 곳을 찾는다 */
-        fun landmarkUrl(q: PlaceQuery) =
-            "$BASE/v2/local/search/category.json?category_group_code=AT4" +
+        fun landmarkUrl(q: PlaceQuery, base: String = BASE) =
+            "$base/v2/local/search/category.json?category_group_code=AT4" +
                 "&x=${coord(q.lon)}&y=${coord(q.lat)}&radius=$LANDMARK_RADIUS_M&sort=distance&size=10"
 
-        fun coord2addressUrl(q: PlaceQuery) =
-            "$BASE/v2/local/geo/coord2address.json?x=${coord(q.lon)}&y=${coord(q.lat)}"
+        fun coord2addressUrl(q: PlaceQuery, base: String = BASE) =
+            "$base/v2/local/geo/coord2address.json?x=${coord(q.lon)}&y=${coord(q.lat)}"
 
         /** 기기 언어가 쉼표 소수점이어도 "37.566500"으로 */
         private fun coord(v: Double) = String.format(Locale.ROOT, "%.6f", v)

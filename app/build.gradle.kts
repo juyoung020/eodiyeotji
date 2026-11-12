@@ -7,6 +7,14 @@ val kakaoRestApiKey: String = Properties().let { props ->
     (props.getProperty("KAKAO_REST_API_KEY") ?: System.getenv("KAKAO_REST_API_KEY") ?: "").filter { it.isLetterOrDigit() }
 }
 
+// 중계 서버 (server/relay, Cloudflare Worker). 주소가 있으면 앱은 카카오 · 구글 키 없이 이 서버에 묻고,
+// 키는 APK에 넣지 않는다 (공개 저장소 · 심사용 APK에서 키가 새지 않게). local.properties의 RELAY_URL · RELAY_TOKEN → 환경 변수
+val relayProps: Properties = Properties().also { props ->
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { props.load(it) }
+}
+val relayUrl: String = (relayProps.getProperty("RELAY_URL") ?: System.getenv("RELAY_URL") ?: "").trim().filter { it != '"' && it != '\\' }
+val relayToken: String = (relayProps.getProperty("RELAY_TOKEN") ?: System.getenv("RELAY_TOKEN") ?: "").filter { it.isLetterOrDigit() || it == '-' || it == '_' }
+
 // 구글 Places API (New) 키 (들른 곳 대표 사진, place/PlacePhotoRepository.kt). 구글 클라우드 프로젝트 eodiyeotji에서 Places API (New)만 허용.
 // local.properties의 GOOGLE_PLACES_API_KEY → 환경 변수 → 없으면 빈 값(사진 끔)
 val googlePlacesApiKey: String = Properties().let { props ->
@@ -49,8 +57,11 @@ android {
         versionName = "0.6.0"
         // 에뮬레이터(x86_64)와 실기기(차·폰 arm64)만 만든다
         ndk { abiFilters += listOf("x86_64", "arm64-v8a") }
-        buildConfigField("String", "KAKAO_REST_API_KEY", "\"$kakaoRestApiKey\"")
-        buildConfigField("String", "GOOGLE_PLACES_API_KEY", "\"$googlePlacesApiKey\"")
+        val useRelay = relayUrl.isNotEmpty()
+        buildConfigField("String", "KAKAO_REST_API_KEY", "\"${if (useRelay) "" else kakaoRestApiKey}\"")
+        buildConfigField("String", "GOOGLE_PLACES_API_KEY", "\"${if (useRelay) "" else googlePlacesApiKey}\"")
+        buildConfigField("String", "RELAY_URL", "\"$relayUrl\"")
+        buildConfigField("String", "RELAY_TOKEN", "\"$relayToken\"")
         buildConfigField("String", "LLM_BASE_URL", "\"$llmBaseUrl\"")
         buildConfigField("String", "LLM_MODEL", "\"$llmModel\"")
         buildConfigField("String", "LLM_API_KEY", "\"$llmApiKey\"")
