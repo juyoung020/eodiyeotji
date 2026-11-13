@@ -32,3 +32,6 @@ scripts/map/style/node_modules/
 
 # 제출용 개인정보(이름·연락처)가 들어간 양식은 올리지 않는다
 submission/*_개인정보*
+
+# Playwright MCP 임시 파일
+.playwright-mcp/

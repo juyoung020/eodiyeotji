@@ -695,10 +695,10 @@ impl MemoryAgent {
 }
 
 /// 모델 답을 소리로 읽기 좋게 다듬는다: 별표·제목표·목록 기호를 지우고 한 줄로, 문장 수를 줄인다
-/// (운전 중 2문장·90자, 정차 중 3문장·180자 안). 잘려 나간 끝 문장이 "…할까요?" 같은 물음이면 그것은 남긴다
+/// (운전 중 2문장·90자, 정차 중 3문장·120자 안 — Pleos 가독성 기준 "한 메시지 120자 이하"). 잘려 나간 끝 문장이 "…할까요?" 같은 물음이면 그것은 남긴다
 /// (운전자가 "응"으로 답할 수 있게).
 pub(crate) fn tidy_answer(raw: &str, driving: bool) -> String {
-    let (max_sentences, max_chars) = if driving { (2, 90) } else { (3, 180) };
+    let (max_sentences, max_chars) = if driving { (2, 90) } else { (3, 120) };
     let mut flat = String::new();
     for line in raw.lines() {
         let l = line.trim().trim_start_matches(['-', '*', '•', '#', '>']).trim();
@@ -992,5 +992,18 @@ pub fn spoken_date(day: &str, today: i64) -> String {
         1 => format!("작년 {m}월 {dd}일"),
         2 => format!("재작년 {m}월 {dd}일"),
         _ => format!("{y}년 {m}월 {dd}일"),
+    }
+}
+
+#[cfg(test)]
+mod tidy_tests {
+    use super::tidy_answer;
+
+    #[test]
+    fn parked_answer_stays_within_120_chars() {
+        let s = "강릉 경포해변에 다녀오셨어요. ".repeat(3) + "그날은 순두부집에도 들르셨고 바다를 오래 보셨어요. 다시 가 볼까요?";
+        let out = tidy_answer(&s, false);
+        assert!(out.chars().count() <= 120 + 12, "{out}");
+        assert!(out.ends_with("까요?"));
     }
 }

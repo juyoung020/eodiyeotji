@@ -151,7 +151,8 @@ class RoadsideAgent @Inject constructor(
                 }
                 mark("LLM round $round ${reply.ms}ms → " + if (calls.isEmpty()) "답 \"${reply.content.take(80)}\"" else calls.joinToString { "${it.name}(${it.arguments})" })
                 if (calls.isEmpty()) {
-                    answer = reply.content.trim().takeIf { it.isNotEmpty() }
+                    // 화면 · 소리용: 마크다운 강조 기호는 뺀다
+                    answer = reply.content.replace("**", "").replace(Regex("\\n{2,}"), "\n").trim().takeIf { it.isNotEmpty() }
                     break
                 }
                 val assistant = JSONObject().put("role", "assistant").put("content", reply.content)
@@ -185,7 +186,9 @@ class RoadsideAgent @Inject constructor(
         val second = (listOfNotNull(pick?.second) + hits).map { remember(it) }.firstOrNull { it.id != primary?.id && it.hit.place.name != primary?.hit?.place?.name }
         val third = hits.map { remember(it) }.firstOrNull { it.id != primary?.id && it.id != second?.id && it.hit.place.name != primary?.hit?.place?.name && it.hit.place.name != second?.hit?.place?.name }
         // 답 문장: LLM 글이 1순위 이름을 말하고 너무 길지 않으면 그대로, 아니면 규칙 문장 (숫자를 지어내지 않게)
-        val llmOk = answer != null && answer.length <= (if (isDriving) 120 else 220) && (primary == null || answer.contains(primary.hit.place.name.substringBefore(' ')))
+        // 운전 중엔 짧고 묻는 말로 끝나야 쓴다 (읽고 바로 "응"을 듣는다)
+        val llmOk = answer != null && (primary == null || answer.contains(primary.hit.place.name.substringBefore(' '))) &&
+            (if (isDriving) answer.length <= 80 && answer.trimEnd().endsWith("?") else answer.length <= 220)
         val line = if (llmOk) answer!! else pick?.line ?: context.getString(R.string.roadside_none)
         filler.cancel()
         if (primary != null) {

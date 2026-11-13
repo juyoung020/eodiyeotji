@@ -48,7 +48,9 @@ class OpenAiCompatChat(
             .put("tools", if (tools.isNullOrBlank()) JSONArray() else JSONArray(tools))
             .put("max_tokens", maxTokens)
             .toString()
-        val raw = runCatching { blockingWithTimeout(timeoutMs) { roadsideLlmChat(config, req) } }.getOrNull() ?: return null
+        val raw = runCatching { blockingWithTimeout(timeoutMs) { roadsideLlmChat(config, req) } }
+            .onFailure { android.util.Log.w("EodiRoadside", "LLM 호출 실패: ${it.message}") }
+            .getOrNull() ?: return null.also { android.util.Log.w("EodiRoadside", "LLM 호출 실패 또는 ${timeoutMs}ms 초과") }
         val o = JSONObject(raw)
         val calls = o.optJSONArray("tool_calls")?.let { a ->
             (0 until a.length()).map { i -> a.getJSONObject(i).let { LlmToolCall(it.optString("id"), it.optString("name"), it.optString("arguments")) } }

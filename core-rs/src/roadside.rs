@@ -161,7 +161,7 @@ pub fn need(text: &str) -> Option<RoadsideNeed> {
     use RoadsideCategory as C;
     use RoadsideNeedKind as K;
     let (kind, cats) = if has(&["화장실", "똥", "오줌", "소변", "대변", "마려", "볼일", "급똥", "쉬하"]) {
-        (K::Toilet, vec![C::RestArea, C::DrowsyShelter, C::Toilet])
+        (K::Toilet, vec![C::RestArea, C::DrowsyShelter])
     } else if has(&["졸려", "졸리", "졸음", "피곤", "잠와", "잠 와", "잠이 와", "하품", "눈이 감", "눈 감겨"]) {
         (K::Sleepy, vec![C::DrowsyShelter, C::RestArea])
     } else if has(&["주유", "기름", "연료"]) {
@@ -467,7 +467,8 @@ pub fn parse_kakao(json: &str, category: RoadsideCategory) -> Vec<RoadsidePlace>
             let name = d["place_name"].as_str()?.trim().to_string();
             let cat_name = d["category_name"].as_str().unwrap_or("");
             match category {
-                RoadsideCategory::RestArea if !cat_name.contains("휴게소") || cat_name.contains("졸음쉼터") => return None,
+                // 고속도로휴게소 분류 또는 이름에 "휴게소" (운수종사자 쉼터 · 휴게소 안 가게는 뺀다)
+                RoadsideCategory::RestArea if !(cat_name.ends_with("고속도로휴게소") || cat_name.contains("휴게소") && name.contains("휴게소")) => return None,
                 RoadsideCategory::DrowsyShelter if !name.contains("졸음쉼터") || name.contains("화장실") => return None,
                 RoadsideCategory::Toilet if !cat_name.contains("화장실") => return None,
                 _ => {}
@@ -755,15 +756,16 @@ pub fn pick(order: &[RoadsideCategory], hits: &[RoadsideHit], can_add_waypoint: 
         let what = order.first().map(|c| c.word()).unwrap_or("들를 곳");
         return RoadsidePick { primary: None, second: None, line: format!("가는 길 앞쪽에서 {} 찾지 못했어요.", eul(what)) };
     };
+    // 다른 종류(화장실: 휴게소 다음 졸음쉼터)가 있으면 그 가장 가까운 곳이 다른 선택. 문장에는 1순위보다 가까울 때만 말한다.
     let closer_other = hits
         .iter()
-        .filter(|h| h.place.category != p.place.category && h.along_m + 500.0 < p.along_m && order.contains(&h.place.category))
+        .filter(|h| h.place.category != p.place.category && order.contains(&h.place.category))
         .min_by(|a, b| a.along_m.total_cmp(&b.along_m));
     let next_same = hits.iter().filter(|h| h.place.category == p.place.category && h.place.name != p.place.name).min_by(|a, b| a.along_m.total_cmp(&b.along_m));
     let second = closer_other.or(next_same).cloned();
     let mut line = format!("다음 {}까지 {}, 약 {}분이에요.", p.place.name, distance_words(p.along_m), p.eta_min);
     if let Some(s) = &second {
-        if s.place.category != p.place.category {
+        if s.place.category != p.place.category && s.along_m < p.along_m {
             line.push_str(&format!(" {} {} 앞이에요.", eun(s.place.category.word()), distance_words(s.along_m)));
         }
     }

@@ -196,6 +196,13 @@ fn pick_says_one_short_sentence_like_the_spec() {
     let none = pick(&[RoadsideCategory::DrowsyShelter], &[], false);
     assert!(none.primary.is_none());
     assert_eq!(none.line, "가는 길 앞쪽에서 졸음쉼터를 찾지 못했어요.");
+    // 다른 종류가 1순위보다 멀면 카드의 다른 선택으로만 (문장엔 말하지 않는다)
+    let far = vec![hit("기흥휴게소", RoadsideCategory::RestArea, 8_400.0, 6), hit("안성휴게소", RoadsideCategory::RestArea, 34_900.0, 21), hit("오산졸음쉼터", RoadsideCategory::DrowsyShelter, 17_500.0, 11)];
+    let p2 = pick(&[RoadsideCategory::RestArea, RoadsideCategory::DrowsyShelter], &far, true);
+    assert_eq!(p2.second.unwrap().place.name, "오산졸음쉼터");
+    assert_eq!(p2.line, "다음 기흥휴게소까지 8.4km, 약 6분이에요. 경유지로 넣을까요?");
+    let jj = r#"{"documents":[{"place_name":"오산시운수종사자쉼터","category_name":"교통,수송 > 휴게소","x":"127.0","y":"37.1"}]}"#;
+    assert!(parse_kakao(jj, RoadsideCategory::RestArea).is_empty());
     let nav = pick(&[RoadsideCategory::Cafe], &[hit("카페B", RoadsideCategory::Cafe, 900.0, 1)], false);
     assert_eq!(nav.line, "다음 카페B까지 900m, 약 1분이에요. 안내할까요?");
 }
