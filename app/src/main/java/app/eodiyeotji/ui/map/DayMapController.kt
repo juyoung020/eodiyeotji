@@ -7,6 +7,7 @@ import android.animation.ValueAnimator
 import android.view.animation.OvershootInterpolator
 import androidx.core.view.doOnLayout
 import app.eodiyeotji.core.DayMapData
+import app.eodiyeotji.core.PERF_TAG
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -555,11 +556,29 @@ internal class DayMapController(
         }
     }
 
+    /**
+     * 하루 경로 그리기 시간 (측정할 때만, `adb shell setprop log.tag.EodiPerf DEBUG`): UI 스레드의 setGeoJson과
+     * 그 뒤 처음으로 다 그려진 프레임까지 (MapLibre가 뒤에서 GeoJSON을 읽고 타일로 자르는 시간 포함).
+     */
+    private fun logRouteDraw(d: DayMapData, t0: Long) {
+        val setMs = (System.nanoTime() - t0) / 1e6
+        mapView.addOnDidFinishRenderingFrameListener(object : MapView.OnDidFinishRenderingFrameListener {
+            override fun onDidFinishRenderingFrame(fully: Boolean, frameEncodingTime: Double, frameRenderingTime: Double) {
+                if (!fully) return
+                mapView.removeOnDidFinishRenderingFrameListener(this)
+                Log.d(PERF_TAG, "route[${d.day}] setGeoJson %.1fms → 다 그림 %.1fms (GeoJSON %dKB)".format(setMs, (System.nanoTime() - t0) / 1e6, d.geojson.length / 1024))
+            }
+        })
+    }
+
     private fun applyData() {
         val src = source ?: return
         val d = data
         if (d !== appliedData) {
+            val probe = d != null && Log.isLoggable(PERF_TAG, Log.DEBUG)
+            val t0 = System.nanoTime()
             src.setGeoJson(d?.geojson ?: EMPTY_GEOJSON)
+            if (probe) logRouteDraw(d!!, t0)
             appliedData = d
             startPlanScene(d)
             style?.let {

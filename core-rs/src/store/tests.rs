@@ -972,3 +972,42 @@ fn timeline_hides_blips_and_folds_repeated_routes() {
     let stays = [stay(hotel, 7 * HOUR + 35 * SEC), stay(lake, 8 * HOUR + 400 * SEC), stay(end, 9 * HOUR + 22 * SEC)];
     assert_eq!(visit_indices(&day, &stays), [0, 1]);
 }
+
+/// 하루 지도 그리기 예산(16ms, CLAUDE.md) 중 Rust 몫: 점 1만 개인 날의 `day_map`(단순화된 경로 → GeoJSON).
+#[test]
+#[ignore = "성능 측정: --release -- --ignored --nocapture 로 실행"]
+fn perf_day_map_10k_points() {
+    let db = TempDb::new("perf-daymap");
+    let store = db.open(KST);
+    let base = days_from_civil(2026, 11, 10) * DAY_MS - KST as i64 * MIN;
+    let morning = wiggly_drive(base + 8 * HOUR, 5000, 37.5, 127.0, 0.3);
+    let (lat, lon) = last_point(&morning);
+    let evening = wiggly_drive(base + 18 * HOUR, 5000, lat, lon, 1.3);
+    for trip in [morning, evening] {
+        store.mark_drive_event(DriveEvent::Start, trip[0].t_ms).unwrap();
+        for c in trip.chunks(30) {
+            store.ingest(c.to_vec()).unwrap();
+        }
+        store.mark_drive_event(DriveEvent::End, trip.last().unwrap().t_ms).unwrap();
+    }
+    let day = format_day(days_from_civil(2026, 11, 10));
+    let s = Instant::now();
+    let detail = store.day_detail(day.clone()).unwrap(); // 첫 호출: 밀린 요약 계산 포함
+    let first_ms = s.elapsed().as_secs_f64() * 1e3;
+    let s = Instant::now();
+    let fresh = crate::mapdata::day_map(&detail); // 캐시 없이 GeoJSON만 새로 만든다
+    let build_ms = s.elapsed().as_secs_f64() * 1e3;
+    println!("첫 day_detail {first_ms:.2}ms, mapdata::day_map {build_ms:.2}ms (경로 점 {})", detail.trips.iter().map(|t| t.path.len()).sum::<usize>());
+    assert!(build_ms < 16.0 && !fresh.geojson.is_empty());
+    let mut times = Vec::new();
+    let mut map = None;
+    for _ in 0..20 {
+        let s = Instant::now();
+        map = Some(store.day_map(day.clone()).unwrap());
+        times.push(s.elapsed().as_secs_f64() * 1e3);
+    }
+    times.sort_by(f64::total_cmp);
+    let m = map.unwrap();
+    println!("day_map(점 10,000개) p50 {:.2}ms max {:.2}ms, GeoJSON {}KB", times[10], times[19], m.geojson.len() / 1024);
+    assert!(times[10] < 16.0);
+}
