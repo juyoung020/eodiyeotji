@@ -55,6 +55,7 @@ import app.eodiyeotji.ui.community.BoardViewModel
 import app.eodiyeotji.ui.community.CommunityRoute
 import app.eodiyeotji.ui.community.CommunityTab
 import app.eodiyeotji.ui.community.CourseViewModel
+import app.eodiyeotji.core.EpisodeKind
 import app.eodiyeotji.core.SearchScope
 import app.eodiyeotji.ui.review.ReviewViewModel
 import app.eodiyeotji.ui.search.SearchActions
@@ -160,7 +161,11 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                     // 탭을 바꾸면 새 화면이 살짝 떠오르며 들어온다 (한 번만 · 그리기 단계만 바뀜, 지도 두 장을 겹쳐 그리지 않는다)
                     Box(Modifier.weight(1f).fillMaxWidth().enterRise(tab)) {
                         when (tab) {
-                            HomeTab.TIMELINE -> TimelineRoute(headerAction = entry, search = recordsSearch)
+                            HomeTab.TIMELINE -> TimelineRoute(
+                                headerAction = entry,
+                                search = recordsSearch,
+                                onOpenTrips = { recordsSearchVm.openKind(EpisodeKind.TRIP) },
+                            )
                             HomeTab.COMMUNITY -> CommunityRoute(
                                 search = communitySearch,
                                 selectedTab = communityTab,

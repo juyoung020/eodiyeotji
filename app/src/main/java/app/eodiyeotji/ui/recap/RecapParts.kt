@@ -47,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -84,13 +85,21 @@ import dagger.hilt.components.SingletonComponent
  * [onOpenDay]: "그날 다시 보기".
  */
 @Composable
-fun RecapListTop(viewModel: RecapViewModel, onOpenDay: (String) -> Unit, modifier: Modifier = Modifier, onOpenBiz: (() -> Unit)? = null) {
+fun RecapListTop(
+    viewModel: RecapViewModel,
+    onOpenDay: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    onOpenBiz: (() -> Unit)? = null,
+    onOpenTrips: (() -> Unit)? = null,
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // 입구: 한 줄 한 띠에 글자만 (아이콘 · 테두리 알약 네 개가 두 줄을 차지하던 것을 줄였다). 주행 중에는 요약 · 결산만.
         val month = stringResource(R.string.recap_month_entry, state.today.monthValue)
         val year = stringResource(R.string.recap_year_entry)
         val entries = buildList<Pair<String, () -> Unit>> {
+            // 여행 간 날만 모아 보기 (검색의 종류 칩 "여행"을 켠 채로 연다)
+            if (onOpenTrips != null && !state.driving) add(stringResource(R.string.trips_entry) to onOpenTrips)
             add(month to { viewModel.openRecap(RecapMode.MONTH) })
             add(year to { viewModel.openRecap(RecapMode.YEAR) })
             if (!state.driving) {
@@ -99,14 +108,15 @@ fun RecapListTop(viewModel: RecapViewModel, onOpenDay: (String) -> Unit, modifie
             }
         }
         EntryStrip(entries)
-        // 다가오는 날(늘 가던 날)이 지난 날(N년 전 오늘)보다 먼저
-        val routine = state.routine
-        if (routine != null && !state.driving) {
-            RoutineCard(routine, onNavigate = viewModel::navigateRoutine, onDismiss = viewModel::dismissRoutine)
+        // 다가오는 날(늘 가던 날)이 지난 날(N년 전 오늘)보다 먼저. 카드는 지우지 않고 한 줄로 접어 둘 수 있다 (누르면 다시 편다)
+        val routine = state.routine?.takeUnless { state.driving }
+        val folded = state.routineFolded
+        if (routine != null) {
+            if (folded) RoutineChip(routine, onExpand = { viewModel.foldRoutine(false) })
+            else RoutineCard(routine, onNavigate = viewModel::navigateRoutine, onFold = { viewModel.foldRoutine(true) })
         }
-        if (state.undoRoutine != null && !state.driving) RoutineUndo(viewModel::undoDismissRoutine)
-        // 카드는 한 번에 하나만 (둘이 같이 뜨면 날짜 목록이 화면 밖으로 밀린다): 늘 가던 날을 닫으면 N년 전 오늘이 나온다
-        val otd = state.onThisDay.takeIf { routine == null && state.undoRoutine == null }
+        // 큰 카드는 한 번에 하나만 (둘이 같이 뜨면 화면을 다 가린다): 늘 가던 날을 접으면 N년 전 오늘이 나온다
+        val otd = state.onThisDay.takeIf { routine == null || folded }
         if (otd != null && !state.driving) {
             OnThisDayCard(
                 otd = otd,
@@ -160,21 +170,21 @@ private fun EntryStrip(entries: List<Pair<String, () -> Unit>>) {
     }
 }
 
-/** 늘 가던 날 카드를 닫은 직후 잠깐 뜨는 줄: 실수로 닫았으면 되돌린다. */
+/** 접어 둔 "늘 가던 날": 금색 도장 + 그곳 이름 한 줄. 누르면 다시 편다 (카드는 지우지 않고 접기만 한다). */
 @Composable
-private fun RoutineUndo(onUndo: () -> Unit) {
+private fun RoutineChip(nudge: RoutineNudge, onExpand: () -> Unit) {
     val c = EodiTheme.colors
+    val shape = RoundedCornerShape(EodiTheme.space.radiusM)
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(EodiTheme.space.radiusM)).background(c.surfaceHigh).padding(start = 24.dp),
+        Modifier.fillMaxWidth().heightIn(min = 76.dp).clip(shape).background(c.surface).border(2.dp, c.memory, shape)
+            .clickable(role = Role.Button, onClickLabel = stringResource(R.string.routine_expand), onClick = onExpand)
+            .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(stringResource(R.string.routine_dismissed), style = EodiTheme.type.label, color = c.textSecondary, modifier = Modifier.weight(1f))
-        Box(
-            Modifier.heightIn(min = 76.dp).clickable(role = Role.Button, onClick = onUndo).padding(horizontal = 28.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(stringResource(R.string.routine_undo), style = EodiTheme.type.label, fontWeight = FontWeight.Bold, color = c.memoryInk)
-        }
+        MemoryStamp(stringResource(R.string.routine_stamp, nudge.whenText))
+        Spacer(Modifier.width(12.dp))
+        Text(nudge.place.name, style = EodiTheme.type.label, fontWeight = FontWeight.Bold, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Icon(EodiIcons.Chevron, contentDescription = null, tint = c.textSecondary, modifier = Modifier.size(28.dp).rotate(90f))
     }
 }
 
@@ -191,10 +201,10 @@ private fun RecapNote(text: String) {
 
 /**
  * "늘 가던 날" 카드: 금색 도장("늘 가던 날 · 내일") · 그곳 사진과 이름 · 한 줄("매달 둘째 목요일마다 …에 갔어요. 내일이 그날이에요.") ·
- * 덧붙임(횟수 · 보통 도착 시각) · [장소 보기] [여기로 안내] · 이번에는 닫기(×). 고르기 · 문장은 Rust(`routine.rs`).
+ * 덧붙임(횟수 · 보통 도착 시각) · [장소 보기] [여기로 안내] · 접어 두기(∧). 고르기 · 문장은 Rust(`routine.rs`).
  */
 @Composable
-fun RoutineCard(nudge: RoutineNudge, onNavigate: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+fun RoutineCard(nudge: RoutineNudge, onNavigate: () -> Unit, onFold: () -> Unit, modifier: Modifier = Modifier) {
     val c = EodiTheme.colors
     val openPlace = LocalOpenPlace.current
     val p = nudge.place
@@ -208,10 +218,10 @@ fun RoutineCard(nudge: RoutineNudge, onNavigate: () -> Unit, onDismiss: () -> Un
                 MemoryStamp(stringResource(R.string.routine_stamp, nudge.whenText), large = true)
                 Spacer(Modifier.weight(1f))
                 Box(
-                    Modifier.size(64.dp).clip(CircleShape).background(c.surfaceHigh).clickable(role = Role.Button, onClick = onDismiss),
+                    Modifier.size(64.dp).clip(CircleShape).background(c.surfaceHigh).clickable(role = Role.Button, onClick = onFold),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(EodiIcons.Close, contentDescription = stringResource(R.string.routine_dismiss), tint = c.textSecondary, modifier = Modifier.size(32.dp))
+                    Icon(EodiIcons.Chevron, contentDescription = stringResource(R.string.routine_fold), tint = c.textSecondary, modifier = Modifier.size(32.dp).rotate(-90f))
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {

@@ -14,9 +14,9 @@
     <string name="routine_stamp">늘 가던 날 · %1$s</string>
     <string name="routine_navigate">여기로 안내</string>
     <string name="routine_open_place">장소 보기</string>
-    <string name="routine_dismiss">이번에는 닫기</string>
-    <string name="routine_dismissed">이번에는 닫았어요</string>
-    <string name="routine_undo">되돌리기</string>
+    <string name="routine_fold">접어 두기</string>
+    <string name="routine_expand">펼치기</string>
+    <string name="trips_entry">여행 모음</string>
     <string name="routine_navi_started">내비로 안내를 시작했어요</string>
     <string name="routine_navi_failed">내비에 목적지를 보내지 못했어요</string>
 

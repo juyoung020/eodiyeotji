@@ -49,10 +49,10 @@ internal object MapStyleSource {
     private const val PLACEHOLDER = "{{PMTILES_URL}}"
     private const val GLYPHS = "asset://map/fonts/{fontstack}/{range}.pbf"
     private const val ONLINE_SOURCE = "ofm"
-    private const val LAND = "#1B1E22"
+    private const val LAND = "#e2dfda"
 
     /**
-     * 밤 지도: 스타일 파일(Protomaps 밝은 지도)은 그대로 두고, 읽을 때 색만 어두운 앨범 바탕에 맞게 바꾼다.
+     * 밤 지도: 스타일 파일(Protomaps 밝은 지도)은 그대로 두고, 다 만든 스타일에서 색만 어두운 앨범 바탕에 맞게 바꾼다.
      * 땅 · 물 · 길은 검은 종이에 가까운 회색, 글자는 밝은 회색 (달린 길의 금색이 가장 눈에 띄게).
      */
     private val NIGHT = listOf(
@@ -69,16 +69,25 @@ internal object MapStyleSource {
 
     private fun night(json: String): String = NIGHT.fold(json) { s, (from, to) -> s.replace(from, to) }
 
+    private fun night(spec: MapStyleSpec): MapStyleSpec = when (spec) {
+        is MapStyleSpec.Offline -> MapStyleSpec.Offline(night(spec.json), spec.offlineOnly?.let(::night))
+        is MapStyleSpec.Online -> MapStyleSpec.Online(night(spec.json))
+        MapStyleSpec.Fallback -> spec
+    }
+
     /** 마지막으로 만든 스타일과 그때의 지도 파일 상태. 지도를 열 때마다 asset 읽기·JSON 합치기(수십 ms)를 다시 하지 않는다. */
     @Volatile private var cached: Pair<String, MapStyleSpec>? = null
 
-    /** 지도 파일이 그대로면(경로·크기·수정 시각) 만들어 둔 스타일을 바로 돌려준다. 파일을 새로 넣으면 다시 만든다. */
-    suspend fun resolve(context: Context): MapStyleSpec = withContext(Dispatchers.IO) {
+    /**
+     * 지도 파일이 그대로면(경로·크기·수정 시각) 만들어 둔 스타일을 바로 돌려준다. 파일을 새로 넣으면 다시 만든다.
+     * [night]이면 밤 지도 색으로 (낮 · 밤이 바뀌면 다시 만든다).
+     */
+    suspend fun resolve(context: Context, night: Boolean): MapStyleSpec = withContext(Dispatchers.IO) {
         val file = mapFile(context)
-        val stamp = file?.let { "${it.absolutePath}:${it.length()}:${it.lastModified()}" } ?: "none"
+        val stamp = (file?.let { "${it.absolutePath}:${it.length()}:${it.lastModified()}" } ?: "none") + ":$night"
         cached?.takeIf { it.first == stamp }?.let { return@withContext it.second }
         val t0 = System.nanoTime()
-        build(context, file).also {
+        build(context, file).let { if (night) night(it) else it }.also {
             cached = stamp to it
             if (BuildConfig.DEBUG) Log.d(TAG, "스타일 만들기 ${(System.nanoTime() - t0) / 1_000_000}ms")
         }
@@ -104,7 +113,7 @@ internal object MapStyleSource {
     }
 
     private fun readAsset(context: Context, path: String): String? = try {
-        night(context.assets.open(path).bufferedReader().use { it.readText() })
+        context.assets.open(path).bufferedReader().use { it.readText() }
     } catch (e: IOException) {
         Log.w(TAG, "asset 없음 ($path)", e)
         null

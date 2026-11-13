@@ -5,10 +5,10 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 /*
- * 색 토큰 — "길 위의 앨범" (docs/90_디자인_컨셉.md).
- * - 앱 화면 = 어두운 앨범(다크): 검은 종이 바탕에 흰 글자, 사진이 주인공. 파랑은 쓰지 않는다.
- *   의미 색은 셋: 금색(달린 길 · 기억) · 흰색(머문 곳 · 주된 동작) · 초록(지금 여기).
- * - 라이트 = 종이 앨범: 밖으로 내보내는 공유 그림에만 쓴다 (길 파랑 · 노을 코랄 · 금색 · 초록).
+ * 색 토큰 — "길 위의 앨범" (docs/90_디자인_컨셉.md). 차의 낮 · 밤 모드를 따라 바뀐다.
+ * - 라이트 = 낮, 종이 앨범: 종이색 바탕에 흰 카드, 먹색 글자.
+ * - 다크 = 밤, 검은 앨범: 검은 종이 바탕에 흰 글자 (밤 운전에 눈이 덜 부시다).
+ * 파랑은 쓰지 않는다. 의미 색은 셋: 금색(달린 길 · 기억) · 먹색/흰색(머문 곳 · 주된 동작) · 초록(지금 여기).
  * 대비: 본문 글자는 바탕 대비 4.5:1 이상, 색 글자(20sp 굵게 이상)와 아이콘은 3:1 이상 (WCAG AA, 값은 컨셉 문서에).
  */
 
@@ -66,20 +66,20 @@ data class EodiColors(
 )
 
 internal val LightColors = EodiColors(
-    background = Color(0xFFF7F9FC),
+    background = Color(0xFFF7F7F5),
     surface = Color(0xFFFFFFFF),
-    surfaceHigh = Color(0xFFF0F3F8),
-    outline = Color(0xFFE2E7EF),
-    textPrimary = Color(0xFF151A24),
-    textSecondary = Color(0xFF464D5C),
-    textTertiary = Color(0xFF646B7A),
-    accent = Color(0xFF0064FF),
+    surfaceHigh = Color(0xFFECECE8),
+    outline = Color(0xFFDCDCD8),
+    textPrimary = Color(0xFF16191C),
+    textSecondary = Color(0xFF4A525B),
+    textTertiary = Color(0xFF6B7178),
+    accent = Color(0xFF16191C),
     onAccent = Color(0xFFFFFFFF),
-    accentSoft = Color(0xFFE8F0FF),
-    trip = Color(0xFF0064FF),
-    tripSoft = Color(0xFFE8F0FF),
-    stay = Color(0xFFE0522A),
-    staySoft = Color(0xFFFFEDE4),
+    accentSoft = Color(0xFFECECE8),
+    trip = Color(0xFFA86A00),
+    tripSoft = Color(0xFFFFF3D1),
+    stay = Color(0xFF2A2E33),
+    staySoft = Color(0xFFECECE8),
     here = Color(0xFF008F4F),
     hereSoft = Color(0xFFDDF5E8),
     onMarker = Color(0xFFFFFFFF),
@@ -87,17 +87,17 @@ internal val LightColors = EodiColors(
     memory = Color(0xFFFFC233),
     memorySoft = Color(0xFFFFF3D1),
     onMemory = Color(0xFF3A2600),
-    memoryInk = Color(0xFF9A6200),
+    memoryInk = Color(0xFF8A5A00),
     heart = Color(0xFFE5364F),
     heartSoft = Color(0xFFFFE6EA),
     star = Color(0xFFF5A800),
     coupon = Color(0xFFF26B1D),
     couponSoft = Color(0xFFFFF0E5),
     couponInk = Color(0xFFB6460A),
-    ink = Color(0xFF141B2B),
+    ink = Color(0xFF16191C),
     onInk = Color(0xFFFFFFFF),
-    onInkMuted = Color(0xFFC9D2E3),
-    scrim = Color(0x8C0A0F1A),
+    onInkMuted = Color(0xFFCFD2D4),
+    scrim = Color(0x8C101214),
     isDark = false,
 )
 
@@ -138,18 +138,42 @@ internal val DarkColors = EodiColors(
 )
 
 /**
- * 지도 위 경로 · 핀 색. 바탕 지도는 밤 지도 하나(MapStyleSource가 색을 어둡게 바꾼다)라
- * 지도 위 색도 그 지도에 맞춘 값 하나를 쓴다: 길은 금색, 머문 곳은 흰 점, 지금 있는 곳은 초록.
+ * 지도 위 경로 · 핀 색. 바탕 지도가 낮에는 밝은 지도, 밤에는 어두운 지도(MapStyleSource가 색을 바꾼다)라
+ * 지도 위 색도 둘이다. 뜻은 같다: 길은 금색, 머문 곳은 점(낮 = 먹색, 밤 = 흰색), 지금 있는 곳은 초록.
  */
-internal object MapInk {
-    val trip = Color(0xFFF0B84A)
-    val casing = Color(0xFF101214)
-    val stay = Color(0xFFE9E9E4)
-    val here = Color(0xFF2FD98C)
-    val selectedStroke = Color(0xFFF0C36A)
-    val onMarker = Color(0xFF101214)
-    val label = Color(0xFFF1F1EE)
-    val labelHalo = Color(0xFF101214)
-}
+internal class MapInk(
+    val trip: Color,
+    val casing: Color,
+    val stay: Color,
+    val here: Color,
+    val selectedStroke: Color,
+    val onMarker: Color,
+    val label: Color,
+    val labelHalo: Color,
+)
+
+private val MapInkDay = MapInk(
+    trip = Color(0xFFF2A100),
+    casing = Color(0xFFFFFFFF),
+    stay = Color(0xFF2A2E33),
+    here = Color(0xFF00A35A),
+    selectedStroke = Color(0xFFFFFFFF),
+    onMarker = Color(0xFFFFFFFF),
+    label = Color(0xFF16191C),
+    labelHalo = Color(0xFFFFFFFF),
+)
+
+private val MapInkNight = MapInk(
+    trip = Color(0xFFF0B84A),
+    casing = Color(0xFF101214),
+    stay = Color(0xFFE9E9E4),
+    here = Color(0xFF2FD98C),
+    selectedStroke = Color(0xFFF0C36A),
+    onMarker = Color(0xFF101214),
+    label = Color(0xFFF1F1EE),
+    labelHalo = Color(0xFF101214),
+)
+
+internal fun mapInk(dark: Boolean): MapInk = if (dark) MapInkNight else MapInkDay
 
 internal val LocalEodiColors = staticCompositionLocalOf { LightColors }

@@ -176,6 +176,12 @@ class SearchViewModel @Inject constructor(
         requestNow()
     }
 
+    /** 종류 하나만 모아 보기 (첫 화면의 "여행 모음" 입구): 말 없이 그 종류 칩만 켠 채로 연다. */
+    fun openKind(kind: EpisodeKind) {
+        _state.update { it.copy(active = true, query = "", filter = SearchFilter(kinds = setOf(kind))) }
+        requestNow()
+    }
+
     fun clearFilter() {
         _state.update { it.copy(filter = SearchFilter()) }
         requestNow()

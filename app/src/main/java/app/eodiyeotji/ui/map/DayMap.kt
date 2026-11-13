@@ -47,7 +47,7 @@ import app.eodiyeotji.core.MapPhotoSpot
 import app.eodiyeotji.ui.gallery.MyPhotoViewer
 import app.eodiyeotji.core.MapBoundsLatLon
 import app.eodiyeotji.ui.theme.EodiTheme
-import app.eodiyeotji.ui.theme.MapInk
+import app.eodiyeotji.ui.theme.mapInk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -114,11 +114,12 @@ fun DayMap(
     val description = stringResource(R.string.map_content_description)
     val inPreview = LocalInspectionMode.current
     val appContext = LocalContext.current.applicationContext
+    val night = EodiTheme.colors.isDark
     // 지도 엔진 준비는 IO 스레드에서. 그동안(처음 한 번 0.1~0.2초)은 바탕색 자리만 보인다.
     val baseOptions by produceState<MapLibreMapOptions?>(initialValue = null) {
         if (inPreview) return@produceState
         // 스타일 만들기(asset 읽기·JSON 합치기)를 엔진 준비와 동시에 시작한다 → 지도 칸이 생길 때는 캐시에서 바로 나온다
-        val styleWarm = launch { MapStyleSource.resolve(appContext) }
+        val styleWarm = launch { MapStyleSource.resolve(appContext, night) }
         value = MapLibreNative.prepare(appContext)
         styleWarm.join()
     }
@@ -144,19 +145,21 @@ private fun DayMapContent(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current.density
-    // 경로·핀 색은 밤 지도에 맞춘 고정값(MapInk), 지도 파일이 없을 때의 바탕색만 테마를 따른다
+    // 경로·핀 색은 낮 · 밤 지도에 맞춘 값(MapInk), 지도 파일이 없을 때의 바탕색은 테마를 따른다
     val loadingBackground = EodiTheme.colors.surfaceHigh
-    val palette = remember(loadingBackground) {
+    val night = EodiTheme.colors.isDark
+    val ink = mapInk(night)
+    val palette = remember(loadingBackground, ink) {
         MapPalette(
-            trip = MapInk.trip.toArgb(),
-            casing = MapInk.casing.toArgb(),
-            stay = MapInk.stay.toArgb(),
-            openStay = MapInk.here.toArgb(),
-            selectedStroke = MapInk.selectedStroke.toArgb(),
+            trip = ink.trip.toArgb(),
+            casing = ink.casing.toArgb(),
+            stay = ink.stay.toArgb(),
+            openStay = ink.here.toArgb(),
+            selectedStroke = ink.selectedStroke.toArgb(),
             background = loadingBackground.toArgb(),
-            onStay = MapInk.onMarker.toArgb(),
-            onOpenStay = MapInk.onMarker.toArgb(),
-            label = MapInk.label.toArgb(),
+            onStay = ink.onMarker.toArgb(),
+            onOpenStay = ink.onMarker.toArgb(),
+            label = ink.label.toArgb(),
         )
     }
 
@@ -196,7 +199,7 @@ private fun DayMapContent(
     }
 
     // 지도 파일·스타일 찾기는 IO 스레드에서 (UI 스레드 블로킹 0)
-    LaunchedEffect(Unit) { style = MapStyleSource.resolve(context.applicationContext) }
+    LaunchedEffect(night) { style = MapStyleSource.resolve(context.applicationContext, night) }
 
     val backgroundArgb by rememberUpdatedState(palette.background)
     LaunchedEffect(controller, style) {
@@ -300,16 +303,17 @@ private fun DayMapContent(
     }
 }
 
-/** 지도 위 작은 안내 (출처 · 지도 파일 없음). 지도 위에서도 읽히게 반투명 흰 바탕 + 진한 글자. */
+/** 지도 위 작은 안내 (출처 · 지도 파일 없음). 지도 위에서도 읽히게 반투명 바탕 + 지도 글자색. */
 @Composable
 private fun MapNotice(text: String, modifier: Modifier = Modifier, small: Boolean = false) {
+    val ink = mapInk(EodiTheme.colors.isDark)
     Text(
         text,
         style = if (small) MapNoticeSmall else EodiTheme.type.caption,
-        color = MapInk.label.copy(alpha = 0.78f),
+        color = ink.label.copy(alpha = 0.78f),
         maxLines = 1,
         modifier = modifier
-            .background(MapInk.casing.copy(alpha = 0.86f), RoundedCornerShape(10.dp))
+            .background(ink.casing.copy(alpha = 0.86f), RoundedCornerShape(10.dp))
             .padding(horizontal = 12.dp, vertical = 5.dp),
     )
 }

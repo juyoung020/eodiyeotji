@@ -332,7 +332,8 @@ private fun WalkMap(me: LocationFix?, target: WalkTarget, accent: Color, modifie
     var style by remember { mutableStateOf<Style?>(null) }
     val accentHex = remember(accent) { String.format("#%06X", 0xFFFFFF and android.graphics.Color.argb(255, (accent.red * 255).toInt(), (accent.green * 255).toInt(), (accent.blue * 255).toInt())) }
     LaunchedEffect(mapView) {
-        val spec = MapStyleSource.resolve(context.applicationContext)
+        // 이 지도 위에 그리는 선 · 표시 색이 밝은 지도 기준이라 낮 지도만 쓴다
+        val spec = MapStyleSource.resolve(context.applicationContext, night = false)
         val json = when (spec) {
             is MapStyleSpec.Offline -> spec.json
             is MapStyleSpec.Online -> spec.json

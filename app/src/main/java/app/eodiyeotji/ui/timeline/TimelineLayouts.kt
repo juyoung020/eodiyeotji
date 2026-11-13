@@ -61,13 +61,13 @@ import app.eodiyeotji.ui.map.MapPhotoPin
 import app.eodiyeotji.ui.place.LocalOpenPlace
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
-import app.eodiyeotji.ui.theme.MapInk
+import app.eodiyeotji.ui.theme.mapInk
 import java.time.LocalDate
 import kotlin.math.roundToInt
 
 private val RailWidth = 116.dp
 private val InfoWidth = 640.dp
-private val TopWidth = 440.dp
+private val TopWidth = 580.dp
 private val SheetWidth = 600.dp
 private val StopCardsHeight = 132.dp
 private val Gap = 20.dp
@@ -147,7 +147,7 @@ internal fun WideHome(
                 Panel { info(Modifier.padding(24.dp)) }
             }
             if (sheet) {
-                TimelineSheet(onClose = { sheet = false }, Modifier.align(Alignment.TopEnd).padding(Gap).width(SheetWidth).fillMaxHeight(), timeline)
+                TimelineSheet(onClose = { sheet = false }, Modifier.align(Alignment.TopEnd).padding(start = Gap, top = Gap, end = Gap, bottom = StopCardsHeight + Gap).width(SheetWidth).fillMaxHeight(), timeline)
             } else if (listTop != null) {
                 Movable(area, start = { IntOffset(area.width - it.width - gap, gap) }, modifier = Modifier.width(TopWidth), onSize = { topSize = it }) { listTop() }
             }
@@ -269,56 +269,58 @@ private fun DateRail(days: List<DaySummary>, today: LocalDate, selected: String?
     }
 }
 
-/** 들른 곳 카드 줄 (번호 · 이름 · 도착 시각 · 머문 시간) + 끝에 전체 시간표 버튼. 누르면 지도에서 그곳을 고르고, 고른 곳을 한 번 더 누르면 그곳 화면을 연다. */
+/** 들른 곳 카드 줄 (번호 · 이름 · 도착 시각 · 머문 시간) + 오른쪽 끝에 붙박은 전체 시간표 버튼. 누르면 지도에서 그곳을 고르고, 고른 곳을 한 번 더 누르면 그곳 화면을 연다. */
 @Composable
 private fun StopCards(entries: List<DayEntry>, selectedKey: String?, onClick: (String) -> Unit, onAll: () -> Unit, modifier: Modifier = Modifier) {
     val c = EodiTheme.colors
+    val ink = mapInk(c.isDark)
     val stays = remember(entries) { entries.filterIsInstance<DayEntry.Stay>() }
-    LazyRow(modifier.height(StopCardsHeight - 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = Gap)) {
-        itemsIndexed(stays, key = { _, e -> e.key }) { i, e ->
-            val stay = e.stay
-            val on = e.key == selectedKey
-            // 그날 처음 · 마지막 곳(대개 집)은 밤새 머문 시간까지 세져서 머문 시간을 뺀다 (시간표 줄과 같은 규칙)
-            val overnight = stay.isOpen || i == 0 || i == stays.lastIndex
-            Surface(
-                onClick = { onClick(e.key) },
-                color = c.surface.copy(alpha = 0.95f),
-                contentColor = c.textPrimary,
-                shape = RoundedCornerShape(24.dp),
-                border = if (on) BorderStroke(3.dp, MapInk.trip) else BorderStroke(1.dp, c.outline),
-                shadowElevation = 6.dp,
-                modifier = Modifier.width(340.dp).fillMaxHeight(),
-            ) {
-                Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(48.dp).background(if (stay.isOpen) MapInk.here else MapInk.stay, CircleShape), contentAlignment = Alignment.Center) {
-                        Text(if (stay.order > 0) stay.order.toString() else "", style = EodiTheme.type.label, fontWeight = FontWeight.Bold, color = MapInk.onMarker)
-                    }
-                    Spacer(Modifier.width(16.dp))
-                    Column {
-                        Text(
-                            stay.place?.name?.takeIf { it.isNotBlank() } ?: stringResource(R.string.place_pending),
-                            style = EodiTheme.type.bodyStrong, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            if (overnight) clockText(stay.arriveMs) else clockText(stay.arriveMs) + " · " + durationText(stay.leaveMs - stay.arriveMs),
-                            style = EodiTheme.type.meta, color = c.textTertiary, maxLines = 1,
-                        )
+    // 전체 시간표 버튼은 줄 끝에 붙박아 둔다 (들른 곳이 많은 날에도 카드를 끝까지 밀지 않고 누를 수 있게)
+    Row(modifier.height(StopCardsHeight - 24.dp).padding(end = Gap), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyRow(Modifier.weight(1f, fill = false), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            itemsIndexed(stays, key = { _, e -> e.key }) { i, e ->
+                val stay = e.stay
+                val on = e.key == selectedKey
+                // 그날 처음 · 마지막 곳(대개 집)은 밤새 머문 시간까지 세져서 머문 시간을 뺀다 (시간표 줄과 같은 규칙)
+                val overnight = stay.isOpen || i == 0 || i == stays.lastIndex
+                Surface(
+                    onClick = { onClick(e.key) },
+                    color = c.surface.copy(alpha = 0.95f),
+                    contentColor = c.textPrimary,
+                    shape = RoundedCornerShape(24.dp),
+                    border = if (on) BorderStroke(3.dp, ink.trip) else BorderStroke(1.dp, c.outline),
+                    shadowElevation = 6.dp,
+                    modifier = Modifier.width(340.dp).fillMaxHeight(),
+                ) {
+                    Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(48.dp).background(if (stay.isOpen) ink.here else ink.stay, CircleShape), contentAlignment = Alignment.Center) {
+                            Text(if (stay.order > 0) stay.order.toString() else "", style = EodiTheme.type.label, fontWeight = FontWeight.Bold, color = ink.onMarker)
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Column {
+                            Text(
+                                stay.place?.name?.takeIf { it.isNotBlank() } ?: stringResource(R.string.place_pending),
+                                style = EodiTheme.type.bodyStrong, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                if (overnight) clockText(stay.arriveMs) else clockText(stay.arriveMs) + " · " + durationText(stay.leaveMs - stay.arriveMs),
+                                style = EodiTheme.type.meta, color = c.textTertiary, maxLines = 1,
+                            )
+                        }
                     }
                 }
             }
         }
-        item(key = "all") {
-            Surface(
-                onClick = onAll,
-                color = c.ink,
-                contentColor = c.onInk,
-                shape = RoundedCornerShape(24.dp),
-                shadowElevation = 6.dp,
-                modifier = Modifier.fillMaxHeight(),
-            ) {
-                Box(Modifier.padding(horizontal = 28.dp), contentAlignment = Alignment.Center) {
-                    Text(stringResource(R.string.home_all_timeline), style = EodiTheme.type.label, fontWeight = FontWeight.Bold, maxLines = 1)
-                }
+        Surface(
+            onClick = onAll,
+            color = c.ink,
+            contentColor = c.onInk,
+            shape = RoundedCornerShape(24.dp),
+            shadowElevation = 6.dp,
+            modifier = Modifier.fillMaxHeight(),
+        ) {
+            Box(Modifier.padding(horizontal = 28.dp), contentAlignment = Alignment.Center) {
+                Text(stringResource(R.string.home_all_timeline), style = EodiTheme.type.label, fontWeight = FontWeight.Bold, maxLines = 1)
             }
         }
     }

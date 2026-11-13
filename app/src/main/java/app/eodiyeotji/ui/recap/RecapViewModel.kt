@@ -13,7 +13,6 @@ import app.eodiyeotji.core.OnThisDay
 import app.eodiyeotji.core.RoutineNudge
 import app.eodiyeotji.core.YearRecap
 import app.eodiyeotji.core.dismissOnThisDay
-import app.eodiyeotji.core.dismissRoutineNudge
 import app.eodiyeotji.core.memoryMap
 import app.eodiyeotji.core.monthRecap
 import app.eodiyeotji.core.onThisDay
@@ -48,15 +47,15 @@ sealed interface Load<out T> {
 /**
  * 첫 화면 위 "N년 전 오늘" 카드 · 요약 입구와 요약 화면 상태.
  * [onThisDay]는 오늘 닫았으면 null. [driving]이면 카드를 숨긴다 (운전 중에는 음성 한 줄만, `RecallCenter`).
- * [routine]은 늘 가던 날이 다가온 곳 (없거나 닫았으면 null).
+ * [routine]은 늘 가던 날이 다가온 곳 (없으면 null). 화면에서는 지우지 않고 접어만 둔다.
  */
 @Immutable
 data class RecapUiState(
     val today: LocalDate = LocalDate.now(),
     val onThisDay: OnThisDay? = null,
     val routine: RoutineNudge? = null,
-    /** 방금 닫은 늘 가던 날 카드: 잠깐 "되돌리기"를 띄우는 동안만 들고 있다 (그 뒤에 닫은 것을 저장한다) */
-    val undoRoutine: RoutineNudge? = null,
+    /** 늘 가던 날 카드를 한 줄로 접어 두었는지 (앱을 다시 켜면 펴진다) */
+    val routineFolded: Boolean = false,
     val driving: Boolean = false,
     val open: Boolean = false,
     val mode: RecapMode = RecapMode.MONTH,
@@ -83,7 +82,6 @@ class RecapViewModel @Inject constructor(
     val state: StateFlow<RecapUiState> = _state.asStateFlow()
     private var loadJob: Job? = null
     private var noteJob: Job? = null
-    private var undoJob: Job? = null
     private var mapJob: Job? = null
     private var otdJob: Job? = null
 
@@ -108,27 +106,9 @@ class RecapViewModel @Inject constructor(
         }
     }
 
-    /**
-     * 이번에 돌아오는 날 것은 닫는다. 실수로 닫았을 수 있으니 [UNDO_MS] 동안은 저장하지 않고 "되돌리기"를 띄운다.
-     * 그 시간이 지나면 저장하고, 그다음으로 가까운 곳이 있으면 그것이 나온다 (닫은 뒤 다시 읽는다).
-     */
-    fun dismissRoutine() {
-        val r = _state.value.routine ?: return
-        _state.update { it.copy(routine = null, undoRoutine = r) }
-        undoJob?.cancel()
-        undoJob = viewModelScope.launch {
-            delay(UNDO_MS)
-            runCatching { core.dismissRoutineNudge(r) }.onFailure { Log.w(TAG, "닫기 저장 실패", it) }
-            _state.update { it.copy(undoRoutine = null) }
-            loadOnThisDay()
-        }
-    }
-
-    /** 방금 닫은 카드를 되돌린다 (아직 저장 전이라 화면만 되돌리면 된다). */
-    fun undoDismissRoutine() {
-        val r = _state.value.undoRoutine ?: return
-        undoJob?.cancel()
-        _state.update { it.copy(routine = r, undoRoutine = null) }
+    /** 늘 가던 날 카드를 접거나 편다 (지우지 않는다). */
+    fun foldRoutine(folded: Boolean) {
+        _state.update { it.copy(routineFolded = folded) }
     }
 
     /** "여기로 안내": 늘 가던 곳을 목적지로 내비에 보낸다. */
@@ -253,7 +233,5 @@ class RecapViewModel @Inject constructor(
         const val TAG = "EodiRecap"
         const val CHANGE_DEBOUNCE_MS = 3_000L
         const val NOTE_MS = 2_500L
-        /** 닫은 카드에 "되돌리기"를 띄워 두는 시간 */
-        const val UNDO_MS = 8_000L
     }
 }
