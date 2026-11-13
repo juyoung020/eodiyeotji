@@ -1282,6 +1282,7 @@ pub(crate) fn parse_day(s: &str) -> Option<i64> {
 }
 
 mod conn;
+mod wipe;
 pub(crate) use conn::Domain;
 
 #[cfg(test)]

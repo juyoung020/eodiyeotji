@@ -32,6 +32,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -69,6 +70,9 @@ import app.eodiyeotji.ui.community.LocalOverlayPresenter
 import app.eodiyeotji.ui.community.OverlayCard
 import app.eodiyeotji.ui.community.PrimaryPill
 import app.eodiyeotji.ui.community.SecondaryPill
+import app.eodiyeotji.ui.agent.DrivingStatePort
+import app.eodiyeotji.ui.common.PressSurface
+import app.eodiyeotji.ui.places.PlacesIcons
 import app.eodiyeotji.ui.theme.EodiTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -126,7 +130,15 @@ class RecordingStatusViewModel @Inject constructor(
     private val platform: RecordingPlatform,
     monitor: RecordingMonitor,
     drive: DriveSignalSource,
+    drivingState: DrivingStatePort,
+    private val dataWipe: DataWipe,
 ) : ViewModel() {
+    /** 주행 중이면 "기록 모두 지우기"를 막는다 (긴 확인 창 · 되돌릴 수 없는 일은 정차 중에만). */
+    val driving: StateFlow<Boolean> = drivingState.isDriving
+
+    /** 기록 모두 지우는 중 (버튼을 다시 못 누르게). */
+    val wiping = MutableStateFlow(false)
+
     private val issues = MutableStateFlow<List<RecordingIssue>>(emptyList())
 
     private val phase: Flow<RecordingPhase> = monitor.phase.transformLatest {
@@ -163,6 +175,15 @@ class RecordingStatusViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             RecordingController.ensureStarted(context)
             refresh()
+        }
+    }
+
+    /** 기록 모두 지우기 (동의 철회). 주행 중이면 아무것도 하지 않는다. 끝나면 앱을 첫 화면부터 다시 띄운다. */
+    fun wipeAll() {
+        if (driving.value || !wiping.compareAndSet(false, true)) return
+        viewModelScope.launch {
+            val ok = runCatching { dataWipe.wipeAll() }.isSuccess
+            if (ok) dataWipe.restartApp() else wiping.value = false
         }
     }
 
@@ -284,7 +305,15 @@ private fun RecordingStatusSheet(state: RecordingStatusUi, viewModel: RecordingS
             R.string.status_fix_permission to { launcher.launch(viewModel.permissionsFor(issue).toTypedArray()) }
         else -> R.string.status_fix_settings to { context.openFixSettings(issue) }
     }
-    val content: @Composable BoxScope.() -> Unit = { StatusSheetContent(state, fix, onClose) }
+    val driving by viewModel.driving.collectAsStateWithLifecycle()
+    val wiping by viewModel.wiping.collectAsStateWithLifecycle()
+    var confirmWipe by remember { mutableStateOf(false) }
+    val content: @Composable BoxScope.() -> Unit = {
+        StatusSheetContent(state, fix, onClose, wipeEnabled = !driving && !wiping, onWipe = { confirmWipe = true })
+    }
+    if (confirmWipe && !driving) {
+        ConfirmWipe(wiping = wiping, onWipe = viewModel::wipeAll, onCancel = { confirmWipe = false })
+    }
     if (LocalOverlayPresenter.current != null) {
         OverlayCard(onDismiss = onClose, content = content)
     } else {
@@ -302,7 +331,13 @@ private fun RecordingStatusSheet(state: RecordingStatusUi, viewModel: RecordingS
 }
 
 @Composable
-private fun StatusSheetContent(state: RecordingStatusUi, fix: Pair<Int, () -> Unit>?, onClose: () -> Unit) {
+private fun StatusSheetContent(
+    state: RecordingStatusUi,
+    fix: Pair<Int, () -> Unit>?,
+    onClose: () -> Unit,
+    wipeEnabled: Boolean,
+    onWipe: () -> Unit,
+) {
     val c = EodiTheme.colors
     val type = EodiTheme.type
     val headline = state.headline
@@ -348,6 +383,65 @@ private fun StatusSheetContent(state: RecordingStatusUi, fix: Pair<Int, () -> Un
             PrimaryPill(stringResource(fix.first), null, fix.second, Modifier.fillMaxWidth())
         }
         SecondaryPill(stringResource(R.string.status_close), null, onClose, Modifier.fillMaxWidth())
+        // 동의 철회 = 기록 모두 지우기. 되돌릴 수 없어 맨 아래에 빨간 글자로 두고, 주행 중에는 막는다
+        Spacer(Modifier.size(8.dp))
+        Text(stringResource(R.string.wipe_section), style = type.label, fontWeight = FontWeight.Bold, color = c.textPrimary, modifier = Modifier.semantics { heading() })
+        Text(
+            stringResource(if (wipeEnabled) R.string.wipe_hint else R.string.wipe_hint_driving),
+            style = type.body,
+            color = c.textSecondary,
+        )
+        PressSurface(
+            onClick = onWipe,
+            enabled = wipeEnabled,
+            shape = CircleShape,
+            color = c.error.copy(alpha = if (wipeEnabled) 0.12f else 0.05f),
+            contentColor = c.error.copy(alpha = if (wipeEnabled) 1f else 0.4f),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 76.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(stringResource(R.string.wipe_button), style = type.bodyStrong, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+/** "기록 모두 지우기" 확인 창 (지우기 확인과 같은 모양: 빨간 원 아이콘 + 제목 + 설명 + [취소][지우기]). */
+@Composable
+private fun ConfirmWipe(wiping: Boolean, onWipe: () -> Unit, onCancel: () -> Unit) {
+    val c = EodiTheme.colors
+    OverlayCard(onDismiss = { if (!wiping) onCancel() }, maxWidth = 900.dp) {
+        Column(Modifier.padding(32.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(72.dp).background(c.error.copy(alpha = 0.12f), CircleShape), contentAlignment = Alignment.Center) {
+                    Icon(PlacesIcons.Trash, null, tint = c.error, modifier = Modifier.size(36.dp))
+                }
+                Spacer(Modifier.width(20.dp))
+                Text(stringResource(R.string.wipe_title), style = EodiTheme.type.title, modifier = Modifier.weight(1f).semantics { heading() })
+            }
+            Spacer(Modifier.size(16.dp))
+            Text(stringResource(R.string.wipe_body), style = EodiTheme.type.body, color = c.textSecondary)
+            Spacer(Modifier.size(28.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                SecondaryPill(stringResource(R.string.wipe_cancel), null, onCancel, Modifier.weight(1f), enabled = !wiping)
+                PressSurface(
+                    onClick = onWipe,
+                    enabled = !wiping,
+                    shape = CircleShape,
+                    color = c.error,
+                    contentColor = Color.White,
+                    modifier = Modifier.weight(1f).heightIn(min = 76.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            stringResource(if (wiping) R.string.wipe_running else R.string.wipe_confirm),
+                            style = EodiTheme.type.bodyStrong,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

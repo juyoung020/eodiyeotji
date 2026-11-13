@@ -47,4 +47,15 @@
     <string name="status_fix_battery">최적화에서 빼기</string>
     <string name="status_fix_restart">다시 켜기</string>
     <string name="status_close">닫기</string>
+
+    <!-- 기록 모두 지우기 (동의 철회, record/DataWipe.kt) -->
+    <string name="wipe_section">기록 모두 지우기</string>
+    <string name="wipe_hint">지금까지의 기록 · 장소 · 사진 · 검색 기록 · 설정을 이 차에서 모두 지우고, 위치 권한 동의도 거둬요.</string>
+    <string name="wipe_hint_driving">주행 중에는 지울 수 없어요. 차를 세운 뒤 해 주세요.</string>
+    <string name="wipe_button">기록 모두 지우기</string>
+    <string name="wipe_title">기록을 모두 지울까요?</string>
+    <string name="wipe_body">다녀온 길 · 머문 곳 · 장소 이름 · 사진 · 리뷰 · 검색 기록 · 같이 가기 상태가 모두 지워지고 되돌릴 수 없어요. 위치 권한 동의도 거두고 앱이 처음 화면부터 다시 열려요.</string>
+    <string name="wipe_cancel">취소</string>
+    <string name="wipe_confirm">모두 지우기</string>
+    <string name="wipe_running">지우는 중…</string>
 </resources>
