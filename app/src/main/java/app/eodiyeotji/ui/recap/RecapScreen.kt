@@ -358,7 +358,8 @@ private fun TotalsStrip(t: RecapTotals) {
 private fun PlacesAndRegions(places: List<RecapPlace>, regions: List<RecapRegion>) {
     if (places.isEmpty() && regions.isEmpty()) return
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        if (maxWidth >= TwoColumn) {
+        // 한쪽이 비면 두 칸으로 나누지 않는다 (다녀온 곳이 없을 때 "1일"이 카드 가운데에 떠 있었다)
+        if (maxWidth >= TwoColumn && places.isNotEmpty() && regions.isNotEmpty()) {
             Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 Column(Modifier.weight(1.3f), verticalArrangement = Arrangement.spacedBy(12.dp)) { TopPlaces(places) }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { Regions(regions) }
@@ -379,7 +380,11 @@ private fun TopPlaces(places: List<RecapPlace>) {
     SectionTitle(stringResource(R.string.recap_top_places), Modifier.padding(top = 8.dp), icon = EodiIcons.Sparkle)
     val openPlace = LocalOpenPlace.current
     places.forEachIndexed { i, p ->
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        // 줄 전체가 누르는 자리 (전에는 76dp 사진만 눌렸다)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(role = Role.Button) { openPlace(p.place) },
+        ) {
             Text("${i + 1}", style = EodiTheme.type.titleSmall, color = c.textTertiary, modifier = Modifier.width(40.dp))
             StopPhotoBox(p.place.name, p.place.address, p.place.lat, p.place.lon, null, Modifier.size(76.dp), iconSize = 36.dp, loadingColor = c.surfaceHigh, onClick = { openPlace(p.place) })
             Spacer(Modifier.width(16.dp))

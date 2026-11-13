@@ -698,7 +698,7 @@ private fun LazyGridScope.suggestions(state: SearchUiState, vm: SearchViewModel)
             val c = EodiTheme.colors
             Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.search_recent), style = EodiTheme.type.eyebrow, color = c.textTertiary, modifier = Modifier.weight(1f).semantics { heading() })
-                TextButton(onClick = vm::clearRecent, modifier = Modifier.heightIn(min = 64.dp)) {
+                TextButton(onClick = vm::clearRecent, modifier = Modifier.heightIn(min = 76.dp)) {
                     Text(stringResource(R.string.search_recent_clear), style = EodiTheme.type.label, color = c.accent)
                 }
             }

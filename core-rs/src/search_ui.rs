@@ -492,7 +492,8 @@ impl EodiStore {
     /// 최근 검색어에 넣는다 (같은 말이면 시각만 새로, 20개까지). 빈 말은 무시.
     pub fn remember_search(&self, text: String, now_ms: i64) -> Result<(), CoreError> {
         let t: String = text.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(RECENT_MAX_CHARS).collect();
-        if t.is_empty() {
+        // 빈 말, 그리고 낱자만 있는 말("ㅁ", "ㄱㅅ" — 한글 조합 중에 눌린 검색)은 남기지 않는다: 최근 검색어 줄에 뜻 없는 칸이 생겼다
+        if t.is_empty() || !t.chars().any(|c| c.is_alphanumeric() && !is_hangul_jamo(c)) {
             return Ok(());
         }
         let conn = self.lock_side()?;
@@ -940,6 +941,11 @@ fn frequent_places(conn: &Connection, n: usize) -> Result<Vec<String>, CoreError
         }
     }
     Ok(out)
+}
+
+/// 한글 낱자(자모)인가: 첫가끝 · 호환 자모 · 확장 A/B.
+fn is_hangul_jamo(c: char) -> bool {
+    matches!(c, '\u{1100}'..='\u{11FF}' | '\u{3130}'..='\u{318F}' | '\u{A960}'..='\u{A97F}' | '\u{D7B0}'..='\u{D7FF}')
 }
 
 #[cfg(test)]
