@@ -166,7 +166,8 @@ private fun ThreadScreen(
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             Column(Modifier.widthIn(max = ReadWidth).fillMaxSize().padding(start = 32.dp, end = 32.dp, bottom = 24.dp)) {
                 Row(Modifier.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    RoundIconButton(EodiIcons.Back, stringResource(R.string.community_back), onBack)
+                    // 드라이브 코스 · 여행 리뷰 상세와 같은 글자 달린 뒤로 버튼 (아이콘만 있으면 어디로 가는지 안 보였다)
+                    SecondaryPill(stringResource(R.string.board_back_to_list), EodiIcons.Back, onBack)
                 }
                 LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
                     item(key = "post") {

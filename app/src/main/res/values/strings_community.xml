@@ -180,6 +180,7 @@
     <string name="drive_navigate_end">끝점으로 바로 안내</string>
     <string name="drive_navi_on_way">시작점으로 가는 중 · 도착하면 끝점까지 자동으로 이어서 안내해요</string>
     <string name="drive_back_to_list">드라이브 코스 목록</string>
+    <string name="board_back_to_list">게시판 목록</string>
     <string name="drive_preview_description">%1$s 3D 미리보기</string>
     <string name="drive_driving_note">주행 중에는 3D 미리보기를 멈춰요</string>
     <string name="drive_shared_done">드라이브 코스를 올렸어요</string>
