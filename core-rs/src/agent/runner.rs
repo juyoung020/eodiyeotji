@@ -226,8 +226,9 @@ impl MemoryAgent {
             // 출퇴근이 아닌 기억 · 오래 머문 기억을 앞으로
             // ("크리스마스"처럼 날짜 말이 낱말로도 남는 때가 있다 → 하루 · 이틀 기간에서 점수가 모두 같으면 같은 규칙)
             let same_scores = fast_hits.windows(2).all(|w| w[0].score == w[1].score);
-            let narrow_range = range.is_some_and(|r| r.to - r.from <= 2);
-            if range.is_some() && (parsed.terms.is_empty() || (narrow_range && same_scores)) {
+            // 하루 · 이틀만 (DayRange는 양 끝 포함). 지난달 · 작년 여름처럼 긴 기간은 검색 순서(최신)를 그대로 둔다
+            let narrow_range = range.is_some_and(|r| r.to - r.from <= 1);
+            if narrow_range && (parsed.terms.is_empty() || same_scores) {
                 order_by_notability(&mut fast_hits);
             }
             // "옛날에 · 예전에": 잘 맞는 기억 중 오래된 것부터, 최근 [RECENT_DAYS]일 기록은 뒤로 (순서만 바꾸고 빼지는 않는다)
@@ -898,8 +899,6 @@ struct Asked<'a> {
     range: Option<DayRange>,
 }
 
-/// "옛날에 · 예전에" 순서: ① 잘 맞는 기억(1위 점수의 [LONG_AGO_STRONG_RATIO] 이상) 중 오래된 것부터 → ② 나머지는 점수순 →
-/// ③ 최근 [RECENT_DAYS]일 기록은 맨 뒤. 빼지는 않는다 (순서만).
 /// 날짜만 물었을 때 답할 기억 순서: 출퇴근이 아닌 것 먼저, 그다음 들른 곳에 오래 머문 것 (같으면 원래 순서).
 pub(crate) fn order_by_notability(hits: &mut [MemoryHit]) {
     let commute = |h: &MemoryHit| matches!(h.episode.facts.kind, EpisodeKind::CommuteToWork | EpisodeKind::CommuteHome);
@@ -907,6 +906,8 @@ pub(crate) fn order_by_notability(hits: &mut [MemoryHit]) {
     hits.sort_by_key(|h| (commute(h), std::cmp::Reverse(dwell(h))));
 }
 
+/// "옛날에 · 예전에" 순서: ① 잘 맞는 기억(1위 점수의 [LONG_AGO_STRONG_RATIO] 이상) 중 오래된 것부터 → ② 나머지는 점수순 →
+/// ③ 최근 [RECENT_DAYS]일 기록은 맨 뒤. 빼지는 않는다 (순서만).
 pub(crate) fn order_long_ago(hits: &mut [MemoryHit], today: i64) {
     let top = hits.iter().map(|h| h.score).fold(f64::MIN, f64::max);
     hits.sort_by_key(|h| {
