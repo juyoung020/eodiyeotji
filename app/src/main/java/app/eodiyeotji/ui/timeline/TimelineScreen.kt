@@ -888,11 +888,16 @@ private fun DetailHeader(summary: DaySummary?, today: LocalDate, onBack: (() -> 
                         modifier = Modifier.semantics { heading() },
                     )
                 }
+                // 더보기(⋯)는 제목 줄 오른쪽 (홈 하루 판과 같은 자리): 버튼 줄 안에 두면 좁은 창에서 혼자 둘째 줄로 꺾였다
+                LocalTimelineEdits.current?.let { edits ->
+                    Spacer(Modifier.width(12.dp))
+                    MoreButton(stringResource(R.string.edit_more_day), { edits.onDay(summary) })
+                }
             }
         }
         if (summary != null) {
             Spacer(Modifier.height(16.dp))
-            DayActions(summary, loaded, onShare)
+            DayActions(summary, loaded, onShare, moreInline = false)
             if (summary.tags.isNotEmpty()) {
                 Spacer(Modifier.height(14.dp))
                 TagRow(summary.tags)
