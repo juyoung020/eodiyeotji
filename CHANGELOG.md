@@ -18,6 +18,7 @@
 ## [Unreleased]
 
 ### Added
+- Pleos 기획 가이드 마무리: Pleos TTS 앞 150ms 선행 묵음(앱에서 지연), PLEOS_CLIENT_ID/SECRET가 있으면 HYBRID + registerApp 서버 음성, 같이 가기는 집·회사 1km 안에서 위치를 보내지 않음, 기록 상태 시트에 개인정보 · 데이터 활용 원칙
 - 오프라인 표시: 인터넷이 끊기면 첫 화면 머리와 주행 화면에 "오프라인"이 보인다 (Pleos 기획 가이드 오프라인 안내 UI, `ui/common/OfflineBadge.kt`)
 - 태블릿에서 길 안내: 차 판을 차가 아닌 기기에 깔면 차 내비가 없어 "목적지를 보내지 못했어요"가 뜨던 것을, 그 기기의 지도 앱(티맵 → 네이버 지도 → 카카오맵 → 일반 지도 요청 순)으로 목적지를 넘기게 했다. 진짜 차에서는 Pleos 내비 그대로 (`platform/TabletNavigator.kt`)
 - 태블릿용 가짜 인포 틀: 차 판을 차가 아닌 기기(태블릿)에 깔면, 넣어 둔 인포 화면 그림(차 상태 판 · 위아래 막대) 안에 앱을 차에서와 같은 자리 · 같은 크기로 그린다. 틀의 버튼은 그림이라 눌러도 반응이 없다. 진짜 차에서는 아무것도 바뀌지 않는다 (`ui/shell/FakeCarShell.kt`, `scripts/demo-shell/push_shell.py`)
