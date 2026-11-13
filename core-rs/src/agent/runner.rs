@@ -440,13 +440,25 @@ impl MemoryAgent {
 
     /// LLM이 답에서 카드와 다른 후보를 말했으면(카드 "대림창고" · 답 "블루보틀 성수 기록이 있어요") 카드 · 안내 제안을
     /// 답이 말한 후보로 바꾼다. 답과 화면이 다르면 운전자가 무엇으로 안내되는지 알 수 없다.
-    /// 이번 질문에서 기억 카드를 보였을 때만 (코스 추천 중이거나 지난 질문의 후보로는 바꾸지 않는다).
+    /// 한 곳으로 옮기는 것은 이번 질문에서 기억 카드를 보였을 때만, 여러 곳을 말했으면 후보 칸을 보인다 (코스 추천 중에는 하지 않는다).
     fn follow_answer_focus(&self, s: &mut Session, t: &mut Turn, ctx: &AgentContext) {
-        if !t.memory_shown || t.course_shown {
+        if t.course_shown {
             return;
         }
         let Some(focus) = s.focus.clone() else { return };
-        let Some(i) = answer_points_elsewhere(t.answer_text(), &focus, &s.candidates) else { return };
+        let Some(named) = answer_names(t.answer_text(), &focus, &s.candidates) else { return };
+        if named.len() >= 2 {
+            // "다른 날도 보여줘" → 답이 후보 둘 이상을 말했다: 후보 칸을 보여 고르게 하고, 안내 제안은 처음 말한 곳으로
+            // (전에는 카드 없이 "안내할까요?"만 남아 무엇으로 안내하는지 몰랐다)
+            let list = s.candidates.clone();
+            s.focus = Some(list[named[0]].clone());
+            t.candidates(&list, named[0]);
+            return;
+        }
+        if named.len() != 1 || !t.memory_shown {
+            return;
+        }
+        let i = named[0];
         let hit = s.candidates[i].clone();
         alog!("[agent] 답이 다른 후보를 말함 → 카드를 {}로", hit_place(&hit));
         s.focus = Some(hit.clone());
@@ -983,7 +995,17 @@ fn times(n: usize) -> String {
 
 /// 답 글이 [focus]가 아닌 후보 하나를 이름으로 말하나: 그 후보 번호. focus의 이름이 나오거나, 둘 이상이 나오거나, 아무것도 없으면 None.
 /// 이름은 들른 곳 이름(띄어쓰기 무시, 세 글자 이상)으로 맞춘다.
+#[cfg(test)]
 pub(crate) fn answer_points_elsewhere(answer: &str, focus: &MemoryHit, cands: &[MemoryHit]) -> Option<usize> {
+    match answer_names(answer, focus, cands) {
+        Some(v) if v.len() == 1 => Some(v[0]),
+        _ => None,
+    }
+}
+
+/// 답 글이 이름으로 말한 후보들 (focus 아닌 것, 같은 곳은 한 번, 후보 순서대로). focus의 이름이 나오면 None.
+/// 이름은 들른 곳 이름(띄어쓰기 무시, 세 글자 이상)으로 맞춘다.
+pub(crate) fn answer_names(answer: &str, focus: &MemoryHit, cands: &[MemoryHit]) -> Option<Vec<usize>> {
     let a: String = answer.chars().filter(|c| !c.is_whitespace()).collect();
     // 답에 나온 들른 곳 이름 (없으면 None)
     let said = |h: &MemoryHit| {
@@ -997,16 +1019,16 @@ pub(crate) fn answer_points_elsewhere(answer: &str, focus: &MemoryHit, cands: &[
         return None;
     }
     // 같은 곳을 여러 번 간 기록은 한 곳으로 센다 (앞 후보 = 더 맞는 기록)
-    let mut first: Option<(usize, String)> = None;
+    let mut seen: Vec<String> = Vec::new();
+    let mut out = Vec::new();
     for (i, h) in cands.iter().enumerate().filter(|(_, h)| h.episode.facts.id != focus.episode.facts.id) {
         let Some(n) = said(h) else { continue };
-        match &first {
-            None => first = Some((i, n)),
-            Some((_, m)) if *m == n => {}
-            Some(_) => return None,
+        if !seen.contains(&n) {
+            seen.push(n);
+            out.push(i);
         }
     }
-    first.map(|(i, _)| i)
+    Some(out)
 }
 
 /// 후보를 부를 이름: 질문과 가장 맞는 들른 곳, 없으면 첫 곳, 없으면 제목.
@@ -1030,7 +1052,7 @@ fn candidate_pick(u: &str, cands: &[MemoryHit], at: usize) -> Option<Option<usiz
         let w = courses::compact(w);
         courses::ordinal(&w, cands.len()).is_none()
             && !courses::OTHER_WORDS.iter().any(|x| w.contains(x))
-            && !["거", "걸로", "거로", "곳", "후보", "번", "번째", "안내", "다른", "딴"].iter().any(|x| w.contains(x))
+            && !["거", "걸로", "거로", "곳", "후보", "번", "번째", "안내", "다른", "딴", "날", "보여"].iter().any(|x| w.contains(x))
     });
     if new_terms || courses::is_past(u) {
         return None;
@@ -1038,7 +1060,8 @@ fn candidate_pick(u: &str, cands: &[MemoryHit], at: usize) -> Option<Option<usiz
     if let Some(i) = courses::ordinal(&c, cands.len()) {
         return Some((i < cands.len()).then_some(i));
     }
-    if courses::OTHER_WORDS.iter().any(|w| c.contains(w)) {
+    // "다른 날도 보여줘"(답 아래 버튼)도 다음 후보로: LLM에 맡기면 카드 없이 "안내할까요?"만 남았다
+    if courses::OTHER_WORDS.iter().any(|w| c.contains(w)) || c.contains("다른날") {
         return Some(Some((at + 1) % cands.len()));
     }
     None
@@ -1094,6 +1117,11 @@ mod tidy_tests {
         // 둘 이상을 말하거나 아무 곳도 말하지 않으면 그대로
         assert_eq!(super::answer_points_elsewhere("어니언 성수와 경포해변 중 어디요?", &cands[0], &cands), None);
         assert_eq!(super::answer_points_elsewhere("기록이 있어요.", &cands[0], &cands), None);
+        // "다른 날도 보여줘"는 다음 후보 (새 검색어가 아니다)
+        assert_eq!(super::candidate_pick("다른 날도 보여줘", &cands, 0), Some(Some(1)));
+        assert_eq!(super::candidate_pick("다른 날 바다 간 데", &cands, 0), None);
+        // 둘 이상이면 후보 칸으로 (후보 순서대로)
+        assert_eq!(super::answer_names("어니언 성수와 경포해변 기록이 있어요.", &cands[0], &cands), Some(vec![1, 2]));
     }
 
     use super::tidy_answer;
