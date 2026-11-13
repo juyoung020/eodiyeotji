@@ -463,7 +463,7 @@ private val MinStatCell = 190.dp
 private fun RowScope.StatCell(value: String, label: String) {
     val c = EodiTheme.colors
     Column(Modifier.weight(1f).padding(horizontal = 8.dp).semantics(mergeDescendants = true) {}, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, style = EodiTheme.type.titleSmall, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(value, style = EodiTheme.type.titleSmall, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center) // 좁은 창에서 "140시간 43분"이 "140시간 4…"로 잘렸다 → 두 줄까지
         Text(label, style = EodiTheme.type.caption, color = c.textTertiary, maxLines = 1)
     }
 }

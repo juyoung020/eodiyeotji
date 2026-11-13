@@ -144,7 +144,7 @@ import java.time.LocalDate
 private val WideBreakpoint = 1200.dp
 
 /** 상세 카드에서 지도가 차지하는 높이 비율 (머리 아래 남은 높이 기준, 나머지는 항목 목록). */
-private const val MapWeight = 0.46f
+private const val MapWeight = 0.54f // 좁은 창(세로) 하루 상세: 지도를 더 크게 (전에는 0.46 + 제목 두 줄로 지도가 좁았다)
 
 /** 고른 행 색이 바뀌는 시간. 짧게 → 누르자마자 반응이 보인다 (Pleos: 응답 0.25초 이내). */
 private const val SelectMs = 160
@@ -708,7 +708,6 @@ private fun DayRow(
     val isToday = s.day == today.toString()
     val title = s.title?.takeIf { it.isNotBlank() }
     val dateText = relative ?: dayListTitle(s.day, today)
-    val stops = stopNamesText(s)
     val bg by animateColorAsState(if (selected) c.accentSoft else c.surface, tween(SelectMs), label = "day-bg")
     val edge by animateColorAsState(if (selected) c.accent else Color.Transparent, tween(SelectMs), label = "day-edge")
     Surface(
@@ -717,53 +716,32 @@ private fun DayRow(
         contentColor = c.textPrimary,
         shape = RoundedCornerShape(EodiTheme.space.radiusL),
         border = BorderStroke(2.dp, edge),
-        modifier = modifier.fillMaxWidth().heightIn(min = 112.dp),
+        modifier = modifier.fillMaxWidth().heightIn(min = 96.dp),
     ) {
-        Row(Modifier.padding(horizontal = 20.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+        // 좁은 창(세로 · 두 앱)에서 한 칸이 4~5줄이라 빽빽했다 → 날짜 타일 + 제목 한 줄 + 짧은 둘째 줄.
+        // 머문 곳 줄 · 시간대 줄은 뺀다 (상세에서 본다). 둘째 줄: "오늘 · 들른 곳 2곳 · 2.7km" / 제목이 없으면 첫 머문 곳 이름 · 거리.
+        val secondary = buildList {
+            if (title != null && relative != null) add(relative)
+            if (title == null && s.stopNames.isNotEmpty()) add(s.stopNames.first())
+            else if (s.stayCount > 0) add(stringResource(R.string.timeline_stays, s.stayCount))
+            add(distanceText(s.distanceM))
+        }.joinToString(" · ")
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             DateTile(s.day, isToday, selected)
-            Spacer(Modifier.width(20.dp))
+            Spacer(Modifier.width(18.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                // 첫 줄: 제목이 있으면 작은 날짜, 없으면 큰 날짜. 오른쪽 끝에 시간대.
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (title != null) {
-                        Text(
-                            relative?.let { stringResource(R.string.timeline_relative_date, it, dayListTitle(s.day, today)) }
-                                ?: dateText,
-                            style = type.label,
-                            color = if (isToday) c.accent else c.textTertiary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
-                        )
-                    } else {
-                        Text(
-                            dateText,
-                            style = type.title,
-                            color = if (isToday) c.accent else c.textPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Text(timeRangeText(s.firstMs, s.lastMs), style = type.caption, color = c.textTertiary, maxLines = 1)
-                }
-                if (title != null) {
-                    Text(title, style = type.title, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
-                if (stops != null) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(EodiIcons.Pin, contentDescription = null, tint = c.stay, modifier = Modifier.size(22.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(stops, style = type.body, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-                // 긴 날("주행 5회 · 들른 곳 4곳 · 384km · 4시간 18분")은 한 줄에 안 들어가 시간이 "4시간 1…"로 잘렸다 → 두 줄까지
                 Text(
-                    daySummaryLine(s),
+                    title ?: dateText,
+                    style = type.title,
+                    color = if (title == null && isToday) c.accent else c.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    secondary,
                     style = type.meta,
-                    color = c.textTertiary,
-                    maxLines = 2,
+                    color = if (isToday) c.accent else c.textTertiary,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -875,7 +853,7 @@ private fun DayDetailCard(
 private fun DetailHeader(summary: DaySummary?, today: LocalDate, onBack: (() -> Unit)?, loaded: Boolean, onShare: (() -> Unit)? = null) {
     val c = EodiTheme.colors
     val space = EodiTheme.space
-    Column(Modifier.fillMaxWidth().padding(start = space.xl, end = space.xl, top = 28.dp, bottom = space.l)) {
+    Column(Modifier.fillMaxWidth().padding(start = space.xl, end = space.xl, top = 16.dp, bottom = space.m)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (onBack != null) {
                 RoundIconButton(EodiIcons.Back, stringResource(R.string.timeline_back_description), onBack, iconSize = 36.dp)
@@ -897,12 +875,12 @@ private fun DetailHeader(summary: DaySummary?, today: LocalDate, onBack: (() -> 
                     } else if (relative != null) {
                         Text(relative, style = EodiTheme.type.label, color = c.accent)
                     }
-                    // 제목은 버튼과 줄을 나눠 폭을 다 쓰고, 두 줄까지 보인다
+                    // 좁은 창(세로)에서 지도 자리를 지키려고 제목은 한 줄 (넘치면 …)
                     Text(
                         title ?: dayTitle(summary.day, today),
-                        style = EodiTheme.type.hero,
+                        style = EodiTheme.type.title,
                         color = c.textPrimary,
-                        maxLines = 2,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.semantics { heading() },
                     )

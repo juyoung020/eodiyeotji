@@ -159,7 +159,11 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                 scope = SearchScope.RECORDS,
                 agent = agentViewModel,
                 actions = actions,
-                hint = stringResource(R.string.search_hint_records),
+                // 좁은 창(세로 · 두 앱, 폭 1200dp 미만)에서는 긴 안내가 "장소·날짜를 찾거나 …"로 잘렸다 → 짧은 안내
+                hint = stringResource(
+                    if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 1200) R.string.search_hint_records_short
+                    else R.string.search_hint_records,
+                ),
             )
             val communitySearch = rememberSearchSlot(
                 viewModel = communitySearchVm,

@@ -340,8 +340,17 @@ fun HalfStars(halves: Int, modifier: Modifier = Modifier, size: Dp = 24.dp) {
 @Composable
 private fun ActionRow(d: PlaceDetail?, vm: PlaceDetailViewModel) {
     val c = EodiTheme.colors
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
-        ActionTile(EodiIcons.Navi, stringResource(R.string.place_detail_navigate), vm::navigate, Modifier.weight(1f), primary = true)
+    // 좁은 창(세로 · 두 앱)에서는 칸이 약 110dp라 "여기로 안내"가 "여기로 …"로 잘렸다 → 짧은 이름 "안내"
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+    val narrow = maxWidth < 600.dp
+    Row(horizontalArrangement = Arrangement.spacedBy(if (narrow) 10.dp else 16.dp), modifier = Modifier.fillMaxWidth()) {
+        ActionTile(
+            EodiIcons.Navi,
+            stringResource(if (narrow) R.string.place_detail_navigate_short else R.string.place_detail_navigate),
+            vm::navigate,
+            Modifier.weight(1f),
+            primary = true,
+        )
         val saved = d?.saved == true
         ActionTile(
             if (saved) CommunityIcons.HeartFilled else CommunityIcons.Heart,
@@ -360,6 +369,7 @@ private fun ActionRow(d: PlaceDetail?, vm: PlaceDetailViewModel) {
         )
         // 같이 가기: 여러 차가 이곳으로 함께 (ui/convoy)
         ActionTile(CommunityIcons.People, stringResource(R.string.convoy_title), vm::goTogether, Modifier.weight(1f))
+    }
     }
 }
 

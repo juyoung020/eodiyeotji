@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 좁은 창(Pleos 두 앱 띄우기 · 세로)에서 쓰는 짧은 글 -->
+<resources>
+    <string name="search_hint_records_short">검색하거나 물어보세요</string>
+    <string name="place_detail_navigate_short">안내</string>
+    <string name="biz_clients_hint_short">거래처에 들른 주행은 모두 출장으로 묶어요.</string>
+    <string name="biz_clients_more">%1$d곳 더보기</string>
+</resources>

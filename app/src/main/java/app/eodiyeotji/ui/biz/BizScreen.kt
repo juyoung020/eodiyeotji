@@ -206,6 +206,7 @@ fun BizOverlay(viewModel: BizViewModel, onOpenDay: (String) -> Unit) {
 
 /** 이보다 좁으면(폰 세로) 머리 · 요약 칸을 여러 줄로 나눈다. */
 private val NarrowWidth = 760.dp
+private const val NarrowSuggestMax = 3
 
 @Composable
 private fun SummaryRow(m: BizMonth, narrow: Boolean) {
@@ -431,26 +432,48 @@ private object BizIcons {
 @Composable
 private fun ClientSection(clients: List<BizClient>, suggestions: List<BizClient>, onSet: (BizClient, Boolean) -> Unit) {
     val c = EodiTheme.colors
+    // 좁은 창(세로 · 두 앱)에서는 옆으로 굴리는 줄이 오른쪽 끝에서 잘려 보였다 → 칩을 줄 바꿈(FlowRow)으로 놓고,
+    // 권하는 곳은 3개까지 + "N곳 더보기". 설명은 짧은 한 줄로.
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+    val narrow = maxWidth < NarrowWidth
+    var showAll by remember { mutableStateOf(false) }
     Surface(shape = RoundedCornerShape(28.dp), color = c.surface, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(stringResource(R.string.biz_clients_title), style = EodiTheme.type.titleSmall, fontWeight = FontWeight.Bold)
-            Text(stringResource(R.string.biz_clients_hint), style = EodiTheme.type.meta, color = c.textSecondary)
+            Text(stringResource(if (narrow) R.string.biz_clients_hint_short else R.string.biz_clients_hint), style = EodiTheme.type.meta, color = c.textSecondary)
+            val chips: @Composable (@Composable () -> Unit) -> Unit = { content ->
+                if (narrow) {
+                    @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                    androidx.compose.foundation.layout.FlowRow(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) { content() }
+                } else {
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) { content() }
+                }
+            }
             if (clients.isNotEmpty()) {
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                chips {
                     clients.forEach { cl ->
                         SecondaryPill(stringResource(R.string.biz_client_chip, cl.name.ifBlank { stringResource(R.string.biz_client_unnamed) }, cl.visitDays.toInt()), EodiIcons.Close, { onSet(cl, false) })
                     }
                 }
             }
             if (suggestions.isNotEmpty()) {
-                Text(stringResource(R.string.biz_clients_suggest), style = EodiTheme.type.meta, color = c.textSecondary)
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    suggestions.forEach { s ->
+                if (!narrow) Text(stringResource(R.string.biz_clients_suggest), style = EodiTheme.type.meta, color = c.textSecondary)
+                val shown = if (narrow && !showAll) suggestions.take(NarrowSuggestMax) else suggestions
+                chips {
+                    shown.forEach { s ->
                         SecondaryPill(stringResource(R.string.biz_client_suggest_chip, s.name, s.visitDays.toInt()), EodiIcons.Pin, { onSet(s, true) })
+                    }
+                    if (shown.size < suggestions.size) {
+                        SecondaryPill(stringResource(R.string.biz_clients_more, suggestions.size - shown.size), EodiIcons.Chevron, { showAll = true })
                     }
                 }
             }
         }
+    }
     }
 }
 
