@@ -143,6 +143,8 @@ export class ConvoyStore {
       } catch {
         return { status: 400, body: { error: 'bad json' } };
       }
+      // null · 숫자 · 배열 같은 JSON도 받으면 아래 구조 분해에서 TypeError(500)가 나므로 객체만 받는다
+      if (!body || typeof body !== 'object' || Array.isArray(body)) return { status: 400, body: { error: 'bad json' } };
     }
     if (parts.length === 1 && request.method === 'POST') return this.create(body);
     if (parts.length === 2 && parts[1] === 'join' && request.method === 'POST') return this.join(body);

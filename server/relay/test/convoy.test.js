@@ -45,3 +45,11 @@ test('모두 나가면 모임이 사라진다', async () => {
   await s.handle(req('POST', `/convoy/${a.id}/leave`, { member_id: a.member_id }));
   assert.equal((await s.handle(req('POST', '/convoy/join', { code: a.code }))).status, 404);
 });
+
+test('객체가 아닌 JSON 본문은 500이 아니라 400', async () => {
+  const s = new ConvoyStore(() => 1_000);
+  for (const raw of ['null', '3', '[]', '"x"']) {
+    const r = await s.handle(new Request('https://x/convoy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: raw }));
+    assert.equal(r.status, 400, raw);
+  }
+});
