@@ -23,7 +23,7 @@ class DemoSeedViewModel @Inject constructor(private val core: EodiCore) : ViewMo
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
 
     fun seed() {
-        if (_busy.value) return
+        if (!app.eodiyeotji.BuildConfig.CONTEST_DEMO || _busy.value) return
         _busy.value = true
         viewModelScope.launch {
             try {

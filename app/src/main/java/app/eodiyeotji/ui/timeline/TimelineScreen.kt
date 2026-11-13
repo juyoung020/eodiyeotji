@@ -1435,7 +1435,7 @@ private fun NaviTag() {
 
 /**
  * 기록이 없을 때. 기록 시작 버튼은 일부러 없다 → 시동을 걸면 저절로 기록된다고만 알려 준다.
- * 아래 작은 "시연 기록 넣기"는 처음 설치한 사람(심사위원)이 1년치 예시 기록으로 바로 둘러보게 한다.
+ * 아래 작은 "시연 기록 넣기"는 처음 설치한 사람(심사위원)이 1년치 예시 기록으로 바로 둘러보게 한다 (공모전 판만, BuildConfig.CONTEST_DEMO).
  */
 @Composable
 private fun EmptyPane(modifier: Modifier = Modifier, demo: DemoSeedViewModel = hiltViewModel()) {
@@ -1457,15 +1457,18 @@ private fun EmptyPane(modifier: Modifier = Modifier, demo: DemoSeedViewModel = h
             textAlign = TextAlign.Center,
             modifier = Modifier.widthIn(max = 720.dp),
         )
-        Spacer(Modifier.height(40.dp))
-        SecondaryPill(
-            stringResource(if (busy) R.string.timeline_demo_seeding else R.string.timeline_demo_seed),
-            EodiIcons.Sparkle,
-            onClick = demo::seed,
-            enabled = !busy,
-        )
-        Spacer(Modifier.height(12.dp))
-        Text(stringResource(R.string.timeline_demo_hint), style = EodiTheme.type.meta, color = EodiTheme.colors.textTertiary, textAlign = TextAlign.Center)
+        // 공모전 판에만 (앱마켓 제출판은 -PCONTEST_DEMO=false → 더미 데이터 금지 규칙)
+        if (app.eodiyeotji.BuildConfig.CONTEST_DEMO) {
+            Spacer(Modifier.height(40.dp))
+            SecondaryPill(
+                stringResource(if (busy) R.string.timeline_demo_seeding else R.string.timeline_demo_seed),
+                EodiIcons.Sparkle,
+                onClick = demo::seed,
+                enabled = !busy,
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(stringResource(R.string.timeline_demo_hint), style = EodiTheme.type.meta, color = EodiTheme.colors.textTertiary, textAlign = TextAlign.Center)
+        }
     }
 }
 

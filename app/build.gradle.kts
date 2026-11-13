@@ -39,6 +39,10 @@ val llmProps: Properties = Properties().also { props ->
 fun llmSetting(name: String, default: String): String =
     (llmProps.getProperty(name) ?: System.getenv(name) ?: default).trim().filter { it != '"' && it != '\\' }
 // 중계 서버가 있으면 기본은 중계의 /llm (Gemini, 붐비면 중계가 다음 모델로) → 개발 PC 없이 심사위원 기기에서도 AI가 답한다.
+// 공모전 시연 도구 ("시연 기록 넣기" 버튼). 앱마켓 심사는 더미 데이터를 금지하므로 마켓 제출판은 끈다:
+// ./gradlew assembleCarRelease -PCONTEST_DEMO=false (또는 환경 변수 CONTEST_DEMO=false). 기본은 켬(공모전 판).
+val contestDemo: Boolean =
+    (project.findProperty("CONTEST_DEMO")?.toString() ?: System.getenv("CONTEST_DEMO") ?: "true").trim().lowercase() != "false"
 val llmBaseUrl = llmSetting("LLM_BASE_URL", if (relayUrl.isNotEmpty()) "${relayUrl.trimEnd('/')}/llm/v1" else "http://10.0.2.2:8181/v1")
 val llmModel = llmSetting("LLM_MODEL", if (relayUrl.isNotEmpty()) "gemini-flash-lite-latest" else "qwen3.5-9b")
 val llmApiKey = llmSetting("LLM_API_KEY", if (relayUrl.isNotEmpty()) relayToken else "")
@@ -70,6 +74,7 @@ android {
         val useRelay = relayUrl.isNotEmpty()
         buildConfigField("String", "KAKAO_REST_API_KEY", "\"${if (useRelay) "" else kakaoRestApiKey}\"")
         buildConfigField("String", "GOOGLE_PLACES_API_KEY", "\"${if (useRelay) "" else googlePlacesApiKey}\"")
+        buildConfigField("boolean", "CONTEST_DEMO", contestDemo.toString())
         buildConfigField("String", "RELAY_URL", "\"$relayUrl\"")
         buildConfigField("String", "RELAY_TOKEN", "\"$relayToken\"")
         buildConfigField("String", "LLM_BASE_URL", "\"$llmBaseUrl\"")

@@ -81,6 +81,25 @@ cd eodiyeotji
 - 시연용 1년치 기록: 디버그 빌드에서 `adb shell am broadcast --user 10 -n app.eodiyeotji/.record.DemoSeedReceiver` (테스트로 쌓인 하루 지우기: `.record.DeleteDayReceiver --es day YYYY-MM-DD`)
 - **APK 안에 들어가는 값:** 중계 서버 주소 · 앱 토큰(`RELAY_URL` · `RELAY_TOKEN`)과 Pleos `PLEOS_CLIENT_ID` · `PLEOS_CLIENT_SECRET`. Pleos 값은 SDK `registerApp()`이 기기에서 요구하는 **클라이언트 자격 증명**이라 앱에 들어갈 수밖에 없고, 서버 비밀값이 아니다. 카카오 · 구글 · Gemini 키는 중계 서버에만 있고 APK에는 없다 (11/13 APK 검사로 확인).
 
+### 앱마켓 제출판 빌드
+
+공모전 판은 심사위원이 바로 둘러보도록 빈 화면에 "시연 기록 넣기" 버튼이 있습니다. Pleos 앱마켓 심사는 더미 데이터를 금지하므로 제출판은 이것을 끄고 빌드합니다.
+
+```powershell
+./gradlew assembleCarRelease -PCONTEST_DEMO=false   # 또는 환경 변수 CONTEST_DEMO=false
+```
+
+**앱마켓 제출 시 사전 협의가 필요한 권한** (Vehicle SDK 권한은 승인된 것만 쓸 수 있음). 모두 실제로 쓰고, 없거나 승인되지 않아도 그 기능만 빠지고 앱은 동작합니다.
+
+| 권한 | 쓰는 곳 | 없을 때 |
+|---|---|---|
+| `pleos.car.permission.CONTROL_CAR_LIGHTS` (제어) · `CAR_LIGHTS` | 정차 중 "그날로 돌아가기" 동안 무드등을 그날 하늘빛으로, 닫으면 원래 색 | 무드등을 건드리지 않음 (권한 확인 후 호출, `PleosMoodLight.kt`) |
+| `pleos.car.permission.CAR_SEATS` | 탑승 인원 수 | 인원 없이 기록 |
+| `pleos.car.permission.CAR_ENERGY` · `CAR_DRIVE` | 배터리 · 연료, 주행거리계 (운행기록부) | 그 칸이 빈 채로 |
+| `pleos.car.permission.CAR_WINDOWS` | 와이퍼 (비 온 날) | 비 표시 없이 |
+
+마켓 등록 자료 초안: [`docs/market/`](docs/market/) (아이콘 512px · 스크린샷 · 개인정보처리방침 · 위치정보 이용약관 — 약관 둘은 법무 검토 필요).
+
 ### 데이터 출처
 
 | 데이터 | 출처 · 이용허락 | 쓰는 곳 |
@@ -149,6 +168,7 @@ flowchart LR
 - **익명화:** 계정 · 로그인이 없고, 차량 번호 · 차대번호(VIN) · 기기 ID를 읽거나 보내지 않습니다. 코스 공유 · 같이 가기에는 사용자가 정한 이름(별명)만 붙습니다.
 - **같이 가기**는 켠 동안만 위치를 보내고, 집 · 회사 1km 안에서는 위치를 보내지 않습니다 (Rust `convoy::position_shareable`). 끝나면 바로 멈춥니다.
 - **데이터 활용:** 분석 · 광고 SDK와 텔레메트리가 없습니다. 주행 기록을 광고 · 마케팅에 쓰거나 제3자에게 팔지 않습니다. 외부로 나가는 것은 장소 이름 · AI 답 · 같이 가기를 위한 요청(중계 서버 경유)뿐입니다.
+- **저장 · 삭제:** 기록 DB(`eodi.db`)는 앱 전용 저장소(기기 파일 기반 암호화, 다른 앱 접근 불가)에 있고, 클라우드 백업 · 기기 이전에서 빠집니다 (`allowBackup=false` + `data_extraction_rules.xml`). DB 자체 암호화(SQLCipher)는 하지 않습니다. 기록 상태 시트의 **"기록 모두 지우기"**(정차 중에만)는 기록 · 장소 · 사진 · 검색 색인 · 기억 · 설정을 모두 지우고 위치 권한 동의를 거둡니다 (동의 철회).
 - 앱 안에서는 기록 상태 시트("내 기록과 개인정보")에 같은 원칙을 보여 줍니다. 로그에는 장소 · 질문 같은 개인정보를 남기지 않습니다 (release).
 - 회상 음성은 하루 횟수를 제한하고 내비 안내 음성과 겹치지 않게 합니다.
 - 장소 사진 · 쿠폰 · 커뮤니티 글의 사용자는 시연용 예시입니다.
