@@ -287,7 +287,8 @@ private fun TitleBlock(place: StopFact, d: PlaceDetail?, compact: Boolean, modif
         if (sub.isNotEmpty()) {
             Text(sub, style = EodiTheme.type.meta, color = c.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
-        if (d != null) {
+        // 리뷰도 하트도 없으면 이 줄은 비운다: 아래 "리뷰 0" 머리와 같은 말이 두 번 보였다
+        if (d != null && (d.reviewCount > 0 || d.hearts > 0)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (d.reviewCount > 0) {
                     HalfStars(d.ratingHalves, size = 30.dp)
