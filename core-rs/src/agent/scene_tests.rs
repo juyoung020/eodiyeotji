@@ -132,3 +132,14 @@ fn one_sentence_course_skips_a_stop() {
     let r = ask(&a, "작년 강릉 여행 그대로, 감자탕집만 빼고 안내해 줘");
     assert!(r.text().contains("맞는 곳이 없어요"), "{}", r.text());
 }
+
+/// 코스 카드 뒤 "거기 몇 명이서 갔어": 다시 묻는 말이 버튼("이 코스로 안내")과 맞게 "그 코스로".
+#[test]
+fn head_count_after_a_course_asks_about_the_course() {
+    let a = agent("headcount-course");
+    let r = ask(&a, "작년 강릉 여행 어디 갔었지");
+    let p = r.proposals.lock().unwrap().last().cloned();
+    assert!(matches!(p.as_ref().map(|p| &p.action), Some(NavAction::Course { .. })), "코스 제안: {p:?}");
+    let r = ask(&a, "거기 몇 명이서 갔어");
+    assert!(r.text().ends_with("그 코스로 안내할까요?"), "{}", r.text());
+}

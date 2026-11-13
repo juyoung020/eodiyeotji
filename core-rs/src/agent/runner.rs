@@ -499,7 +499,12 @@ impl MemoryAgent {
         if let Some(p) = &pending {
             t.l.on_action_proposal(p.clone());
         }
-        let ask = if pending.is_some() { " 거기로 안내할까요?" } else { "" };
+        // 제안이 코스면 "그 코스로", 한 곳이면 "거기로" (버튼 "이 코스로 안내"와 말이 맞게)
+        let ask = match &pending {
+            Some(p) if matches!(p.action, super::NavAction::Course { .. }) => " 그 코스로 안내할까요?",
+            Some(_) => " 거기로 안내할까요?",
+            None => "",
+        };
         let place = hit_place(&hit);
         let text = match n {
             None => format!("그때 몇 분이 타셨는지는 기록이 없어요.{ask}"),
