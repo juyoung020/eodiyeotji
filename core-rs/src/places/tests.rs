@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 use super::*;
-use crate::store::{DayDetail, DriveEvent, GeoFix, StaySummary};
+use crate::store::{DayDetail, DaySummary, DriveEvent, GeoFix, StaySummary};
 
 const SEC: i64 = 1000;
 const MIN: i64 = 60 * SEC;
@@ -547,7 +547,10 @@ fn day_list_shows_first_three_named_stops_and_follows_renames() {
     let days = store.day_summaries(5).unwrap();
     assert_eq!(days[1].stop_names, ["주문진항", "경포해변", "초당순두부마을"], "앞에서 3개");
     assert_eq!(days[0].stop_names, ["주문진항"], "다음 날도 같은 장소");
-    assert_eq!(days[1], store.day_detail(DAY.into()).unwrap().summary);
+    // 하루 요약 글(story)은 하루 상세에서만 채운다 (날짜 목록은 쓰지 않는다) → 그것만 빼고 같아야 한다
+    let detail = store.day_detail(DAY.into()).unwrap().summary;
+    assert!(detail.story.is_some());
+    assert_eq!(days[1], DaySummary { story: None, ..detail });
 
     // 내비 힌트로 이름이 바뀌어도 (다른 날 요약까지) 따라간다
     store.add_navi_hint(hint("주문진 수산시장", ends[0].0, ends[0].1, ends[0].2 + MIN, NaviHintKind::Destination)).unwrap();

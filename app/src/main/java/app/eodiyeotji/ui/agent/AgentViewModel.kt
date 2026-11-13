@@ -12,6 +12,11 @@ import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.agent.RecommendedCourse
 import app.eodiyeotji.core.lastKnownLocation
 import app.eodiyeotji.agent.ProactiveVoice
+import app.eodiyeotji.agent.roadside.AgentUtterances
+import app.eodiyeotji.agent.roadside.RoadsideAgent
+import app.eodiyeotji.agent.roadside.RoadsideCard
+import app.eodiyeotji.core.rust.ReplyIntent
+import app.eodiyeotji.core.rust.proactiveReplyIntent
 import app.eodiyeotji.convoy.ConvoyPhase
 import app.eodiyeotji.convoy.ConvoyPlace
 import app.eodiyeotji.convoy.ConvoyRepository
@@ -104,6 +109,8 @@ data class AgentTurn(
     val courseFocus: Int = 0,
     /** 이번 질문에서 코스 목록을 받았나. 앞 질문에서 넘겨받은 목록은 답이 끝날 때까지 안 오면 지운다. */
     val coursesFresh: Boolean = false,
+    /** 길 위의 필요("나 똥마려")에 찾은 경로 앞쪽 들를 곳 (agent/roadside). */
+    val roadside: RoadsideCard? = null,
 )
 
 enum class AnswerPhase {
@@ -155,6 +162,7 @@ class AgentViewModel @Inject constructor(
     private val tts: SpeechOutput,
     private val convoy: ConvoyRepository,
     @ApplicationContext private val appContext: Context,
+    private val roadside: RoadsideAgent,
 ) : ViewModel() {
 
     private val turn = MutableStateFlow<AgentTurn?>(null)
@@ -204,6 +212,8 @@ class AgentViewModel @Inject constructor(
 
     init {
         viewModelScope.launch { speech.results.collect(::onSpeech) }
+        // 시연 · 디버그: 밖에서 넣은 말 (adb, agent/roadside/RoadsideDebugReceiver)
+        viewModelScope.launch { AgentUtterances.texts.collect { ask(it) } }
     }
 
     /** 마이크 버튼: 듣는 중이면 "다 말했다"(지금까지 들은 말로 묻기), 아니면 듣기 시작. 읽던 답은 멈춘다. */
@@ -258,6 +268,7 @@ class AgentViewModel @Inject constructor(
     private fun ask(utterance: String, replace: Boolean) {
         val question = utterance.trim()
         if (question.isEmpty()) return
+        if (answerRoadside(question)) return
         tts.stop()
         speech.cancel()
         followUp.value = false
@@ -303,13 +314,42 @@ class AgentViewModel @Inject constructor(
                 }
                 FollowUpIntent.Pass -> Unit
             }
-            agent.ask(query, context)
+            // 길 위의 필요("나 똥마려" · "졸려")는 길 위 도구 에이전트가 맡는다 (경로 앞쪽 휴게소 · 졸음쉼터 → 경유지 제안)
+            val source = if (query == question && roadside.handles(question)) roadside.ask(question, isDriving) else agent.ask(query, context)
+            source
                 .catch { e ->
                     if (e is CancellationException) throw e
                     Log.w(TAG, "에이전트 질문 실패", e)
                     emit(AgentEvent.Error(MSG_FAILED))
                 }
                 .collect { onEvent(id, it) }
+        }
+    }
+
+    /**
+     * 길 위 제안("경유지로 넣을까요?")에 대한 "응/아니": 새 질문으로 묻지 않고 지금 차례에서 처리한다. 처리했으면 true.
+     */
+    private fun answerRoadside(question: String): Boolean {
+        val t = turn.value ?: return false
+        val p = t.proposals.firstOrNull()?.takeIf { t.roadside != null && roadside.owns(it.id) && t.action is ActionState.Idle } ?: return false
+        return when (runCatching { proactiveReplyIntent(question) }.getOrDefault(ReplyIntent.UNKNOWN)) {
+            ReplyIntent.YES -> {
+                tts.stop()
+                speech.cancel()
+                followUp.value = false
+                confirm(p)
+                true
+            }
+            ReplyIntent.NO -> {
+                tts.stop()
+                speech.cancel()
+                followUp.value = false
+                val line = appContext.getString(app.eodiyeotji.R.string.roadside_declined)
+                updateTurn(t.id) { it.copy(proposals = emptyList(), answer = it.answer.trimEnd() + "\n" + line) }
+                if (driving.isDriving.value) tts.speak(line)
+                true
+            }
+            ReplyIntent.UNKNOWN -> false
         }
     }
 
@@ -493,7 +533,14 @@ class AgentViewModel @Inject constructor(
         actionJob = viewModelScope.launch(Dispatchers.Default) {
             updateTurn(id) { it.copy(action = ActionState.Running(proposal.id)) }
             val result = try {
-                agent.confirm(proposal)
+                if (roadside.owns(proposal.id)) {
+                    val line = roadside.confirm(proposal)
+                    // 길 위 제안은 실행 결과를 답에 덧붙이고 (운전 중이면) 읽는다
+                    updateTurn(id) { it.copy(answer = it.answer.trimEnd() + "\n" + line) }
+                    if (driving.isDriving.value) tts.speak(line)
+                } else {
+                    agent.confirm(proposal)
+                }
                 ActionState.Done(proposal.id)
             } catch (e: CancellationException) {
                 throw e
@@ -557,6 +604,7 @@ class AgentViewModel @Inject constructor(
             }
             is AgentEvent.ActionProposal -> updateTurn(id) { it.copy(proposals = it.proposals + event) }
             is AgentEvent.Notice -> updateTurn(id) { it.copy(notice = event.text) }
+            is AgentEvent.Roadside -> updateTurn(id) { it.copy(roadside = event.card, courses = emptyList(), courseFocus = 0, recommendations = emptyList()) }
             AgentEvent.Done -> {
                 updateTurn(id) {
                     val t = if (it.coursesFresh) it else it.copy(courses = emptyList(), courseFocus = 0)

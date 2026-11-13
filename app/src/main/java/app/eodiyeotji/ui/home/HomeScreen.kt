@@ -93,6 +93,8 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
     val agentState by agentViewModel.state.collectAsStateWithLifecycle()
     var agentOpen by rememberSaveable { mutableStateOf(false) }
     var tab by rememberSaveable { mutableStateOf(HomeTab.TIMELINE) }
+    // 밖에서 넣은 말(시연 · adb, agent/roadside)은 에이전트가 묻고 → 정차 화면이면 에이전트 창을 연다
+    androidx.compose.runtime.LaunchedEffect(Unit) { app.eodiyeotji.agent.roadside.AgentUtterances.texts.collect { agentOpen = true } }
     Box(Modifier.fillMaxSize()) {
         if (agentState.isDriving && agentViewModel.drivingLocksScreen) {
             Column(Modifier.fillMaxSize()) {

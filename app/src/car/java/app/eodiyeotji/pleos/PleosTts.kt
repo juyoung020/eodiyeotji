@@ -13,6 +13,7 @@ import android.os.Handler
 import android.os.Looper
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import app.eodiyeotji.core.rust.speakableText
 import app.eodiyeotji.platform.SpeechOutput
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Locale
@@ -135,7 +136,8 @@ class PleosTts @Inject constructor(@ApplicationContext private val context: Cont
 
     /** [text]를 읽는다 (읽던 것은 멈춘다). 다 읽거나 멈추면 [then]을 한 번 부른다. */
     override fun speak(text: String, then: (() -> Unit)?) {
-        val clean = text.replace('\n', ' ').trim()
+        // 기호 · 단위 · 그림 문자를 읽기 좋게 (Rust speech_text). 엔진이 이상한 글자에서 끊기거나 "km"를 영어로 읽지 않게
+        val clean = speakableText(text)
         if (clean.isEmpty()) return
         main.post {
             stopNow()
@@ -172,6 +174,7 @@ class PleosTts @Inject constructor(@ApplicationContext private val context: Cont
     private fun play(text: String) {
         val my = seq
         playAtMs = System.currentTimeMillis()
+        Log.i(TAG, "읽기 #$my 한 번에 ${text.length}자: $text")
         if (pleosReady && !pleosBroken) {
             pleosTurn = my
             runCatching { pleos?.speak(text, true) }
@@ -196,15 +199,29 @@ class PleosTts @Inject constructor(@ApplicationContext private val context: Cont
                     return@post
                 }
                 fallbackReady = true
-                fallback?.language = Locale.KOREA
+                fallback?.let(::useBestKoreanVoice)
                 fallback?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String?) = Unit
-                    override fun onDone(utteranceId: String?) = main.post { done(my) }.let { }
+                    // 엔진은 한 번 만들어 계속 쓴다 → 차례는 처음 만들 때의 my가 아니라 읽기 id("eodi-N")에서 읽는다
+                    override fun onDone(utteranceId: String?) = main.post { done(turnOf(utteranceId)) }.let { }
                     @Deprecated("Deprecated in Java")
-                    override fun onError(utteranceId: String?) = main.post { done(my) }.let { }
+                    override fun onError(utteranceId: String?) = main.post { done(turnOf(utteranceId)) }.let { }
                 })
                 if (seq == my) playFallback(text, my)
             }
+        }
+    }
+
+    private fun turnOf(utteranceId: String?): Int = utteranceId?.removePrefix("eodi-")?.toIntOrNull() ?: -1
+
+    /** Android TTS: 기기에 있는 한국어 목소리 중 가장 품질 높은 것 (네트워크가 필요 없는 것 먼저). */
+    private fun useBestKoreanVoice(tts: AndroidTts) {
+        tts.language = Locale.KOREA
+        runCatching {
+            tts.voices.orEmpty()
+                .filter { it.locale.language == "ko" && AndroidTts.Engine.KEY_FEATURE_NOT_INSTALLED !in it.features }
+                .maxWithOrNull(compareBy({ !it.isNetworkConnectionRequired }, { it.quality }))
+                ?.let { tts.voice = it; Log.i(TAG, "Android TTS 목소리: ${it.name} (quality=${it.quality})") }
         }
     }
 

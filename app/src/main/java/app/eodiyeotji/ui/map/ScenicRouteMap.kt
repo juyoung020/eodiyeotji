@@ -17,6 +17,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
 import kotlin.coroutines.resume
 import kotlinx.coroutines.job
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -76,7 +79,8 @@ private const val DESCEND_MS = 1_800
  * @param style [ScenicMapStyle]로 만든 스타일 (null이면 불러오는 중 — 바탕색만)
  * @param camera Rust가 길 방향·이 칸 크기에 맞춘 처음 카메라 (`drive_route_camera`)
  * @param frames 미리보기 비행 장면 (Rust `drive_route_flight`, 길을 따라 같은 간격)
- * @param flying true면 [flightMs] 동안 장면을 따라 카메라를 부드럽게(처음·끝은 천천히) 옮긴다. 지도를 만지면 멈춘다.
+ * @param flying true면 [plan]의 구간(짧은 길은 길 전체, 긴 길은 출발 · 가운데 풍경 · 도착 2~3구간)을 차분한 빠르기로 달린다.
+ *   구간 사이는 살짝 어두워졌다 밝아지며 넘어간다. 지도를 만지면 멈춘다.
  * @param onFlightEnd 비행이 끝나거나 손으로 멈췄을 때
  */
 @Composable
@@ -86,7 +90,7 @@ fun ScenicRouteMap(
     camera: RouteCameraSpec?,
     frames: List<FlightFrame>,
     flying: Boolean,
-    flightMs: Long,
+    plan: List<FlightSpan>,
     onFlightEnd: () -> Unit,
     contentDescription: String,
     modifier: Modifier = Modifier,
@@ -106,7 +110,7 @@ fun ScenicRouteMap(
         Box(modifier.background(bg).semantics { this.contentDescription = contentDescription })
         return
     }
-    ScenicMapContent(style, theme, camera, frames, flying, flightMs, onFlightEnd, onFlightProgress, onArrive, options, bg, modifier.semantics { this.contentDescription = contentDescription })
+    ScenicMapContent(style, theme, camera, frames, flying, plan, onFlightEnd, onFlightProgress, onArrive, options, bg, modifier.semantics { this.contentDescription = contentDescription })
 }
 
 @SuppressLint("ClickableViewAccessibility") // 터치는 지도에 그대로 넘기고 비행만 멈춘다
@@ -117,7 +121,7 @@ private fun ScenicMapContent(
     camera: RouteCameraSpec?,
     frames: List<FlightFrame>,
     flying: Boolean,
-    flightMs: Long,
+    plan: List<FlightSpan>,
     onFlightEnd: () -> Unit,
     onFlightProgress: (Float) -> Unit,
     onArrive: () -> Unit,
@@ -145,8 +149,10 @@ private fun ScenicMapContent(
     val overview by rememberUpdatedState(camera)
     val arrive by rememberUpdatedState(onArrive)
     val st = loaded
+    // 구간 사이 넘어갈 때 지도를 살짝 덮는 막 (값은 그리기 단계에서만 읽는다)
+    val veil = remember { Animatable(0f) }
     LaunchedEffect(m, st, flying, frames) {
-        if (m == null || st == null || !flying || frames.size < 2) return@LaunchedEffect
+        if (m == null || st == null || !flying || frames.size < 2 || plan.isEmpty()) return@LaunchedEffect
         val car = st.getSourceAs<GeoJsonSource>(CAR_SRC)
         val trail = st.getLayerAs<LineLayer>(TRAIL)
         val carLayer = st.getLayer(CAR)
@@ -164,29 +170,40 @@ private fun ScenicMapContent(
         try {
             heavy.forEach { it.setProperties(PropertyFactory.visibility(Property.NONE)) }
             val pos = FlightPose()
-            pos.at(frames, 0.0)
-            car?.setGeoJson(pos.feature())
-            trail?.setProperties(PropertyFactory.lineGradient(ink.trailGradient(0f)), PropertyFactory.lineOpacity(1f))
-            carLayer?.setProperties(PropertyFactory.iconOpacity(1f)) // 층에 걸어 둔 전환으로 살며시 나타난다
-            // 여는 장면: 길 전체 모습에서 출발점으로 내려앉는다
-            m.easeTo(pos.camera(chaseTop), DESCEND_MS)
-            // 달리기: 매 화면(vsync) 카메라와 점 하나짜리 소스만 바꾼다 (재구성 없음)
-            val start = withFrameNanos { it }
             var lastTrail = -1f
-            while (true) {
-                val now = withFrameNanos { it }
-                val u = ((now - start) / 1e6 / flightMs).coerceAtMost(1.0)
-                val s = easeTrip(u)
-                pos.at(frames, s)
-                m.moveCamera(CameraUpdateFactory.newCameraPosition(pos.camera(chaseTop)))
+            fun show(sv: Double, force: Boolean = false) {
+                pos.at(frames, sv)
                 car?.setGeoJson(pos.feature())
-                val t = s.toFloat()
-                if (t - lastTrail >= TRAIL_STEP || u >= 1.0) {
+                val t = sv.toFloat()
+                if (force || kotlin.math.abs(t - lastTrail) >= TRAIL_STEP) {
                     lastTrail = t
                     trail?.setProperties(PropertyFactory.lineGradient(ink.trailGradient(t)))
                 }
                 flightProgress(t)
-                if (u >= 1.0) break
+            }
+            show(plan.first().from, force = true)
+            trail?.setProperties(PropertyFactory.lineOpacity(1f))
+            carLayer?.setProperties(PropertyFactory.iconOpacity(1f)) // 층에 걸어 둔 전환으로 살며시 나타난다
+            for ((k, span) in plan.withIndex()) {
+                if (k == 0) {
+                    // 여는 장면: 길 전체 모습에서 출발점으로 내려앉는다
+                    m.easeTo(pos.camera(chaseTop), DESCEND_MS)
+                } else {
+                    // 다음 구간으로: 살짝 덮었다가 그 자리에서 다시 밝아진다 (빨리 감지 않고 건너뛴다)
+                    veil.animateTo(1f, tween(VEIL_MS))
+                    show(span.from, force = true)
+                    m.moveCamera(CameraUpdateFactory.newCameraPosition(pos.camera(chaseTop)))
+                    veil.animateTo(0f, tween(VEIL_MS))
+                }
+                // 달리기: 매 화면(vsync) 카메라와 점 하나짜리 소스만 바꾼다 (재구성 없음)
+                val start = withFrameNanos { it }
+                while (true) {
+                    val now = withFrameNanos { it }
+                    val u = ((now - start) / 1e6 / span.ms).coerceAtMost(1.0)
+                    show(span.from + (span.to - span.from) * easeTrip(u))
+                    m.moveCamera(CameraUpdateFactory.newCameraPosition(pos.camera(chaseTop)))
+                    if (u >= 1.0) break
+                }
             }
             natural = true
             arrive()
@@ -195,6 +212,7 @@ private fun ScenicMapContent(
         } finally {
             mapView.setOnTouchListener(null)
             if (!natural) m.cancelTransitions()
+            veil.snapTo(0f)
             heavy.forEach { it.setProperties(PropertyFactory.visibility(Property.VISIBLE)) }
             carLayer?.setProperties(PropertyFactory.iconOpacity(0f))
             trail?.setProperties(PropertyFactory.lineOpacity(0f))
@@ -203,6 +221,7 @@ private fun ScenicMapContent(
     }
     Box(modifier) {
         AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
+        Box(Modifier.fillMaxSize().graphicsLayer { alpha = veil.value }.background(bg))
         // 기울어진 지도 지평선 위 하늘 · 지평선 빛 · 비네트 (때 색, 밤이면 별)
         val sky = when (theme) {
             RouteTheme.DAY -> SkyPhase.DAY
@@ -261,6 +280,38 @@ internal fun easeTrip(u: Double): Double {
 
 private const val RAMP = 0.14
 
+/** 미리 달리기 한 구간: 길 거리 비율 [from]~[to]를 [ms] 동안. */
+@androidx.compose.runtime.Immutable
+data class FlightSpan(val from: Double, val to: Double, val ms: Long)
+
+/**
+ * 미리 달리기 계획: 차분한 빠르기(화면에서 길과 지명이 읽히게)로 25~35초.
+ * 짧은 길(약 13km 이하)은 길 전체를, 긴 길은 출발 · 가운데 풍경([midAt], 없으면 한가운데) · 도착 쪽을 구간(약 3.8km)씩 달린다.
+ */
+fun flightPlan(lengthM: Double, midAt: Double?): List<FlightSpan> {
+    if (lengthM <= 0.0) return emptyList()
+    if (lengthM <= WHOLE_MAX_M) {
+        val ms = (lengthM / CALM_MPS * 1000).toLong().coerceIn(25_000L, 35_000L)
+        return listOf(FlightSpan(0.0, 1.0, ms))
+    }
+    val f = (SPAN_M / lengthM).coerceAtMost(0.3)
+    val ms = (SPAN_M / CALM_MPS * 1000).toLong()
+    val first = FlightSpan(0.0, f, ms)
+    val last = FlightSpan(1.0 - f, 1.0, ms)
+    if (lengthM < THREE_SPANS_MIN_M) return listOf(first, last)
+    val mid = (midAt ?: 0.5).coerceIn(f * 1.5, 1.0 - f * 1.5)
+    return listOf(first, FlightSpan(mid - f / 2, mid + f / 2, ms), last)
+}
+
+/** 차분한 빠르기(지도 위 m/초): 줌 14~15에서 한 화면을 몇 초에 걸쳐 지난다 */
+private const val CALM_MPS = 380.0
+private const val SPAN_M = 3_800.0
+private const val WHOLE_MAX_M = 13_000.0
+private const val THREE_SPANS_MIN_M = 16_000.0
+private const val FLIGHT_MIN_ZOOM = 14.0
+private const val FLIGHT_MAX_ZOOM = 15.0
+private const val VEIL_MS = 380
+
 /** 장면 배열(Rust, 같은 거리 간격 · 매끈하게 편 길 · 고르게 돈 방향) 사이를 섞어 읽는 자리 하나. 매 화면 새로 만들지 않는다. */
 private class FlightPose {
     var lat = 0.0
@@ -281,7 +332,7 @@ private class FlightPose {
     }
 
     fun camera(top: Float): CameraPosition = CameraPosition.Builder()
-        .target(LatLng(lat, lon)).zoom(zoom).bearing(bearing.mod(360.0)).tilt(FLIGHT_PITCH)
+        .target(LatLng(lat, lon)).zoom(zoom.coerceIn(FLIGHT_MIN_ZOOM, FLIGHT_MAX_ZOOM)).bearing(bearing.mod(360.0)).tilt(FLIGHT_PITCH)
         .padding(0.0, top.toDouble(), 0.0, 0.0)
         .build()
 
@@ -305,10 +356,10 @@ internal fun frameAt(frames: List<FlightFrame>, t: Float, pitch: Double = FLIGHT
 }
 
 /** 뒤따라가는 카메라 기울기: 살짝만 (지평선까지 타일을 덜 그리고, 차와 지나온 길이 잘 보이게). */
-private const val FLIGHT_PITCH = 58.0
+private const val FLIGHT_PITCH = 55.0
 
 /** 뒤따라가는 카메라: 위쪽 여백 비율 (차가 화면 아래 1/3쯤에 온다) */
-private const val CHASE_TOP_FRACTION = 0.24f
+private const val CHASE_TOP_FRACTION = 0.2f
 
 private const val CAR_SRC = "flight-car"
 private const val CAR = "flight-car"

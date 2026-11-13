@@ -223,7 +223,7 @@ class PhoneSpeechOutput @Inject constructor(@ApplicationContext private val cont
     }
 
     override fun speak(text: String, then: (() -> Unit)?) {
-        val clean = text.replace('\n', ' ').trim()
+        val clean = app.eodiyeotji.core.rust.speakableText(text) // 기호 · 단위 · 그림 문자 다듬기 (Rust speech_text)
         if (clean.isEmpty()) return
         main.post {
             stopNow()

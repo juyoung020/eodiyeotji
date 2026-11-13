@@ -368,20 +368,6 @@ internal class DayMapController(
         // 핀은 꼬리 끝이 찍은 자리 (anchor = bottom). 그림은 그 핀(묶음이면 가장 이른) 사진 썸네일, 아직 없으면 카메라 핀.
         val photoLayout = arrayOf(iconAllowOverlap(true), iconIgnorePlacement(true), iconAnchor(Property.ICON_ANCHOR_BOTTOM))
         s.addLayer(
-            SymbolLayer(PHOTO, PHOTO_SOURCE_ID).withProperties(
-                *photoLayout,
-                iconImage(coalesce(Expression.image(concat(literal(THUMB_PREFIX), Expression.toString(get("rep")))), Expression.image(literal(PIN)))),
-            ),
-        )
-        s.addLayer(
-            SymbolLayer(PHOTO_BADGE, PHOTO_SOURCE_ID).withFilter(has("point_count")).withProperties(
-                *photoLayout,
-                iconAnchor(Property.ICON_ANCHOR_CENTER),
-                iconOffset(arrayOf(PIN_DP / 2 - 2f, -(PIN_HEIGHT_DP + SHADOW_DP - 4f))),
-                iconImage(concat(literal(BADGE_PREFIX), Expression.toString(Expression.min(get("point_count"), literal(MAX_BADGE))))),
-            ),
-        )
-        s.addLayer(
             SymbolLayer(STAY_MINI, SOURCE_ID).withFilter(NOTHING).withProperties(
                 *calloutLayout,
                 iconImage(concat(literal(MapIconId.MINI), get("key"))),
@@ -407,6 +393,21 @@ internal class DayMapController(
             ),
         )
 
+        // 사진 핀은 머문 곳 카드 위에 (같은 자리에서 찍은 사진은 카드 바로 밑이라 가려진다)
+        s.addLayer(
+            SymbolLayer(PHOTO, PHOTO_SOURCE_ID).withProperties(
+                *photoLayout,
+                iconImage(coalesce(Expression.image(concat(literal(THUMB_PREFIX), Expression.toString(get("rep")))), Expression.image(literal(PIN)))),
+            ),
+        )
+        s.addLayer(
+            SymbolLayer(PHOTO_BADGE, PHOTO_SOURCE_ID).withFilter(has("point_count")).withProperties(
+                *photoLayout,
+                iconAnchor(Property.ICON_ANCHOR_CENTER),
+                iconOffset(arrayOf(PIN_DP / 2 - 2f, -(PIN_HEIGHT_DP + SHADOW_DP - 4f))),
+                iconImage(concat(literal(BADGE_PREFIX), Expression.toString(Expression.min(get("point_count"), literal(MAX_BADGE))))),
+            ),
+        )
         // 고른 사진 핀과 말풍선은 맨 위에 (머문 곳 말풍선에 가리지 않게)
         val picked = GeoJsonSource(PHOTO_PICK_SOURCE_ID, EMPTY_GEOJSON)
         s.addSource(picked)

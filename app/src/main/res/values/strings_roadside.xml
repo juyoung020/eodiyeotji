@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 길 위 도구 에이전트 (agent/roadside): "나 똥마려" · "졸려" → 경로 앞쪽 휴게소 · 졸음쉼터 -->
+<resources>
+    <string name="roadside_filler">찾아볼게요.</string>
+    <string name="roadside_none">가는 길 앞쪽에서 들를 곳을 찾지 못했어요.</string>
+    <string name="roadside_ahead">%1$s · %2$d분 앞</string>
+    <string name="roadside_add_waypoint">%1$s 경유지로</string>
+    <string name="roadside_navigate">%1$s 안내</string>
+    <string name="roadside_done_navigate">안내를 시작했어요.</string>
+    <string name="roadside_declined">알겠어요.</string>
+    <string name="roadside_offline_notice">AI 연결 없이 기기 안 목록으로 찾았어요.</string>
+    <string name="roadside_second">다른 선택</string>
+    <string name="roadside_yes">예</string>
+    <string name="roadside_no">아니요</string>
+</resources>

@@ -304,7 +304,9 @@ private fun ParkedAgent(
                         verticalArrangement = Arrangement.spacedBy(20.dp),
                         modifier = Modifier.weight(0.56f).fillMaxHeight().verticalScroll(cards).padding(vertical = 24.dp),
                     ) {
-                        if (turn.courses.isNotEmpty()) {
+                        if (turn.roadside != null) {
+                            RoadsideOptionsBlock(turn.roadside)
+                        } else if (turn.courses.isNotEmpty()) {
                             CourseRecommendationList(turn, onAsk)
                         } else {
                             // 후보 칸이 맨 위: 1·2·3번을 한눈에 견주고 눌러서 고른다
@@ -402,6 +404,7 @@ private fun CurrentTurnColumn(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(28.dp)) {
         AnswerBlock(turn, onRetry)
+        turn.roadside?.let { RoadsideOptionsBlock(it) }
         if (turn.courses.isNotEmpty()) {
             ActionBlock(turn, onConfirm, onAsk)
             CourseRecommendationList(turn, onAsk)
@@ -907,6 +910,11 @@ private fun DrivingAgent(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Spacer(Modifier.height(28.dp))
+                    // 길 위의 필요(화장실 · 졸음): 1순위 곳 + 거리 · 분 크게, 다른 선택 한 줄
+                    turn.roadside?.let {
+                        DrivingRoadsideCard(it)
+                        Spacer(Modifier.height(24.dp))
+                    }
                     // 추천 코스: 주행 중에는 지금 제안한 코스 하나만 크게
                     turn.courses.getOrNull(turn.courseFocus)?.let {
                         DrivingCourseCard(it)
@@ -944,6 +952,8 @@ private fun DrivingAgent(
                             // 안내는 어디로 가는지 버튼에 바로 ("안목항 바다횟집으로 안내" / "이 코스로 안내") — 주행 중엔 화면을 한 번 흘끗 본다
                             label = when {
                                 failed -> stringResource(R.string.agent_retry)
+                                // 길 위 제안은 "예 · ○○ 경유지로" (말로 "응"과 같다)
+                                proposal != null && turn.roadside != null -> stringResource(R.string.roadside_yes) + " · " + proposal.title
                                 proposal != null -> proposal.title
                                 else -> stringResource(R.string.agent_navigate)
                             },
@@ -954,7 +964,7 @@ private fun DrivingAgent(
                             modifier = Modifier.weight(1.4f),
                         )
                         BigButton(
-                            label = stringResource(R.string.agent_cancel),
+                            label = stringResource(if (turn.roadside != null && proposal != null) R.string.roadside_no else R.string.agent_cancel),
                             icon = EodiIcons.Close,
                             primary = false,
                             enabled = true,

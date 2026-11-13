@@ -368,7 +368,7 @@ private fun DriveRouteDetailScreen(
                                 camera = d.camera,
                                 frames = d.frames,
                                 flying = d.flying,
-                                flightMs = d.flightMs,
+                                plan = d.flightPlan,
                                 onFlightEnd = onFlightEnd,
                                 contentDescription = description,
                                 modifier = Modifier.fillMaxSize(),

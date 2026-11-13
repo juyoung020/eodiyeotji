@@ -163,7 +163,7 @@ fun BizOverlay(viewModel: BizViewModel, onOpenDay: (String) -> Unit) {
                                 Load.Loading -> LoadingBox(Modifier.padding(top = 80.dp))
                                 Load.Failed -> CenterMessage(stringResource(R.string.biz_failed), Modifier.padding(top = 48.dp))
                                 is Load.Ready -> Column(inner, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                                    SummaryRow(m.value, narrow)
+                                    SummaryRow(m.value, narrow || selected != null)
                                     HowToggle()
                                     state.removedDay?.let { UndoBar(it, viewModel::undoNotBiz) }
                                     if (m.value.trips.isEmpty()) {

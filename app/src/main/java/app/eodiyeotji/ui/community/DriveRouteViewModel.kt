@@ -24,7 +24,9 @@ import app.eodiyeotji.core.toggleDriveRouteHeart
 import app.eodiyeotji.pleos.CourseGuide
 import app.eodiyeotji.pleos.CourseProgress
 import app.eodiyeotji.ui.agent.DrivingStatePort
+import app.eodiyeotji.ui.map.FlightSpan
 import app.eodiyeotji.ui.map.ScenicMapStyle
+import app.eodiyeotji.ui.map.flightPlan
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -53,8 +55,10 @@ data class DriveRouteDetail(
     val flyWhenReady: Boolean = false,
     val naviFailed: Boolean = false,
 ) {
-    /** 달리는 시간: 길 1km에 약 0.3초, 8~15초 (일정한 빠르기, 처음 · 끝만 천천히). */
-    val flightMs: Long get() = (item.route.distanceM * 0.3).toLong().coerceIn(8_000L, 15_000L)
+    /** 미리 달리기 계획: 짧은 길은 전체, 긴 길은 출발 · 가운데 풍경 · 도착 구간 (차분한 빠르기로 25~35초). */
+    val flightPlan: List<FlightSpan> by lazy {
+        flightPlan(item.route.distanceM, sights.minByOrNull { kotlin.math.abs(it.at - 0.5f) }?.at?.toDouble())
+    }
 }
 
 @Immutable

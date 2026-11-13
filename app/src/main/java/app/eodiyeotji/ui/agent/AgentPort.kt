@@ -67,6 +67,9 @@ sealed interface AgentEvent {
     /** 답과 따로 보일 흐린 안내 한 줄 (예: AI 연결이 끊겨 기기 안 기록으로 답함). 오류가 아니고 소리로 읽지 않는다. [Done] 바로 앞에 온다. */
     data class Notice(val text: String) : AgentEvent
 
+    /** 길 위의 필요(화장실 · 졸음 등)에 찾은 들를 곳 카드 (agent/roadside). 운전 중엔 1·2번만 보인다. */
+    data class Roadside(val card: app.eodiyeotji.agent.roadside.RoadsideCard) : AgentEvent
+
     data object Done : AgentEvent
 
     data class Error(val message: String) : AgentEvent

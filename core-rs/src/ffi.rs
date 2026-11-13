@@ -58,6 +58,12 @@ pub fn day_hints(days: Vec<Vec<String>>) -> Vec<String> {
     crate::dayhint::day_hints(&days)
 }
 
+/// 소리 내어 읽기 전 글 다듬기: 단위 · 기호 · 그림 문자 (`speech_text::speakable`).
+#[uniffi::export]
+pub fn speakable_text(text: String) -> String {
+    crate::speech_text::speakable(&text)
+}
+
 /// 경로 단순화. 남길 점의 인덱스를 오름차순으로 돌려준다.
 #[uniffi::export]
 pub fn simplify_route(points: Vec<GeoPoint>, tolerance_m: f64) -> Vec<u32> {
@@ -437,5 +443,101 @@ impl EodiStore {
     /// 횟수 기록 지우기 (시연).
     pub fn proactive_reset(&self) -> Result<(), crate::store::CoreError> {
         crate::proactive::reset(self)
+    }
+}
+
+// ---- 길 위의 필요 (경로 앞쪽 들를 곳, roadside.rs) ----
+
+/// 흔한 말("나 똥마려", "졸려")을 규칙으로 알아듣는다. 모르면 None.
+#[uniffi::export]
+pub fn roadside_need(text: String) -> Option<crate::roadside::RoadsideNeed> {
+    crate::roadside::need(&text)
+}
+
+/// 기기에 넣어 둔 휴게소 · 졸음쉼터 중 [categories]에 해당하는 것.
+#[uniffi::export]
+pub fn roadside_bundled(categories: Vec<crate::roadside::RoadsideCategory>) -> Vec<crate::roadside::RoadsidePlace> {
+    crate::roadside::bundled(&categories)
+}
+
+/// 카카오 로컬 검색 방법 (분류 코드 · 검색어 · 반경).
+#[uniffi::export]
+pub fn roadside_kakao_query(category: crate::roadside::RoadsideCategory) -> crate::roadside::RoadsideKakaoQuery {
+    crate::roadside::kakao_query(category)
+}
+
+/// 카카오 로컬 검색 응답 → 후보.
+#[uniffi::export]
+pub fn roadside_parse_kakao(json: String, category: crate::roadside::RoadsideCategory) -> Vec<crate::roadside::RoadsidePlace> {
+    crate::roadside::parse_kakao(&json, category)
+}
+
+/// 카카오에 물어볼 경로 앞쪽 지점들.
+#[uniffi::export]
+pub fn roadside_probe_points(route: Vec<GeoPoint>, here: GeoPoint, heading_deg: Option<f64>, step_m: f64, count: u32) -> Vec<GeoPoint> {
+    crate::roadside::probe_points(&route, here, heading_deg, step_m, count)
+}
+
+/// 경로 앞쪽 후보를 가까운 순으로 (지나온 곳 · 반대 방향 · 너무 먼 우회는 뺀다).
+#[uniffi::export]
+pub fn roadside_rank(
+    route: Vec<GeoPoint>,
+    here: GeoPoint,
+    heading_deg: Option<f64>,
+    speed_kmh: Option<f64>,
+    candidates: Vec<crate::roadside::RoadsidePlace>,
+    max_detour_m: f64,
+    limit: u32,
+) -> Vec<crate::roadside::RoadsideHit> {
+    crate::roadside::rank(&route, here, heading_deg, speed_kmh, candidates, max_detour_m, limit as usize)
+}
+
+/// 1순위 · 다른 선택 · 읽을 문장 (규칙 답).
+#[uniffi::export]
+pub fn roadside_pick(order: Vec<crate::roadside::RoadsideCategory>, hits: Vec<crate::roadside::RoadsideHit>, can_add_waypoint: bool) -> crate::roadside::RoadsidePick {
+    crate::roadside::pick(&order, &hits, can_add_waypoint)
+}
+
+/// 도구 정의 (공급자 중립 JSON 스키마 목록).
+#[uniffi::export]
+pub fn roadside_tool_specs() -> String {
+    crate::roadside::tool_specs()
+}
+
+/// 도구 호출 검증.
+#[uniffi::export]
+pub fn roadside_parse_call(name: String, arguments: String) -> crate::roadside::RoadsideCall {
+    crate::roadside::parse_call(&name, &arguments)
+}
+
+/// 글로 흘린 도구 호출 `{"tool":..,"args":..}` 찾기 → [이름, 인자 JSON].
+#[uniffi::export]
+pub fn roadside_parse_json_call(text: String) -> Option<Vec<String>> {
+    crate::roadside::parse_json_call(&text).map(|(n, a)| vec![n, a])
+}
+
+/// 찾은 곳 → 모델에 돌려줄 도구 결과 JSON.
+#[uniffi::export]
+pub fn roadside_hits_json(hits: Vec<crate::roadside::RoadsideHit>, ids: Vec<String>) -> String {
+    crate::roadside::hits_json(&hits, &ids)
+}
+
+/// 시스템 프롬프트.
+#[uniffi::export]
+pub fn roadside_system_prompt(context: String, driving: bool, json_protocol: bool) -> String {
+    crate::roadside::system_prompt(&context, driving, json_protocol)
+}
+
+/// LLM 채팅 한 번 (OpenAI 호환, 도구 포함). 네트워크를 쓰니 IO 스레드에서.
+#[uniffi::export]
+pub fn roadside_llm_chat(config: crate::agent::LlmConfig, request: String) -> Result<String, crate::store::CoreError> {
+    crate::roadside::llm_chat(config, &request)
+}
+
+#[uniffi::export]
+impl EodiStore {
+    /// 최근 위치 기록으로 지금 위치 · 방향 · 속도 · 쉬지 않고 달린 분.
+    pub fn roadside_motion(&self, now_ms: i64) -> Result<crate::roadside::RoadsideMotion, crate::store::CoreError> {
+        self.roadside_motion_at(now_ms)
     }
 }

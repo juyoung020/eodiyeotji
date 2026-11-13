@@ -96,6 +96,10 @@ class ProactiveCenter @Inject constructor(
     private var cardJob: Job? = null
     private var lastId = 0L
 
+    /** 지금 내비 목적지 · 경유지 (주행 중 내비 이벤트로 받은 것). 길 위 도구 에이전트(`agent/roadside`)가 읽는다. */
+    val naviDestination: NaviPoi? get() = destination
+    val naviWaypoints: List<NaviPoi> get() = waypoints
+
     /** 시연용으로 바꿔 끼운 값 ([fireDebug]). */
     @Volatile private var override: DebugOverride? = null
 
