@@ -144,7 +144,7 @@ private fun DayMapContent(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current.density
-    // 경로·핀 색은 라이트 바탕 지도에 맞춘 고정값(MapInk), 지도 파일이 없을 때의 바탕색만 테마를 따른다
+    // 경로·핀 색은 밤 지도에 맞춘 고정값(MapInk), 지도 파일이 없을 때의 바탕색만 테마를 따른다
     val loadingBackground = EodiTheme.colors.surfaceHigh
     val palette = remember(loadingBackground) {
         MapPalette(

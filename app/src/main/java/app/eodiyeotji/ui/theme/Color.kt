@@ -6,9 +6,9 @@ import androidx.compose.ui.graphics.Color
 
 /*
  * 색 토큰 — "길 위의 앨범" (docs/90_디자인_컨셉.md).
- * - 라이트 = 종이 앨범: 따뜻한 종이색 바탕 위에 흰 카드, 글자는 남색 먹색.
- * - 다크 = 밤길: 회색이 아니라 깊은 남색 바탕 (밤 운전 때 눈부시지 않고, 파랑 브랜드와 한 가족으로 보인다).
- * 의미 색은 넷: 길 파랑(주행 · 주된 동작, Pleos #0064FF) · 노을 코랄(머문 곳) · 반짝 금색(기억 · AI 회상) · 지금 초록(지금 여기).
+ * - 앱 화면 = 어두운 앨범(다크): 검은 종이 바탕에 흰 글자, 사진이 주인공. 파랑은 쓰지 않는다.
+ *   의미 색은 셋: 금색(달린 길 · 기억) · 흰색(머문 곳 · 주된 동작) · 초록(지금 여기).
+ * - 라이트 = 종이 앨범: 밖으로 내보내는 공유 그림에만 쓴다 (길 파랑 · 노을 코랄 · 금색 · 초록).
  * 대비: 본문 글자는 바탕 대비 4.5:1 이상, 색 글자(20sp 굵게 이상)와 아이콘은 3:1 이상 (WCAG AA, 값은 컨셉 문서에).
  */
 
@@ -102,54 +102,54 @@ internal val LightColors = EodiColors(
 )
 
 internal val DarkColors = EodiColors(
-    background = Color(0xFF0A0F1A),
-    surface = Color(0xFF131B29),
-    surfaceHigh = Color(0xFF1C2638),
-    outline = Color(0xFF2C3850),
-    textPrimary = Color(0xFFF2F4F8),
-    textSecondary = Color(0xFFB9C2D0),
-    textTertiary = Color(0xFF8F9AAD),
-    accent = Color(0xFF3A87FF),
-    onAccent = Color(0xFFFFFFFF),
-    accentSoft = Color(0xFF16294A),
-    trip = Color(0xFF3A87FF),
-    tripSoft = Color(0xFF16294A),
-    stay = Color(0xFFF0643C),
-    staySoft = Color(0xFF3A2219),
+    background = Color(0xFF101214),
+    surface = Color(0xFF1A1D20),
+    surfaceHigh = Color(0xFF25292D),
+    outline = Color(0xFF353A40),
+    textPrimary = Color(0xFFF1F1EE),
+    textSecondary = Color(0xFFCFD2D4),
+    textTertiary = Color(0xFF8D949C),
+    accent = Color(0xFFF1F1EE),
+    onAccent = Color(0xFF101214),
+    accentSoft = Color(0xFF2A2E33),
+    trip = Color(0xFFF0C36A),
+    tripSoft = Color(0xFF332A14),
+    stay = Color(0xFFE9E9E4),
+    staySoft = Color(0xFF2A2E33),
     here = Color(0xFF2FD98C),
     hereSoft = Color(0xFF0F3324),
-    onMarker = Color(0xFFFFFFFF),
+    onMarker = Color(0xFF101214),
     error = Color(0xFFFF6B57),
-    memory = Color(0xFFFFC94D),
-    memorySoft = Color(0xFF3A2E12),
+    memory = Color(0xFFF0C36A),
+    memorySoft = Color(0xFF332A14),
     onMemory = Color(0xFF2B1D00),
-    memoryInk = Color(0xFFFFC94D),
+    memoryInk = Color(0xFFF0C36A),
     heart = Color(0xFFFF5C74),
     heartSoft = Color(0xFF3D1A22),
-    star = Color(0xFFFFC233),
+    star = Color(0xFFF0C36A),
     coupon = Color(0xFFFF8A4C),
     couponSoft = Color(0xFF3A2416),
     couponInk = Color(0xFFFFB083),
-    ink = Color(0xFF22304B),
-    onInk = Color(0xFFFFFFFF),
-    onInkMuted = Color(0xFFC9D2E3),
-    scrim = Color(0x990A0F1A),
+    ink = Color(0xFF2A2E33),
+    onInk = Color(0xFFF1F1EE),
+    onInkMuted = Color(0xFFCFD2D4),
+    scrim = Color(0x99101214),
     isDark = true,
 )
 
 /**
- * 지도 위 경로 · 핀 색. 바탕 지도(assets/map/style.json)가 라이트 하나뿐이라
- * 앱이 다크여도 지도 위 색은 라이트 지도에 맞춘 값 하나를 쓴다 (라이트 토큰과 같은 색 가족).
+ * 지도 위 경로 · 핀 색. 바탕 지도는 밤 지도 하나(MapStyleSource가 색을 어둡게 바꾼다)라
+ * 지도 위 색도 그 지도에 맞춘 값 하나를 쓴다: 길은 금색, 머문 곳은 흰 점, 지금 있는 곳은 초록.
  */
 internal object MapInk {
-    val trip = Color(0xFFF2A100)
-    val casing = Color(0xFFFFFFFF)
-    val stay = Color(0xFF22304B)
-    val here = Color(0xFF00A35A)
-    val selectedStroke = Color(0xFFFFFFFF)
-    val onMarker = Color(0xFFFFFFFF)
-    val label = Color(0xFF151A24)
-    val labelHalo = Color(0xFFFFFFFF)
+    val trip = Color(0xFFF0B84A)
+    val casing = Color(0xFF101214)
+    val stay = Color(0xFFE9E9E4)
+    val here = Color(0xFF2FD98C)
+    val selectedStroke = Color(0xFFF0C36A)
+    val onMarker = Color(0xFF101214)
+    val label = Color(0xFFF1F1EE)
+    val labelHalo = Color(0xFF101214)
 }
 
 internal val LocalEodiColors = staticCompositionLocalOf { LightColors }

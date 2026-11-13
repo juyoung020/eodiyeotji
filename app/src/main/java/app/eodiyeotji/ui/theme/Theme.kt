@@ -1,6 +1,5 @@
 package app.eodiyeotji.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
@@ -79,11 +78,11 @@ object EodiTheme {
 }
 
 /**
- * 앱 테마. 시스템 다크 설정을 따른다 (Pleos 시스템 UI와 같이 바뀐다).
+ * 앱 테마. 화면은 늘 어두운 앨범(다크)이다: 사진이 돋보이고 밤 운전에 눈이 덜 부시다. 라이트는 공유 그림처럼 따로 부를 때만.
  * Material 컴포넌트가 쓰는 colorScheme도 모든 역할을 토큰으로 채워서 기본 보라색이 나오지 않게 한다.
  */
 @Composable
-fun EodiTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+fun EodiTheme(darkTheme: Boolean = true, content: @Composable () -> Unit) {
     val colors = if (darkTheme) DarkColors else LightColors
     val type = remember { EodiType() }
     val scheme = remember(colors) { colors.toMaterial() }

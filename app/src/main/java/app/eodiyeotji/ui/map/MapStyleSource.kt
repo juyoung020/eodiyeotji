@@ -49,7 +49,25 @@ internal object MapStyleSource {
     private const val PLACEHOLDER = "{{PMTILES_URL}}"
     private const val GLYPHS = "asset://map/fonts/{fontstack}/{range}.pbf"
     private const val ONLINE_SOURCE = "ofm"
-    private const val LAND = "#e2dfda"
+    private const val LAND = "#1B1E22"
+
+    /**
+     * 밤 지도: 스타일 파일(Protomaps 밝은 지도)은 그대로 두고, 읽을 때 색만 어두운 앨범 바탕에 맞게 바꾼다.
+     * 땅 · 물 · 길은 검은 종이에 가까운 회색, 글자는 밝은 회색 (달린 길의 금색이 가장 눈에 띄게).
+     */
+    private val NIGHT = listOf(
+        "#cccccc" to "#15181B", "#e2dfda" to "#1B1E22", "#9cd3b4" to "#1F2C26", "#e8e4d0" to "#2B2A24",
+        "#dadbdf" to "#22262A", "#e9e9ed" to "#2C3035", "#80deea" to "#10242F", "#e0e0e0" to "#14171A",
+        "#ffffff" to "#3A3F45", "#ebebeb" to "#30353A", "#a7b1b3" to "#3C4246", "#adadad" to "#4A5056",
+        "#728dd4" to "#6F93B5", "#91888b" to "#8D949C", "#938a8d" to "#8D949D", "#8f8f8f" to "#9AA1A8",
+        "#b3b3b3" to "#7D848C", "#5c5c5c" to "#D5D8DA", "#a3a3a3" to "#9AA1A9",
+        "rgba(210, 239, 207, 1)" to "#1F2A22", "rgba(255, 243, 215, 1)" to "#2A2820", "rgba(230, 230, 230, 1)" to "#1F2327",
+        "rgba(216, 239, 210, 1)" to "#202A22", "rgba(255, 255, 255, 1)" to "#2C3036", "rgba(234, 239, 210, 1)" to "#24291F",
+        "rgba(196, 231, 210, 1)" to "#1C2A24",
+        "#1A8CBD" to "#4FB3DD", "#20834D" to "#4FB47E", "#315BCF" to "#7C9BEA", "#6A5B8F" to "#A493CC", "#CB6704" to "#E59A4A",
+    )
+
+    private fun night(json: String): String = NIGHT.fold(json) { s, (from, to) -> s.replace(from, to) }
 
     /** 마지막으로 만든 스타일과 그때의 지도 파일 상태. 지도를 열 때마다 asset 읽기·JSON 합치기(수십 ms)를 다시 하지 않는다. */
     @Volatile private var cached: Pair<String, MapStyleSpec>? = null
@@ -86,7 +104,7 @@ internal object MapStyleSource {
     }
 
     private fun readAsset(context: Context, path: String): String? = try {
-        context.assets.open(path).bufferedReader().use { it.readText() }
+        night(context.assets.open(path).bufferedReader().use { it.readText() })
     } catch (e: IOException) {
         Log.w(TAG, "asset 없음 ($path)", e)
         null

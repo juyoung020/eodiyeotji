@@ -53,10 +53,12 @@ import androidx.compose.ui.unit.dp
 import app.eodiyeotji.R
 import app.eodiyeotji.core.DayEntry
 import app.eodiyeotji.core.DaySummary
+import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.ui.common.durationText
 import app.eodiyeotji.ui.community.RoundIconButton
 import app.eodiyeotji.ui.map.DayMap
 import app.eodiyeotji.ui.map.MapPhotoPin
+import app.eodiyeotji.ui.place.LocalOpenPlace
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.theme.MapInk
@@ -95,15 +97,23 @@ internal fun WideHome(
     val share: (() -> Unit)? = loaded?.shareEpisode?.let { id -> { onShare(id) } }
     // 전체 시간표 (주행 줄 · 쿠폰 · 내 사진 · 고치기까지): 들른 곳 카드 끝의 버튼으로 연다
     var sheet by remember(summary?.day) { mutableStateOf(false) }
+    // 이미 고른 곳을 한 번 더 누르면(지도 핀 · 아래 카드) 그곳 화면을 연다: 큰 사진 · 별점 · 안내
+    val openPlace = LocalOpenPlace.current
+    fun openStay(key: String): Boolean {
+        val stay = loaded?.entries?.filterIsInstance<DayEntry.Stay>()?.firstOrNull { it.key == key }?.stay ?: return false
+        val p = stay.place ?: return false
+        openPlace(StopFact(p.name, p.category, p.address, stay.arriveMs, stay.leaveMs, stay.center.lat, stay.center.lon, false))
+        return true
+    }
     val info: @Composable (Modifier) -> Unit = { m -> if (summary != null) StageInfo(summary, today, loaded != null, share, m) }
     val stops: @Composable (Modifier) -> Unit = { m ->
-        if (loaded != null) StopCards(loaded.entries, state.selectedEntry, onEntryClick, onAll = { sheet = !sheet }, modifier = m)
+        if (loaded != null) StopCards(loaded.entries, state.selectedEntry, { key -> if (key != state.selectedEntry || !openStay(key)) onEntryClick(key) }, onAll = { sheet = !sheet }, modifier = m)
     }
     val map: @Composable (Modifier, IntArray) -> Unit = { m, pad ->
         DayMap(
             data = loaded?.map,
             selectedKey = state.selectedEntry,
-            onSelectKey = onMapSelect,
+            onSelectKey = { key -> if (key == null || key != state.selectedEntry || !openStay(key)) onMapSelect(key) },
             modifier = m,
             photoPins = remember(loaded?.entries, loaded?.myPhotos) { stayPhotoPins(loaded) },
             myPhotos = loaded?.mapPhotos.orEmpty(),
@@ -186,6 +196,8 @@ private fun Panel(modifier: Modifier = Modifier, content: @Composable () -> Unit
         color = EodiTheme.colors.surface.copy(alpha = 0.95f),
         contentColor = EodiTheme.colors.textPrimary,
         shape = RoundedCornerShape(EodiTheme.space.radiusL),
+        // 어두운 지도 위에서 판 가장자리가 묻히지 않게 가는 테두리
+        border = BorderStroke(1.dp, EodiTheme.colors.outline),
         shadowElevation = 6.dp,
         modifier = modifier,
         content = content,
@@ -257,7 +269,7 @@ private fun DateRail(days: List<DaySummary>, today: LocalDate, selected: String?
     }
 }
 
-/** 들른 곳 카드 줄 (번호 · 이름 · 도착 시각 · 머문 시간) + 끝에 전체 시간표 버튼. 누르면 지도에서 그곳을 고른다. */
+/** 들른 곳 카드 줄 (번호 · 이름 · 도착 시각 · 머문 시간) + 끝에 전체 시간표 버튼. 누르면 지도에서 그곳을 고르고, 고른 곳을 한 번 더 누르면 그곳 화면을 연다. */
 @Composable
 private fun StopCards(entries: List<DayEntry>, selectedKey: String?, onClick: (String) -> Unit, onAll: () -> Unit, modifier: Modifier = Modifier) {
     val c = EodiTheme.colors
@@ -273,13 +285,13 @@ private fun StopCards(entries: List<DayEntry>, selectedKey: String?, onClick: (S
                 color = c.surface.copy(alpha = 0.95f),
                 contentColor = c.textPrimary,
                 shape = RoundedCornerShape(24.dp),
-                border = if (on) BorderStroke(3.dp, MapInk.trip) else null,
+                border = if (on) BorderStroke(3.dp, MapInk.trip) else BorderStroke(1.dp, c.outline),
                 shadowElevation = 6.dp,
                 modifier = Modifier.width(340.dp).fillMaxHeight(),
             ) {
                 Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(48.dp).background(if (stay.isOpen) MapInk.here else MapInk.stay, CircleShape), contentAlignment = Alignment.Center) {
-                        Text(if (stay.order > 0) stay.order.toString() else "", style = EodiTheme.type.label, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(if (stay.order > 0) stay.order.toString() else "", style = EodiTheme.type.label, fontWeight = FontWeight.Bold, color = MapInk.onMarker)
                     }
                     Spacer(Modifier.width(16.dp))
                     Column {
