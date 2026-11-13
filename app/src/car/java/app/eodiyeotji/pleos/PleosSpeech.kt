@@ -179,7 +179,8 @@ class PleosSpeech @Inject constructor(@ApplicationContext private val context: C
         finished = true
         main.removeCallbacks(timeout)
         _state.value = ListenState()
-        Log.i(TAG, "듣기 끝: $r")
+        // 알아들은 말은 개인정보 → release 로그에는 글자 수만 (기획 가이드 보안: 로그 마스킹)
+        Log.i(TAG, "듣기 끝: " + if (BuildConfig.DEBUG || r !is SpeechResult.Final) "$r" else "Final(${r.text.length}자)")
         _results.tryEmit(r)
     }
 

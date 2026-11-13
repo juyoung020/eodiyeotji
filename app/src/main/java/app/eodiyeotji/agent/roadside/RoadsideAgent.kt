@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.SystemClock
 import android.util.Log
 import androidx.compose.runtime.Immutable
+import app.eodiyeotji.BuildConfig
 import app.eodiyeotji.R
 import app.eodiyeotji.agent.ProactiveCenter
 import app.eodiyeotji.core.EodiCore
@@ -220,7 +221,9 @@ class RoadsideAgent @Inject constructor(
         }
         if (usedLlm.not() && llm.available) send(AgentEvent.Notice(context.getString(R.string.roadside_offline_notice)))
         mark("끝 (${if (llmOk) "LLM 답" else "규칙 답"}) 1순위=${primary?.hit?.place?.name} 2순위=${second?.hit?.place?.name}")
-        Log.i(TAG, "길 위 에이전트 \"$text\" ${SystemClock.elapsedRealtime() - t0}ms\n$trace")
+        // 질문 · 장소 이름은 개인정보 → release 로그에는 글자 수와 걸린 시간만
+        if (BuildConfig.DEBUG) Log.i(TAG, "길 위 에이전트 \"$text\" ${SystemClock.elapsedRealtime() - t0}ms\n$trace")
+        else Log.i(TAG, "길 위 에이전트 ${text.length}자 ${SystemClock.elapsedRealtime() - t0}ms")
         send(AgentEvent.Done)
     }.flowOn(Dispatchers.Default)
 
@@ -253,7 +256,7 @@ class RoadsideAgent @Inject constructor(
             navi.requestRoute(place.name, place.lat, place.lon, place.address)
         }
         check(ok) { context.getString(R.string.agent_send_failed) }
-        Log.i(TAG, "길 위 제안 실행: ${if (p.addWaypoint && dest != null) "경유지" else "안내"} ${place.name}")
+        Log.i(TAG, "길 위 제안 실행: ${if (p.addWaypoint && dest != null) "경유지" else "안내"}" + if (BuildConfig.DEBUG) " ${place.name}" else "")
         return context.getString(if (p.addWaypoint && dest != null) R.string.proactive_done_waypoint else R.string.roadside_done_navigate)
     }
 

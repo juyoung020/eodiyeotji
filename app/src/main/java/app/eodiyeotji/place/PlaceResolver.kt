@@ -170,7 +170,7 @@ class PlaceResolver @Inject constructor(
                         core.setPlaceName(q.id, r.label)
                         failures.remove(q.id)
                         val t1 = now()
-                        Log.i(TAG, "이름 ${q.id} '${r.label.name}' (${p.name}) 조회 ${t1 - t0} ms, 신호부터 ${t1 - since} ms")
+                        Log.i(TAG, "이름 ${q.id} " + (if (BuildConfig.DEBUG) "'${r.label.name}' " else "") + "(${p.name}) 조회 ${t1 - t0} ms, 신호부터 ${t1 - since} ms")
                         return true
                     }
                     Lookup.NotFound -> anyAnswered = true
