@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -238,6 +240,22 @@ private fun DateRail(days: List<DaySummary>, today: LocalDate, selected: String?
         if (i >= 0 && listState.layoutInfo.visibleItemsInfo.none { it.key == selected }) listState.animateScrollToItem(i)
     }
     Column(Modifier.width(RailWidth).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+        // 지난 날을 보고 있으면(검색 · 여행 모음에서 들어왔을 때 등) 맨 위에 가장 최근 날로 돌아가는 버튼
+        val latest = days.firstOrNull()?.day
+        if (latest != null && selected != null && selected != latest) {
+            Surface(
+                onClick = { onSelect(latest) },
+                color = c.ink,
+                contentColor = c.onInk,
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.padding(bottom = 12.dp).width(RailWidth - 24.dp).height(76.dp),
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    Icon(EodiIcons.Chevron, contentDescription = null, modifier = Modifier.size(24.dp).rotate(-90f))
+                    Text(stringResource(R.string.home_latest_day), style = EodiTheme.type.caption, fontWeight = FontWeight.Bold, maxLines = 1)
+                }
+            }
+        }
         LazyColumn(
             Modifier.weight(1f),
             state = listState,

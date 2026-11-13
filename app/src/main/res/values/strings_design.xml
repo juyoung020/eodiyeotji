@@ -4,6 +4,7 @@
 
     <!-- 하루 상세 통계 칸: 위는 값, 아래는 이름 -->
     <string name="home_month">%1$d월</string>
+    <string name="home_latest_day">최근으로</string>
     <string name="home_all_timeline">전체 시간표</string>
     <string name="home_close_timeline">시간표 닫기</string>
     <string name="stat_more">통계 더 보기</string>

@@ -57,6 +57,7 @@ import app.eodiyeotji.ui.review.StopStrip
 import app.eodiyeotji.ui.place.placeDetailOpenLabel
 import app.eodiyeotji.ui.theme.MemoryStamp
 import app.eodiyeotji.ui.place.LocalOpenPlace
+import app.eodiyeotji.ui.replay.LocalOpenReplay
 import app.eodiyeotji.ui.community.StopPhotoBox
 import app.eodiyeotji.ui.share.ComposableImageShare
 import app.eodiyeotji.ui.share.ShareButtonStyle
@@ -116,13 +117,30 @@ internal fun RecommendationCard(
                 val pins = remember(stops, skipped) {
                     (stops + skipped).filter { it.name.isNotBlank() }.map { MapPhotoPin("s${it.arriveMs}", it.name, it.address, it.lat, it.lon) }
                 }
-                DayMap(
-                    data = map,
-                    selectedKey = null,
-                    onSelectKey = {},
-                    photoPins = pins,
-                    modifier = Modifier.fillMaxWidth().height(340.dp).clip(RoundedCornerShape(20.dp)),
-                )
+                // 지도를 누르면(어디든) 바로 그날로 돌아가기가 열린다. 오른쪽 아래 딱지는 그 안내이자 같은 버튼
+                val openReplay = LocalOpenReplay.current
+                Box(Modifier.fillMaxWidth().height(340.dp).clip(RoundedCornerShape(20.dp))) {
+                    DayMap(
+                        data = map,
+                        selectedKey = null,
+                        onSelectKey = { openReplay(facts.day) },
+                        photoPins = pins,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    Surface(
+                        onClick = { openReplay(facts.day) },
+                        color = c.ink,
+                        contentColor = c.onInk,
+                        shape = CircleShape,
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
+                    ) {
+                        Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(EodiIcons.Play, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(stringResource(R.string.replay_open), style = EodiTheme.type.caption, fontWeight = FontWeight.Bold, maxLines = 1)
+                        }
+                    }
+                }
             } else if (hero != null) {
                 FeedHero(
                     hero,

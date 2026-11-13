@@ -440,7 +440,7 @@ private fun AskItem(label: String, selected: Boolean, driving: Boolean, modifier
                     }
                 }
             } else {
-                // AI 동그라미 (파랑 + 금색 반짝임, 디자인 무늬 SparkleBadge) — 기억 에이전트 입구
+                // AI 동그라미 (먹색 + 금색 반짝임, 디자인 무늬 SparkleBadge) — 기억 에이전트 입구
                 Surface(shape = CircleShape, color = c.accent, shadowElevation = 6.dp, modifier = Modifier.size(104.dp)) {
                     SparkleBadge(size = 104.dp)
                 }

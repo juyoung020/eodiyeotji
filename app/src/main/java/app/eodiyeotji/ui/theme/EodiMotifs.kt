@@ -127,9 +127,9 @@ fun SparkleBadge(modifier: Modifier = Modifier, size: Dp = 52.dp) {
     val c = EodiTheme.colors
     Canvas(modifier.size(size)) {
         val s = this.size.width
-        drawCircle(Brush.linearGradient(listOf(MarkTop, MarkBottom), Offset.Zero, Offset(s, s)))
+        drawCircle(c.ink)
         drawSparkle(Offset(s * 0.46f, s * 0.46f), s * 0.24f, c.memory)
-        drawSparkle(Offset(s * 0.70f, s * 0.68f), s * 0.10f, Color.White)
+        drawSparkle(Offset(s * 0.70f, s * 0.68f), s * 0.10f, c.onInk)
     }
 }
 
