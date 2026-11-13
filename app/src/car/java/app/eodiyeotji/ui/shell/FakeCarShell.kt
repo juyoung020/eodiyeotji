@@ -109,6 +109,8 @@ private val StatusHeight = 90.dp
 private val BarHeight = 140.dp
 
 private val PanelBg = Color(0xFFF3F4F6)
+private val TopInk = Color(0xFF333333)
+private val TopMuted = Color(0xFFAAAAAA)
 private val PanelInk = Color(0xFF16191C)
 private val PanelMuted = Color(0xFF8A9099)
 private val BarBg = Color(0xFF000000)
@@ -198,26 +200,26 @@ private class ShellArt(val panel: ImageBitmap?, val bar: ImageBitmap?, val statu
 private fun DrivePanel(gear: String, speedKmh: Float, onGear: (String) -> Unit, art: ImageBitmap?, modifier: Modifier) {
     val moving = TabletVehicle.isMoving(gear)
     Column(modifier.background(PanelBg)) {
-        Row(
-            Modifier.fillMaxWidth().height(StatusHeight).background(if (art != null) Color.White else PanelBg).padding(start = 28.dp, end = 24.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.size(width = 64.dp, height = 30.dp).background(PanelInk, RoundedCornerShape(6.dp)))
-            Spacer(Modifier.width(14.dp))
-            Text("500", color = PanelInk, fontSize = 34.sp, fontWeight = FontWeight.SemiBold)
-            Text(" km", color = PanelInk, fontSize = 24.sp)
-            Spacer(Modifier.weight(1f))
-            Text(speedKmh.roundToInt().toString(), color = if (moving) PanelInk else PanelMuted, fontSize = 34.sp, fontWeight = FontWeight.SemiBold)
-            Text(" km/h", color = PanelMuted, fontSize = 24.sp)
-            Spacer(Modifier.weight(1f))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        // 윗줄: 자리 · 크기는 Pleos 에뮬레이터의 주행 정보 화면에 맞췄다 (px = dp). 기어 글자는 작지만 누르는 칸은 줄 높이 전체다
+        Box(Modifier.fillMaxWidth().height(StatusHeight).background(if (art != null) Color.White else PanelBg)) {
+            Row(Modifier.align(Alignment.CenterStart).padding(start = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(width = 72.dp, height = 32.dp).background(TopInk))
+                Box(Modifier.padding(start = 4.dp).size(width = 4.dp, height = 14.dp).background(Color(0xFFD0D0D0)))
+                Spacer(Modifier.width(15.dp))
+                Text("500", color = Color.Black, fontSize = 32.sp)
+                Text(" km", color = Color.Black, fontSize = 25.sp, modifier = Modifier.padding(top = 5.dp))
+            }
+            Row(Modifier.align(Alignment.CenterStart).padding(start = 384.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(speedKmh.roundToInt().toString(), color = if (moving) TopInk else TopMuted, fontSize = 32.sp)
+                Text(" km/h", color = TopMuted, fontSize = 25.sp, modifier = Modifier.padding(top = 5.dp))
+            }
+            Row(Modifier.align(Alignment.CenterEnd).padding(end = 21.dp).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
                 listOf("P", "R", "N", "D").forEach { g ->
                     val on = g == gear
-                    Box(
-                        Modifier.size(76.dp).clip(RoundedCornerShape(10.dp)).background(if (on) PanelInk else Color.Transparent).clickable { onGear(g) },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(g, color = if (on) Color.White else PanelMuted, fontSize = 36.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal)
+                    // 고른 기어는 48dp 짙은 네모(양옆 8dp), 나머지는 32dp 칸의 회색 글자
+                    Box(Modifier.width(if (on) 64.dp else 32.dp).fillMaxHeight().clickable { onGear(g) }, contentAlignment = Alignment.Center) {
+                        if (on) Box(Modifier.size(48.dp).background(TopInk))
+                        Text(g, color = if (on) Color.White else TopMuted, fontSize = 30.sp)
                     }
                 }
             }
