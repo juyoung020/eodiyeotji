@@ -79,7 +79,7 @@ internal fun BoxScope.AgentVoiceLayer(
         exit = fadeOut(),
         // 주행 중에는 아래쪽 큰 "안내"·"취소" 버튼 바로 위 (가운데에 두면 두 줄짜리 답 글을 덮었다), 정차 중에는 맨 아래
         modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding()
-            .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = if (driving) DrivingButtonsClearance else 24.dp),
+            .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = if (driving && hasTurn) DrivingButtonsClearance else 24.dp),
     ) {
         ListeningCard(voice, driving, onMic, onCancelListening)
     }
