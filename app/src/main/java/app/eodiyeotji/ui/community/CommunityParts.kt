@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.community
 
+import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.ui.gallery.MyPhotoImage
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.heading
@@ -234,13 +235,13 @@ fun HeartButton(hearts: Int, hearted: Boolean, onToggle: () -> Unit, modifier: M
     val desc = stringResource(R.string.community_hearts_description, hearts) + ", " +
         stringResource(if (hearted) R.string.community_heart_remove else R.string.community_heart_add)
     val press = remember { MutableInteractionSource() }
-    Surface(
+    PressSurface(
         onClick = onToggle,
         shape = CircleShape,
         color = if (hearted) c.heartSoft else c.surfaceHigh,
         contentColor = if (hearted) c.heart else c.textSecondary,
         interactionSource = press,
-        modifier = modifier.pressScale(press).heightIn(min = if (compact) 64.dp else 76.dp).semantics { contentDescription = desc },
+        modifier = modifier.heightIn(min = if (compact) 64.dp else 76.dp).semantics { contentDescription = desc },
     ) {
         Row(
             Modifier.padding(horizontal = if (compact) 18.dp else 22.dp),
@@ -343,7 +344,7 @@ fun TogglePill(
     minHeight: Dp = 64.dp,
 ) {
     val c = EodiTheme.colors
-    Surface(
+    PressSurface(
         onClick = onToggle,
         enabled = enabled,
         shape = CircleShape,
@@ -370,37 +371,39 @@ fun TogglePill(
  * 주된 동작 버튼 (파란 알약, 76dp). [large]는 운전 중 큰 버튼 (높이 144dp · 큰 글자 · 큰 아이콘).
  */
 @Composable
-fun PrimaryPill(text: String, icon: ImageVector?, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, large: Boolean = false) {
+fun PrimaryPill(text: String, icon: ImageVector?, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, large: Boolean = false, loading: Boolean = false) {
     val c = EodiTheme.colors
     val press = remember { MutableInteractionSource() }
-    Surface(
+    PressSurface(
         onClick = onClick,
         enabled = enabled,
         shape = CircleShape,
         color = if (enabled) c.accent else c.surfaceHigh,
         contentColor = if (enabled) c.onAccent else c.textTertiary,
         interactionSource = press,
-        modifier = modifier.pressScale(press).let { m -> if (large) m.height(LargePillHeight) else m.heightIn(min = 76.dp) },
+        loading = loading,
+        modifier = modifier.let { m -> if (large) m.height(LargePillHeight) else m.heightIn(min = 76.dp) },
     ) {
-        PillContent(text, icon, iconTint = null, large = large, bold = true, horizontal = 30.dp)
+        PillContent(text, icon, iconTint = null, large = large, bold = true, horizontal = 30.dp, loading = loading)
     }
 }
 
 /** 보조 버튼 (회색 알약, 76dp). [large]는 운전 중 큰 버튼 (높이 144dp). */
 @Composable
-fun SecondaryPill(text: String, icon: ImageVector?, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, large: Boolean = false) {
+fun SecondaryPill(text: String, icon: ImageVector?, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, large: Boolean = false, loading: Boolean = false) {
     val c = EodiTheme.colors
     val press = remember { MutableInteractionSource() }
-    Surface(
+    PressSurface(
         onClick = onClick,
         enabled = enabled,
         shape = CircleShape,
         color = c.surfaceHigh,
         contentColor = if (enabled) c.textPrimary else c.textTertiary,
         interactionSource = press,
-        modifier = modifier.pressScale(press).let { m -> if (large) m.height(LargePillHeight) else m.heightIn(min = 76.dp) },
+        loading = loading,
+        modifier = modifier.let { m -> if (large) m.height(LargePillHeight) else m.heightIn(min = 76.dp) },
     ) {
-        PillContent(text, icon, iconTint = if (enabled && !large) c.accent else null, large = large, bold = true, horizontal = 28.dp, normalStyle = EodiTheme.type.label)
+        PillContent(text, icon, iconTint = if (enabled && !large) c.accent else null, large = large, bold = true, horizontal = 28.dp, normalStyle = EodiTheme.type.label, loading = loading)
     }
 }
 
@@ -415,13 +418,18 @@ private fun PillContent(
     bold: Boolean,
     horizontal: Dp,
     normalStyle: androidx.compose.ui.text.TextStyle = EodiTheme.type.bodyStrong,
+    loading: Boolean = false,
 ) {
     Row(
         Modifier.padding(horizontal = if (large) 36.dp else horizontal),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
-        if (icon != null) {
+        if (loading) {
+            // 가이드 Basic button "Loading": 버튼 안 로더 + 누름 막기 (PressSurface loading)
+            app.eodiyeotji.ui.common.EodiLoader(size = if (large) 48.dp else 32.dp)
+            Spacer(Modifier.width(if (large) 20.dp else 12.dp))
+        } else if (icon != null) {
             val size = if (large) 48.dp else 28.dp
             if (iconTint != null) Icon(icon, null, Modifier.size(size), tint = iconTint) else Icon(icon, null, Modifier.size(size))
             Spacer(Modifier.width(if (large) 20.dp else 12.dp))
@@ -455,8 +463,9 @@ fun TwoLinePill(
 ) {
     val c = EodiTheme.colors
     val content = if (primary) c.onAccent else c.textPrimary
-    Surface(
+    PressSurface(
         onClick = onClick,
+        loading = running,
         shape = RoundedCornerShape(EodiTheme.space.radiusL),
         color = if (primary) c.accent else c.surfaceHigh,
         contentColor = content,
@@ -468,7 +477,7 @@ fun TwoLinePill(
         ) {
             val iconSize = if (large) 32.dp else 28.dp
             if (running) {
-                CircularProgressIndicator(strokeWidth = 3.dp, color = content, modifier = Modifier.size(iconSize))
+                app.eodiyeotji.ui.common.EodiLoader(size = iconSize)
             } else if (icon != null) {
                 Icon(icon, null, Modifier.size(iconSize), tint = if (primary) content else c.accent)
             }
@@ -497,9 +506,9 @@ fun TwoLinePill(
     }
 }
 
-/** 보조 글자(설명 · 분류 · 요약 줄): Pleos 가장 작은 글자 크기(20sp)에 줄 간격만 넉넉히. */
+/** 보조 글자(설명 · 분류 · 요약 줄): 차 판 최소 글자 22sp(Pleos 가독성 기준)에 줄 간격만 넉넉히. */
 val SubTextStyle: androidx.compose.ui.text.TextStyle
-    @Composable @ReadOnlyComposable get() = EodiTheme.type.bodyStrong.copy(fontSize = 20.sp, lineHeight = 28.sp)
+    @Composable @ReadOnlyComposable get() = EodiTheme.type.bodyStrong.copy(fontSize = 22.sp, lineHeight = 30.sp)
 
 /** 순위 동그라미 (드라이브 코스 카드 · 에이전트 추천). [focused]면 파란 바탕 (지금 안내 제안 중인 것). */
 @Composable
@@ -536,7 +545,7 @@ fun RoundIconButton(
     iconModifier: Modifier = Modifier,
 ) {
     val c = EodiTheme.colors
-    Surface(
+    PressSurface(
         onClick = onClick,
         enabled = enabled,
         shape = CircleShape,
@@ -865,20 +874,15 @@ fun CenterMessage(
 }
 
 /**
- * 불러오는 중: 가운데 둥근 진행 고리 (옅은 파란 바탕 위 파란 고리). [message]가 있으면 아래에 한 줄.
+ * 불러오는 중: 가운데 Pleos 공식 로딩 애니메이션(Tension). [message]가 있으면 아래에 한 줄.
  * [compact]는 작은 칸 · 상세 창 안에서 쓰는 작은 고리.
  */
 @Composable
 fun LoadingBox(modifier: Modifier = Modifier, message: String? = null, compact: Boolean = false) {
     val c = EodiTheme.colors
     Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        CircularProgressIndicator(
-            color = c.accent,
-            trackColor = c.accentSoft,
-            strokeWidth = if (compact) 5.dp else 6.dp,
-            strokeCap = StrokeCap.Round,
-            modifier = Modifier.size(if (compact) 48.dp else 64.dp),
-        )
+        // Pleos 공식 로딩 (긴 로딩 = Tension)
+        app.eodiyeotji.ui.common.EodiLoader(size = if (compact) 48.dp else 64.dp, kind = app.eodiyeotji.ui.common.LoaderKind.Tension)
         if (message != null) {
             Spacer(Modifier.height(24.dp))
             Text(message, style = EodiTheme.type.body, color = c.textSecondary, textAlign = TextAlign.Center)

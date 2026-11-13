@@ -1,5 +1,8 @@
 package app.eodiyeotji.ui.agent
 
+import app.eodiyeotji.ui.common.eodiShadow
+import app.eodiyeotji.ui.common.PressIconButton
+import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.theme.EodiIcons
 import androidx.compose.animation.AnimatedVisibility
@@ -56,14 +59,12 @@ internal fun BoxScope.AgentVoiceLayer(
 ) {
     // 주행 중 답 화면에는 마이크가 없다 → 오른쪽 위에 하나 둔다 (처음 화면은 가운데 큰 마이크가 있다)
     if (driving && hasTurn && !voice.listening) {
-        Surface(
+        PressSurface(
             onClick = onMic,
             shape = CircleShape,
             color = EodiTheme.colors.accent,
             contentColor = EodiTheme.colors.onAccent,
-            shadowElevation = 6.dp,
-            modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(top = 56.dp, end = 56.dp).size(96.dp),
-        ) {
+            modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(top = 56.dp, end = 56.dp).size(96.dp).eodiShadow(EodiTheme.elevation.level2, CircleShape)) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(AgentIcons.Mic, contentDescription = stringResource(R.string.agent_mic), modifier = Modifier.size(48.dp))
             }
@@ -85,13 +86,19 @@ internal fun BoxScope.AgentVoiceLayer(
         visible = note != null && !voice.listening,
         enter = fadeIn(),
         exit = fadeOut(),
-        modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 40.dp, start = 24.dp, end = 24.dp),
+        // 토스트 규격 (Pleos 가이드 components/toast.md): 좌우 · 아래 24dp, 최대 792dp, 글 712dp
+        modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 24.dp, start = 24.dp, end = 24.dp),
     ) {
-        Surface(shape = CircleShape, color = EodiTheme.colors.textPrimary, contentColor = EodiTheme.colors.surface) {
+        Surface(
+            shape = RoundedCornerShape(EodiTheme.space.radiusM),
+            color = EodiTheme.colors.ink,
+            contentColor = EodiTheme.colors.onInk,
+            modifier = Modifier.widthIn(max = 792.dp).eodiShadow(EodiTheme.elevation.level2, RoundedCornerShape(EodiTheme.space.radiusM)),
+        ) {
             Text(
                 note.orEmpty(),
-                style = EodiTheme.type.titleSmall,
-                modifier = Modifier.padding(horizontal = 32.dp, vertical = 18.dp).semantics { liveRegion = LiveRegionMode.Polite },
+                style = EodiTheme.type.bodyStrong,
+                modifier = Modifier.widthIn(max = 712.dp).padding(horizontal = 32.dp, vertical = 20.dp).semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
     }
@@ -103,12 +110,10 @@ private fun ListeningCard(voice: VoiceUi, driving: Boolean, onMic: () -> Unit, o
     Surface(
         shape = RoundedCornerShape(36.dp),
         color = EodiTheme.colors.surfaceHigh,
-        shadowElevation = 12.dp,
-        modifier = Modifier.widthIn(max = 960.dp).fillMaxWidth(),
-    ) {
+        modifier = Modifier.widthIn(max = 960.dp).fillMaxWidth().eodiShadow(EodiTheme.elevation.level2, RoundedCornerShape(36.dp))) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 32.dp, vertical = 28.dp)) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.size(132.dp)) {
-                Surface(
+                PressSurface(
                     onClick = onMic,
                     shape = CircleShape,
                     color = EodiTheme.colors.accent,
@@ -122,11 +127,14 @@ private fun ListeningCard(voice: VoiceUi, driving: Boolean, onMic: () -> Unit, o
             }
             Spacer(Modifier.width(28.dp))
             Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
-                Text(
-                    stringResource(if (voice.followUp) R.string.agent_voice_follow_up else R.string.agent_voice_listening),
-                    style = EodiTheme.type.titleSmall,
-                    color = EodiTheme.colors.accent,
-                    fontWeight = FontWeight.SemiBold,
+                // Gleo 상태: 듣는 중(Passive → 2초 뒤 "운전석에서 듣는 중…") / 말하는 중(Active) / 되묻는 중(Asking)
+                GleoStatusChip(
+                    when {
+                        voice.followUp -> GleoStatus.Asking
+                        voice.partial.isBlank() -> GleoStatus.ListeningPassive
+                        else -> GleoStatus.ListeningActive
+                    },
+                    level = voice.level,
                 )
                 Text(
                     voice.partial.ifBlank {
@@ -147,7 +155,7 @@ private fun ListeningCard(voice: VoiceUi, driving: Boolean, onMic: () -> Unit, o
                 )
                 Spacer(Modifier.height(2.dp))
             }
-            IconButton(onClick = onCancel, modifier = Modifier.size(AgentTouchMin)) {
+            PressIconButton(onClick = onCancel, modifier = Modifier.size(AgentTouchMin)) {
                 Icon(EodiIcons.Close, contentDescription = stringResource(R.string.agent_voice_cancel), modifier = Modifier.size(36.dp))
             }
         }

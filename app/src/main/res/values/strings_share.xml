@@ -3,6 +3,7 @@
     <!-- 공유 이미지 카드 (ui/share) — 카카오톡 등 공유 시트로 보낸다 (폰 판) -->
     <string name="share_card_button">카드로 공유</string>
     <string name="share_card_icon">사진 카드로 공유하기</string>
+    <string name="share_icon_label">공유</string>
     <string name="share_card_making">카드 만드는 중…</string>
     <string name="share_card_chooser">어디였지 카드 보내기</string>
     <string name="share_card_failed">공유 카드를 만들지 못했어요</string>

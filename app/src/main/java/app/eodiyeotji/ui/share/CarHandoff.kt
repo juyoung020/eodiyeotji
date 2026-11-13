@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.share
 
+import app.eodiyeotji.ui.common.PressSurface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -95,7 +96,7 @@ internal fun CarHandoffButton(target: ShareTarget, modifier: Modifier, style: Sh
         ShareButtonStyle.ICON -> {
             val c = EodiTheme.colors
             val label = stringResource(R.string.handoff_button)
-            Surface(
+            PressSurface(
                 onClick = onClick,
                 enabled = !busy,
                 shape = CircleShape,
@@ -108,7 +109,7 @@ internal fun CarHandoffButton(target: ShareTarget, modifier: Modifier, style: Sh
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (busy) CircularProgressIndicator(Modifier.size(30.dp), color = c.accent, strokeWidth = 3.dp)
+                    if (busy) app.eodiyeotji.ui.common.EodiLoader(size = 30.dp)
                     else Icon(ShareIcon, null, Modifier.size(30.dp), tint = c.accent)
                     Text(
                         stringResource(if (busy) R.string.handoff_sending else R.string.handoff_icon_label),
@@ -176,13 +177,13 @@ private fun PairContent(p: HandoffPairing?, failed: Boolean, onClose: () -> Unit
             Spacer(Modifier.size(32.dp))
             when {
                 failed -> Text(stringResource(R.string.handoff_pair_failed), style = type.bodyStrong, color = c.textSecondary)
-                p == null -> CircularProgressIndicator(color = c.accent)
+                p == null -> app.eodiyeotji.ui.common.EodiLoader(size = 64.dp, kind = app.eodiyeotji.ui.common.LoaderKind.Tension)
                 else -> {
                     Text(stringResource(R.string.handoff_pair_code), style = type.label, color = c.textTertiary)
                     Text(p.code.chunked(3).joinToString(" "), fontSize = 88.sp, fontWeight = FontWeight.ExtraBold, color = c.accent, letterSpacing = 4.sp)
                     Spacer(Modifier.size(12.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(Modifier.size(24.dp), color = c.accent, strokeWidth = 3.dp)
+                        app.eodiyeotji.ui.common.EodiLoader(size = 24.dp)
                         Spacer(Modifier.size(12.dp))
                         Text(stringResource(R.string.handoff_pair_waiting), style = type.meta, color = c.textSecondary)
                     }

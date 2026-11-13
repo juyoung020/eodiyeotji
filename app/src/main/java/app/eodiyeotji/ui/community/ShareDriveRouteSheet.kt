@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.community
 
+import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.ui.theme.EodiIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -228,7 +229,7 @@ fun ShareDriveRouteSheet(onDone: (DriveRoute?) -> Unit, viewModel: ShareDriveVie
 @Composable
 private fun TripRow(t: DriveTripCandidate, onClick: () -> Unit) {
     val c = EodiTheme.colors
-    Surface(onClick = onClick, color = c.surfaceHigh, shape = RoundedCornerShape(EodiTheme.space.radiusM), modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp)) {
+    PressSurface(onClick = onClick, color = c.surfaceHigh, shape = RoundedCornerShape(EodiTheme.space.radiusM), modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp)) {
         Row(Modifier.padding(horizontal = 22.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(CommunityIcons.Road, null, tint = c.stay, modifier = Modifier.size(36.dp))
             Spacer(Modifier.width(20.dp))

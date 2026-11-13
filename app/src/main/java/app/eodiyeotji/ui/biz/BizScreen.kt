@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.biz
 
+import app.eodiyeotji.ui.common.PressSurface
 import android.content.Context
 import android.content.Intent
 import android.util.Log
@@ -108,7 +109,18 @@ fun BizOverlay(viewModel: BizViewModel, onOpenDay: (String) -> Unit) {
             val export: @Composable () -> Unit = {
                 val ready = (state.month as? Load.Ready)?.value
                 if (canExport && ready != null && ready.trips.isNotEmpty()) {
-                    SecondaryPill(stringResource(R.string.biz_export), EodiIcons.Calendar, { scope.launch { share(context, viewModel, ready) } })
+                    // 파일을 만드는 동안 버튼 안 로더 + 누름 막기
+                    var exporting by remember { mutableStateOf(false) }
+                    SecondaryPill(
+                        stringResource(R.string.biz_export), EodiIcons.Calendar,
+                        {
+                            exporting = true
+                            scope.launch {
+                                try { share(context, viewModel, ready) } finally { exporting = false }
+                            }
+                        },
+                        loading = exporting,
+                    )
                 }
             }
             val month: @Composable () -> Unit = {
@@ -275,7 +287,7 @@ private fun UndoBar(day: String, onUndo: () -> Unit) {
     Surface(shape = RoundedCornerShape(24.dp), color = c.ink, contentColor = c.onInk, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(start = 24.dp, end = 8.dp).heightIn(min = 88.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.biz_removed, "${d.monthValue}/${d.dayOfMonth}"), style = EodiTheme.type.body, modifier = Modifier.weight(1f))
-            Surface(onClick = onUndo, shape = RoundedCornerShape(38.dp), color = c.ink, contentColor = c.onInk) {
+            PressSurface(onClick = onUndo, shape = RoundedCornerShape(38.dp), color = c.ink, contentColor = c.onInk) {
                 Box(Modifier.heightIn(min = 76.dp).padding(horizontal = 24.dp), contentAlignment = Alignment.Center) {
                     Text(stringResource(R.string.biz_undo), style = EodiTheme.type.bodyStrong, fontWeight = FontWeight.Bold)
                 }
@@ -289,7 +301,7 @@ private fun UndoBar(day: String, onUndo: () -> Unit) {
 private fun TripRow(t: BizTrip, selected: Boolean, onClick: () -> Unit) {
     val c = EodiTheme.colors
     val d = java.time.LocalDate.parse(t.day)
-    Surface(onClick = onClick, color = if (selected) c.infoSoft else c.surface, modifier = Modifier.fillMaxWidth()) {
+    PressSurface(onClick = onClick, color = if (selected) c.infoSoft else c.surface, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.heightIn(min = 112.dp).padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.width(88.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("${d.dayOfMonth}", style = EodiTheme.type.title, fontWeight = FontWeight.Bold, color = c.info)

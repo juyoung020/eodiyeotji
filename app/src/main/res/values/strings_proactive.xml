@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 에이전트가 먼저 말 걸기 (agent/ProactiveCenter.kt · ui/agent/ProactiveCard.kt) -->
 <resources>
-    <string name="proactive_yes">예</string>
-    <string name="proactive_no">아니요</string>
+    <string name="proactive_yes">그래</string>
+    <string name="proactive_no">아니</string>
     <string name="proactive_close">닫기</string>
     <string name="proactive_listening">"응" 또는 "아니"라고 말씀하세요</string>
     <string name="proactive_running">하는 중…</string>

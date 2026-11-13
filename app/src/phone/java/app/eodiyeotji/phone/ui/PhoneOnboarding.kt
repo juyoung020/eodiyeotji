@@ -1,5 +1,6 @@
 package app.eodiyeotji.phone.ui
 
+import app.eodiyeotji.ui.common.PressSurface
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -173,7 +174,7 @@ private fun OnboardPage(step: OnboardStep, position: Int, total: Int, onAllow: (
         }
         PrimaryPill(stringResource(button), if (step == OnboardStep.NOTIFICATIONS) null else EodiIcons.Pin, onAllow, Modifier.fillMaxWidth())
         Spacer(Modifier.height(12.dp))
-        Surface(
+        PressSurface(
             onClick = onLater,
             color = androidx.compose.ui.graphics.Color.Transparent,
             contentColor = c.textSecondary,

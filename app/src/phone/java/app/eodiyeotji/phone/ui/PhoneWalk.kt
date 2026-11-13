@@ -1,5 +1,6 @@
 package app.eodiyeotji.phone.ui
 
+import app.eodiyeotji.ui.common.eodiShadow
 import android.content.Context
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -137,7 +138,7 @@ fun ParkedCarCard(
         }
     }
     var editing by remember(car.tMs) { mutableStateOf(false) }
-    Surface(color = c.surface, shape = RoundedCornerShape(EodiTheme.space.radiusL), shadowElevation = 2.dp, modifier = modifier.fillMaxWidth()) {
+    Surface(color = c.surface, shape = RoundedCornerShape(EodiTheme.space.radiusL), modifier = modifier.fillMaxWidth().eodiShadow(EodiTheme.elevation.level1, RoundedCornerShape(EodiTheme.space.radiusL))) {
         Column(Modifier.padding(start = 24.dp, end = 16.dp, top = 18.dp, bottom = 18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(56.dp).background(CarBlue, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
@@ -295,7 +296,7 @@ private fun WalkBanner(guide: WalkGuide?, target: WalkTarget, accent: Color) {
     }
     val angle by animateFloatAsState(unwrapped, label = "walk-arrow")
     Row(
-        Modifier.fillMaxWidth().shadow(12.dp, RoundedCornerShape(24.dp)).background(accent, RoundedCornerShape(24.dp)).padding(20.dp),
+        Modifier.fillMaxWidth().eodiShadow(EodiTheme.elevation.level2, RoundedCornerShape(24.dp)).clip(RoundedCornerShape(24.dp)).background(accent, RoundedCornerShape(24.dp)).padding(20.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(96.dp).background(Color.White.copy(alpha = 0.16f), CircleShape), contentAlignment = Alignment.Center) {

@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.convoy
 
+import app.eodiyeotji.ui.common.PressSurface
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -163,6 +164,8 @@ private fun StartPane(s: ConvoyUiState, repo: ConvoyRepository) {
     var name by rememberSaveable { mutableStateOf(s.name.ifEmpty { defaultName }) }
     var code by rememberSaveable { mutableStateOf("") }
     val busy = s.phase == ConvoyPhase.CONNECTING
+    // 누른 버튼 안에 로더 (만들기 / 들어가기)
+    var joining by remember { mutableStateOf(false) }
     Column(Modifier.padding(40.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.convoy_title), style = EodiTheme.type.title, color = c.textPrimary, modifier = Modifier.weight(1f))
@@ -182,7 +185,8 @@ private fun StartPane(s: ConvoyUiState, repo: ConvoyRepository) {
             modifier = Modifier.fillMaxWidth(),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            BigButton(stringResource(R.string.convoy_create), primary = true, enabled = !busy, modifier = Modifier.weight(1f)) {
+            BigButton(stringResource(R.string.convoy_create), primary = true, enabled = !busy || !joining, loading = busy && !joining, modifier = Modifier.weight(1f)) {
+                joining = false
                 repo.create(name.trim(), s.dest)
             }
             // 코드는 숫자 6자리 → 숫자 키보드 (한글 입력기와 섞이지 않게)
@@ -195,7 +199,8 @@ private fun StartPane(s: ConvoyUiState, repo: ConvoyRepository) {
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Go),
                 modifier = Modifier.weight(1f),
             )
-            BigButton(stringResource(R.string.convoy_join), enabled = !busy && code.length == 6, modifier = Modifier.weight(0.7f)) {
+            BigButton(stringResource(R.string.convoy_join), enabled = (busy && joining) || (!busy && code.length == 6), loading = busy && joining, modifier = Modifier.weight(0.7f)) {
+                joining = true
                 repo.join(code, name.trim())
             }
         }
@@ -303,17 +308,22 @@ private fun Puck(m: ConvoyMemberView, sizeDp: Int) {
 }
 
 @Composable
-private fun BigButton(text: String, modifier: Modifier = Modifier, primary: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
+private fun BigButton(text: String, modifier: Modifier = Modifier, primary: Boolean = false, enabled: Boolean = true, loading: Boolean = false, onClick: () -> Unit) {
     val c = EodiTheme.colors
-    Surface(
+    PressSurface(
         onClick = onClick,
         enabled = enabled,
         shape = RoundedCornerShape(EodiTheme.space.radiusM),
         color = if (primary) c.accent else c.surfaceHigh,
         contentColor = if (primary) c.onAccent else c.textPrimary,
+        loading = loading,
         modifier = modifier.heightIn(min = 88.dp),
     ) {
-        Box(Modifier.padding(horizontal = 16.dp).height(88.dp), contentAlignment = Alignment.Center) {
+        Row(Modifier.padding(horizontal = 16.dp).height(88.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            if (loading) {
+                app.eodiyeotji.ui.common.EodiLoader(size = 36.dp)
+                Spacer(Modifier.width(10.dp))
+            }
             Text(
                 text,
                 style = EodiTheme.type.label,

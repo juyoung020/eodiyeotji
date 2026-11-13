@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.review
 
+import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.ui.community.TogglePill
 import app.eodiyeotji.ui.community.ChipTone
 import app.eodiyeotji.ui.community.InfoChip
@@ -95,7 +96,7 @@ internal fun RichReviewCard(t: TravelReview, onHeart: () -> Unit, modifier: Modi
     var expanded by rememberSaveable(r.id) { mutableStateOf(false) }
     // 접힌 글이 넘친 적이 있으면 "더보기 / 접기"를 보인다
     var canExpand by rememberSaveable(r.id) { mutableStateOf(false) }
-    Surface(
+    PressSurface(
         onClick = { if (canExpand) expanded = !expanded },
         color = if (showPlace) c.surface else c.surfaceHigh,
         contentColor = c.textPrimary,
@@ -168,7 +169,7 @@ internal fun RichReviewCard(t: TravelReview, onHeart: () -> Unit, modifier: Modi
 internal fun TripReviewCard(t: DriveCourse, onOpen: () -> Unit, onHeart: (() -> Unit)?, modifier: Modifier = Modifier) {
     val c = EodiTheme.colors
     val p = t.post
-    Surface(
+    PressSurface(
         onClick = onOpen,
         color = c.surface,
         contentColor = c.textPrimary,

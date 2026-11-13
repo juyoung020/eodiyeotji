@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.places
 
+import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.ui.community.StopPhotoBox
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -241,7 +242,7 @@ private fun MenuCell(item: MenuItem, modifier: Modifier) {
         item.on -> c.heart
         else -> c.accent
     }
-    Surface(
+    PressSurface(
         onClick = item.onClick,
         enabled = item.enabled,
         shape = RoundedCornerShape(EodiTheme.space.radiusM),
@@ -340,7 +341,7 @@ private fun RenameSheet(r: RenameState, onSave: (String, PlaceLabel?) -> Unit, o
             Spacer(Modifier.height(12.dp))
             when (val list = r.candidates) {
                 null -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(color = c.accent, strokeWidth = 4.dp, modifier = Modifier.size(32.dp))
+                    app.eodiyeotji.ui.common.EodiLoader(size = 32.dp)
                     Spacer(Modifier.width(16.dp))
                     Text(stringResource(R.string.rename_candidates_loading), style = type.body, color = c.textSecondary)
                 }
@@ -359,7 +360,7 @@ private fun RenameSheet(r: RenameState, onSave: (String, PlaceLabel?) -> Unit, o
 @Composable
 private fun CandidateRow(label: PlaceLabel, onClick: () -> Unit) {
     val c = EodiTheme.colors
-    Surface(onClick = onClick, shape = RoundedCornerShape(EodiTheme.space.radiusM), color = c.surfaceHigh, modifier = Modifier.fillMaxWidth().heightIn(min = 84.dp)) {
+    PressSurface(onClick = onClick, shape = RoundedCornerShape(EodiTheme.space.radiusM), color = c.surfaceHigh, modifier = Modifier.fillMaxWidth().heightIn(min = 84.dp)) {
         Row(Modifier.padding(horizontal = 24.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(EodiIcons.Pin, null, tint = c.stay, modifier = Modifier.size(28.dp))
             Spacer(Modifier.width(16.dp))
@@ -406,7 +407,7 @@ private fun ConfirmDelete(target: EditTarget, onDelete: () -> Unit, onHide: () -
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 SecondaryPill(stringResource(R.string.edit_cancel), null, onCancel, Modifier.weight(1f))
                 SecondaryPill(stringResource(R.string.delete_instead_hide), PlacesIcons.Hide, onHide, Modifier.weight(1f))
-                Surface(onClick = onDelete, shape = CircleShape, color = c.error, contentColor = Color.White, modifier = Modifier.weight(1f).heightIn(min = 76.dp)) {
+                PressSurface(onClick = onDelete, shape = CircleShape, color = c.error, contentColor = Color.White, modifier = Modifier.weight(1f).heightIn(min = 76.dp)) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(stringResource(R.string.delete_confirm), style = EodiTheme.type.bodyStrong, fontWeight = FontWeight.Bold)
                     }

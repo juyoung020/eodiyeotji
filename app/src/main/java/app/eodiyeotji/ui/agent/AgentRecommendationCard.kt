@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.agent
 
+import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.ui.community.SubTextStyle
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.common.agoText
@@ -127,7 +128,7 @@ internal fun RecommendationCard(
                         photoPins = pins,
                         modifier = Modifier.fillMaxSize(),
                     )
-                    Surface(
+                    PressSurface(
                         onClick = { openReplay(facts.day) },
                         color = c.ink,
                         contentColor = c.onInk,
@@ -305,7 +306,7 @@ private fun CandidateTile(hit: MemoryHit, rank: Int, selected: Boolean, today: L
     val facts = hit.episode.facts
     val place = hit.bestStop ?: facts.stops.firstOrNull()
     val title = hit.episode.title ?: hit.dayTitle ?: facts.ruleLabel
-    Surface(
+    PressSurface(
         onClick = onClick,
         shape = RoundedCornerShape(24.dp),
         color = if (selected) c.accentSoft else c.surface,
@@ -384,7 +385,7 @@ internal fun OtherDayRow(rec: RecommendationUi, rank: Int, today: LocalDate, onA
     val title = rec.hit.episode.title ?: rec.hit.dayTitle ?: facts.ruleLabel
     val dateLine = memoryDateLine(facts.day, today)
     val question = stringResource(R.string.agent_followup_pick_candidate, rank)
-    Surface(
+    PressSurface(
         onClick = { onAsk(question) },
         shape = RoundedCornerShape(24.dp),
         color = EodiTheme.colors.surface,

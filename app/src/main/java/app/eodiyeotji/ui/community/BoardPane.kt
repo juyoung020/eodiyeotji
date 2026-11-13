@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.community
 
+import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.ui.common.agoText
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
@@ -108,7 +109,7 @@ fun BoardPane(viewModel: BoardViewModel = hiltViewModel()) {
 @Composable
 private fun PostCard(p: BoardPost, onOpen: () -> Unit, onHeart: () -> Unit) {
     val c = EodiTheme.colors
-    Surface(onClick = onOpen, color = c.surface, shape = RoundedCornerShape(EodiTheme.space.radiusL), modifier = Modifier.fillMaxWidth()) {
+    PressSurface(onClick = onOpen, color = c.surface, shape = RoundedCornerShape(EodiTheme.space.radiusL), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(

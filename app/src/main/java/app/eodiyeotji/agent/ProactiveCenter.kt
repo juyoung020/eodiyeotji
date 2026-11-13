@@ -56,6 +56,8 @@ data class ProactiveUi(
     val phase: Phase = Phase.Asking,
     /** 실행 결과 한 줄 (문자열 자원 id). */
     val result: Int? = null,
+    /** Gleo Standby: 말과 듣기가 끝나 5초 뒤 내려가는 중. */
+    val standby: Boolean = false,
 ) {
     enum class Phase { Asking, Listening, Running, Done, Failed }
 }
@@ -88,6 +90,9 @@ class ProactiveCenter @Inject constructor(
 
     /** 화면에 보일 카드 (없으면 null). */
     val state: StateFlow<ProactiveUi?> = _state.asStateFlow()
+
+    /** 카드 말을 읽는 중 (Gleo Speaking 표시). */
+    val speaking: StateFlow<Boolean> get() = tts.speaking
 
     @Volatile private var destination: NaviPoi? = null
     @Volatile private var waypoints: List<NaviPoi> = emptyList()
@@ -208,13 +213,27 @@ class ProactiveCenter @Inject constructor(
         }
         val id = ++lastId
         _state.value = ProactiveUi(id, s)
-        tts.speak(s.line) {
-            if (s.ask && _state.value?.id == id && _state.value?.phase == ProactiveUi.Phase.Asking && !speech.needsMicPermission()) listen(id)
-        }
+        // 표시 시간 (Pleos 가이드 Gleo AI Standby): 말을 다 읽은 뒤 — 묻는 카드는 "응/아니"를 들은 뒤 — 5초 유지하고 내려간다.
+        // 읽기 완료 알림이 오지 않는 경우(음성 엔진 없음 · 멈춤)를 위해 넉넉한 안전 시간도 둔다.
         cardJob?.cancel()
         cardJob = scope.launch {
-            delay(if (s.ask) ASK_SHOWN_MS else INFO_SHOWN_MS)
+            delay(SAFETY_SHOWN_MS)
             if (_state.value?.id == id && _state.value?.phase != ProactiveUi.Phase.Running) dismiss()
+        }
+        tts.speak(s.line) {
+            if (s.ask && _state.value?.id == id && _state.value?.phase == ProactiveUi.Phase.Asking && !speech.needsMicPermission()) listen(id) else standby(id)
+        }
+    }
+
+    /** Gleo Standby: [STANDBY_MS] 뒤 카드가 내려간다 (그 사이 버튼은 그대로 누를 수 있다). */
+    private fun standby(id: Long) {
+        if (_state.value?.id != id) return
+        _state.update { if (it?.id == id) it.copy(standby = true) else it }
+        cardJob?.cancel()
+        cardJob = scope.launch {
+            delay(STANDBY_MS)
+            val cur = _state.value
+            if (cur?.id == id && cur.phase != ProactiveUi.Phase.Running && cur.phase != ProactiveUi.Phase.Listening) dismiss()
         }
     }
 
@@ -233,13 +252,17 @@ class ProactiveCenter @Inject constructor(
             when (intent) {
                 ReplyIntent.YES -> accept()
                 ReplyIntent.NO -> decline()
-                ReplyIntent.UNKNOWN -> _state.update { if (it?.id == id) it.copy(phase = ProactiveUi.Phase.Asking) else it }
+                ReplyIntent.UNKNOWN -> {
+                    _state.update { if (it?.id == id) it.copy(phase = ProactiveUi.Phase.Asking) else it }
+                    standby(id)
+                }
             }
         }
     }
 
     private suspend fun run(cur: ProactiveUi) {
-        _state.update { if (it?.id == cur.id) it.copy(phase = ProactiveUi.Phase.Running) else it }
+        _state.update { if (it?.id == cur.id) it.copy(phase = ProactiveUi.Phase.Running, standby = false) else it }
+        cardJob?.cancel()
         val ok = runCatching {
             when (val a = cur.suggestion.action) {
                 is ProactiveAction.Navigate -> guide.startPlace(a.stop.name, a.stop.lat, a.stop.lon, a.stop.address)
@@ -265,12 +288,11 @@ class ProactiveCenter @Inject constructor(
             else -> app.eodiyeotji.R.string.proactive_done_navigate
         }
         _state.update { if (it?.id == cur.id) it.copy(phase = if (ok) ProactiveUi.Phase.Done else ProactiveUi.Phase.Failed, result = msg) else it }
-        tts.speak(context.getString(msg))
-        cardJob?.cancel()
         cardJob = scope.launch {
-            delay(RESULT_SHOWN_MS)
+            delay(SAFETY_SHOWN_MS)
             if (_state.value?.id == cur.id) _state.value = null
         }
+        tts.speak(context.getString(msg)) { standby(cur.id) }
     }
 
     private suspend fun snapshot(): VehicleSnapshot {
@@ -322,9 +344,10 @@ class ProactiveCenter @Inject constructor(
         const val ENERGY_EVERY_MS = 3 * 60_000L
         const val ARRIVAL_DEDUPE_MS = 10 * 60_000L
         const val LISTEN_MS = 6_000L
-        const val ASK_SHOWN_MS = 45_000L
-        const val INFO_SHOWN_MS = 15_000L
-        const val RESULT_SHOWN_MS = 6_000L
+        /** Gleo Standby: 대화가 끝난 뒤 응답 화면 유지 (Pleos 가이드 Experiences/Gleo AI) */
+        const val STANDBY_MS = 5_000L
+        /** 읽기 완료 알림이 오지 않을 때만 쓰는 최대 표시 시간 */
+        const val SAFETY_SHOWN_MS = 30_000L
     }
 }
 

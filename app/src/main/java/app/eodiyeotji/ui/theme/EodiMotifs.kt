@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.theme
 
+import app.eodiyeotji.ui.common.eodiShadow
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -204,7 +205,7 @@ fun AlbumPhoto(modifier: Modifier = Modifier, tilt: Float = 0f, radius: Dp = 14.
     Box(
         modifier
             .graphicsLayer { rotationZ = tilt }
-            .shadow(3.dp, outer)
+            .eodiShadow(EodiTheme.elevation.level1, outer).clip(outer)
             .background(if (c.isDark) c.surfaceHigh else c.surface, outer)
             .padding(4.dp)
             .clip(RoundedCornerShape(radius))

@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.search
 
+import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.core.CourseOffers
 import app.eodiyeotji.core.PartnerOffer
 import app.eodiyeotji.ui.community.StopPhotoBox
@@ -246,7 +247,7 @@ fun SearchField(
                         Icon(EodiIcons.Close, stringResource(R.string.search_clear), tint = c.textTertiary, modifier = Modifier.size(28.dp))
                     }
                 }
-                Surface(
+                PressSurface(
                     onClick = onMic,
                     shape = CircleShape,
                     color = if (dictating) c.accent else c.accentSoft,
@@ -621,7 +622,7 @@ private fun RowAction(icon: ImageVector, label: String, filled: Boolean, tint: C
 private fun AskAiCard(ai: AskAi, primary: Boolean, onAsk: (String) -> Unit) {
     val c = EodiTheme.colors
     if (primary) {
-        Surface(
+        PressSurface(
             onClick = { onAsk(ai.text) },
             color = c.surface,
             contentColor = c.textPrimary,
@@ -676,7 +677,7 @@ private fun AskAiCard(ai: AskAi, primary: Boolean, onAsk: (String) -> Unit) {
 @Composable
 private fun DrivingHint(onMic: () -> Unit) {
     val c = EodiTheme.colors
-    Surface(onClick = onMic, color = c.accent, contentColor = c.onAccent, shape = RoundedCornerShape(EodiTheme.space.radiusL)) {
+    PressSurface(onClick = onMic, color = c.accent, contentColor = c.onAccent, shape = RoundedCornerShape(EodiTheme.space.radiusL)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(72.dp).background(c.onAccent, CircleShape), contentAlignment = Alignment.Center) {
                 Icon(AgentIcons.Mic, stringResource(R.string.search_mic), tint = c.accent, modifier = Modifier.size(36.dp))
@@ -760,7 +761,7 @@ private fun SuggestionChip(chip: SearchChip, onClick: () -> Unit) {
         SearchChipKind.PLACE -> c.stay
         SearchChipKind.KEYWORD -> c.textSecondary
     }
-    Surface(onClick = onClick, shape = CircleShape, color = c.surface, contentColor = c.textPrimary, border = BorderStroke(2.dp, c.outline)) {
+    PressSurface(onClick = onClick, shape = CircleShape, color = c.surface, contentColor = c.textPrimary, border = BorderStroke(2.dp, c.outline)) {
         Row(Modifier.heightIn(min = 72.dp).padding(start = 20.dp, end = 26.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null, tint = tint, modifier = Modifier.size(26.dp))
             Spacer(Modifier.width(10.dp))

@@ -1,5 +1,11 @@
 package app.eodiyeotji.ui.share
 
+import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import app.eodiyeotji.ui.common.PressSurface
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -75,19 +81,22 @@ fun ShareImageButton(target: ShareTarget, modifier: Modifier = Modifier, style: 
         ShareButtonStyle.ICON -> {
             val c = EodiTheme.colors
             val label = stringResource(R.string.share_card_icon)
-            Surface(
+            PressSurface(
                 onClick = { if (!sharer.busy) onClick() },
                 shape = CircleShape,
                 color = c.surfaceHigh,
                 contentColor = c.textPrimary,
-                modifier = modifier.size(EodiTheme.space.touch).semantics { contentDescription = label },
+                loading = sharer.busy,
+                modifier = modifier.heightIn(min = EodiTheme.space.touch).semantics { contentDescription = label },
             ) {
-                Box(contentAlignment = Alignment.Center) {
+                // 아이콘 + 짧은 글자 (Pleos 가이드: 아이콘은 텍스트 라벨과 함께)
+                Row(Modifier.padding(start = 18.dp, end = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (sharer.busy) {
-                        CircularProgressIndicator(Modifier.size(32.dp), color = c.accent, strokeWidth = 3.dp)
+                        app.eodiyeotji.ui.common.EodiLoader(size = 30.dp)
                     } else {
-                        Icon(ShareIcon, null, Modifier.size(32.dp), tint = c.accent)
+                        Icon(ShareIcon, null, Modifier.size(30.dp), tint = c.accent)
                     }
+                    Text(stringResource(R.string.share_icon_label), style = EodiTheme.type.label, maxLines = 1)
                 }
             }
         }

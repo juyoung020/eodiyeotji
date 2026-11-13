@@ -1,6 +1,11 @@
 package app.eodiyeotji.ui.theme
 
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.LocalOverscrollFactory
+import app.eodiyeotji.ui.common.BounceOverscrollFactory
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.graphics.Color
+import app.eodiyeotji.ui.common.PressIndication
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
@@ -46,19 +51,40 @@ data class EodiMotion(
     val quick: Int = 120,
     val medium: Int = 240,
     val slow: Int = 420,
-    /** 누르는 동안 줄어드는 비율 (버튼 · 카드) */
-    val pressScale: Float = 0.96f,
+    /** 누르는 동안 줄어드는 비율 (버튼 · 카드). Pleos 가이드 Interaction "Button interaction": 95% */
+    val pressScale: Float = 0.95f,
+    /** 누른 뒤 눈에 보이는 반응까지의 한도 (Pleos 가이드 Introduction 즉시성: 0.25초) */
+    val feedbackMs: Int = 250,
+    /** Gleo AI Standby: 대화가 끝난 뒤 응답 화면을 유지하는 시간 (Pleos 가이드 Experiences/Gleo AI) */
+    val standbyMs: Long = 5_000L,
+    /** Gleo AI Listening_Passive: 말이 들어오지 않으면 이 시간 뒤 "듣는 중…" 안내 */
+    val passiveHintMs: Long = 2_000L,
     /** 화면이 들어올 때 아래에서 올라오는 거리 */
     val enterOffset: Dp = 24.dp,
 )
 
-/** 그림자 높이: 바탕 위 카드는 0(테두리 · 색 차이로 구분), 떠 있는 판(안내 띠 · 사진 위 버튼)만 그림자. */
+/**
+ * 그림자 한 겹: 아래로 [y] 내려간 곳에 [blur]만큼 번진 검은 그림자 ([alpha] 진하기).
+ * 값은 Pleos 가이드 foundations/shadow.md의 Figma 값(CSS box-shadow와 같은 뜻) 그대로다.
+ */
+@Immutable
+data class ShadowLayer(val y: Dp, val blur: Dp, val alpha: Float)
+
+/** 그림자 단계 하나 = 겹 1~2개. [Modifier.eodiShadow][app.eodiyeotji.ui.common.eodiShadow]로 그린다. */
+@Immutable
+data class ShadowLevel(val layers: List<ShadowLayer>)
+
+/**
+ * 그림자 3단계 (Pleos 가이드 foundations/shadow.md). 바탕 위 카드는 [flat](테두리 · 색 차이로 구분),
+ * 떠 있는 것만 그림자: level1 = 살짝 뜬 카드 · 칩, level2 = 떠 있는 판(안내 띠 · 사진 위 버튼 · 토스트),
+ * level3 = 모든 것 위에 겹치는 판(제안 카드 · 듣는 중 카드 · 시트).
+ */
 @Immutable
 data class EodiElevation(
-    val flat: Dp = 0.dp,
-    val raised: Dp = 2.dp,
-    val floating: Dp = 8.dp,
-    val overlay: Dp = 16.dp,
+    val flat: ShadowLevel = ShadowLevel(emptyList()),
+    val level1: ShadowLevel = ShadowLevel(listOf(ShadowLayer(6.dp, 24.dp, 0.08f))),
+    val level2: ShadowLevel = ShadowLevel(listOf(ShadowLayer(8.dp, 32.dp, 0.16f), ShadowLayer(2.dp, 2.dp, 0.08f))),
+    val level3: ShadowLevel = ShadowLevel(listOf(ShadowLayer(20.dp, 40.dp, 0.24f), ShadowLayer(2.dp, 4.dp, 0.20f))),
 )
 
 internal val LocalEodiMotion = staticCompositionLocalOf { EodiMotion() }
@@ -88,12 +114,26 @@ fun EodiTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable (
     val type = remember { EodiType() }
     val scheme = remember(colors) { colors.toMaterial() }
     val typography = remember(type) { materialTypography(type) }
+    val motion = remember { EodiMotion() }
+    // 앱 전체 clickable 누름 반응: 95% 축소 + 낮엔 어둡게 · 밤엔 밝게 (Pleos 가이드 Button interaction)
+    val press = remember(colors.isDark) {
+        PressIndication(if (colors.isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.06f), motion.pressScale, motion.quick)
+    }
+    val bounce = remember { BounceOverscrollFactory() }
     CompositionLocalProvider(
         LocalEodiColors provides colors,
         LocalEodiType provides type,
         LocalEodiSpace provides EodiSpace(),
     ) {
-        MaterialTheme(colorScheme = scheme, typography = typography, shapes = EodiShapes, content = content)
+        MaterialTheme(colorScheme = scheme, typography = typography, shapes = EodiShapes) {
+            // MaterialTheme이 LocalIndication을 ripple로 덮으므로 그 안에서 다시 넣는다.
+            // 목록 끝은 늘이기 대신 튕기기 (Pleos 가이드 End of scroll bounce, 최대 약 2/5)
+            CompositionLocalProvider(
+                LocalIndication provides press,
+                LocalOverscrollFactory provides bounce,
+                content = content,
+            )
+        }
     }
 }
 

@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -78,6 +79,8 @@ data class VoiceUi(
     val note: String? = null,
     /** 검색 칸에 받아쓰는 중 ([AgentViewModel.dictate]) — 에이전트 화면의 듣기 표시는 띄우지 않는다 */
     val dictating: Boolean = false,
+    /** Gleo Standby: 대화가 막 끝나 응답 화면을 5초 더 보이는 중 ([GleoStatus.Standby]) */
+    val standby: Boolean = false,
 )
 
 /**
@@ -177,7 +180,11 @@ class AgentViewModel @Inject constructor(
     /** 검색 칸 마이크로 알아들은 말 (검색 칸에 넣는다). */
     val dictated: SharedFlow<String> = _dictated.asSharedFlow()
 
-    private val voice = combine(speech.state, tts.speaking, combine(followUp, followUpCourses, dictating, ::Triple), note) { l, s, (f, fc, d), n ->
+    /** Gleo Standby (대화가 끝난 뒤 5초). 주행 중이면 5초 뒤 처음 화면(Sleep)으로 내려간다. */
+    private val standby = MutableStateFlow(false)
+    private var standbyJob: Job? = null
+
+    private val voice = combine(speech.state, tts.speaking, combine(followUp, followUpCourses, dictating, standby) { f, fc, d, sb -> Flags(f, fc, d, sb) }, note) { l, s, (f, fc, d, sb), n ->
         VoiceUi(
             listening = l.listening,
             partial = l.partial,
@@ -187,8 +194,11 @@ class AgentViewModel @Inject constructor(
             followUpCourses = fc,
             note = n,
             dictating = d && l.listening,
+            standby = sb && !l.listening && !s,
         )
     }
+
+    private data class Flags(val followUp: Boolean, val courses: Boolean, val dictating: Boolean, val standby: Boolean)
 
     val state: StateFlow<AgentUiState> = combine(turn, history, driving.isDriving, voice) { t, h, d, v -> AgentUiState(isDriving = d, turn = t, voice = v, history = h) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AgentUiState(isDriving = driving.isDriving.value))
@@ -214,7 +224,36 @@ class AgentViewModel @Inject constructor(
         viewModelScope.launch { speech.results.collect(::onSpeech) }
         // 시연 · 디버그: 밖에서 넣은 말 (adb, agent/roadside/RoadsideDebugReceiver)
         viewModelScope.launch { AgentUtterances.texts.collect { ask(it) } }
+        // Gleo Standby: 듣기 · 생각 · 말하기가 모두 끝나면 응답 화면을 5초 유지한 뒤 Sleep (Pleos 가이드 Experiences/Gleo AI)
+        viewModelScope.launch {
+            combine(speech.state, tts.speaking, turn) { l, sp, t -> (l.listening || sp || t.busy()) to t?.id }
+                .distinctUntilChanged()
+                .collect { (busy, id) -> onConversationBusy(busy, id) }
+        }
     }
+
+    private var wasBusy = false
+
+    private fun onConversationBusy(busy: Boolean, id: Long?) {
+        if (busy) {
+            standbyJob?.cancel()
+            standby.value = false
+        } else if (wasBusy && id != null) {
+            standbyJob?.cancel()
+            standby.value = true
+            standbyJob = viewModelScope.launch {
+                delay(STANDBY_MS)
+                standby.value = false
+                // 주행 중에는 응답 화면이 내려가고 큰 마이크 화면으로 (정차 중에는 대화를 남긴다 — 다시 볼 수 있게)
+                val t = turn.value
+                if (driving.isDriving.value && t?.id == id && !t.busy() && driving.locksScreen) clear()
+            }
+        }
+        wasBusy = busy
+    }
+
+    private fun AgentTurn?.busy(): Boolean =
+        this != null && (phase == AnswerPhase.Thinking || phase == AnswerPhase.Streaming || action is ActionState.Running)
 
     /** 마이크 버튼: 듣는 중이면 "다 말했다"(지금까지 들은 말로 묻기), 아니면 듣기 시작. 읽던 답은 멈춘다. */
     fun voice() {
@@ -355,6 +394,8 @@ class AgentViewModel @Inject constructor(
 
     /** 처음 화면으로 (운전 중 "취소" 포함). 진행 중인 질문·행동도 멈춘다. */
     fun clear() {
+        standbyJob?.cancel()
+        standby.value = false
         planTurn = null
         autoConfirmId = null
         askJob?.cancel()
@@ -717,6 +758,8 @@ class AgentViewModel @Inject constructor(
     private companion object {
         const val TAG = "EodiAgentVm"
         const val NOTE_MS = 4_000L
+        /** Gleo Standby (Pleos 가이드: 응답 화면이 있으면 5초) */
+        const val STANDBY_MS = 5_000L
         const val FOLLOW_UP_LISTEN_MS = 7_000L
         /** 대화 기록은 최근 이만큼만 (오래된 것부터 지운다). */
         const val MAX_HISTORY = 30

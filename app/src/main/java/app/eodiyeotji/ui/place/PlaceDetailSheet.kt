@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.place
 
+import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.ui.community.LoadingBox
 import app.eodiyeotji.ui.community.RetryButton
 import androidx.activity.compose.BackHandler
@@ -350,6 +351,7 @@ private fun ActionRow(d: PlaceDetail?, vm: PlaceDetailViewModel) {
             vm::navigate,
             Modifier.weight(1f),
             primary = true,
+            loading = vm.state.collectAsStateWithLifecycle().value.naviBusy,
         )
         val saved = d?.saved == true
         ActionTile(
@@ -382,6 +384,7 @@ private fun ActionTile(
     primary: Boolean = false,
     enabled: Boolean = true,
     tint: Color? = null,
+    loading: Boolean = false,
 ) {
     val c = EodiTheme.colors
     val bg = when {
@@ -393,9 +396,10 @@ private fun ActionTile(
         !enabled -> c.textTertiary
         else -> c.textPrimary
     }
-    Surface(
+    PressSurface(
         onClick = onClick,
         enabled = enabled,
+        loading = loading,
         shape = RoundedCornerShape(EodiTheme.space.radiusM),
         color = bg,
         contentColor = fg,
@@ -406,7 +410,8 @@ private fun ActionTile(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Icon(icon, null, Modifier.size(36.dp), tint = if (enabled) tint ?: (if (primary) fg else c.accent) else fg)
+            if (loading) app.eodiyeotji.ui.common.EodiLoader(size = 36.dp, dark = primary || c.isDark)
+            else Icon(icon, null, Modifier.size(36.dp), tint = if (enabled) tint ?: (if (primary) fg else c.accent) else fg)
             Spacer(Modifier.height(8.dp))
             Text(label, style = EodiTheme.type.label, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }

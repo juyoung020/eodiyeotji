@@ -91,4 +91,13 @@
     <string name="agent_people_alone">혼자 탔어요</string>
     <string name="agent_people_source">좌석 기록</string>
     <string name="agent_skipped_label">빼고 가요</string>
+    <!-- Gleo AI 대화 상태 (Pleos 가이드 Experiences/Gleo AI Status) -->
+    <string name="gleo_listening_passive">듣는 중…</string>
+    <string name="gleo_listening_passive_seat">운전석에서 듣는 중…</string>
+    <string name="gleo_listening_active">듣고 있어요</string>
+    <string name="gleo_thinking">생각 중</string>
+    <string name="gleo_asking">대답을 기다려요</string>
+    <string name="gleo_speaking">말하는 중</string>
+    <string name="gleo_standby">대기 중</string>
+    <string name="gleo_dismiss">대화 닫기</string>
 </resources>

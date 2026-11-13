@@ -1,5 +1,7 @@
 package app.eodiyeotji.ui.share
 
+import app.eodiyeotji.ui.common.eodiShadow
+import app.eodiyeotji.ui.common.PressSurface
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
@@ -81,9 +83,11 @@ internal fun ShareNoticeState?.notify(context: Context, text: String, actionLabe
  * 알림을 그리는 자리: 화면 아래 가운데 어두운 카드가 몇 초(버튼이 있으면 조금 더) 떠 있다가 사라진다.
  * 판마다 화면 뼈대 맨 위에 한 번 둔다 (차 AppRoot · 폰 PhoneApp — 폰은 아래 탭을 피하게 [bottom]을 키운다).
  * 카드 밖은 터치를 가로채지 않는다.
+ * 규격은 Pleos 가이드 components/toast.md: 앱 창 안 좌우 · 아래 24dp, 전체 최대 792dp, 글 최대 712dp.
+ * (가이드 토스트는 메시지만 — 되돌리기 같은 버튼이 꼭 필요할 때만 오른쪽에 하나 붙인다.)
  */
 @Composable
-fun ShareNoticeHost(bottom: Dp = 40.dp) {
+fun ShareNoticeHost(bottom: Dp = ToastMargin) {
     val state = LocalShareNotice.current ?: return
     val notice = state.current
     // 사라지는 동안에도 마지막 내용을 그린다 (상태로 두지 않는 보관함)
@@ -113,17 +117,18 @@ private fun NoticeCard(n: ShareNotice, onDone: () -> Unit) {
         color = c.ink,
         contentColor = c.onInk,
         shape = RoundedCornerShape(EodiTheme.space.radiusM),
-        shadowElevation = EodiTheme.elevation.overlay,
-        modifier = Modifier.padding(horizontal = 24.dp).widthIn(max = 1100.dp).semantics { liveRegion = LiveRegionMode.Polite },
+        modifier = Modifier.padding(horizontal = ToastMargin).widthIn(max = ToastMaxWidth)
+            .eodiShadow(EodiTheme.elevation.level2, RoundedCornerShape(EodiTheme.space.radiusM))
+            .semantics { liveRegion = LiveRegionMode.Polite },
     ) {
         Row(
             Modifier.heightIn(min = EodiTheme.space.touch).padding(start = 32.dp, end = if (n.action != null) 12.dp else 32.dp, top = 12.dp, bottom = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(n.text, style = type.bodyStrong, modifier = Modifier.weight(1f, fill = false))
+            Text(n.text, style = type.bodyStrong, modifier = Modifier.weight(1f, fill = false).widthIn(max = ToastTextMaxWidth))
             if (n.action != null && n.actionLabel != null) {
-                Surface(
+                PressSurface(
                     onClick = { onDone(); n.action.invoke() },
                     shape = CircleShape,
                     color = c.accent,
@@ -137,6 +142,11 @@ private fun NoticeCard(n: ShareNotice, onDone: () -> Unit) {
         }
     }
 }
+
+/** 토스트 규격 (Pleos 가이드 components/toast.md) */
+private val ToastMargin = 24.dp
+private val ToastMaxWidth = 792.dp
+private val ToastTextMaxWidth = 712.dp
 
 private const val PLAIN_MS = 5_000L
 private const val ACTION_MS = 8_000L

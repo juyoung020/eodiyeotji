@@ -1,5 +1,6 @@
 package app.eodiyeotji.phone.ui
 
+import app.eodiyeotji.ui.common.PressSurface
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -165,7 +166,7 @@ private fun PhoneDateCalendar(days: List<DaySummary>, today: LocalDate, selected
             val thisMonth = YearMonth.from(today)
             if (shown != thisMonth || picking) {
                 Spacer(Modifier.width(12.dp))
-                Surface(
+                PressSurface(
                     onClick = {
                         picking = false
                         scope.launch { pager.animateScrollToPage(months.pageOf(thisMonth)) }
@@ -277,7 +278,7 @@ private fun MonthPicker(months: RecordMonths, shown: YearMonth, today: LocalDate
     FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         years.forEach { y ->
             val on = y == year
-            Surface(
+            PressSurface(
                 onClick = { year = y },
                 shape = CircleShape,
                 color = if (on) c.accent else c.surfaceHigh,
@@ -298,7 +299,7 @@ private fun MonthPicker(months: RecordMonths, shown: YearMonth, today: LocalDate
                 val inRange = m >= months.first && m <= months.last
                 val n = months.byMonth[m]?.size ?: 0
                 val on = m == shown
-                Surface(
+                PressSurface(
                     onClick = { onPick(m) },
                     enabled = inRange,
                     shape = RoundedCornerShape(EodiTheme.space.radiusM),

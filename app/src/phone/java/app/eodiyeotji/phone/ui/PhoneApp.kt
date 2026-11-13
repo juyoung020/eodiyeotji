@@ -1,5 +1,7 @@
 package app.eodiyeotji.phone.ui
 
+import app.eodiyeotji.ui.common.eodiShadow
+import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.ui.community.RoundIconButton
 import android.Manifest
 import androidx.activity.compose.BackHandler
@@ -469,7 +471,7 @@ private fun DrivingBanner(passenger: Boolean, onListen: () -> Unit, onPassenger:
     val c = EodiTheme.colors
     val type = EodiTheme.type
     if (!passenger) {
-        Surface(onClick = onListen, color = c.accent, contentColor = c.onAccent, shape = RoundedCornerShape(EodiTheme.space.radiusL), shadowElevation = 4.dp, modifier = modifier) {
+        PressSurface(onClick = onListen, color = c.accent, contentColor = c.onAccent, shape = RoundedCornerShape(EodiTheme.space.radiusL), modifier = modifier.eodiShadow(EodiTheme.elevation.level1, RoundedCornerShape(EodiTheme.space.radiusL))) {
             Row(Modifier.padding(start = 20.dp, end = 16.dp, top = 18.dp, bottom = 18.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(96.dp).background(c.onAccent, CircleShape), contentAlignment = Alignment.Center) {
                     Icon(AgentIcons.Mic, contentDescription = stringResource(R.string.agent_mic), tint = c.accent, modifier = Modifier.size(48.dp))
@@ -500,7 +502,7 @@ private fun DrivingBanner(passenger: Boolean, onListen: () -> Unit, onPassenger:
 @Composable
 private fun BannerPill(text: String, onClick: () -> Unit, onInk: Boolean) {
     val c = EodiTheme.colors
-    Surface(
+    PressSurface(
         onClick = onClick,
         shape = CircleShape,
         color = if (onInk) c.onAccent.copy(alpha = 0.18f) else c.surface,

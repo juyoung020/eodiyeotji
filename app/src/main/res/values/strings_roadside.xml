@@ -10,7 +10,7 @@
     <string name="roadside_declined">알겠어요.</string>
     <string name="roadside_offline_notice">AI 연결 없이 기기 안 목록으로 찾았어요.</string>
     <string name="roadside_second">다른 선택</string>
-    <string name="roadside_yes">예</string>
-    <string name="roadside_no">아니요</string>
+    <string name="roadside_yes">그래</string>
+    <string name="roadside_no">아니</string>
     <string name="roadside_public_credit">출처: 공공데이터포털(한국도로공사 등)</string>
 </resources>

@@ -63,7 +63,7 @@ fun PlacePhotoGallery(name: String, address: String, lat: Double, lon: Double, m
     Box(modifier.background(c.ink), contentAlignment = Alignment.Center) {
         val list = photos
         when {
-            list == null -> CircularProgressIndicator(color = c.onInk)
+            list == null -> app.eodiyeotji.ui.common.EodiLoader(size = 64.dp, kind = app.eodiyeotji.ui.common.LoaderKind.Tension, dark = true)
             list.isEmpty() -> Text(stringResource(R.string.place_no_photos), style = EodiTheme.type.label, color = c.onInkMuted)
             else -> {
                 val pager = rememberPagerState { list.size }

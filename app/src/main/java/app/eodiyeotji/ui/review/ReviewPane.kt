@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.review
 
+import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.ui.community.ErrorState
 import androidx.compose.foundation.horizontalScroll
 import androidx.activity.compose.BackHandler
@@ -278,7 +279,7 @@ internal fun WriteReviewSheet(
 @Composable
 private fun CandidatePlace(s: StopFact, onClick: () -> Unit) {
     val c = EodiTheme.colors
-    Surface(onClick = onClick, color = c.surfaceHigh, shape = RoundedCornerShape(EodiTheme.space.radiusM), modifier = Modifier.fillMaxWidth()) {
+    PressSurface(onClick = onClick, color = c.surfaceHigh, shape = RoundedCornerShape(EodiTheme.space.radiusM), modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             StopPhoto(s.name, s.address, s.lat, s.lon, order = null, size = 96.dp)
             Spacer(Modifier.width(20.dp))

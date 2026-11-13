@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.community
 
+import app.eodiyeotji.ui.common.PressSurface
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -93,7 +94,7 @@ fun RegionReportPane(viewModel: RegionReportViewModel = hiltViewModel()) {
 @Composable
 private fun RegionRow(r: RegionActivity, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = EodiTheme.colors
-    Surface(
+    PressSurface(
         onClick = onClick,
         shape = RoundedCornerShape(22.dp),
         color = if (selected) c.accentSoft else c.surface,

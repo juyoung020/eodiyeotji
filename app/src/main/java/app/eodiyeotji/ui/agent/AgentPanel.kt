@@ -1,5 +1,8 @@
 package app.eodiyeotji.ui.agent
 
+import app.eodiyeotji.ui.common.eodiShadow
+import app.eodiyeotji.ui.common.PressIconButton
+import app.eodiyeotji.ui.common.PressSurface
 import androidx.compose.runtime.derivedStateOf
 import app.eodiyeotji.ui.community.RetryButton
 import app.eodiyeotji.ui.community.SecondaryPill
@@ -58,6 +61,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -122,14 +127,12 @@ fun AgentEntryButton(onClick: () -> Unit, modifier: Modifier = Modifier, driving
         maxWidth < EntryFullWidth -> R.string.agent_entry_short
         else -> R.string.agent_entry
     }
-    Surface(
+    PressSurface(
         onClick = onClick,
         shape = CircleShape,
         color = EodiTheme.colors.accentSoft,
         contentColor = EodiTheme.colors.accent,
-        shadowElevation = 2.dp,
-        modifier = Modifier.heightIn(min = 88.dp),
-    ) {
+        modifier = Modifier.heightIn(min = 88.dp).eodiShadow(EodiTheme.elevation.level1, CircleShape)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(start = 24.dp, end = if (mic) 12.dp else 28.dp, top = 12.dp, bottom = 12.dp),
@@ -230,7 +233,9 @@ fun AgentPanelContent(
     // 후보를 누르면 대화에 남는 내 말풍선 ("2번 볼게요")
     val pickBubble = stringResource(R.string.agent_pick_bubble)
     val pick: (Int) -> Unit = remember(pickBubble, onSelectCandidate) { { i -> onSelectCandidate(i, pickBubble.format(i + 1)) } }
+    val gleo = gleoStatus(state.voice, state.turn)
     Surface(modifier = modifier.fillMaxSize(), color = EodiTheme.colors.background) {
+      CompositionLocalProvider(LocalGleoStatus provides gleo) {
         Crossfade(targetState = state.isDriving, label = "agentMode", modifier = Modifier.padding(top = topSpace)) { driving ->
             if (driving) {
                 // 주행 중에는 대화 기록 없이 지금 답 하나만 크게
@@ -241,8 +246,12 @@ fun AgentPanelContent(
                 ParkedAgent(state.history, state.turn, onAsk, onConfirm, onSelectStop, pick, onRetry, onClose, onVoiceRequest)
             }
         }
+      }
     }
 }
+
+/** 지금 Gleo 대화 상태 (답 위 상태 알약이 읽는다). */
+internal val LocalGleoStatus = staticCompositionLocalOf { GleoStatus.Sleep }
 
 // =====================================================================================
 // 정차 중: 전체 화면
@@ -513,14 +522,12 @@ private fun CompactAskBar(question: String?, onAsk: (String) -> Unit, onVoiceReq
             ),
             modifier = Modifier.weight(1f).heightIn(min = 96.dp),
         )
-        Surface(
+        PressSurface(
             onClick = onVoiceRequest,
             shape = CircleShape,
             color = EodiTheme.colors.accent,
             contentColor = EodiTheme.colors.onAccent,
-            shadowElevation = 4.dp,
-            modifier = Modifier.size(112.dp),
-        ) {
+            modifier = Modifier.size(112.dp).eodiShadow(EodiTheme.elevation.level1, CircleShape)) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(AgentIcons.Mic, contentDescription = stringResource(R.string.agent_mic), modifier = Modifier.size(52.dp))
             }
@@ -586,7 +593,7 @@ private fun QuestionBar(
             modifier = Modifier.weight(1f).heightIn(min = 88.dp),
         )
         if (onClose != null) {
-            IconButton(onClick = onClose, modifier = Modifier.size(AgentTouchMin)) {
+            PressIconButton(onClick = onClose, modifier = Modifier.size(AgentTouchMin)) {
                 Icon(EodiIcons.Close, contentDescription = stringResource(R.string.agent_close), modifier = Modifier.size(32.dp))
             }
         }
@@ -631,7 +638,7 @@ private fun EmptyState(onAsk: (String) -> Unit, modifier: Modifier = Modifier) {
         Spacer(Modifier.height(16.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             examples.forEach { q ->
-                Surface(
+                PressSurface(
                     onClick = { onAsk(q) },
                     shape = CircleShape,
                     color = EodiTheme.colors.surface,
@@ -655,6 +662,7 @@ private fun EmptyState(onAsk: (String) -> Unit, modifier: Modifier = Modifier) {
 private fun AnswerBlock(turn: AgentTurn, onRetry: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         QuestionBubble(turn.question, Modifier.align(Alignment.End))
+        GleoStatusChip(LocalGleoStatus.current)
         Row(verticalAlignment = Alignment.Top) {
             SparkleBadge(size = 52.dp)
             Spacer(Modifier.width(20.dp))
@@ -730,28 +738,12 @@ private fun AnswerText(answer: String, streaming: Boolean, large: Boolean, maxLi
     )
 }
 
-/** "기억을 찾는 중…" + 깜빡이는 점 세 개. */
+/** "기억을 찾는 중…" + Pleos 공식 로딩 애니메이션(Linear, foundations/animation.md). */
 @Composable
 private fun Thinking(large: Boolean = false) {
-    val transition = rememberInfiniteTransition(label = "thinking")
-    val phase = transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 3f,
-        animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Restart),
-        label = "dots",
-    )
-    // 점은 0 · 1 · 2 세 단계만 바뀐다 → 매 프레임이 아니라 단계가 바뀔 때만 재구성
-    val step by remember { derivedStateOf { phase.value.toInt() } }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        repeat(3) { i ->
-            val on = step == i
-            Box(
-                Modifier.padding(end = 8.dp).size(if (large) 18.dp else 12.dp)
-                    .alpha(if (on) 1f else 0.3f)
-                    .background(EodiTheme.colors.accent, CircleShape),
-            )
-        }
-        Spacer(Modifier.width(12.dp))
+        app.eodiyeotji.ui.common.EodiLoader(size = if (large) 64.dp else 48.dp)
+        Spacer(Modifier.width(16.dp))
         Text(
             stringResource(R.string.agent_thinking),
             style = if (large) EodiTheme.type.drivingTitle else EodiTheme.type.drivingBody,
@@ -906,13 +898,17 @@ private fun DrivingAgent(
                         BigButton(stringResource(R.string.agent_close), null, primary = false, enabled = true, onClick = onClose, modifier = Modifier.fillMaxWidth())
                     }
                 } else {
-                    Text(
-                        "“${turn.question}”",
-                        style = EodiTheme.type.drivingHeadline,
-                        color = EodiTheme.colors.textSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Text(
+                            "“${turn.question}”",
+                            style = EodiTheme.type.drivingHeadline,
+                            color = EodiTheme.colors.textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        GleoStatusChip(LocalGleoStatus.current, large = true)
+                    }
                     Spacer(Modifier.height(28.dp))
                     // 길 위의 필요(화장실 · 졸음): 1순위 곳 + 거리 · 분 크게, 다른 선택 한 줄
                     turn.roadside?.let {
@@ -995,7 +991,7 @@ private fun DrivingPrompt(onVoiceRequest: () -> Unit, modifier: Modifier = Modif
                 drawCircle(ring.copy(alpha = 0.12f), radius = size.minDimension * 0.4f)
             },
         ) {
-            Surface(
+            PressSurface(
                 onClick = onVoiceRequest,
                 shape = CircleShape,
                 color = EodiTheme.colors.accent,

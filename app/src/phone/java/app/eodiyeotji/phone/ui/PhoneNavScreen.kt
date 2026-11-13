@@ -1,5 +1,7 @@
 package app.eodiyeotji.phone.ui
 
+import androidx.compose.ui.draw.clip
+import app.eodiyeotji.ui.common.eodiShadow
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -101,12 +103,12 @@ fun PhoneNavScreen(nav: NavUi, onEnd: () -> Unit, onNext: () -> Unit) {
 @Composable
 private fun Banner(icon: ImageVector?, text: String, sub: String, meters: Double?, busy: Boolean = false, turn: NavTurn? = null) {
     Row(
-        Modifier.fillMaxWidth().shadow(12.dp, RoundedCornerShape(24.dp)).background(NavInk, RoundedCornerShape(24.dp)).padding(20.dp),
+        Modifier.fillMaxWidth().eodiShadow(EodiTheme.elevation.level2, RoundedCornerShape(24.dp)).clip(RoundedCornerShape(24.dp)).background(NavInk, RoundedCornerShape(24.dp)).padding(20.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(72.dp).background(Color.White.copy(alpha = 0.16f), RoundedCornerShape(18.dp)), contentAlignment = Alignment.Center) {
             when {
-                busy -> CircularProgressIndicator(Modifier.size(36.dp), color = Color.White, strokeWidth = 4.dp)
+                busy -> app.eodiyeotji.ui.common.EodiLoader(size = 36.dp, dark = true)
                 icon != null -> Icon(icon, null, Modifier.size(48.dp).rotate(turn.angle()), tint = Color.White)
             }
         }

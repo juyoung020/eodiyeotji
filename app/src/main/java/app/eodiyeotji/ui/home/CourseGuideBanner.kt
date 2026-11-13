@@ -1,5 +1,7 @@
 package app.eodiyeotji.ui.home
 
+import app.eodiyeotji.ui.common.eodiShadow
+import app.eodiyeotji.ui.common.PressSurface
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -100,9 +102,7 @@ private fun BannerCard(p: CourseProgress, interactive: Boolean, onNext: () -> Un
         color = c.ink,
         contentColor = c.onInk,
         shape = RoundedCornerShape(EodiTheme.space.radiusL),
-        shadowElevation = 8.dp,
-        modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
-    ) {
+        modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }.eodiShadow(EodiTheme.elevation.level2, RoundedCornerShape(EodiTheme.space.radiusL))) {
         Row(Modifier.padding(start = 24.dp, end = 16.dp, top = 16.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(64.dp).background(if (p.failed) c.error else c.accent, CircleShape), contentAlignment = Alignment.Center) {
                 Icon(if (p.finished) EodiIcons.Check else EodiIcons.Navi, null, tint = c.onAccent, modifier = Modifier.size(32.dp))
@@ -145,9 +145,7 @@ private fun CompactBannerCard(p: CourseProgress, onNext: () -> Unit, onRetry: ()
         color = c.ink,
         contentColor = c.onInk,
         shape = RoundedCornerShape(EodiTheme.space.radiusL),
-        shadowElevation = 8.dp,
-        modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
-    ) {
+        modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }.eodiShadow(EodiTheme.elevation.level2, RoundedCornerShape(EodiTheme.space.radiusL))) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(56.dp).background(if (p.failed) c.error else c.accent, CircleShape), contentAlignment = Alignment.Center) {
@@ -205,7 +203,7 @@ private fun bannerDetail(p: CourseProgress): String? = when {
 @Composable
 private fun BannerButton(text: String, icon: ImageVector?, primary: Boolean, onClick: () -> Unit) {
     val c = EodiTheme.colors
-    Surface(
+    PressSurface(
         onClick = onClick,
         shape = CircleShape,
         color = if (primary) c.accent else c.onInk.copy(alpha = 0.14f),

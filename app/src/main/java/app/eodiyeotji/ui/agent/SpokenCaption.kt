@@ -1,5 +1,7 @@
 package app.eodiyeotji.ui.agent
 
+import app.eodiyeotji.ui.common.eodiShadow
+import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.ui.theme.EodiIcons
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
@@ -78,9 +80,7 @@ fun BoxScope.SpokenCaption(bottomInset: androidx.compose.ui.unit.Dp? = null, vie
             // 불투명 (아래 화면 글자와 섞이지 않게)
             color = Color(0xFF1B1F27),
             contentColor = Color.White,
-            shadowElevation = 12.dp,
-            modifier = Modifier.widthIn(max = 1180.dp),
-        ) {
+            modifier = Modifier.widthIn(max = 1180.dp).eodiShadow(EodiTheme.elevation.level2, RoundedCornerShape(28.dp))) {
             Row(Modifier.padding(start = 26.dp, end = 12.dp, top = 14.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(AgentIcons.Speaker, contentDescription = null, tint = Color(0xFF8DB8FF), modifier = Modifier.size(34.dp))
                 Spacer(Modifier.width(18.dp))
@@ -93,7 +93,7 @@ fun BoxScope.SpokenCaption(bottomInset: androidx.compose.ui.unit.Dp? = null, vie
                     modifier = Modifier.weight(1f, fill = false).semantics { liveRegion = LiveRegionMode.Polite },
                 )
                 Spacer(Modifier.width(18.dp))
-                Surface(
+                PressSurface(
                     onClick = viewModel::stop,
                     shape = CircleShape,
                     color = Color.White.copy(alpha = 0.14f),

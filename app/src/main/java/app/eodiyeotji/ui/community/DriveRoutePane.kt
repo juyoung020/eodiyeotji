@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.community
 
+import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.ui.gallery.MyPhotoStrip
 import app.eodiyeotji.ui.gallery.MyPhotoViewer
 import app.eodiyeotji.ui.common.agoText
@@ -227,7 +228,7 @@ internal fun DriveRouteCard(
     val colors = EodiTheme.colors
     val type = EodiTheme.type
     val r = item.route
-    Surface(
+    PressSurface(
         onClick = onOpen,
         color = colors.surface,
         contentColor = colors.textPrimary,

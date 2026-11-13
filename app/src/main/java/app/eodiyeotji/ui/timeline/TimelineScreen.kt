@@ -1,5 +1,7 @@
 package app.eodiyeotji.ui.timeline
 
+import app.eodiyeotji.ui.common.eodiShadow
+import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.ui.community.RoundIconButton
 import app.eodiyeotji.core.StayMyPhotos
 import app.eodiyeotji.ui.gallery.AskGalleryOnce
@@ -479,7 +481,7 @@ private fun CompactDayDetail(
                 }
                 LocalTimelineEdits.current?.let { edits ->
                     Spacer(Modifier.width(12.dp))
-                    MoreButton(stringResource(R.string.edit_more_day), { edits.onDay(summary) })
+                    MoreButton(stringResource(R.string.edit_more_day), { edits.onDay(summary) }, label = stringResource(R.string.action_more))
                 }
             }
         }
@@ -669,14 +671,12 @@ private fun DayList(
         exit = fadeOut(),
         modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp),
     ) {
-        Surface(
+        PressSurface(
             onClick = { scope.launch { listState.scrollToItem(0) } },
             shape = CircleShape,
             color = EodiTheme.colors.ink,
             contentColor = EodiTheme.colors.onInk,
-            shadowElevation = 6.dp,
-            modifier = Modifier.heightIn(min = 64.dp),
-        ) {
+            modifier = Modifier.heightIn(min = 64.dp).eodiShadow(EodiTheme.elevation.level2, CircleShape)) {
             Text(
                 stringResource(R.string.timeline_back_to_today),
                 style = EodiTheme.type.label,
@@ -710,7 +710,7 @@ private fun DayRow(
     val dateText = relative ?: dayListTitle(s.day, today)
     val bg by animateColorAsState(if (selected) c.accentSoft else c.surface, tween(SelectMs), label = "day-bg")
     val edge by animateColorAsState(if (selected) c.accent else Color.Transparent, tween(SelectMs), label = "day-edge")
-    Surface(
+    PressSurface(
         onClick = { onSelect(s.day) },
         color = bg,
         contentColor = c.textPrimary,
@@ -930,7 +930,7 @@ internal fun DayActions(summary: DaySummary, loaded: Boolean, onShare: (() -> Un
         // 카드로 공유 (차: 연결된 휴대폰으로 → 카톡)
         ShareImageButton(ShareTarget.Day(summary.day), style = ShareButtonStyle.ICON)
         LocalTimelineEdits.current?.let { edits ->
-            MoreButton(stringResource(R.string.edit_more_day), { edits.onDay(summary) })
+            MoreButton(stringResource(R.string.edit_more_day), { edits.onDay(summary) }, label = stringResource(R.string.action_more))
         }
     }
     reason?.let {
@@ -949,18 +949,21 @@ private fun DimPill(text: String, icon: ImageVector, available: Boolean, onClick
     )
 }
 
-/** [DimPill]의 글자 없는 둥근 버튼 (머리 버튼 줄에서 글자 있는 버튼은 그날로 돌아가기 하나만 둔다). */
+/** [DimPill]의 작은 판: 아이콘 + 짧은 글자 (Pleos 가이드: 아이콘은 텍스트 라벨과 함께). */
 @Composable
 private fun DimIcon(description: String, icon: ImageVector, available: Boolean, onClick: () -> Unit, onUnavailable: () -> Unit) {
     val c = EodiTheme.colors
-    Surface(
+    PressSurface(
         onClick = if (available) onClick else onUnavailable,
         shape = CircleShape,
         color = c.surfaceHigh,
         contentColor = c.textSecondary,
-        modifier = Modifier.size(76.dp).alpha(if (available) 1f else 0.42f).semantics { contentDescription = description },
+        modifier = Modifier.heightIn(min = 76.dp).alpha(if (available) 1f else 0.42f).semantics { contentDescription = description },
     ) {
-        Box(contentAlignment = Alignment.Center) { Icon(icon, null, modifier = Modifier.size(32.dp)) }
+        Row(Modifier.padding(start = 18.dp, end = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, modifier = Modifier.size(30.dp), tint = c.accent)
+            Text(stringResource(R.string.timeline_share_icon_label), style = EodiTheme.type.label, color = c.textPrimary, maxLines = 1)
+        }
     }
 }
 

@@ -1,5 +1,6 @@
 package app.eodiyeotji.phone.ui
 
+import app.eodiyeotji.ui.common.eodiShadow
 import android.Manifest
 import android.app.Activity
 import android.app.NotificationChannel
@@ -174,7 +175,7 @@ private fun InboxSheet(raw: RShareCard, photosRepo: PlacePhotoRepository, onClos
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(c.surfaceHigh).padding(vertical = 24.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Box(Modifier.width(300.dp).shadow(16.dp, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp))) {
+                Box(Modifier.width(300.dp).eodiShadow(EodiTheme.elevation.level3, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp))) {
                     ShareCardView(card, photos)
                 }
             }

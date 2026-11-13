@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.community
 
+import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.ui.theme.EodiIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -398,7 +399,7 @@ fun ShareEpisodePicker(onPick: (Long) -> Unit, onDismiss: () -> Unit, viewModel:
 private fun CandidateRow(p: SharePreview, onClick: () -> Unit) {
     val c = EodiTheme.colors
     val first = p.stops.first()
-    Surface(onClick = onClick, color = c.surfaceHigh, shape = RoundedCornerShape(EodiTheme.space.radiusM), modifier = Modifier.fillMaxWidth()) {
+    PressSurface(onClick = onClick, color = c.surfaceHigh, shape = RoundedCornerShape(EodiTheme.space.radiusM), modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             StopPhoto(first.name, first.address, first.lat, first.lon, order = null, size = 112.dp)
             Spacer(Modifier.width(20.dp))

@@ -1,5 +1,7 @@
 package app.eodiyeotji.ui.timeline
 
+import app.eodiyeotji.ui.common.eodiShadow
+import app.eodiyeotji.ui.common.PressSurface
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -205,10 +207,8 @@ private fun Panel(modifier: Modifier = Modifier, content: @Composable () -> Unit
         shape = RoundedCornerShape(EodiTheme.space.radiusL),
         // 어두운 지도 위에서 판 가장자리가 묻히지 않게 가는 테두리
         border = BorderStroke(1.dp, EodiTheme.colors.outline),
-        shadowElevation = 6.dp,
-        modifier = modifier,
-        content = content,
-    )
+        modifier = modifier.eodiShadow(EodiTheme.elevation.level2, RoundedCornerShape(EodiTheme.space.radiusL)),
+        content = content)
 }
 
 /** 그날 머리: 날짜 · 제목 · 한 줄 통계 · 버튼 (통계 칸 · 태그는 두지 않는다). */
@@ -268,7 +268,7 @@ private fun DateRail(days: List<DaySummary>, today: LocalDate, selected: String?
         val scrolled by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
         val scope = rememberCoroutineScope()
         if (latest != null && selected != null && (selected != latest || scrolled)) {
-            Surface(
+            PressSurface(
                 onClick = {
                     onSelect(latest)
                     scope.launch { listState.animateScrollToItem(0) }
@@ -343,15 +343,13 @@ private fun StopCards(entries: List<DayEntry>, selectedKey: String?, onClick: (S
                 val on = e.key == selectedKey
                 // 그날 처음 · 마지막 곳(대개 집)은 밤새 머문 시간까지 세져서 머문 시간을 뺀다 (시간표 줄과 같은 규칙)
                 val overnight = stay.isOpen || i == 0 || i == stays.lastIndex
-                Surface(
+                PressSurface(
                     onClick = { onClick(e.key) },
                     color = c.surface.copy(alpha = 0.95f),
                     contentColor = c.textPrimary,
                     shape = RoundedCornerShape(24.dp),
                     border = if (on) BorderStroke(3.dp, ink.trip) else BorderStroke(1.dp, c.outline),
-                    shadowElevation = 6.dp,
-                    modifier = Modifier.width(340.dp).fillMaxHeight(),
-                ) {
+                    modifier = Modifier.width(340.dp).fillMaxHeight().eodiShadow(EodiTheme.elevation.level2, RoundedCornerShape(24.dp))) {
                     Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(48.dp).background(if (stay.isOpen) ink.here else ink.stay, CircleShape), contentAlignment = Alignment.Center) {
                             Text(if (stay.order > 0) stay.order.toString() else "", style = EodiTheme.type.label, fontWeight = FontWeight.Bold, color = ink.onMarker)
@@ -371,14 +369,12 @@ private fun StopCards(entries: List<DayEntry>, selectedKey: String?, onClick: (S
                 }
             }
         }
-        Surface(
+        PressSurface(
             onClick = onAll,
             color = c.ink,
             contentColor = c.onInk,
             shape = RoundedCornerShape(24.dp),
-            shadowElevation = 6.dp,
-            modifier = Modifier.fillMaxHeight(),
-        ) {
+            modifier = Modifier.fillMaxHeight().eodiShadow(EodiTheme.elevation.level2, RoundedCornerShape(24.dp))) {
             Box(Modifier.padding(horizontal = 28.dp), contentAlignment = Alignment.Center) {
                 Text(stringResource(R.string.home_all_timeline), style = EodiTheme.type.label, fontWeight = FontWeight.Bold, maxLines = 1)
             }

@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.replay
 
+import app.eodiyeotji.ui.common.eodiShadow
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
@@ -140,7 +141,7 @@ private fun DayReplayScreen(state: ReplayUiState, onClose: () -> Unit, onNavigat
             r != null -> Player(r, state.roadPhotos, onClose, onNavigate)
             state.failed -> Center(stringResource(R.string.replay_failed))
             else -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator(color = EodiTheme.colors.memory)
+                app.eodiyeotji.ui.common.EodiLoader(size = 64.dp, kind = app.eodiyeotji.ui.common.LoaderKind.Tension, dark = true)
                 Spacer(Modifier.height(20.dp))
                 Text(stringResource(R.string.replay_loading), style = EodiTheme.type.body, color = Color.White.copy(alpha = 0.8f))
             }
@@ -301,7 +302,7 @@ private fun RoadPhotoCard(spot: MapPhotoSpot, wide: Boolean) {
                 Modifier
                     .fillMaxWidth(if (wide) 0.42f else 0.8f)
                     .aspectRatio(4f / 3f)
-                    .shadow(18.dp, RoundedCornerShape(20.dp))
+                    .eodiShadow(EodiTheme.elevation.level3, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp))
                     .border(5.dp, EodiTheme.colors.memory, RoundedCornerShape(20.dp))
                     .clip(RoundedCornerShape(20.dp)),
                 sizePx = ROAD_PHOTO_PX,
@@ -408,7 +409,7 @@ private fun SceneCard(r: DayReplay, s: ReplayScene, paused: Boolean, wide: Boole
                 Modifier
                     .width(cardW)
                     .height(cardW * 0.75f)
-                    .shadow(20.dp, shape)
+                    .eodiShadow(EodiTheme.elevation.level3, shape).clip(shape)
                     .clip(shape)
                     .background(Color(0xFF1C222C)),
             ) {

@@ -41,6 +41,8 @@ data class PlaceDetailUiState(
     val detail: PlaceDetail? = null,
     val error: String? = null,
     val navi: Boolean? = null,
+    /** 내비에 안내를 보내는 중 (안내 버튼 안 로더) */
+    val naviBusy: Boolean = false,
     val draft: ReviewDraft? = null,
     val justPosted: Boolean = false,
 )
@@ -106,9 +108,10 @@ class PlaceDetailViewModel @Inject constructor(
         val s = _state.value
         val p = s.detail?.place ?: s.place ?: return
         naviJob?.cancel()
+        _state.update { it.copy(naviBusy = true) }
         naviJob = viewModelScope.launch {
             val ok = runCatching { guide.startPlace(p.name, p.lat, p.lon, p.address) }.getOrDefault(false)
-            _state.update { it.copy(navi = ok) }
+            _state.update { it.copy(navi = ok, naviBusy = false) }
             delay(NOTICE_MS)
             _state.update { it.copy(navi = null) }
         }

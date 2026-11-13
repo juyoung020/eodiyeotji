@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.places
 
+import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.ui.community.SectionTitle
 import app.eodiyeotji.ui.community.StopPhotoBox
 import app.eodiyeotji.core.PartnerOffer
@@ -135,7 +136,7 @@ private fun Header(onBack: (() -> Unit)?, compact: Boolean) {
     ) {
         if (onBack != null) {
             val description = stringResource(R.string.timeline_back_description)
-            Surface(onClick = onBack, shape = CircleShape, color = c.surfaceHigh, modifier = Modifier.size(EodiTheme.space.touch).semantics { contentDescription = description }) {
+            PressSurface(onClick = onBack, shape = CircleShape, color = c.surfaceHigh, modifier = Modifier.size(EodiTheme.space.touch).semantics { contentDescription = description }) {
                 Box(contentAlignment = Alignment.Center) { Icon(EodiIcons.Back, null, modifier = Modifier.size(36.dp)) }
             }
             Spacer(Modifier.width(20.dp))
@@ -197,7 +198,7 @@ private fun PlaceCardView(card: PlaceCard, offers: List<PartnerOffer>, onHeart: 
     val open: () -> Unit = {
         if (label != null) openPlace(StopFact(label.name, label.category, label.address, 0, 0, card.lat, card.lon, false))
     }
-    Surface(
+    PressSurface(
         onClick = open,
         enabled = label != null,
         color = c.surface,
@@ -217,7 +218,7 @@ private fun PlaceCardView(card: PlaceCard, offers: List<PartnerOffer>, onHeart: 
                 }
                 Spacer(Modifier.width(12.dp))
                 val desc = stringResource(if (card.saved) R.string.places_unsave else R.string.places_save)
-                Surface(
+                PressSurface(
                     onClick = onHeart,
                     shape = CircleShape,
                     color = if (card.saved) c.heartSoft else c.surfaceHigh,
@@ -243,7 +244,7 @@ private fun PlaceCardView(card: PlaceCard, offers: List<PartnerOffer>, onHeart: 
 @Composable
 private fun OutlinePill(text: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = EodiTheme.colors
-    Surface(
+    PressSurface(
         onClick = onClick,
         shape = CircleShape,
         color = c.surface,

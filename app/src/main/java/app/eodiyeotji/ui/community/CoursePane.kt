@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.community
 
+import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.ui.common.agoText
 import app.eodiyeotji.ui.offers.CourseCouponBadge
 import androidx.compose.foundation.background
@@ -296,7 +297,7 @@ private fun StopRow(
     localPhoto: String? = null,
 ) {
     val c = EodiTheme.colors
-    Surface(
+    PressSurface(
         onClick = onClick,
         color = if (selected) c.accentSoft else c.surface,
         shape = RoundedCornerShape(EodiTheme.space.radiusM),
@@ -346,7 +347,7 @@ private fun StopRow(
 private fun StopReviewQuote(t: TravelReview, author: String?, onOpen: () -> Unit) {
     val c = EodiTheme.colors
     val r = t.review
-    Surface(
+    PressSurface(
         onClick = onOpen,
         color = c.surfaceHigh,
         shape = RoundedCornerShape(EodiTheme.space.radiusM),
