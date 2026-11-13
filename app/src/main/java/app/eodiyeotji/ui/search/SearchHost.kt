@@ -18,6 +18,8 @@ import app.eodiyeotji.core.SearchScope
 import app.eodiyeotji.ui.agent.AgentViewModel
 import app.eodiyeotji.ui.agent.VoiceUi
 import app.eodiyeotji.ui.community.CommunityTab
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 /**
  * 화면(내 기록 · 커뮤니티)에 끼울 검색 자리를 만든다: 검색 칸 + 결과 + 말로 찾기.
@@ -36,7 +38,9 @@ fun rememberSearchSlot(
     resultsPadding: PaddingValues = PaddingValues(bottom = 24.dp),
 ): SearchSlot {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val agentState by agent.state.collectAsStateWithLifecycle()
+    // 에이전트 상태 전체를 읽으면 듣는 소리 크기 · 답 글자가 바뀔 때마다 이 칸을 부른 홈 화면 전체가 다시 그려진다
+    // → 받아쓰기 중인지만 따로 보고, 목소리 상태는 이 칸에서 받아쓰는 동안만 읽는다.
+    val dictatingNow by remember(agent) { agent.state.map { it.voice.dictating }.distinctUntilChanged() }.collectAsStateWithLifecycle(false)
     var dictatingHere by remember { mutableStateOf(false) }
     LaunchedEffect(scope) { viewModel.setScope(scope) }
     val vm by rememberUpdatedState(viewModel)
@@ -50,8 +54,8 @@ fun rememberSearchSlot(
     }
     // 받아쓰기가 끝났는데 말이 없었으면 (못 들음 · 취소) 이 칸의 받아쓰기 표시도 끝낸다 (말이 있었으면 위에서 이미 끝남)
     var sawDictating by remember { mutableStateOf(false) }
-    LaunchedEffect(agentState.voice.dictating) {
-        if (agentState.voice.dictating) {
+    LaunchedEffect(dictatingNow) {
+        if (dictatingNow) {
             sawDictating = true
         } else if (sawDictating) {
             sawDictating = false
@@ -70,7 +74,11 @@ fun rememberSearchSlot(
         viewModel.open()
         if (agent.needsMicPermission()) micPermission.launch(Manifest.permission.RECORD_AUDIO) else agent.dictate()
     }
-    val voice = if (dictatingHere) agentState.voice else VoiceUi()
+    val voice = if (dictatingHere) {
+        remember(agent) { agent.state.map { it.voice }.distinctUntilChanged() }.collectAsStateWithLifecycle(VoiceUi()).value
+    } else {
+        VoiceUi()
+    }
     return SearchSlot(
         active = state.active,
         bar = { m ->

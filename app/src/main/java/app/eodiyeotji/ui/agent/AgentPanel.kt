@@ -193,10 +193,13 @@ fun AgentPanel(
         if (state.voice.speaking && !state.voice.listening) (if (narrowWindow) CaptionSpaceTwoLines else CaptionSpace) else 0.dp,
         label = "caption",
     )
+    // 마이크 소리 크기(level)는 듣는 동안 초당 여러 번 바뀐다. 대화 화면에는 level을 0으로 고정한 상태를 넘겨
+    // (같은 값이면 Compose가 건너뛴다) 듣는 동안 대화 목록 · 카드 전체가 다시 그려지지 않게 한다. level은 AgentVoiceLayer만 쓴다.
+    val contentState = remember(state) { if (state.voice.level == 0f) state else state.copy(voice = state.voice.copy(level = 0f)) }
     Box(modifier) {
         AgentPanelContent(
             topSpace = captionSpace,
-            state = state,
+            state = contentState,
             onAsk = viewModel::ask,
             onConfirm = viewModel::confirm,
             onSelectStop = viewModel::selectStop,

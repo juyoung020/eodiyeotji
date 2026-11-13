@@ -50,6 +50,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import app.eodiyeotji.R
 import app.eodiyeotji.record.RecordingStatusChip
 import app.eodiyeotji.ui.agent.AgentPanel
@@ -93,13 +94,15 @@ enum class HomeTab { TIMELINE, COMMUNITY, PLACES, COLLECTIONS }
 fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: CourseGuideViewModel = hiltViewModel()) {
     // 코스 안내 이어 가기(CourseGuide)는 주행 중에도 살아 있어야 한다 → 화면 갈래와 상관없이 여기서 만든다
     // (운전 중 "응, 안내해 줘"로 시작한 에이전트 코스도 도착하면 다음 구간으로 이어진다)
-    val agentState by agentViewModel.state.collectAsStateWithLifecycle()
+    // 주행 중인지만 본다: 에이전트 상태 전체(듣는 소리 크기 · 답 글자)를 읽으면 그때마다 홈 화면 전체가 다시 그려진다
+    val driving by remember(agentViewModel) { agentViewModel.state.map { it.isDriving }.distinctUntilChanged() }
+        .collectAsStateWithLifecycle(agentViewModel.state.value.isDriving)
     var agentOpen by rememberSaveable { mutableStateOf(false) }
     var tab by rememberSaveable { mutableStateOf(HomeTab.TIMELINE) }
     // 밖에서 넣은 말(시연 · adb, agent/roadside)은 에이전트가 묻고 → 정차 화면이면 에이전트 창을 연다
     androidx.compose.runtime.LaunchedEffect(Unit) { app.eodiyeotji.agent.roadside.AgentUtterances.texts.collect { agentOpen = true } }
     Box(Modifier.fillMaxSize()) {
-        if (agentState.isDriving && agentViewModel.drivingLocksScreen) {
+        if (driving && agentViewModel.drivingLocksScreen) {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).fillMaxWidth()) { AgentPanel(onClose = null, viewModel = agentViewModel) }
                 // 같이 가는 중이면 큰 카드 1장 (가장 뒤처진 차 · 도착 차이). 목록은 정차 중에만.
@@ -195,7 +198,7 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
             Row(Modifier.fillMaxSize().background(EodiTheme.colors.background)) {
                 NavRail(
                     if (fromCollections && overlayOpen) HomeTab.COLLECTIONS else tab,
-                    driving = agentState.isDriving,
+                    driving = driving,
                     onSelect = { fromCollections = false; tab = it },
                 )
                 Column(Modifier.weight(1f).fillMaxHeight()) {
@@ -221,7 +224,7 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                             })
                             // 여행 모음 · 이번 달 요약 · 올해 결산 · 기억 지도 · 출장 관리. 요약 · 결산 · 지도 · 출장 창은 내 기록 화면 위에 뜬다.
                             HomeTab.COLLECTIONS -> CollectionsRoute(
-                                driving = agentState.isDriving,
+                                driving = driving,
                                 onOpenTrips = {
                                     tab = HomeTab.TIMELINE
                                     recordsSearchVm.openKind(EpisodeKind.TRIP)
@@ -242,7 +245,7 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                 AgentPanel(onClose = closeAgent, viewModel = agentViewModel)
             }
             // 같이 가기 창 (만들기 · 참여 · 지도). 주행 중에는 그리지 않는다.
-            app.eodiyeotji.ui.convoy.ConvoyHost(driving = agentState.isDriving)
+            app.eodiyeotji.ui.convoy.ConvoyHost(driving = driving)
         }
     }
 }
