@@ -1128,9 +1128,9 @@ mod tidy_tests {
         let h = MemoryHit { day_title: None, episode: e, score: 1.0, best_stop: None, matched_tags: vec![], visit_days: vec![], visit_note: String::new(), people: None };
         let today = super::parse_ymd("2026-11-14", false).unwrap();
         // 올해 일은 "작년"이 붙지 않는다 (LLM이 day만 보고 "작년 10월 29일"이라 말했다)
-        assert_eq!(super::tools::hit_json(&h, today)["say"], "10월 29일");
+        assert_eq!(super::tools::hit_json(&h, today)["say"], "10월 29일 목요일");
         let last_year = super::parse_ymd("2027-01-02", false).unwrap();
-        assert_eq!(super::tools::hit_json(&h, last_year)["say"], "작년 10월 29일");
+        assert_eq!(super::tools::hit_json(&h, last_year)["say"], "작년 10월 29일 목요일");
     }
     #[test]
     fn answer_naming_another_candidate_moves_the_card() {

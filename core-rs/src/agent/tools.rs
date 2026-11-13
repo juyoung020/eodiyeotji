@@ -375,7 +375,8 @@ pub fn hit_json(h: &MemoryHit, today: i64) -> Value {
     let f = &h.episode.facts;
     let wd = parse_ymd(&f.day, false).map(|d| WEEKDAYS[dates::weekday(d)]).unwrap_or("");
     json!({
-        "id": f.id, "day": f.day, "say": super::runner::spoken_date(&f.day, today), "wd": wd, "kind": kind_name(f.kind),
+        // 요일까지 붙여 둔다: 모델이 "11월 6일 목요일"처럼 요일을 지어냈다 (그날은 금요일)
+        "id": f.id, "day": f.day, "say": format!("{} {wd}요일", super::runner::spoken_date(&f.day, today)), "wd": wd, "kind": kind_name(f.kind),
         "title": h.episode.title.clone().unwrap_or(f.rule_label.clone()),
         "day_title": h.day_title.clone().unwrap_or_default(),
         "region": f.region,

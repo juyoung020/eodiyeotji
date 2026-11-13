@@ -965,5 +965,5 @@ fn empty_narrow_find_offers_the_last_record_before() {
     let data = v.get("data").unwrap_or(&v);
     assert_eq!(data["count"], 0, "{v}");
     assert_eq!(data["last_before"]["day"], "2026-11-01", "{v}");
-    assert_eq!(data["last_before"]["say"], "11월 1일");
+    assert_eq!(data["last_before"]["say"], "11월 1일 일요일");
 }
