@@ -58,8 +58,9 @@ fun BoardPane(viewModel: BoardViewModel = hiltViewModel()) {
     LaunchedEffect(viewModel) { viewModel.start() }
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
+            // 머리 줄도 글 목록과 같은 폭: 글 쓰기 버튼이 화면 끝에 따로 떨어져 있지 않고 카드 오른쪽 끝에 맞춰진다
             Row(
-                Modifier.fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = 8.dp, bottom = 16.dp),
+                Modifier.widthIn(max = ReadWidth).fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = 8.dp, bottom = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 SortChoice(state.sort, viewModel::setSort)
