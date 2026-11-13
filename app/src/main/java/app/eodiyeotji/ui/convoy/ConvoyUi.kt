@@ -37,7 +37,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -58,6 +61,9 @@ import app.eodiyeotji.ui.theme.EodiTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.launch
+
+/** 이보다 좁은 창(dp)은 세로로 쌓는다 (세로 화면 · 나눈 화면). */
+private const val NARROW_DP = 1100
 
 @HiltViewModel
 class ConvoyViewModel @Inject constructor(val repo: ConvoyRepository) : ViewModel()
@@ -94,8 +100,12 @@ fun ConvoyDrivingCard(modifier: Modifier = Modifier, vm: ConvoyViewModel = hiltV
     if (s.phase != ConvoyPhase.ACTIVE) return
     val c = EodiTheme.colors
     val f = s.focus
+    val narrow = LocalConfiguration.current.screenWidthDp < NARROW_DP
+    val scope = rememberCoroutineScope()
+    val showStop = s.low != null && s.waypoint == null
     Surface(color = c.surface, shape = RoundedCornerShape(EodiTheme.space.radiusL), modifier = modifier) {
-        Row(Modifier.padding(horizontal = 32.dp, vertical = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+      Column(Modifier.padding(horizontal = 32.dp, vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             if (f != null) {
                 Puck(f, 72)
                 Spacer(Modifier.width(24.dp))
@@ -104,7 +114,12 @@ fun ConvoyDrivingCard(modifier: Modifier = Modifier, vm: ConvoyViewModel = hiltV
                 Text(
                     f?.card ?: stringResource(R.string.convoy_waiting),
                     style = EodiTheme.type.drivingBody,
-                    color = c.textPrimary,
+                    // 잔량 부족 · 끊김은 한눈에 (빨강 = 부족, 흐림 = 소식 끊김)
+                    color = when {
+                        f?.low == true && !f.stale -> c.error
+                        f?.stale == true -> c.textSecondary
+                        else -> c.textPrimary
+                    },
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -115,14 +130,20 @@ fun ConvoyDrivingCard(modifier: Modifier = Modifier, vm: ConvoyViewModel = hiltV
                 )
             }
             // 누가 잔량이 부족하면 한 번 누르기로 모두 같이 들를 곳을 정한다 (주행 중에도 큰 버튼 하나만)
-            if (s.low != null && s.waypoint == null) {
-                val scope = rememberCoroutineScope()
+            if (showStop && !narrow) {
                 Spacer(Modifier.width(24.dp))
                 BigButton(stringResource(R.string.convoy_stop_together), primary = true, modifier = Modifier.width(320.dp)) {
                     scope.launch { vm.repo.stopTogether() }
                 }
             }
         }
+        // 좁은 창(세로 · 나눈 화면)에서는 버튼을 글 아래 한 줄로 (옆에 두면 글이 잘렸다)
+        if (showStop && narrow) {
+            BigButton(stringResource(R.string.convoy_stop_together), primary = true, modifier = Modifier.fillMaxWidth()) {
+                scope.launch { vm.repo.stopTogether() }
+            }
+        }
+      }
     }
 }
 
@@ -144,7 +165,7 @@ fun ConvoyHost(driving: Boolean, vm: ConvoyViewModel = hiltViewModel()) {
             shape = RoundedCornerShape(EodiTheme.space.radiusL),
             modifier = Modifier
                 .align(Alignment.Center)
-                .padding(32.dp)
+                .padding(if (LocalConfiguration.current.screenWidthDp < NARROW_DP) 16.dp else 32.dp)
                 .fillMaxWidth()
                 .fillMaxHeight()
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
@@ -166,7 +187,7 @@ private fun StartPane(s: ConvoyUiState, repo: ConvoyRepository) {
     val busy = s.phase == ConvoyPhase.CONNECTING
     // 누른 버튼 안에 로더 (만들기 / 들어가기)
     var joining by remember { mutableStateOf(false) }
-    Column(Modifier.padding(40.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+    Column(Modifier.verticalScroll(rememberScrollState()).padding(40.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.convoy_title), style = EodiTheme.type.title, color = c.textPrimary, modifier = Modifier.weight(1f))
             Pill(stringResource(R.string.convoy_close), onClick = repo::closeSheet)
@@ -184,8 +205,16 @@ private fun StartPane(s: ConvoyUiState, repo: ConvoyRepository) {
             textStyle = EodiTheme.type.body,
             modifier = Modifier.fillMaxWidth(),
         )
+        val narrow = LocalConfiguration.current.screenWidthDp < NARROW_DP
+        if (narrow) {
+            // 좁은 창: [새로 만들기] 한 줄, 아래 [코드 칸 | 코드로 참여]
+            BigButton(stringResource(R.string.convoy_create), primary = true, enabled = !busy || !joining, loading = busy && !joining, modifier = Modifier.fillMaxWidth()) {
+                joining = false
+                repo.create(name.trim(), s.dest)
+            }
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            BigButton(stringResource(R.string.convoy_create), primary = true, enabled = !busy || !joining, loading = busy && !joining, modifier = Modifier.weight(1f)) {
+            if (!narrow) BigButton(stringResource(R.string.convoy_create), primary = true, enabled = !busy || !joining, loading = busy && !joining, modifier = Modifier.weight(1f)) {
                 joining = false
                 repo.create(name.trim(), s.dest)
             }
@@ -216,21 +245,43 @@ private fun StartPane(s: ConvoyUiState, repo: ConvoyRepository) {
 @Composable
 private fun ActivePane(s: ConvoyUiState, repo: ConvoyRepository) {
     val c = EodiTheme.colors
+    val mapDesc = stringResource(R.string.convoy_map_description)
+    // 넓은 창: [지도 | 정보]. 좁은 창(세로 · 나눈 화면): 위 지도 · 아래 정보 (옆으로 두면 정보 칸이 잘렸다)
+    val narrow = LocalConfiguration.current.screenWidthDp < NARROW_DP
+    val r = EodiTheme.space.radiusL
+    if (narrow) {
+        Column(Modifier.fillMaxSize()) {
+            ConvoyMap(
+                s.geojson,
+                s.bounds,
+                Modifier.fillMaxWidth().fillMaxHeight(0.38f)
+                    .background(c.surfaceHigh, RoundedCornerShape(topStart = r, topEnd = r))
+                    .semantics { contentDescription = mapDesc },
+            )
+            ActiveInfo(s, repo, Modifier.weight(1f).fillMaxWidth().padding(24.dp))
+        }
+    } else {
+        Row(Modifier.fillMaxSize()) {
+            ConvoyMap(
+                s.geojson,
+                s.bounds,
+                Modifier.weight(1.4f).fillMaxHeight()
+                    .background(c.surfaceHigh, RoundedCornerShape(topStart = r, bottomStart = r))
+                    .semantics { contentDescription = mapDesc },
+            )
+            ActiveInfo(s, repo, Modifier.weight(1f).fillMaxHeight().padding(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun ActiveInfo(s: ConvoyUiState, repo: ConvoyRepository, modifier: Modifier) {
+    val c = EodiTheme.colors
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var navi by remember { mutableStateOf<Boolean?>(null) }
-    val mapDesc = stringResource(R.string.convoy_map_description)
-    Row(Modifier.fillMaxSize()) {
-        ConvoyMap(
-            s.geojson,
-            s.bounds,
-            Modifier
-                .weight(1.4f)
-                .fillMaxHeight()
-                .background(c.surfaceHigh, RoundedCornerShape(topStart = EodiTheme.space.radiusL, bottomStart = EodiTheme.space.radiusL))
-                .semantics { contentDescription = mapDesc },
-        )
-        Column(Modifier.weight(1f).fillMaxHeight().padding(32.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    run {
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(14.dp).background(c.accent, CircleShape))
                 Spacer(Modifier.width(10.dp))
@@ -238,7 +289,7 @@ private fun ActivePane(s: ConvoyUiState, repo: ConvoyRepository) {
                 Pill(stringResource(R.string.convoy_close), onClick = repo::closeSheet)
             }
             Text(stringResource(R.string.convoy_code), style = EodiTheme.type.eyebrow, color = c.textTertiary)
-            Text(s.code, style = EodiTheme.type.display, color = c.textPrimary)
+            Text(s.code, style = EodiTheme.type.display, color = c.textPrimary, maxLines = 1)
             Text(
                 s.dest?.let { stringResource(R.string.convoy_dest, it.name) } ?: stringResource(R.string.convoy_dest_none),
                 style = EodiTheme.type.body,
@@ -314,8 +365,9 @@ private fun BigButton(text: String, modifier: Modifier = Modifier, primary: Bool
         onClick = onClick,
         enabled = enabled,
         shape = RoundedCornerShape(EodiTheme.space.radiusM),
-        color = if (primary) c.accent else c.surfaceHigh,
-        contentColor = if (primary) c.onAccent else c.textPrimary,
+        // 꺼진 주 버튼은 회색 바탕 (파랑 위 흐린 글자는 읽히지 않았다)
+        color = if (primary && enabled) c.accent else c.surfaceHigh,
+        contentColor = if (primary && enabled) c.onAccent else c.textPrimary,
         loading = loading,
         modifier = modifier.heightIn(min = 88.dp),
     ) {

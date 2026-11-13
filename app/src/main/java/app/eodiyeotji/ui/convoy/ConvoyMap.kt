@@ -75,11 +75,12 @@ fun ConvoyMap(geojson: String, bounds: MapBoundsLatLon?, modifier: Modifier = Mo
         Box(modifier.background(bg))
         return
     }
-    val mapView = rememberMapViewWithLifecycle(LocalContext.current, o, bg.toArgb(), label = "convoy")
+    val mapView = rememberMapViewWithLifecycle(LocalContext.current, o, bg.toArgb(), label = "convoy", overlay = true)
     val me = EodiTheme.colors.accent.toArgb()
     val ink = EodiTheme.colors.textPrimary.toArgb()
     val halo = EodiTheme.colors.surface.toArgb()
-    val controller = remember(mapView) { ConvoyMapController(mapView, me, ink, halo) }
+    val warn = EodiTheme.colors.error.toArgb()
+    val controller = remember(mapView) { ConvoyMapController(mapView, me, ink, halo, warn) }
     var style by remember { mutableStateOf<MapStyleSpec?>(null) }
     LaunchedEffect(night) { style = MapStyleSource.resolve(context, night) }
     LaunchedEffect(style) {
@@ -94,13 +95,13 @@ fun ConvoyMap(geojson: String, bounds: MapBoundsLatLon?, modifier: Modifier = Mo
     AndroidView(factory = { mapView }, modifier = modifier)
 }
 
-/** 다른 차 색: 앱 파랑과 겹치지 않는 것 (산호 · 보라 · 청록 · 분홍), 번호 순서대로 돌려 쓴다. */
+/** 다른 차 색: 앱 파랑 · 경고 빨강과 겹치지 않는 것 (테마 [app.eodiyeotji.ui.theme.ConvoyCarColors]), 번호 순서대로 돌려 쓴다. */
 object ConvoyColors {
-    val argb = intArrayOf(0xFFFF6B57.toInt(), 0xFF8B5CF6.toInt(), 0xFF0FA38A.toInt(), 0xFFE0457B.toInt())
+    val argb = app.eodiyeotji.ui.theme.ConvoyCarColors.map { it.toArgb() }.toIntArray()
     fun of(index: Int): Int = argb[((index % argb.size) + argb.size) % argb.size]
 }
 
-private class ConvoyMapController(private val view: MapView, private val meColor: Int, private val ink: Int, private val halo: Int) {
+private class ConvoyMapController(private val view: MapView, private val meColor: Int, private val ink: Int, private val halo: Int, private val warn: Int) {
     private var map: MapLibreMap? = null
     private var source: GeoJsonSource? = null
     private var pendingStyle: String? = null
@@ -136,7 +137,8 @@ private class ConvoyMapController(private val view: MapView, private val meColor
     private fun colorExpr(): Expression {
         val stops = ConvoyColors.argb.indices.flatMap { i -> listOf(literal(i), Expression.color(ConvoyColors.of(i))) }.toTypedArray()
         // 번호가 색 수를 넘으면 나머지로 (Rust 번호는 0부터)
-        return Expression.match(Expression.mod(get("color"), literal(ConvoyColors.argb.size)), Expression.color(meColor), *stops)
+        // match(입력, 값1, 색1, …, 기본색): 기본색은 맨 뒤 (앞에 두면 식이 깨져 점이 검게 그려졌다)
+        return Expression.match(Expression.mod(get("color"), literal(ConvoyColors.argb.size)), *stops, Expression.color(meColor))
     }
 
     private fun onStyle(s: Style) {
@@ -164,7 +166,7 @@ private class ConvoyMapController(private val view: MapView, private val meColor
             CircleLayer("convoy-car", SRC).withFilter(eq(kind, literal("car"))).withProperties(
                 circleRadius(22f), circleColor(colorExpr()),
                 // 잔량 부족이면 테두리를 빨갛고 굵게 (이름표에도 "배터리 부족"이 붙는다, Rust)
-                circleStrokeColor(Expression.switchCase(eq(get("low"), literal(true)), Expression.color(0xFFE5484D.toInt()), Expression.color(0xFFFFFFFF.toInt()))),
+                circleStrokeColor(Expression.switchCase(eq(get("low"), literal(true)), Expression.color(warn), Expression.color(halo))),
                 circleStrokeWidth(Expression.switchCase(eq(get("low"), literal(true)), literal(7f), literal(4f))),
                 circleOpacity(Expression.switchCase(eq(get("stale"), literal(true)), literal(0.45f), literal(1f))),
             ),

@@ -343,6 +343,8 @@ internal fun rememberMapViewWithLifecycle(
     initialCamera: CameraPosition? = null,
     /** 성능 기록([MapFrameProbe])에 붙일 이름 */
     label: String = "map",
+    /** 다른 지도 위에 덮이는 창의 지도 (같이 가기 등): 아래 화면 지도의 Surface가 비쳐 보이지 않게 위로 올린다 */
+    overlay: Boolean = false,
 ): MapView {
     val mapView = remember {
         MapLibre.getInstance(context)
@@ -356,6 +358,7 @@ internal fun rememberMapViewWithLifecycle(
             .compassEnabled(false)
             .rotateGesturesEnabled(tiltAndRotate)
             .tiltGesturesEnabled(tiltAndRotate)
+        options.renderSurfaceOnTop(overlay)
         MapView(context, options)
     }
     val frameProbe = remember(mapView) { MapFrameProbe.attach(mapView, label) }
