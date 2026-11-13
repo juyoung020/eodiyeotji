@@ -305,8 +305,9 @@ private fun TitleBlock(place: StopFact, d: PlaceDetail?, compact: Boolean, modif
                     Text(d.hearts.toString(), style = EodiTheme.type.label, fontWeight = FontWeight.Bold)
                 }
             }
-            if (d.offers.isNotEmpty()) PlaceCouponBadge(d.offers)
         }
+        // 쿠폰은 리뷰 · 하트와 상관없이 (리뷰 0 줄을 비울 때 같이 숨어서 목록엔 있는 쿠폰이 장소 창에서 사라졌다)
+        if (d != null && d.offers.isNotEmpty()) PlaceCouponBadge(d.offers)
     }
 }
 
