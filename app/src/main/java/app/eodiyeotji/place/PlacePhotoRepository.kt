@@ -112,14 +112,17 @@ class PlacePhotoRepository @Inject constructor(
         )
     }
 
-    private companion object {
-        const val TAG = "EodiPhoto"
-        const val BIAS_RADIUS_M = 300.0
-        const val LOCAL_DIR = "place_photos"
-        const val LOCAL_PREFIX = "local:"
+    companion object {
+        private const val TAG = "EodiPhoto"
+        private const val BIAS_RADIUS_M = 300.0
+        private const val LOCAL_DIR = "place_photos"
+        private const val LOCAL_PREFIX = "local:"
+
+        /** 기기에 넣어 둔 시연 사진인지 (구글 사진이 아니라서 출처 표시가 다르다). */
+        fun isLocal(photo: PlacePhoto): Boolean = photo.name.startsWith(LOCAL_PREFIX)
 
         /** 새로 받을 때의 긴 변(px): 카드 위쪽 넓게 보기·공유 카드까지 충분한 크기. 모든 화면이 이 한 장을 같이 쓴다. */
-        const val PHOTO_PX = 1080
+        private const val PHOTO_PX = 1080
 
     }
 }
