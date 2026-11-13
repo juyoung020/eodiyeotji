@@ -594,3 +594,28 @@ fn map_names_keep_only_drawable_characters() {
     assert!(m.geojson.contains(r#","to":"맛집"}"#));
     assert!(!m.geojson.contains(r#""from""#), "거르고 남는 게 없으면 뺀다");
 }
+
+/// 머문 곳이 하나도 잡히지 않은 날(퇴근길 하나만 있고 다음 주행이 다른 곳에서 시작)도
+/// stop_names는 그날 주행의 출발 · 도착 장소 이름으로 채워진다 (날짜 줄 귀띔이 비지 않게).
+#[test]
+fn day_without_stays_names_trip_endpoints() {
+    let db = TempDb::new("endpoints");
+    let store = db.open();
+    let a = drive(at(18, 0), 300, 37.5, 127.0, 1e-4);
+    let (elat, elon, _) = end_of(&a);
+    store.ingest(a).unwrap();
+    // 다음 주행은 이틀 뒤 멀리서 시작 → 도착점은 머문 곳이 아니다
+    let b = drive(at(48 + 9, 0), 300, 37.7, 127.2, 1e-4);
+    store.ingest(b).unwrap();
+    assert!(store.day_detail(DAY.into()).unwrap().stays.is_empty());
+
+    let set = |lat: f64, lon: f64, n: &str| {
+        let q = pending_near(&store, lat, lon);
+        store.set_place_name(PlaceName { id: q.id, label: label(n, PlaceSource::Kakao) }).unwrap();
+    };
+    set(37.5, 127.0, "센터원빌딩");
+    set(elat, elon, "응봉동 현대아파트");
+    let days = store.day_summaries(5).unwrap();
+    let d = days.iter().find(|d| d.day == DAY).unwrap();
+    assert_eq!(d.stop_names, ["센터원빌딩", "응봉동 현대아파트"]);
+}

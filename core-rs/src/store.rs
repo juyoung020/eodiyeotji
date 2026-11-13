@@ -64,7 +64,8 @@ pub const PATH_TOLERANCE_M: f64 = 5.0;
 pub(crate) const DAY_MS: i64 = 86_400_000;
 /// 하루 요약을 만드는 규칙의 버전. 규칙이 바뀌면(예: 잡음 주행 빼기) 올린다 → 다음에 열 때 날짜별 요약을 다시 만든다.
 /// 3: 들른 곳 수(`stay_count`)를 하루 출발·도착 머문 곳 뺀 수로, 주행 수(`trip_count`)를 타임라인 주행 줄 수로.
-const DAY_RULES: i64 = 3;
+/// 4: 머문 곳 이름이 없는 날의 `stop_names`를 그날 주행 출발·도착 장소 이름으로 채운다.
+const DAY_RULES: i64 = 4;
 /// 이보다 짧게(거리·시간 둘 다) 움직인 주행은 타임라인에서 숨긴다 (거리 합에는 들어간다). 에뮬레이터 위치 재생 · 주차장 안 이동.
 pub const BLIP_M: f64 = 500.0;
 pub const BLIP_MS: i64 = 60_000;
@@ -652,7 +653,8 @@ impl DayAcc {
             .fold(None, |acc: Option<(i64, i64)>, t| Some(acc.map_or((t, t), |(a, b)| (a.min(t), b.max(t)))))
             .unwrap_or((0, 0));
         let distance_m: f64 = self.trips.iter().map(|t| t.distance_m).sum();
-        let named = self.stays.iter().filter(|s| s.place.as_ref().is_some_and(|p| !p.name.trim().is_empty())).count();
+        let stop_names = self.stop_names();
+        let named = stop_names.iter().filter(|n| !n.trim().is_empty()).count();
         DaySummary {
             day: format_day(day),
             trip_count: timeline_trips(&self.trips, &self.stays).len() as u32,
@@ -662,11 +664,32 @@ impl DayAcc {
             drive_millis: self.trips.iter().map(|t| t.end_ms - t.start_ms).sum(),
             first_ms,
             last_ms,
-            stop_names: self.stays.iter().filter_map(|s| Some(s.place.as_ref()?.name.clone())).take(3).collect(),
+            stop_names,
             title: None,
             tags: Vec::new(),
             story: None,
         }
+    }
+
+    /// 그날 이름 있는 머문 곳 앞 3개 (도착 순서). 머문 곳으로 잡힌 데가 없거나 이름이 없으면
+    /// (다음 주행이 다른 곳에서 시작해 도착점이 머문 곳으로 잡히지 않은 퇴근길 하나 같은 날)
+    /// 그날 주행의 출발 · 도착 장소 이름으로 채운다 → 날짜 줄 귀띔이 비지 않는다.
+    fn stop_names(&self) -> Vec<String> {
+        let named = |p: &Option<PlaceLabel>| p.as_ref().map(|p| p.name.trim().to_owned()).filter(|n| !n.is_empty());
+        let stays: Vec<String> = self.stays.iter().filter_map(|s| named(&s.place)).take(3).collect();
+        if !stays.is_empty() {
+            return stays;
+        }
+        let mut out: Vec<String> = Vec::new();
+        for t in &self.trips {
+            for n in [named(&t.start_place), named(&t.end_place)].into_iter().flatten() {
+                if !out.contains(&n) {
+                    out.push(n);
+                }
+            }
+        }
+        out.truncate(3);
+        out
     }
 
     /// 주행·머문 곳을 시간순 한 줄로 (같은 시각이면 주행 먼저).

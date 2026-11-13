@@ -86,4 +86,25 @@ mod tests {
         let h = day_hints(&[v(&["센터원빌딩"]), v(&["센터원빌딩"])]);
         assert_eq!(h, ["센터원빌딩", "센터원빌딩"]);
     }
+
+    /// 출퇴근길 하나만 있는 날(출발 · 도착이 둘 다 늘 가는 곳) → "출퇴근".
+    #[test]
+    fn commute_only_day_is_routine() {
+        let mut days = vec![v(&["센터원빌딩", "응봉동 현대아파트"])];
+        for _ in 0..6 {
+            days.push(v(&["응봉동 현대아파트", "센터원빌딩"]));
+        }
+        days.push(v(&["응봉동 현대아파트", "이마트 성수점", "센터원빌딩"]));
+        let h = day_hints(&days);
+        assert_eq!(h[0], ROUTINE_LABEL);
+        assert_eq!(h[7], "이마트 성수점");
+    }
+
+    /// 빈 이름 · 공백뿐인 이름은 없는 것으로 본다 → 빈 귀띔.
+    #[test]
+    fn blank_names_give_empty_hint() {
+        let h = day_hints(&[v(&["", "  "]), v(&[])]);
+        assert_eq!(h, ["", ""]);
+        assert!(day_hints(&[]).is_empty());
+    }
 }

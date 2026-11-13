@@ -47,7 +47,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -310,18 +312,26 @@ private fun DateRail(days: List<DaySummary>, today: LocalDate, selected: String?
                         .clickable(role = Role.Button) { onSelect(s.day) }
                         .padding(6.dp),
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        DateTile(s.day, s.day == today.toString(), on)
-                        // 그날 귀띔 한 단어 (숫자 > 요일 > 귀띔 위계의 맨 아래): 늘 가는 곳을 뺀 그날 특별한 곳의 짧은 이름 (Rust `day_hints`).
-                        // 이름 있는 곳이 없는 날도 빈 줄로 자리를 지켜 칸 높이가 흔들리지 않는다.
-                        Text(
-                            s.hint,
-                            // 이름은 줄이지 않고 낱말 단위로 두 줄까지 감싼다 (넘칠 때만 "…")
-                            style = EodiTheme.type.label.copy(fontWeight = FontWeight.Normal, lineBreak = LineBreak.Heading),
-                            color = c.textSecondary,
-                            maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(top = EodiTheme.space.xs).width(RailWidth - 16.dp),
-                        )
+                    // 칸 높이는 귀띔 두 줄 자리까지 늘 같게 지킨다 (줄이 흔들리지 않게).
+                    // 귀띔이 빈 날은 그 자리를 보이지 않게만 두고 날짜 · 요일을 칸 가운데에 그린다 → 고른 칸 안에 빈 아래쪽이 남지 않는다.
+                    val blank = s.hint.isBlank()
+                    Box(contentAlignment = Alignment.Center) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = if (blank) Modifier.alpha(0f).clearAndSetSemantics {} else Modifier,
+                        ) {
+                            DateTile(s.day, s.day == today.toString(), on)
+                            // 그날 귀띔 한 단어 (숫자 > 요일 > 귀띔 위계의 맨 아래): 늘 가는 곳을 뺀 그날 특별한 곳의 짧은 이름 (Rust `day_hints`).
+                            Text(
+                                s.hint,
+                                // 이름은 줄이지 않고 낱말 단위로 두 줄까지 감싼다 (넘칠 때만 "…")
+                                style = EodiTheme.type.label.copy(fontWeight = FontWeight.Normal, lineBreak = LineBreak.Heading),
+                                color = c.textSecondary,
+                                maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(top = EodiTheme.space.xs).width(RailWidth - 16.dp),
+                            )
+                        }
+                        if (blank) DateTile(s.day, s.day == today.toString(), on)
                     }
                 }
             }
