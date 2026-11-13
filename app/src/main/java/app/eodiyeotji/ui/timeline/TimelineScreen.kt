@@ -916,7 +916,12 @@ internal fun DayActions(summary: DaySummary, loaded: Boolean, onShare: (() -> Un
         }
     }
     val openReplay = app.eodiyeotji.ui.replay.LocalOpenReplay.current
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    // 라벨 단 버튼 4개가 좁은 카드에서 잘리지 않게 넘치면 다음 줄로
+    @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+    androidx.compose.foundation.layout.FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         // 그날로 돌아가기: 다시 볼 것이 있는 날만 (Rust `replayable`)
         DimPill(
             stringResource(R.string.replay_open), app.eodiyeotji.ui.theme.EodiIcons.Play, available = summary.replayable,
