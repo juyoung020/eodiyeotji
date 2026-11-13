@@ -167,6 +167,9 @@ class CourseViewModel @Inject constructor(
         }
     }
 
+    /** 코스 안내 끝내기 (내비 미리보기를 X로 닫으면 취소 알림이 없어 진행 줄이 남는다 → 손으로 끝낸다). */
+    fun stopGuide() = guide.stop()
+
     fun toggleHeart(id: String) {
         _state.update { it.flipHeart(id, null) }
         viewModelScope.launch {

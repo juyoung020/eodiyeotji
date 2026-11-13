@@ -154,6 +154,7 @@ internal fun CourseDetailScreen(
     onHeart: () -> Unit,
     onNavigate: () -> Unit,
     onOpenPlace: (StopFact) -> Unit,
+    onStopGuide: () -> Unit = {},
 ) {
     val colors = EodiTheme.colors
     val p = d.course.post
@@ -268,6 +269,19 @@ internal fun CourseDetailScreen(
                             style = EodiTheme.type.caption,
                             color = if (d.naviFailed) colors.error else colors.textSecondary,
                             modifier = Modifier.padding(top = 8.dp, start = 8.dp),
+                        )
+                    }
+                    // 내비 경로 미리보기를 X로 닫으면 내비가 취소 알림을 주지 않는다 (NaviHelper에 그 신호가 없다)
+                    // → 진행 줄이 남지 않게 여기서 직접 끝낼 수 있게 한다
+                    if (progress != null) {
+                        Text(
+                            stringResource(R.string.guide_end),
+                            style = EodiTheme.type.bodyStrong,
+                            color = colors.accent,
+                            modifier = Modifier
+                                .padding(top = 4.dp)
+                                .clickable(onClick = onStopGuide)
+                                .padding(horizontal = 8.dp, vertical = 16.dp),
                         )
                     }
                 }
