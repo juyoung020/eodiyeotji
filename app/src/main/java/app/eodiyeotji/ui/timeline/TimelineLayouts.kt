@@ -29,6 +29,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -231,7 +232,10 @@ private fun StageInfo(summary: DaySummary, today: LocalDate, loaded: Boolean, on
     }
 }
 
-/** 날짜 줄: 일 · 요일 타일만 세로로 (달이 바뀌는 곳에 "10월"). 고른 날은 파랑 테두리. */
+/**
+ * 날짜 줄: 일 · 요일 타일만 세로로. 맨 위에 지금 보이는 달("2026년 / 11월")을 붙박아 두고 굴리면 따라 바뀐다.
+ * 달이 바뀌는 자리에는 가는 선 + 굵은 "10월". 고른 날은 옅은 칸.
+ */
 @Composable
 private fun DateRail(days: List<DaySummary>, today: LocalDate, selected: String?, onSelect: (String) -> Unit, listState: LazyListState) {
     val c = EodiTheme.colors
@@ -240,6 +244,16 @@ private fun DateRail(days: List<DaySummary>, today: LocalDate, selected: String?
         if (i >= 0 && listState.layoutInfo.visibleItemsInfo.none { it.key == selected }) listState.animateScrollToItem(i)
     }
     Column(Modifier.width(RailWidth).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+        // 지금 맨 위에 보이는 날의 해 · 달 (작년 날짜인지도 여기서 보인다)
+        val top by remember(days) { derivedStateOf { days.getOrNull(listState.firstVisibleItemIndex)?.day } }
+        top?.let { d ->
+            Text(stringResource(R.string.home_year, d.substring(0, 4).toInt()), style = EodiTheme.type.caption, color = c.textTertiary, maxLines = 1)
+            Text(
+                stringResource(R.string.home_month, d.substring(5, 7).toInt()),
+                style = EodiTheme.type.title, fontWeight = FontWeight.Bold, color = c.textPrimary, maxLines = 1,
+                modifier = Modifier.padding(bottom = 10.dp),
+            )
+        }
         // 지난 날을 보고 있으면(검색 · 여행 모음에서 들어왔을 때 등) 맨 위에 가장 최근 날로 돌아가는 버튼
         val latest = days.firstOrNull()?.day
         if (latest != null && selected != null && selected != latest) {
@@ -265,11 +279,13 @@ private fun DateRail(days: List<DaySummary>, today: LocalDate, selected: String?
         ) {
             itemsIndexed(days, key = { _, s -> s.day }) { i, s ->
                 val month = s.day.substring(5, 7).toInt()
-                if (i == 0 || days[i - 1].day.substring(0, 7) != s.day.substring(0, 7)) {
+                // 달이 바뀌는 자리: 가는 선 + 굵은 달 이름 (맨 처음 달은 위에 붙박은 이름이 대신한다)
+                if (i > 0 && days[i - 1].day.substring(0, 7) != s.day.substring(0, 7)) {
+                    Box(Modifier.padding(top = 10.dp).width(RailWidth - 40.dp).height(2.dp).background(c.outline))
                     Text(
                         stringResource(R.string.home_month, month),
-                        style = EodiTheme.type.caption, fontWeight = FontWeight.Bold, color = c.textTertiary,
-                        modifier = Modifier.padding(top = if (i == 0) 0.dp else 10.dp, bottom = 8.dp),
+                        style = EodiTheme.type.label, fontWeight = FontWeight.Bold, color = c.textPrimary,
+                        modifier = Modifier.padding(top = 10.dp, bottom = 8.dp),
                     )
                 }
                 val on = s.day == selected
