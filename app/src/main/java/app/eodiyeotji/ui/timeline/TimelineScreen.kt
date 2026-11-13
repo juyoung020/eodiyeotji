@@ -522,27 +522,33 @@ private fun CompactDayDetail(
                             header = {
                                 item(key = "__day-head", contentType = "head") {
                                     Column(Modifier.padding(start = 4.dp, end = 4.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                        // AI가 쓴 하루 요약 (여행 · 나들이처럼 이야기가 있는 날만)
+                                        detail.summary.story?.let { Text(it, style = EodiTheme.type.body, color = c.textPrimary, modifier = Modifier.padding(horizontal = 4.dp)) }
                                         StatRow(detail.summary)
                                         if (detail.summary.tags.isNotEmpty()) TagRow(detail.summary.tags)
-                                        // 커뮤니티에 올리기 옆에 카드로 공유(카톡 등, ui/share). 자리는 날마다 같고, 올릴 기록이 없는 날은 흐리게 + 누르면 이유.
-                                        var reason by remember(detail.summary.day) { mutableStateOf(false) }
+                                        // 차 화면과 같은 버튼 줄: 그날로 돌아가기(글자 버튼) · 코스 올리기 · 카드로 공유(카톡 등, ui/share).
+                                        // 자리는 날마다 같고, 못 쓰는 날은 흐리게 + 누르면 이유.
+                                        var reason by remember(detail.summary.day) { mutableStateOf<Int?>(null) }
                                         LaunchedEffect(reason) {
-                                            if (reason) {
+                                            if (reason != null) {
                                                 delay(ReasonMs)
-                                                reason = false
+                                                reason = null
                                             }
                                         }
+                                        val openReplay = app.eodiyeotji.ui.replay.LocalOpenReplay.current
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                             DimPill(
-                                                stringResource(R.string.timeline_share), CommunityIcons.Upload, available = shareEpisode != null,
-                                                onClick = { shareEpisode?.let(onShare) }, onUnavailable = { reason = true },
+                                                stringResource(R.string.replay_open), app.eodiyeotji.ui.theme.EodiIcons.Play, available = detail.summary.replayable,
+                                                onClick = { openReplay(detail.summary.day) }, onUnavailable = { reason = R.string.timeline_replay_unavailable },
                                                 modifier = Modifier.weight(1f),
+                                            )
+                                            DimIcon(
+                                                stringResource(R.string.timeline_share), CommunityIcons.Upload, available = shareEpisode != null,
+                                                onClick = { shareEpisode?.let(onShare) }, onUnavailable = { reason = R.string.timeline_share_unavailable },
                                             )
                                             ShareImageButton(ShareTarget.Day(detail.summary.day), style = ShareButtonStyle.ICON)
                                         }
-                                        if (reason) {
-                                            Text(stringResource(R.string.timeline_share_unavailable), style = EodiTheme.type.body, color = c.textSecondary)
-                                        }
+                                        reason?.let { Text(stringResource(it), style = EodiTheme.type.body, color = c.textSecondary) }
                                         if (detail.entries.isEmpty()) {
                                             Text(stringResource(R.string.timeline_detail_empty), style = EodiTheme.type.body, color = c.textSecondary)
                                         }

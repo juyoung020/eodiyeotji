@@ -385,6 +385,7 @@ mod tests {
                 stop_names: Vec::new(),
                 title: None,
                 tags: Vec::new(),
+                story: None,
             },
             entries: Vec::new(),
         }

@@ -231,6 +231,11 @@ private fun StageInfo(summary: DaySummary, today: LocalDate, loaded: Boolean, on
         )
         Spacer(Modifier.height(6.dp))
         Text(daySummaryLine(summary), style = EodiTheme.type.body, color = c.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        // AI가 쓴 하루 요약 (여행 · 나들이처럼 이야기가 있는 날만)
+        summary.story?.let {
+            Spacer(Modifier.height(10.dp))
+            Text(it, style = EodiTheme.type.body, color = c.textPrimary, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        }
         Spacer(Modifier.height(20.dp))
         DayActions(summary, loaded, onShare)
     }
