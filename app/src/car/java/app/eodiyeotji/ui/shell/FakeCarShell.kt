@@ -36,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +57,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
@@ -85,6 +87,7 @@ import kotlinx.coroutines.delay
  * - 기준 크기는 Pleos 에뮬레이터 화면(2560x1440, 밀도 1.0)이다. 틀 전체를 그 크기로 그린 뒤 태블릿 화면에 맞게 줄인다.
  * - 동작하는 것: 시계, 기어(P R N D — D · R이면 앱이 주행 중으로 바뀌고 시연 주행을 기록한다, platform/TabletVehicle.kt),
  *   속도(시연 주행의 값), 실내 온도 올리고 내리기.
+ * - 이 화면이 떠 있는 동안에는 화면이 꺼지지 않는다 (앱을 벗어나면 기기 설정대로).
  * - 그림뿐인 것: 주행 가능 거리 · 음악 · 홈 · 내비 · 전화 · 앱 버튼 (눌러도 아무 일도 없다).
  * - 꾸밈 그림(선택): 기기의 `files/shell/panel.png`(주행 정보 화면의 차 그림 · 음악 줄)와 `bar.png`(하단 바)가 있으면
  *   직접 그린 것 대신 그 그림을 쓴다. 에뮬레이터 화면에서 오려 넣는 것이라 저장소에는 두지 않는다 (scripts/demo-shell/push_shell.py).
@@ -117,6 +120,12 @@ fun FakeCarShell(content: @Composable () -> Unit) {
     if (automotive) {
         content()
         return
+    }
+    // 시연용 화면이 떠 있는 동안에는 화면이 꺼지지 않게 한다 (꺼지면 잠겨서 시연이 끊긴다). 앱을 벗어나면 풀린다
+    val view = LocalView.current
+    DisposableEffect(view) {
+        view.keepScreenOn = true
+        onDispose { view.keepScreenOn = false }
     }
     var box by remember { mutableStateOf(IntSize.Zero) }
     Box(
