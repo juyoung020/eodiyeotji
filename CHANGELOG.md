@@ -18,6 +18,7 @@
 ## [Unreleased]
 
 ### Added
+- 시연용 장소 사진 넣기: 시연 기록의 들른 곳 46곳에 자유 이용 사진(위키미디어 공용)을 넣어, 장소 사진 API 키가 없어도 핀 · 시간표 · 늘 가던 날 카드에 대표 사진이 뜬다. 앱은 `files/place_photos`에 그 이름의 사진이 있으면 구글 대신 그것을 쓴다. 출처는 README (`scripts/demo-photos/push_place_photos.py`, `place/PlacePhotoRepository.kt`)
 - 시연용 내 사진 넣기: 자유 이용 사진 7장(경포해변 · 순두부 · 안목해변 · 커피 · 회 · 대관령 터널)을 1년 전 강릉 여행 날의 들른 곳과 달리던 길에 맞춰 차 앱에 넣는다. 갤러리 권한 · 사진 API 키 없이도 하루 지도와 들른 곳에 뜬다. 출처는 README (`scripts/demo-photos/push_photos.py`)
 - 기획서 v2.2: 폰 사진이 붙은 기억(차로 다닌 날 찍은 사진을 폰이 차로 보냄)과 거래처 목록을 ③④⑤⑥에 반영, 여행 날 전체 사진 · 여러 날 출장 묶기 · 정산서 워드 내보내기는 "2차 PT까지"로 (`docs/00_plan.md`, `submission/어디였지_접수양식_v2.docx`, 13쪽)
 - 거래처 목록: 출장 관리에서 거래처를 정해 두면 거기 들른 주행은 요일 · 시각 · 거리와 상관없이 출장으로 묶는다 (주말 방문 · 야간 근무 · 회사 근처 고객사, 회사에 오래 머물지 않는 영업직). 평일에 3일 이상 들른 곳을 "거래처로 정할까요"로 권하고, 거래처 방문은 제목이 "한빛전자 방문"으로 나온다. DB 구조 버전 20 (`core-rs/src/bizclient.rs`, `biztrip.rs`, `ui/biz/BizScreen.kt ClientSection`)

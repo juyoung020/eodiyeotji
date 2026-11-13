@@ -8,6 +8,7 @@ import app.eodiyeotji.core.PlacePhoto
 import app.eodiyeotji.core.StopFact
 import coil.request.ImageRequest
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.File
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -45,6 +46,7 @@ class PlacePhotoRepository @Inject constructor(
      * 같은 곳을 여러 화면(지도 카드·목록 사진)이 동시에 물으면 구글에는 한 번만 묻는다.
      */
     suspend fun photos(name: String, address: String, lat: Double, lon: Double): List<PlacePhoto> {
+        local[name]?.let { return listOf(it) }
         if (!ApiAccess.googleAvailable || name.isBlank()) return emptyList()
         val id = String.format(Locale.ROOT, "%s@%.4f,%.4f", name, lat, lon)
         val job = inflight.getOrPut(id) {
@@ -57,6 +59,21 @@ class PlacePhotoRepository @Inject constructor(
         return job.await()
     }
 
+    /**
+     * 기기에 넣어 둔 장소 사진 (`files/place_photos`, `scripts/demo-photos/push_place_photos.py`): 장소 이름 → 사진.
+     * 시연 기록의 들른 곳을 API 키 없이 자유 이용 사진으로 보여 주려고 둔다. 있으면 구글에 묻지 않는다. 앱을 켜고 처음 물을 때 한 번 읽는다.
+     * `index.tsv` 한 줄: 장소 이름 · 파일 · 가로 · 세로 · 저작자와 라이선스 (사진 곁에 올린 사람 자리에 보인다).
+     */
+    private val local: Map<String, PlacePhoto> by lazy {
+        val dir = File(context.filesDir, LOCAL_DIR)
+        runCatching {
+            File(dir, "index.tsv").readLines().mapNotNull { line ->
+                val f = line.split('\t')
+                if (f.size < 5) null else f[0] to PlacePhoto(LOCAL_PREFIX + File(dir, f[1]).path, f[2].toInt(), f[3].toInt(), f[4])
+            }.toMap()
+        }.getOrDefault(emptyMap())
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val inflight = ConcurrentHashMap<String, Deferred<List<PlacePhoto>>>()
 
@@ -66,6 +83,7 @@ class PlacePhotoRepository @Inject constructor(
      * 모든 화면이 같은 크기([PHOTO_PX]) 한 장을 같이 쓴다 (구글은 크기마다 따로 하루 한도를 센다). 작은 칸은 Coil이 줄여 그린다.
      */
     fun imageRequest(photo: PlacePhoto): ImageRequest {
+        if (photo.name.startsWith(LOCAL_PREFIX)) return ImageRequest.Builder(context).data(File(photo.name.removePrefix(LOCAL_PREFIX))).build()
         val id = "${photo.name.substringBefore("/photos/")}/${photo.author}/${photo.widthPx}x${photo.heightPx}"
         return ImageRequest.Builder(context)
             .data(ApiAccess.googleMediaUrl(photo.name, PHOTO_PX))
@@ -97,6 +115,8 @@ class PlacePhotoRepository @Inject constructor(
     private companion object {
         const val TAG = "EodiPhoto"
         const val BIAS_RADIUS_M = 300.0
+        const val LOCAL_DIR = "place_photos"
+        const val LOCAL_PREFIX = "local:"
 
         /** 새로 받을 때의 긴 변(px): 카드 위쪽 넓게 보기·공유 카드까지 충분한 크기. 모든 화면이 이 한 장을 같이 쓴다. */
         const val PHOTO_PX = 1080
