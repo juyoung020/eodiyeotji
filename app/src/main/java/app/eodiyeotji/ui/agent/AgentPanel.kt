@@ -821,6 +821,8 @@ private fun ProposalButton(p: AgentEvent.ActionProposal, primary: Boolean, runni
         running = running,
         large = true,
         detailLines = 2,
+        // "'강변북로 한강 야경 드라이브' 코스로 안내"처럼 긴 제안이 한 줄에서 잘렸다
+        titleLines = 2,
     )
 }
 

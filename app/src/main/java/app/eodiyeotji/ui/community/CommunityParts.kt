@@ -460,6 +460,8 @@ fun TwoLinePill(
     running: Boolean = false,
     large: Boolean = false,
     detailLines: Int = 1,
+    /** 제목 줄 수 (안내 제안처럼 코스 이름이 길면 2) */
+    titleLines: Int = 1,
 ) {
     val c = EodiTheme.colors
     val content = if (primary) c.onAccent else c.textPrimary
@@ -487,7 +489,7 @@ fun TwoLinePill(
                     title,
                     style = if (large) EodiTheme.type.drivingBody else EodiTheme.type.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
+                    maxLines = titleLines,
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (!detail.isNullOrBlank()) {
