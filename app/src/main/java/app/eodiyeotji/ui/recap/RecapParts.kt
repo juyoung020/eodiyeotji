@@ -16,6 +16,9 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -154,21 +157,28 @@ internal fun EntryPill(text: String, icon: ImageVector, ai: Boolean, modifier: M
 @Composable
 private fun EntryStrip(entries: List<Pair<String, () -> Unit>>) {
     val c = EodiTheme.colors
-    Row(
-        Modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(EodiTheme.space.radiusM)).background(c.surfaceHigh),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        entries.forEachIndexed { i, (text, onClick) ->
-            if (i > 0) Box(Modifier.width(2.dp).fillMaxHeight().padding(vertical = 18.dp).background(c.outline))
-            Box(
-                Modifier.weight(1f).heightIn(min = 76.dp).clickable(role = Role.Button, onClick = onClick).padding(horizontal = 6.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(text, style = EodiTheme.type.label, fontWeight = FontWeight.Bold, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    BoxWithConstraints(Modifier.fillMaxWidth().clip(RoundedCornerShape(EodiTheme.space.radiusM)).background(c.surfaceHigh)) {
+        // 한 칸이 [MinEntryCell]보다 좁아지면(폰 세로) 같은 너비로 나누지 않고 글자만큼 주고 옆으로 민다 (글자가 잘리지 않게)
+        val scroll = maxWidth / entries.size.coerceAtLeast(1) < MinEntryCell
+        Row(
+            Modifier.fillMaxWidth().height(IntrinsicSize.Min).then(if (scroll) Modifier.horizontalScroll(rememberScrollState()) else Modifier),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            entries.forEachIndexed { i, (text, onClick) ->
+                if (i > 0) Box(Modifier.width(2.dp).fillMaxHeight().padding(vertical = 18.dp).background(c.outline))
+                Box(
+                    (if (scroll) Modifier else Modifier.weight(1f)).heightIn(min = 76.dp).clickable(role = Role.Button, onClick = onClick)
+                        .padding(horizontal = if (scroll) 24.dp else 6.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(text, style = EodiTheme.type.label, fontWeight = FontWeight.Bold, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
     }
 }
+
+private val MinEntryCell = 110.dp
 
 /** 접어 둔 "늘 가던 날": 금색 도장 + 그곳 이름 한 줄. 누르면 다시 편다 (카드는 지우지 않고 접기만 한다). */
 @Composable
@@ -420,23 +430,32 @@ fun RecallDrivingCard(modifier: Modifier = Modifier) {
 
 // ---------------------------------------------------------------- 공통 조각
 
-/** 통계 칸 줄 (카드 안 옅은 칸, 칸 사이 세로선). */
+/** 통계 칸 줄 (카드 안 옅은 칸, 칸 사이 세로선). 좁은 창(폰 세로)에서는 값이 잘리지 않게 두 줄로 나눈다. */
 @Composable
 internal fun StatStrip(cells: List<Pair<String, String>>, modifier: Modifier = Modifier) {
     val c = EodiTheme.colors
-    Row(
-        modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min)
-            .background(c.surfaceHigh, RoundedCornerShape(EodiTheme.space.radiusM))
-            .padding(vertical = 18.dp),
-    ) {
-        cells.forEachIndexed { i, (value, label) ->
-            if (i > 0) Box(Modifier.width(2.dp).fillMaxHeight().padding(vertical = 8.dp).background(c.outline))
-            StatCell(value, label)
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        // 한 칸이 [MinStatCell]보다 좁아지면 줄을 나눈다 (5칸 → 3 + 2, 4칸 → 2 + 2)
+        val fit = (maxWidth / MinStatCell).toInt().coerceAtLeast(2)
+        val lines = (cells.size + fit - 1) / fit
+        val perLine = if (lines <= 1) cells.size else (cells.size + lines - 1) / lines
+        Column(
+            Modifier.fillMaxWidth().background(c.surfaceHigh, RoundedCornerShape(EodiTheme.space.radiusM)).padding(vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            cells.chunked(perLine.coerceAtLeast(1)).forEach { line ->
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                    line.forEachIndexed { i, (value, label) ->
+                        if (i > 0) Box(Modifier.width(2.dp).fillMaxHeight().padding(vertical = 8.dp).background(c.outline))
+                        StatCell(value, label)
+                    }
+                }
+            }
         }
     }
 }
+
+private val MinStatCell = 190.dp
 
 @Composable
 private fun RowScope.StatCell(value: String, label: String) {

@@ -139,17 +139,16 @@ private fun RecapHeader(
     onShift: (Int) -> Unit,
 ) {
     val c = EodiTheme.colors
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 104.dp).padding(horizontal = EodiTheme.space.page, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    val back: @Composable () -> Unit = {
         RoundIconButton(EodiIcons.Back, stringResource(R.string.recap_back), onBack, containerColor = c.surface, iconSize = 36.dp)
-        Spacer(Modifier.width(16.dp))
-        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    }
+    val tabs: @Composable (Modifier) -> Unit = { m ->
+        Row(m, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             ModeTab(stringResource(R.string.recap_tab_month), mode == RecapMode.MONTH, Modifier.weight(1f, fill = false)) { onMode(RecapMode.MONTH) }
             ModeTab(stringResource(R.string.recap_tab_year), mode == RecapMode.YEAR, Modifier.weight(1f, fill = false)) { onMode(RecapMode.YEAR) }
         }
-        Spacer(Modifier.width(16.dp))
+    }
+    val shift: @Composable () -> Unit = {
         // 넘어갈 수 없는 쪽 화살표는 흐리게 (눌러도 아무 일 없는 버튼이 살아 있는 것처럼 보이지 않게)
         RoundIconButton(EodiIcons.Chevron, stringResource(R.string.recap_prev), { onShift(-1) }, Modifier.alpha(if (hasPrev) 1f else DisabledAlpha), enabled = hasPrev, containerColor = c.surface, iconModifier = Modifier.rotate(180f))
         Text(
@@ -163,7 +162,34 @@ private fun RecapHeader(
         )
         RoundIconButton(EodiIcons.Chevron, stringResource(R.string.recap_next), { onShift(1) }, Modifier.alpha(if (hasNext) 1f else DisabledAlpha), enabled = hasNext, containerColor = c.surface)
     }
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        if (maxWidth >= NarrowHeader) {
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 104.dp).padding(horizontal = EodiTheme.space.page, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                back()
+                Spacer(Modifier.width(16.dp))
+                tabs(Modifier.weight(1f))
+                Spacer(Modifier.width(16.dp))
+                shift()
+            }
+        } else {
+            // 좁은 창(폰 세로): 한 줄에 다 두면 월간 · 연간 탭이 글자 없이 찌그러진다 → 탭 한 줄, 달 넘기기 한 줄
+            Column(Modifier.fillMaxWidth().padding(horizontal = EodiTheme.space.page, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    back()
+                    Spacer(Modifier.width(16.dp))
+                    tabs(Modifier.weight(1f))
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) { shift() }
+            }
+        }
+    }
 }
+
+/** 이보다 좁으면 머리를 두 줄로 나눈다. */
+private val NarrowHeader = 760.dp
 
 /** 넘어갈 수 없는 화살표의 흐림 정도. */
 private const val DisabledAlpha = 0.35f

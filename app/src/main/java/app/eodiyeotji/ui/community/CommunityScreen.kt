@@ -1,5 +1,7 @@
 package app.eodiyeotji.ui.community
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -83,7 +85,8 @@ fun CommunityRoute(
                         ),
                         selected = tab,
                         onSelect = selectTab,
-                        big = true,
+                        // 폰(좁은 창)에서는 작은 칩으로: 큰 칩 셋은 화면 폭을 넘어 마지막 탭 글자가 잘린다
+                        big = !compact,
                     )
                 }
                 val searching = search?.active == true
@@ -101,7 +104,7 @@ fun CommunityRoute(
                     }
                     if (!detailOpen) {
                         search.bar(Modifier.fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = if (searching) 16.dp else 0.dp, bottom = 12.dp))
-                        Box(Modifier.padding(start = 32.dp, end = 32.dp, bottom = 8.dp)) { tabs() }
+                        Box(Modifier.horizontalScroll(rememberScrollState()).padding(start = 32.dp, end = 32.dp, bottom = 8.dp)) { tabs() }
                     }
                 } else {
                     if (!detailOpen) Row(Modifier.fillMaxWidth().height(104.dp).padding(horizontal = 32.dp), verticalAlignment = Alignment.CenterVertically) {
