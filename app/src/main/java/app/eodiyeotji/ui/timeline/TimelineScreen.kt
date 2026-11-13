@@ -1217,7 +1217,7 @@ private fun StayRow(
         badge = if (offers.isNotEmpty()) ({ PlaceCouponBadge(offers) }) else null,
         // 그곳에서 찍은 내 사진 작은 카드 (누르면 크게 보기)
         below = myPhotos?.let { mp ->
-            { MyPhotoStrip(mp.photos.map { it.uri }, mp.total, onOpen = { viewing = it }, size = MyPhotoThumb) }
+            { MyPhotoStrip(mp.photos.map { it.uri }, mp.total, onOpen = { viewing = it }, size = MyPhotoThumb, maxShown = if (LocalCompactEntries.current) 2 else 3) }
         },
         trailing = place?.let { p ->
             {
@@ -1249,8 +1249,16 @@ private val BackToTodayClearance = 96.dp
 
 private enum class EntryKind { Trip, Stay, Here }
 
+/**
+ * 좁은 판(홈 지도 위 "전체 시간표", 600dp) 안이면 true: 시각 · 선 열을 줄이고 오른쪽 대표 사진을 뺀다
+ * (사진은 아래 줄에 이미 있다). 안 그러면 제목 칸이 200dp 남짓이라 장소 이름이 두 줄로 꺾였다.
+ */
+internal val LocalCompactEntries = androidx.compose.runtime.staticCompositionLocalOf { false }
+
 private val TimeColumn = 92.dp
 private val RailColumn = 64.dp
+private val TimeColumnCompact = 92.dp
+private val RailColumnCompact = 44.dp
 /** 첫 줄 높이: 시각 · 노드 · 제목이 이 줄 가운데에 나란히 선다. */
 private val FirstLine = 44.dp
 private val RowPadV = 16.dp
@@ -1285,6 +1293,7 @@ private fun EntryRow(
     val bg by animateColorAsState(if (selected) c.accentSoft else Color.Transparent, tween(SelectMs), label = "entry-bg")
     val edge by animateColorAsState(if (selected) c.accent else Color.Transparent, tween(SelectMs), label = "entry-edge")
     val shape = RoundedCornerShape(EodiTheme.space.radiusM)
+    val compact = LocalCompactEntries.current
     // 누르기 = 고르기, 길게 누르기 = ⋯ 메뉴 (기록 고치기)
     Surface(
         color = bg,
@@ -1295,7 +1304,7 @@ private fun EntryRow(
         Row(Modifier.height(IntrinsicSize.Min).heightIn(min = EodiTheme.space.touch)) {
             // 시각 열
             Column(
-                Modifier.width(TimeColumn).padding(top = RowPadV, bottom = RowPadV, start = 12.dp),
+                Modifier.width(if (compact) TimeColumnCompact else TimeColumn).padding(top = RowPadV, bottom = RowPadV, start = 12.dp),
                 horizontalAlignment = Alignment.Start,
             ) {
                 Box(Modifier.height(FirstLine), contentAlignment = Alignment.CenterStart) {
@@ -1304,7 +1313,7 @@ private fun EntryRow(
                 Text(timeSub, style = type.caption, color = timeSubColor, maxLines = 1)
             }
             // 선 + 노드
-            RailCell(kind, rail, selected, Modifier.width(RailColumn).fillMaxHeight())
+            RailCell(kind, rail, selected, Modifier.width(if (compact) RailColumnCompact else RailColumn).fillMaxHeight())
             // 내용
             Column(
                 Modifier.weight(1f).padding(top = RowPadV, bottom = RowPadV, end = 20.dp),
@@ -1342,7 +1351,7 @@ private fun EntryRow(
                 badge?.invoke()
                 below?.invoke()
             }
-            if (trailing != null) {
+            if (trailing != null && !compact) {
                 Box(Modifier.padding(top = 12.dp, bottom = 12.dp, end = 16.dp)) { trailing() }
             }
             if (onMore != null) {

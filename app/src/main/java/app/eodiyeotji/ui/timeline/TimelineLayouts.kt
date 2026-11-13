@@ -413,7 +413,9 @@ private fun TimelineSheet(onClose: () -> Unit, modifier: Modifier, timeline: @Co
                 Text(stringResource(R.string.home_all_timeline), style = EodiTheme.type.title, modifier = Modifier.weight(1f))
                 RoundIconButton(EodiIcons.Close, stringResource(R.string.home_close_timeline), onClose)
             }
-            Box(Modifier.weight(1f)) { timeline() }
+            Box(Modifier.weight(1f)) {
+                androidx.compose.runtime.CompositionLocalProvider(LocalCompactEntries provides true) { timeline() }
+            }
         }
     }
 }
