@@ -773,7 +773,10 @@ private fun ActionBlock(turn: AgentTurn, onConfirm: (AgentEvent.ActionProposal) 
     val first = turn.recommendations.firstOrNull()
     val selectedStop = first?.stops?.getOrNull(turn.selectedStop)
     // 제안이 이미 그곳 하나로 안내("안목해변 카페거리로 안내")면 "여기로 안내 · 안목해변 카페거리"는 같은 버튼이 둘 → 뺀다
-    val proposedHere = selectedStop != null && turn.proposals.any { it.title.startsWith(selectedStop.name) }
+    val proposedHere = selectedStop != null && turn.proposals.any { p ->
+        // 이름 앞부분만 같은 다른 곳("스타벅스" · "스타벅스 왕십리역점")은 다르게 본다
+        p.title.startsWith(selectedStop.name + "로 ") || p.title.startsWith(selectedStop.name + "으로 ")
+    }
     val showOnlyHere = first != null && first.stops.size > 1 && selectedStop != null && !proposedHere
     val showOtherDays = first != null && turn.phase == AnswerPhase.Done && turn.recommendations.size == 1 && turn.candidates.size < 2
     val onlyHereQuestion = selectedStop?.let { stringResource(R.string.agent_followup_only_here, it.name) }

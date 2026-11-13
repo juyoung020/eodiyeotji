@@ -447,17 +447,11 @@ impl MemoryAgent {
         }
         let Some(focus) = s.focus.clone() else { return };
         let Some(named) = answer_names(t.answer_text(), &focus, &s.candidates) else { return };
-        if named.len() >= 2 {
-            // "다른 날도 보여줘" → 답이 후보 둘 이상을 말했다: 후보 칸을 보여 고르게 하고, 안내 제안은 처음 말한 곳으로
-            // (전에는 카드 없이 "안내할까요?"만 남아 무엇으로 안내하는지 몰랐다)
-            let list = s.candidates.clone();
-            s.focus = Some(list[named[0]].clone());
-            t.candidates(&list, named[0]);
+        // 이번 질문에서 기억 카드를 보였을 때만 (지난 질문의 후보를 다시 꺼내지 않는다)
+        if named.is_empty() || !t.memory_shown {
             return;
         }
-        if named.len() != 1 || !t.memory_shown {
-            return;
-        }
+        // 여럿을 말했으면 후보 칸으로 고르게 하고, 카드 · 안내 제안은 처음 말한 곳으로 (아래에서 함께 옮긴다)
         let i = named[0];
         let hit = s.candidates[i].clone();
         alog!("[agent] 답이 다른 후보를 말함 → 카드를 {}로", hit_place(&hit));
@@ -1058,7 +1052,9 @@ fn candidate_pick(u: &str, cands: &[MemoryHit], at: usize) -> Option<Option<usiz
         let w = courses::compact(w);
         courses::ordinal(&w, cands.len()).is_none()
             && !courses::OTHER_WORDS.iter().any(|x| w.contains(x))
-            && !["거", "걸로", "거로", "곳", "후보", "번", "번째", "안내", "다른", "딴", "날", "보여"].iter().any(|x| w.contains(x))
+            && !["거", "걸로", "거로", "곳", "후보", "번", "번째", "안내", "다른", "딴"].iter().any(|x| w.contains(x))
+            // "다른 날도 보여줘"의 "날" · "보여"는 낱말 그대로일 때만 (날씨 · 날짜는 새 검색어)
+            && w != "날" && w != "날도" && !w.starts_with("보여")
     });
     if new_terms || courses::is_past(u) {
         return None;
@@ -1126,6 +1122,7 @@ mod tidy_tests {
         // "다른 날도 보여줘"는 다음 후보 (새 검색어가 아니다)
         assert_eq!(super::candidate_pick("다른 날도 보여줘", &cands, 0), Some(Some(1)));
         assert_eq!(super::candidate_pick("다른 날 바다 간 데", &cands, 0), None);
+        assert_eq!(super::candidate_pick("날씨 좋은 다른 데 없어", &cands, 0), None, "날씨는 새 검색어");
         // 둘 이상이면 후보 칸으로 (후보 순서대로)
         assert_eq!(super::answer_names("어니언 성수와 경포해변 기록이 있어요.", &cands[0], &cands), Some(vec![1, 2]));
     }

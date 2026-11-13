@@ -180,7 +180,8 @@ pub fn member_view(m: &ConvoyMemberIn, color: u32, me: Option<&ConvoyMe>, dest: 
     let name = if name.is_empty() { "같이 가는 차" } else { name };
     let what = if m.ev { "배터리" } else { "연료" };
     let range = known_range(m);
-    let low = !arrived && is_low(m.energy_pct, range, to_dest_m);
+    // 끊긴 차는 잔량이 지금 값이 아니므로 "부족"으로 치지 않는다 (지도 테두리 · 목록 빨강 · 충전소 제안 · 알림이 한 규칙을 따른다)
+    let low = !arrived && !stale && is_low(m.energy_pct, range, to_dest_m);
     let energy = if m.range_km >= 0.0 {
         format!("{what} {}km", m.range_km.round() as i64)
     } else if m.energy_pct >= 0.0 {
@@ -440,7 +441,7 @@ impl Tracker {
         for v in members {
             grow(v.lat, v.lon);
             feats.push(json!({"type":"Feature","geometry":{"type":"Point","coordinates":[v.lon,v.lat]},
-                "properties":{"kind":"car","id":v.id,"color":v.color,"initial":v.initial,"label":v.label,"stale":v.stale,"low":v.low && !v.stale}}));
+                "properties":{"kind":"car","id":v.id,"color":v.color,"initial":v.initial,"label":v.label,"stale":v.stale,"low":v.low}}));
         }
         (json!({"type":"FeatureCollection","features":feats}).to_string(), b)
     }
@@ -602,6 +603,7 @@ mod tests {
         let car = g["features"].as_array().unwrap().iter().find(|f| f["properties"]["kind"] == "car").unwrap();
         assert_eq!(car["properties"]["stale"], true);
         assert_eq!(car["properties"]["low"], false);
+        assert!(!v.members[0].low && v.low.is_none(), "끊긴 차는 부족으로 치지 않는다 (충전소 제안도 없음)");
     }
 
     #[test]
