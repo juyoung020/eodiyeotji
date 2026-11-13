@@ -21,6 +21,7 @@ import app.eodiyeotji.place.blockingWithTimeout
 import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.LatLon
 import app.eodiyeotji.core.convoyEnergyStop
+import app.eodiyeotji.core.convoyPositionShareable
 import app.eodiyeotji.platform.EnergySource
 import app.eodiyeotji.platform.GaugeSource
 import app.eodiyeotji.platform.LocationSource
@@ -223,9 +224,11 @@ class ConvoyRepository @Inject constructor(
             if (tick++ % ENERGY_EVERY_TICKS == 0) readEnergy()
             val e = debugEnergy ?: myEnergy
             val fix = lastFix
+            // 집 · 회사 근처(1km)에서는 내 위치를 보내지 않는다 (공유 개인정보 원칙, Rust convoy::position_shareable)
+            val shareable = fix != null && fix.tMs != sentFixMs && core.convoyPositionShareable(LatLon(fix.lat, fix.lon))
             val group = runCatching {
                 blockingWithTimeout(NET_TIMEOUT_MS) {
-                    if (fix != null && fix.tMs != sentFixMs) {
+                    if (fix != null && shareable) {
                         backend.post(s, ConvoyPosition(fix.lat, fix.lon, -1.0, 0.0, -1, fix.tMs, e.ev, e.pct, e.rangeKm)).also { sentFixMs = fix.tMs }
                     } else {
                         backend.state(s)

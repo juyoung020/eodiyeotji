@@ -11,3 +11,8 @@ suspend fun EodiCore.convoyEnergyStop(from: LatLon, dest: LatLon, ev: Boolean): 
         .getOrNull()
         ?.let { Triple(it.name, it.lat, it.lon) }
 }
+
+/** 같이 가기: 지금 위치를 다른 차에 보내도 되는가. 집 · 회사 근처(공유와 같은 1km)면 false. 오류면 보내지 않는다(안전한 쪽). */
+suspend fun EodiCore.convoyPositionShareable(at: LatLon): Boolean = coreCall("convoyPositionShareable") {
+    runCatching { rust.convoyPositionShareable(RGeoPoint(at.lat, at.lon)) }.getOrDefault(false)
+}

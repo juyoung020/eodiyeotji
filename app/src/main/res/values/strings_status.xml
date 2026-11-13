@@ -21,6 +21,8 @@
     <string name="status_title_no_vehicle">차량 신호를 기다리고 있어요</string>
 
     <string name="status_body_driving">도착해서 멈추면 저절로 끝나요. 경로와 들른 곳은 기기 안에만 저장돼요.</string>
+    <string name="status_privacy_title">내 기록과 개인정보</string>
+    <string name="status_privacy_body">기록은 이 차 안에만 저장되고 기본은 나만 봐요. 계정 · 차량 번호 · 차대번호는 쓰지 않아요. 코스 공유와 같이 가기에서는 집 · 회사 근처 1km를 자동으로 가리고, 동승자 정보는 보내지 않아요. 주행 기록을 광고 · 마케팅에 쓰거나 남에게 팔지 않아요.</string>
     <string name="status_body_waiting">시작 버튼은 없어요. 출발을 알아채면 바로 기록을 시작해요.</string>
     <string name="status_body_off">기록 서비스가 켜져 있지 않아요. 다시 켜 볼게요.</string>
     <string name="status_body_location_off">어디였지는 위치로 길과 들른 곳을 기록해요. 위치 권한을 켜야 기록이 시작돼요.</string>

@@ -402,6 +402,11 @@ impl EodiStore {
     pub fn convoy_energy_stop(&self, from: GeoPoint, dest: GeoPoint, ev: bool, now_ms: i64) -> Result<Option<StopFact>, crate::store::CoreError> {
         crate::convoy::energy_stop(self, from.into(), dest.into(), ev, now_ms)
     }
+
+    /// 같이 가기: 지금 내 위치를 다른 차에 보내도 되는가 (집 · 회사 근처면 false → 보내지 않는다, `convoy::position_shareable`).
+    pub fn convoy_position_shareable(&self, at: GeoPoint) -> Result<bool, crate::store::CoreError> {
+        crate::convoy::position_shareable_now(self, at.into())
+    }
 }
 
 // ---- 먼저 말 걸기 (`proactive.rs`) ----

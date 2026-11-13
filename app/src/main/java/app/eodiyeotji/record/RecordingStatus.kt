@@ -340,6 +340,9 @@ private fun StatusSheetContent(state: RecordingStatusUi, fix: Pair<Int, () -> Un
                 CheckRow(stringResource(i.checkLabel()), stringResource(if (ok) R.string.status_ok else R.string.status_bad), ok)
             }
         }
+        // 개인정보 · 데이터 활용 원칙 (Pleos 보안 · 개인정보 가이드: 익명화 · 마케팅 금지). README "개인정보" 절과 같은 내용
+        Text(stringResource(R.string.status_privacy_title), style = type.label, fontWeight = FontWeight.Bold, color = c.textPrimary, modifier = Modifier.semantics { heading() })
+        Text(stringResource(R.string.status_privacy_body), style = type.body, color = c.textSecondary)
         Spacer(Modifier.size(4.dp))
         if (fix != null) {
             PrimaryPill(stringResource(fix.first), null, fix.second, Modifier.fillMaxWidth())

@@ -288,6 +288,18 @@ pub fn energy_stop(store: &EodiStore, from: Point, dest: Point, ev: bool, now_ms
     Ok(pick_energy_stop(&visits, from, dest, ev))
 }
 
+/// 같이 가기에서 내 위치를 서버로 보내도 되는가: 집 · 회사([crate::community::PRIVACY_RADIUS_M], 공유와 같은 기준) 안이면 보내지 않는다.
+/// (CLAUDE.md "공유할 때 집 · 회사 근처 구간은 자동으로 가린다") 그동안 다른 차에는 마지막으로 보낸 위치가 남는다.
+pub fn position_shareable(p: Point, anchors: &[Point]) -> bool {
+    anchors.iter().all(|&a| haversine_m(a, p) > crate::community::PRIVACY_RADIUS_M)
+}
+
+/// [position_shareable]을 기기 DB의 집 · 회사(`memory_anchor`)로.
+pub fn position_shareable_now(store: &EodiStore, p: Point) -> Result<bool, CoreError> {
+    let conn = store.read()?;
+    Ok(position_shareable(p, &crate::community::privacy_anchors(&conn)?))
+}
+
 /// 같이 가기 한 번의 상태 (색 번호 · 지나온 길 · 이미 한 알림). Kotlin은 [ConvoyTracker::update]만 부른다.
 #[derive(Debug, Default)]
 pub struct Tracker {
@@ -454,6 +466,19 @@ mod tests {
     fn me(km: f64) -> ConvoyMe {
         let (lat, lon) = north(km);
         ConvoyMe { lat, lon, heading: 180.0, speed_mps: 15.0, eta_s: -1 }
+    }
+
+    #[test]
+    fn position_near_home_or_work_is_not_shared() {
+        let home = Point { lat: 37.5, lon: 127.0 };
+        let work = Point { lat: 37.6, lon: 127.1 };
+        let anchors = [home, work];
+        // 집에서 500m · 회사에서 900m → 보내지 않는다
+        assert!(!position_shareable(Point { lat: 37.5 + 0.5 / 111.195, lon: 127.0 }, &anchors));
+        assert!(!position_shareable(Point { lat: 37.6 - 0.9 / 111.195, lon: 127.1 }, &anchors));
+        // 집에서 2km → 보낸다. 집 · 회사를 모르면 늘 보낸다
+        assert!(position_shareable(Point { lat: 37.5 + 2.0 / 111.195, lon: 127.0 }, &anchors));
+        assert!(position_shareable(home, &[]));
     }
 
     #[test]

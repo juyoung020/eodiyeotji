@@ -43,7 +43,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Eodiyeotji">
 
-        <!-- screenOrientation 미지정 = Pleos 기본(창 1개, portrait). 창 크기가 바뀌어도 깨지지 않게 화면을 만든다. -->
+        <!-- screenOrientation 미지정 = Pleos 기본(창 1개, portrait). 앱 영역 2개를 쓰는 landscape(단독 실행 · 창 바 확장, 에뮬레이터 1682dp)와
+             portrait(1:1 분할, 약 840dp)를 각각 설계했다: 넓은 창(1200dp 이상)은 지도 바탕 + 날짜 줄 + 하루 카드 + 제안 카드를 함께(확장 정보),
+             좁은 창은 핵심인 하루 목록 → 상세 순서 (TimelineScreen WideHome / CompactTimeline). 창 크기가 바뀌어도 깨지지 않게 반응형. -->
         <activity
             android:name=".MainActivity"
             android:launchMode="singleTask"

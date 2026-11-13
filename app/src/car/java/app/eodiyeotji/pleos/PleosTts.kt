@@ -5,6 +5,7 @@ import ai.pleos.playground.tts.constant.ErrorType
 import ai.pleos.playground.tts.constant.Mode
 import ai.pleos.playground.tts.listener.EventListener
 import ai.pleos.playground.tts.listener.OnInitializeListener
+import ai.pleos.playground.tts.listener.OnServerConnectionListener
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
@@ -32,7 +33,8 @@ import android.speech.tts.TextToSpeech as AndroidTts
  * - 읽기 전에 비서 음성(`USAGE_ASSISTANT`)으로 잠깐 포커스를 달라고 한다. 음악은 줄어들고(duck),
  *   내비가 말하는 중이면 시스템이 미뤄 준다(`DELAYED`) → 내비가 끝나면 읽는다 ([MAX_WAIT_MS]가 지나면 버린다).
  * - 읽는 중에 내비 안내가 끼어들어 포커스를 잃으면 바로 멈춘다. 다 읽으면 포커스를 돌려준다.
- * - 모드는 `ON_DEVICE`(앱 등록 없이, 오프라인에서도). Pleos 음성 서비스가 없으면 Android 표준 TTS로 대신 읽는다.
+ * - 모드: local.properties에 PLEOS_CLIENT_ID · PLEOS_CLIENT_SECRET이 있으면 `HYBRID`(가이드 기본 = 서버 고음질 우선, 끊기면 SDK가 기기 안 엔진으로)
+ *   + `registerApp()`, 없거나 등록이 실패하면 `ON_DEVICE`(앱 등록 없이, 오프라인에서도). Pleos 음성 서비스가 없으면 Android 표준 TTS로 대신 읽는다.
  */
 @Singleton
 class PleosTts @Inject constructor(@ApplicationContext private val context: Context) : SpeechOutput {
@@ -112,9 +114,12 @@ class PleosTts @Inject constructor(@ApplicationContext private val context: Cont
         Handler(init.looper).post(::initPleos) // SDK가 이 스레드 루퍼로 콜백을 줄 수 있어 스레드는 남겨 둔다 (쉬는 스레드 1개)
     }
 
-    private fun initPleos() {
+    private fun initPleos() = initPleos(hybrid = BuildConfig.PLEOS_CLIENT_ID.isNotEmpty() && BuildConfig.PLEOS_CLIENT_SECRET.isNotEmpty())
+
+    private fun initPleos(hybrid: Boolean) {
+        val mode = if (hybrid) Mode.HYBRID else Mode.ON_DEVICE
         runCatching {
-            TextToSpeech(context, Mode.ON_DEVICE).also { t ->
+            TextToSpeech(context, mode).also { t ->
                 pleos = t
                 t.initialize(object : OnInitializeListener {
                     override fun onSuccess() {
@@ -122,17 +127,35 @@ class PleosTts @Inject constructor(@ApplicationContext private val context: Cont
                             t.addEventListener(pleosEvents)
                             t.setLocale(Locale.KOREA)
                             t.setAudioAttributes(attributes)
-                        }.onSuccess { pleosReady = true; Log.i(TAG, "Pleos TextToSpeech 준비됨 (ON_DEVICE)") }
-                            .onFailure { pleosBroken = true; Log.w(TAG, "Pleos TextToSpeech 설정 실패", it) }
+                        }.onFailure { pleosBroken = true; Log.w(TAG, "Pleos TextToSpeech 설정 실패", it); return }
+                        if (!hybrid) { pleosReady = true; Log.i(TAG, "Pleos TextToSpeech 준비됨 (ON_DEVICE)"); return }
+                        // 서버 합성: 초기화 뒤 앱 등록, onConnected 이후에 speak (가이드 app-registration). 그 전에는 Android TTS로 읽는다
+                        runCatching {
+                            t.registerApp(BuildConfig.PLEOS_CLIENT_ID, BuildConfig.PLEOS_CLIENT_SECRET, object : OnServerConnectionListener {
+                                override fun onConnected() { pleosReady = true; Log.i(TAG, "Pleos TextToSpeech 준비됨 (HYBRID, 앱 등록 완료)") }
+                                override fun onFailed(errorType: ErrorType) {
+                                    Log.w(TAG, "Pleos TTS 앱 등록 실패: $errorType → ON_DEVICE로 다시 만든다")
+                                    fallbackToOnDevice(t)
+                                }
+                            })
+                        }.onFailure { Log.w(TAG, "Pleos TTS registerApp 실패 → ON_DEVICE", it); fallbackToOnDevice(t) }
                     }
 
                     override fun onFailure(errorType: ErrorType) {
+                        if (hybrid) { Log.w(TAG, "Pleos TTS(HYBRID) 초기화 실패: $errorType → ON_DEVICE"); fallbackToOnDevice(t); return }
                         pleosBroken = true
                         Log.w(TAG, "Pleos TextToSpeech 초기화 실패: $errorType → Android TTS로 대신 읽는다")
                     }
                 })
             }
-        }.onFailure { pleosBroken = true; Log.w(TAG, "Pleos TextToSpeech 없음", it) }
+        }.onFailure { if (hybrid) initPleos(hybrid = false) else { pleosBroken = true; Log.w(TAG, "Pleos TextToSpeech 없음", it) } }
+    }
+
+    private fun fallbackToOnDevice(old: TextToSpeech) {
+        pleosReady = false
+        runCatching { old.removeEventListener(pleosEvents) }
+        runCatching { old.release() }
+        initPleos(hybrid = false)
     }
 
     /** [text]를 읽는다 (읽던 것은 멈춘다). 다 읽거나 멈추면 [then]을 한 번 부른다. */
@@ -179,11 +202,20 @@ class PleosTts @Inject constructor(@ApplicationContext private val context: Cont
         Log.i(TAG, "읽기 #$my 한 번에 ${text.length}자" + if (BuildConfig.DEBUG) ": $text" else "")
         if (pleosReady && !pleosBroken) {
             pleosTurn = my
-            runCatching { pleos?.speak(text, true) }
-                .onSuccess { return }
-                .onFailure { Log.w(TAG, "Pleos TTS 읽기 실패 → Android TTS", it); pleosBroken = true; pleosTurn = null }
+            // 선행 묵음(Pleos 음성 안내 가이드 150~200ms): Pleos SDK는 speak(text)만 받아 오디오 앞에 묵음을 넣을 수 없다.
+            // 그래서 포커스를 받은 뒤 [PREROLL_MS]만큼 (UI 스레드를 막지 않고 postDelayed로) 기다렸다 읽는다 → 출력 경로가 열리는 동안 첫 음절이 잘리지 않는다
+            main.postDelayed({ speakPleos(text, my) }, PREROLL_MS)
+            return
         }
         playFallback(text, my)
+    }
+
+    private fun speakPleos(text: String, my: Int) {
+        if (seq != my || pleosTurn != my) return // 묵음 동안 멈추거나 새로 읽기 시작함
+        playAtMs = System.currentTimeMillis()
+        Log.i(TAG, "읽기 #$my 선행 묵음 ${PREROLL_MS}ms 뒤 Pleos speak")
+        runCatching { pleos?.speak(text, true) }
+            .onFailure { Log.w(TAG, "Pleos TTS 읽기 실패 → Android TTS", it); pleosBroken = true; pleosTurn = null; playFallback(text, my) }
     }
 
     private fun playFallback(text: String, my: Int) {

@@ -22,6 +22,14 @@ val googlePlacesApiKey: String = Properties().let { props ->
     (props.getProperty("GOOGLE_PLACES_API_KEY") ?: System.getenv("GOOGLE_PLACES_API_KEY") ?: "").filter { it.isLetterOrDigit() || it == '_' || it == '-' }
 }
 
+// Pleos TTS 서버 합성(고음질) 앱 등록 값 (Pleos Playground My Project). local.properties의 PLEOS_CLIENT_ID · PLEOS_CLIENT_SECRET → 환경 변수 → 없으면 빈 값.
+// 둘 다 있으면 PleosTts가 HYBRID(서버 우선, 끊기면 기기 안 엔진)로, 없으면 ON_DEVICE로 읽는다. 값은 커밋하지 않는다.
+val pleosTtsProps: Properties = Properties().also { props ->
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { props.load(it) }
+}
+val pleosClientId: String = (pleosTtsProps.getProperty("PLEOS_CLIENT_ID") ?: System.getenv("PLEOS_CLIENT_ID") ?: "").trim().filter { it.isLetterOrDigit() || it == '-' || it == '_' || it == '.' }
+val pleosClientSecret: String = (pleosTtsProps.getProperty("PLEOS_CLIENT_SECRET") ?: System.getenv("PLEOS_CLIENT_SECRET") ?: "").trim().filter { it.isLetterOrDigit() || it == '-' || it == '_' || it == '.' }
+
 // 기억 에이전트·길 위 에이전트·하루 라벨링 LLM (agent/). OpenAI 호환 Chat Completions. 기본은 중계 서버 → Google Gemini (키는 중계에만).
 // 개발 PC의 llama.cpp(Qwen)를 쓰려면 LLM_BASE_URL=http://10.0.2.2:8181/v1, LLM_MODEL=qwen3.5-9b (scripts/llm, 선택).
 // local.properties → 환경 변수 → 기본값. 에뮬레이터에서 개발 PC는 10.0.2.2 로 보인다.
@@ -67,6 +75,8 @@ android {
         buildConfigField("String", "LLM_BASE_URL", "\"$llmBaseUrl\"")
         buildConfigField("String", "LLM_MODEL", "\"$llmModel\"")
         buildConfigField("String", "LLM_API_KEY", "\"$llmApiKey\"")
+        buildConfigField("String", "PLEOS_CLIENT_ID", "\"$pleosClientId\"")
+        buildConfigField("String", "PLEOS_CLIENT_SECRET", "\"$pleosClientSecret\"")
     }
 
     // 두 판: car = Pleos Connect 차량 앱(Pleos SDK·AAOS Car API), phone = 어느 차에서나 혼자 쓰는 폰 앱(Android 위치·지도 앱 연동).
@@ -137,6 +147,7 @@ dependencies {
     "carImplementation"(libs.pleos.vehicle)
     implementation(libs.maplibre.android)
     implementation(libs.coil.compose)
+    implementation(libs.lottie.compose)
 
     implementation(libs.jna) { artifact { type = "aar" } }
 
