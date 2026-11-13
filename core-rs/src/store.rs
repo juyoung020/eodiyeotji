@@ -116,7 +116,8 @@ pub struct DaySummary {
     pub title: Option<String>,
     /// 하루 태그 (예: "바다", "여행", "가족")
     pub tags: Vec<String>,
-    /// LLM이 쓴 하루 요약 한두 문장 (예: "경포해변을 걷고 초당순두부를 먹었다."). LLM 제목이 있는 날에만 있다 (출퇴근뿐인 날은 None).
+    /// 하루 요약 한두 문장. LLM 제목이 있는 날은 LLM이 쓴 글 (예: "경포해변을 걷고 초당순두부를 먹었다."),
+    /// 출퇴근 · 동네 볼일뿐인 날은 규칙으로 쓴 글 (예: "07:53에 출근하며 스타벅스 왕십리역점에 들렀다.", 하루 상세에서만 채운다).
     pub story: Option<String>,
     /// "그날로 돌아가기"로 다시 볼 것이 있는 날: 이름 있는 머문 곳이 1곳 이상이거나 5km 이상 달렸다 ([`is_replayable`]).
     pub replayable: bool,
@@ -295,7 +296,7 @@ impl EodiStore {
         let acc = self.collect_days(&conn, d, d, true)?.remove(&d).unwrap_or_default();
         let mut summary = acc.summary(d);
         (summary.title, summary.tags) = crate::memory::day_title(&conn, d)?;
-        summary.story = crate::memory::day_story(&conn, d)?;
+        summary.story = crate::memory::day_story(&conn, d, self.tz_minutes())?;
         let entries = acc.entries();
         Ok(DayDetail { day: format_day(d), trips: acc.trips, stays: acc.stays, summary, entries })
     }

@@ -1047,14 +1047,54 @@ pub(crate) fn day_title(conn: &Connection, d: i64) -> Result<(Option<String>, Ve
     })
 }
 
-/// 하루 요약 글 (`DaySummary.story`): LLM 제목이 있는 날([LLM_TITLE])의 한두 문장. 없으면 None.
-pub(crate) fn day_story(conn: &Connection, d: i64) -> Result<Option<String>, CoreError> {
-    Ok(conn
+/// 하루 요약 글 (`DaySummary.story`): LLM 제목이 있는 날([LLM_TITLE])은 LLM이 쓴 한두 문장,
+/// 그 밖의 날(출퇴근 · 동네 볼일)은 규칙으로 만든 한두 문장([rule_story]). 쓸 말이 없으면 None.
+pub(crate) fn day_story(conn: &Connection, d: i64, tz_minutes: i32) -> Result<Option<String>, CoreError> {
+    let llm = conn
         .prepare_cached("SELECT CASE WHEN needs_llm = 1 AND title IS NOT NULL THEN nullif(summary, '') END FROM day_memory WHERE day = ?1")?
         .query_row([d], |r| r.get::<_, Option<String>>(0))
         .optional()?
-        .flatten())
+        .flatten();
+    if llm.is_some() {
+        return Ok(llm);
+    }
+    Ok(rule_story(&episodes_of_day(conn, d)?, tz_minutes))
 }
+
+/// 규칙으로 쓰는 하루 요약 (LLM 없이): 묶음마다 한 문장, 앞에서 [RULE_STORY_MAX]개까지.
+/// 출근 · 퇴근은 나선 시각과 가는 길에 들른 곳("07:53에 출근하며 스타벅스 왕십리역점에 들렀다."),
+/// 그 밖의 묶음은 이름 있는 곳에 다녀온 것만 ("14:10에 나서 이마트 성수점에 다녀왔다."). 쓸 문장이 없으면 None.
+pub(crate) fn rule_story(episodes: &[Episode], tz_minutes: i32) -> Option<String> {
+    let mut out: Vec<String> = Vec::new();
+    for e in episodes {
+        let f = &e.facts;
+        let mut names: Vec<&str> = Vec::new();
+        for s in &f.stops {
+            let n = s.name.trim();
+            if !n.is_empty() && n != "집" && n != "회사" && !names.contains(&n) && names.len() < 2 {
+                names.push(n);
+            }
+        }
+        let at = crate::agent::dates::hhmm(f.start_ms, tz_minutes);
+        let via = names.join(" · ");
+        let sentence = match (f.kind, names.is_empty()) {
+            (EpisodeKind::CommuteToWork, true) => format!("{at}에 출근했다."),
+            (EpisodeKind::CommuteToWork, false) => format!("{at}에 출근하며 {via}에 들렀다."),
+            (EpisodeKind::CommuteHome, true) => format!("{at}에 퇴근했다."),
+            (EpisodeKind::CommuteHome, false) => format!("{at}에 퇴근하며 {via}에 들렀다."),
+            (_, true) => continue,
+            (_, false) => format!("{at}에 나서 {via}에 다녀왔다."),
+        };
+        out.push(sentence);
+        if out.len() == RULE_STORY_MAX {
+            break;
+        }
+    }
+    (!out.is_empty()).then(|| out.join(" "))
+}
+
+/// 규칙 요약에 넣는 문장 수 (하루 화면 제목 아래 두세 줄에 들어가는 만큼).
+const RULE_STORY_MAX: usize = 3;
 
 /// 하루의 검색 색인을 다시 쓴다 (에피소드마다 한 줄).
 pub(crate) fn reindex_day(conn: &Connection, d: i64) -> Result<(), CoreError> {

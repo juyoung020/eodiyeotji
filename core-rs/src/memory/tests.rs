@@ -664,3 +664,46 @@ fn demo_top_up_adds_the_gangneung_seafood_dinner_to_old_data() {
     assert_eq!(store.episodes_for_day("2026-08-08".into()).unwrap().len(), other_before, "다른 날은 그대로");
     assert_eq!(store.seed_demo_data(demo_today()).unwrap(), 0, "한 번만");
 }
+
+#[test]
+fn rule_story_writes_commute_and_errand_sentences() {
+    let stop = |name: &str| StopFact {
+        name: name.into(),
+        category: String::new(),
+        address: String::new(),
+        arrive_ms: 0,
+        leave_ms: 0,
+        lat: 0.0,
+        lon: 0.0,
+        first_visit: false,
+    };
+    let ep = |kind: EpisodeKind, start_min: i64, stops: Vec<StopFact>| Episode {
+        facts: EpisodeFacts {
+            id: 0,
+            day: "2026-11-11".into(),
+            kind,
+            rule_label: String::new(),
+            start_ms: start_min * 60_000,
+            end_ms: start_min * 60_000,
+            distance_m: 0.0,
+            from_name: String::new(),
+            to_name: String::new(),
+            stops,
+            region: String::new(),
+        },
+        title: None,
+        tags: Vec::new(),
+    };
+    // 시각은 UTC 분, 시간대 +9시간(540분): 22:53 UTC → 07:53
+    let day = [
+        ep(EpisodeKind::CommuteToWork, 22 * 60 + 53, vec![stop("스타벅스 왕십리역점"), stop("회사")]),
+        ep(EpisodeKind::CommuteHome, 10 * 60 + 16, vec![stop("")]),
+        ep(EpisodeKind::Errand, 11 * 60, vec![]),
+        ep(EpisodeKind::Errand, 12 * 60, vec![stop("이마트 성수점")]),
+    ];
+    assert_eq!(
+        episode::rule_story(&day, 540).as_deref(),
+        Some("07:53에 출근하며 스타벅스 왕십리역점에 들렀다. 19:16에 퇴근했다. 21:00에 나서 이마트 성수점에 다녀왔다."),
+    );
+    assert_eq!(episode::rule_story(&[ep(EpisodeKind::Errand, 0, vec![])], 540), None);
+}
