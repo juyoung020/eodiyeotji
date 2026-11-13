@@ -312,11 +312,8 @@ fun bestTimeLabel(b: BestTime): String = stringResource(
 /** 그림 위 "야경 추천" 띠 (그림 위에서도 읽히게 때 색 바탕 + 흰 글자). */
 @Composable
 fun BestTimeBadge(b: BestTime, theme: RouteTheme, modifier: Modifier = Modifier) {
-    val bg = when (theme) {
-        RouteTheme.NIGHT -> androidx.compose.ui.graphics.Color(0xE61B2440)
-        RouteTheme.SUNSET -> androidx.compose.ui.graphics.Color(0xE6C2553B)
-        RouteTheme.DAY -> androidx.compose.ui.graphics.Color(0xE6236B4E)
-    }
+    // 때와 상관없이 먹색 반투명 바탕 하나 (주황 · 초록 띠가 강조색 파랑 하나 원칙과 어긋났다). 어느 그림 위에서도 흰 글자가 읽힌다
+    val bg = androidx.compose.ui.graphics.Color(0xD9111827)
     Text(
         stringResource(R.string.drive_best_chip, bestTimeLabel(b)),
         style = EodiTheme.type.caption,

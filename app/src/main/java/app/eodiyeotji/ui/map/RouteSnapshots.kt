@@ -65,14 +65,20 @@ class RouteSnapshots @Inject constructor(
     private val memory = object : LruCache<String, Bitmap>(MEMORY_BYTES) {
         override fun sizeOf(key: String, value: Bitmap) = value.allocationByteCount
     }
-    private val dir by lazy { File(context.cacheDir, "route-snapshots").apply { mkdirs() } }
+    // 처음 쓸 때(IO 스레드) 옛 판(-vN) 그림을 지운다 — 판을 올릴 때마다 장당 수백 KB씩 캐시에 쌓였다
+    private val dir by lazy {
+        File(context.cacheDir, "route-snapshots").apply {
+            mkdirs()
+            listFiles()?.forEach { if (!it.name.endsWith("-v$VERSION.webp")) it.delete() }
+        }
+    }
 
     /** [route]의 그림 (저장된 것 → 새로 그림). 못 그리면 null. */
     suspend fun get(route: DriveRoute): Bitmap? {
         val map = runCatching { core.driveRouteMap(route.id) }.getOrNull() ?: return null
         val key = "${route.id.filter { it.isLetterOrDigit() || it == '-' }}-${route.theme.name.lowercase()}-${map.geojson.hashCode().toUInt()}-v$VERSION"
         memory.get(key)?.let { return it }
-        val file = File(dir, "$key.webp")
+        val file = withContext(Dispatchers.IO) { File(dir, "$key.webp") }
         withContext(Dispatchers.IO) { if (file.isFile) BitmapFactory.decodeFile(file.path) else null }?.let {
             memory.put(key, it)
             return it
@@ -133,7 +139,7 @@ class RouteSnapshots @Inject constructor(
     private companion object {
         const val TAG = "EodiRouteSnapshot"
         /** 스타일·카메라를 바꾸면 올린다 (저장된 그림을 다시 그리게). */
-        const val VERSION = 5 // 5: 길 가운데 선을 진한 색 + 흰 테두리로 (scenic-3d.json) — 4로 저장된 흰 선 그림이 카드에 남아 있었다
+        const val VERSION = 6 // 6: 길 색을 때와 상관없이 파랑으로 (routeInk) — 5로 저장된 주황 길 그림이 밤 카드에 남아 있었다. 5: 길 가운데 선을 진한 색 + 흰 테두리로 (scenic-3d.json) — 4로 저장된 흰 선 그림이 카드에 남아 있었다
         /** 그림 크기 (논리 픽셀). 카드 대표 그림 비율 2.1 : 1. */
         const val WIDTH_DP = 640
         const val HEIGHT_DP = 305
