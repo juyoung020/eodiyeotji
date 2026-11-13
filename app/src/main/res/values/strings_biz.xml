@@ -12,7 +12,7 @@
     <string name="biz_failed">출장 기록을 불러오지 못했어요.</string>
     <string name="biz_empty">이 달에는 출장 기록이 없어요.</string>
     <string name="biz_how">어떻게 계산하나요</string>
-    <string name="biz_hint">평일 낮에 집 · 회사에서 15km 넘게 다녀온 기록을 자동으로 출장으로 묶어요. 거리는 계기판, 경비는 쓴 배터리 · 연료 × 충전 · 주유 단가로 어림한 값이에요.</string>
+    <string name="biz_hint">평일 낮 집 · 회사에서 15km 넘게 다녀온 길을 출장으로 묶어요. 경비는 쓴 에너지로 어림해요.</string>
     <string name="biz_count">%1$d건</string>
     <string name="biz_count_label">출장</string>
     <string name="biz_time_tile">시간</string>
@@ -26,7 +26,7 @@
     <string name="biz_detail_total">합계</string>
     <string name="biz_tag_est">추정</string>
     <string name="biz_tag_real">실제</string>
-    <string name="biz_detail_note">아직 카드 결제 내역과 이어지지 않아, 모든 금액은 쓴 배터리 · 연료와 들른 곳으로 어림한 값이에요. 실제 영수증과 다를 수 있어요.</string>
+    <string name="biz_detail_note">금액은 쓴 배터리 · 연료로 어림한 값이라 영수증과 다를 수 있어요.</string>
     <string name="biz_detail_empty">어림할 경비가 없어요.</string>
     <string name="biz_not_biz_hint">출장이 아니면 목록에서 빼요</string>
     <string name="biz_removed">%1$s 출장을 목록에서 뺐어요</string>
@@ -45,7 +45,7 @@
     <string name="biz_not_biz">출장 아님</string>
     <!-- 거래처 목록 (Rust bizclient.rs) -->
     <string name="biz_clients_title">거래처</string>
-    <string name="biz_clients_hint">거래처에 들른 주행은 요일 · 시각 · 거리와 상관없이 출장으로 묶어요. 근무 시간이 다르거나 회사에 잘 들르지 않아도 돼요.</string>
+    <string name="biz_clients_hint">거래처에 들른 주행은 요일 · 시각과 상관없이 출장으로 묶어요.</string>
     <string name="biz_clients_suggest">평일에 자주 간 곳이에요. 누르면 거래처로 정해요.</string>
     <string name="biz_client_chip">%1$s · %2$d일</string>
     <string name="biz_client_suggest_chip">%1$s · 평일 %2$d일</string>

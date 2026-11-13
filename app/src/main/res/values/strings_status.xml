@@ -24,9 +24,9 @@
     <string name="status_body_waiting">시작 버튼은 없어요. 출발을 알아채면 바로 기록을 시작해요.</string>
     <string name="status_body_off">기록 서비스가 켜져 있지 않아요. 다시 켜 볼게요.</string>
     <string name="status_body_location_off">어디였지는 위치로 길과 들른 곳을 기록해요. 위치 권한을 켜야 기록이 시작돼요.</string>
-    <string name="status_body_background_off">위치를 \"항상 허용\"으로 바꾸면 앱을 열지 않아도, 폰을 켠 직후에도 출발을 알아채요. 설정 → 권한 → 위치에서 바꿔 주세요.</string>
+    <string name="status_body_background_off">위치를 \"항상 허용\"으로 바꾸면 앱을 열지 않아도 출발을 알아채요. 설정 → 권한 → 위치</string>
     <string name="status_body_notifications_off">기록은 그대로 해요. 다만 기록 중이라는 알림이 안 보여 언제 기록하는지 알기 어려워요.</string>
-    <string name="status_body_battery">폰이 오래 쉰 앱을 멈추면 그동안의 길을 놓칠 수 있어요. 어디였지를 배터리 최적화에서 빼 주세요. 서 있을 때는 전력을 아주 적게 써요.</string>
+    <string name="status_body_battery">배터리 최적화에서 어디였지를 빼야 길을 놓치지 않아요. 서 있을 땐 전력을 거의 안 써요.</string>
     <string name="status_body_no_vehicle">기어·시동 신호가 아직 오지 않았어요. 차량 서비스가 연결되면 저절로 이어져요.</string>
 
     <string name="status_check_location">위치 권한</string>

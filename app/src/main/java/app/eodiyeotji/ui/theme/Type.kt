@@ -1,6 +1,7 @@
 package app.eodiyeotji.ui.theme
 
 import androidx.compose.material3.Typography
+import app.eodiyeotji.BuildConfig
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
@@ -19,6 +20,13 @@ import androidx.compose.ui.unit.sp
  */
 
 private const val TABULAR = "tnum"
+
+/**
+ * 가장 작은 글자(caption · eyebrow) 크기. Pleos 가독성 기준 "보조 텍스트 높이 3 mm 이상":
+ * 17인치 2560×1440(160dpi, 1sp = 1px)에서 1px ≈ 0.147 mm → 20sp는 2.94 mm로 살짝 모자라 차 판은 22sp(3.2 mm)로 둔다.
+ * 폰 판은 PhoneUiScale로 따로 줄여 그리므로 Pleos 최소값 20 그대로.
+ */
+private val SMALLEST = if (BuildConfig.FLAVOR == "car") 22 else 20
 
 /** 한글은 글자 사이가 넓어 보여서 큰 글자일수록 살짝 좁힌다. */
 private fun style(size: Int, line: Int, weight: FontWeight, tracking: TextUnit = 0.sp, tabular: Boolean = false) = TextStyle(
@@ -51,10 +59,10 @@ data class EodiType(
     /** 숫자가 섞인 둘째 줄 (거리 · 시간) */
     val meta: TextStyle = style(24, 30, FontWeight.Normal, tabular = true),
     val label: TextStyle = style(24, 28, FontWeight.SemiBold),
-    /** 작은 표시 (내비 · 오늘 배지, 통계 이름). Pleos 최소 크기 20 */
-    val caption: TextStyle = style(20, 24, FontWeight.Medium, tabular = true),
+    /** 작은 표시 (내비 · 오늘 배지, 통계 이름). Pleos 최소 크기 20, 차 판 22 (3 mm) */
+    val caption: TextStyle = style(SMALLEST, SMALLEST + 4, FontWeight.Medium, tabular = true),
     /** 제목 위 작은 머리말 ("날짜별 기록", "1년 전" 도장). 굵고 자간을 살짝 넓혀 제목과 구별된다 */
-    val eyebrow: TextStyle = style(20, 24, FontWeight.Bold, 0.03.em, tabular = true),
+    val eyebrow: TextStyle = style(SMALLEST, SMALLEST + 4, FontWeight.Bold, 0.03.em, tabular = true),
     /** 운전 중 큰 카드 · 큰 버튼 글자 (멀리서 한눈에). 큰 순서: display > drivingTitle > drivingHeadline > drivingBody */
     val display: TextStyle = style(56, 72, FontWeight.ExtraBold),
     val drivingTitle: TextStyle = style(48, 64, FontWeight.Bold),
