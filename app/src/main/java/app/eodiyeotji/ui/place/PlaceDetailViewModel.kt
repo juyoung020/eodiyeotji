@@ -56,6 +56,7 @@ class PlaceDetailViewModel @Inject constructor(
     private val core: EodiCore,
     private val guide: CourseGuide,
     private val driving: DrivingStatePort,
+    private val convoy: app.eodiyeotji.convoy.ConvoyRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(PlaceDetailUiState())
     val state: StateFlow<PlaceDetailUiState> = _state.asStateFlow()
@@ -111,6 +112,14 @@ class PlaceDetailViewModel @Inject constructor(
             delay(NOTICE_MS)
             _state.update { it.copy(navi = null) }
         }
+    }
+
+    /** "같이 가기": 이곳을 여러 차가 함께 가는 목적지로 (같이 가기 창이 뜬다, 장소 창은 닫는다). */
+    fun goTogether() {
+        val s = _state.value
+        val p = s.detail?.place ?: s.place ?: return
+        convoy.goTogether(app.eodiyeotji.convoy.ConvoyPlace(p.name, p.lat, p.lon))
+        close()
     }
 
     /** 저장(♥) 누르기: 바로 바뀐 것처럼 보이고, 저장은 Rust (내 장소 화면은 EodiCore.changes로 다시 읽는다). */

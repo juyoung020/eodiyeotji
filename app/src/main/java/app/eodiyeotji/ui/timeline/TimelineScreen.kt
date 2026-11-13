@@ -162,6 +162,8 @@ fun TimelineRoute(
     search: SearchSlot? = null,
     /** 여행 간 날만 모아 보기 (위쪽 입구 띠의 "여행 모음") */
     onOpenTrips: (() -> Unit)? = null,
+    /** 날짜 목록 맨 위 입구 띠. 차 홈은 "모아보기" 탭이 맡아 false로 넘긴다. */
+    showEntries: Boolean = true,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     // 날짜 목록 맨 위: "N년 전 오늘" 카드 · 이번 달 요약 입구 (ui/recap)
@@ -199,7 +201,7 @@ fun TimelineRoute(
         compact = compact,
         headerBanner = headerBanner,
         search = search,
-        listTop = { RecapListTop(recap, onOpenDay = openDay, onOpenBiz = biz::open, onOpenTrips = onOpenTrips) },
+        listTop = { RecapListTop(recap, onOpenDay = openDay, onOpenBiz = biz::open, onOpenTrips = onOpenTrips, showEntries = showEntries) },
     ) }
     PlaceEditHost(editVm)
     // 내 사진 카드: 머문 곳이 있는 하루 상세를 처음 열 때 한 번만 갤러리 권한을 묻는다 (허용하면 다시 읽어 사진을 채운다)

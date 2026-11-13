@@ -11,25 +11,38 @@
     <string name="biz_subject">출장 정산서 %1$s</string>
     <string name="biz_failed">출장 기록을 불러오지 못했어요.</string>
     <string name="biz_empty">이 달에는 출장 기록이 없어요.</string>
+    <string name="biz_how">어떻게 계산하나요</string>
     <string name="biz_hint">평일 낮에 집 · 회사에서 15km 넘게 다녀온 기록을 자동으로 출장으로 묶어요. 거리는 계기판, 경비는 쓴 배터리 · 연료 × 충전 · 주유 단가로 어림한 값이에요.</string>
     <string name="biz_count">%1$d건</string>
     <string name="biz_count_label">출장</string>
+    <string name="biz_time_tile">시간</string>
+    <string name="biz_cost_tile">경비 (추정)</string>
+    <string name="biz_row_meta">%1$s · %2$s · %3$.1fkm</string>
+    <string name="biz_open_detail">경비 내역 보기</string>
+    <!-- 경비 내역 (Rust biztrip.rs biz_expenses) -->
+    <string name="biz_detail_title">경비 내역</string>
+    <string name="biz_detail_close">닫기</string>
+    <string name="biz_detail_range">%1$s ~ %2$s</string>
+    <string name="biz_detail_total">합계</string>
+    <string name="biz_tag_est">추정</string>
+    <string name="biz_tag_real">실제</string>
+    <string name="biz_detail_note">아직 카드 결제 내역과 이어지지 않아, 모든 금액은 쓴 배터리 · 연료와 들른 곳으로 어림한 값이에요. 실제 영수증과 다를 수 있어요.</string>
+    <string name="biz_detail_empty">어림할 경비가 없어요.</string>
+    <string name="biz_not_biz_hint">출장이 아니면 목록에서 빼요</string>
+    <string name="biz_removed">%1$s 출장을 목록에서 뺐어요</string>
+    <string name="biz_undo">되돌리기</string>
+    <string name="biz_won">%1$s원</string>
     <!-- 달 합계 칸: 값은 출장 줄과 같은 소수 한 자리, 이름에 거리 기준(계기판 / 계기판 · GPS 섞임) -->
     <string name="biz_km_value">%1$.1fkm</string>
     <string name="biz_km_label">주행 거리 · 계기판</string>
     <string name="biz_km_label_mixed">주행 거리 · 계기판 · GPS</string>
-    <string name="biz_time_label">출장에 쓴 시간</string>
-    <string name="biz_cost_label">경비 어림</string>
     <string name="biz_date">%1$d월 %2$d일 (%3$s)</string>
     <string name="biz_km_odo">계기판 %1$.1fkm</string>
     <string name="biz_km_gps">GPS %1$.1fkm</string>
     <string name="biz_drive">운전 %1$s</string>
     <string name="biz_battery">배터리 %1$d%%</string>
     <string name="biz_fuel">연료 %1$d%%</string>
-    <string name="biz_auto">자동으로 찾음</string>
-    <string name="biz_marked">직접 지정</string>
     <string name="biz_not_biz">출장 아님</string>
-    <string name="biz_about">약 %1$s</string>
     <!-- 거래처 목록 (Rust bizclient.rs) -->
     <string name="biz_clients_title">거래처</string>
     <string name="biz_clients_hint">거래처에 들른 주행은 요일 · 시각 · 거리와 상관없이 출장으로 묶어요. 근무 시간이 다르거나 회사에 잘 들르지 않아도 돼요.</string>
@@ -37,5 +50,4 @@
     <string name="biz_client_chip">%1$s · %2$d일</string>
     <string name="biz_client_suggest_chip">%1$s · 평일 %2$d일</string>
     <string name="biz_client_unnamed">이름 없는 곳</string>
-    <string name="biz_client_visit">거래처 방문</string>
 </resources>

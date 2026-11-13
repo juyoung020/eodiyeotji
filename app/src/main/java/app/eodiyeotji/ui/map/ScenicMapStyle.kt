@@ -3,6 +3,8 @@ package app.eodiyeotji.ui.map
 import android.content.Context
 import app.eodiyeotji.core.RouteTheme
 import app.eodiyeotji.core.SkyPhase
+import androidx.compose.ui.graphics.toArgb
+import app.eodiyeotji.ui.theme.mapInk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -36,11 +38,23 @@ internal object ScenicMapStyle {
     private suspend fun fill(context: Context, colors: Map<String, String>, routeGeojson: String): String = withContext(Dispatchers.IO) {
         val t = template ?: context.assets.open(ASSET).bufferedReader().use { it.readText() }.also { template = it }
         var json = t
-        for ((k, v) in colors) json = json.replace("{{$k}}", v)
+        for ((k, v) in colors + routeInk(colors)) json = json.replace("{{$k}}", v)
         json.replace(ROUTE_SLOT, routeGeojson)
     }
 
-    /** 새벽: 라벤더빛 땅 · 분홍으로 밝아 오는 산등성이 · 아직 불이 남은 높은 건물. */
+    /**
+     * 길 선 색은 때와 상관없이 앱의 길 색([mapInk].trip, 파랑)으로 맞춘다 (주황 · 금빛 길을 쓰지 않는다).
+     * 어두운 땅(밤 · 푸른 시간)이면 밤 색, 빛 · 번짐은 반대 쪽 파랑으로 둔다.
+     */
+    private fun routeInk(colors: Map<String, String>): Map<String, String> {
+        val dark = colors["land"]?.let { android.graphics.Color.luminance(android.graphics.Color.parseColor(it)) < 0.2f } ?: false
+        fun hex(c: androidx.compose.ui.graphics.Color) = "#%06X".format(c.toArgb() and 0xFFFFFF)
+        val core = mapInk(dark).trip
+        val soft = mapInk(!dark).trip
+        return mapOf("routeCore" to hex(core), "routeGlow" to hex(soft), "routeHalo" to hex(soft))
+    }
+
+    /** 새벽:라벤더빛 땅 · 분홍으로 밝아 오는 산등성이 · 아직 불이 남은 높은 건물. */
     private val DAWN = mapOf(
         "land" to "#D9CCD6", "green" to "#C9C6CC", "park" to "#C2C2C6", "water" to "#7E86B0", "waterDeep" to "#3E4A78", "waterLabel" to "#F2E6F2",
         "hillShadow" to "#3E3358", "hillHighlight" to "#FFE1D6", "hillAccent" to "#7D6E8E", "hillRim" to "#FFB9A8", "coast" to "#FFC7B8",

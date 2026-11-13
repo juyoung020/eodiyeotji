@@ -659,46 +659,116 @@ fn flight_zoom(length_m: f64) -> f64 {
     (15.6 - 0.5 * (length_m.max(1.0) / 5_000.0).log2()).clamp(14.0, 15.6)
 }
 
-/// 미리보기 비행 ([EodiStore::drive_route_flight]): 같은 간격 장면 + 앞(길 길이의 6%, 600m 이상)을 보는 방향을
-/// 앞뒤로 고르게 다듬고(나들목·굽잇길에서 흔들리지 않게) 이어지게 푼 것.
+/// 비행 방향이 보는 앞 거리(m): 굽잇길에서 방향이 튀지 않을 만큼만 앞을 본다.
+const FLIGHT_LOOK_AHEAD_M: f64 = 220.0;
+/// 방향을 고르게 펴는 범위(앞뒤 m).
+const FLIGHT_BEARING_SMOOTH_M: f64 = 160.0;
+/// 방향이 1m 갈 때 돌 수 있는 최대 각도(°) — 급한 모퉁이도 천천히 돈다.
+const FLIGHT_MAX_TURN_PER_M: f64 = 0.1;
+/// 굽잇길에서 얼마나 더 가까이 내려가는지(줌, 곧은 길 0 ~ 굽은 길 이만큼).
+const FLIGHT_CURVE_ZOOM: f64 = 0.5;
+
+/// 미리보기 비행 ([EodiStore::drive_route_flight]): 길을 Catmull-Rom으로 매끈하게 편 뒤 같은 거리 간격 [n]장면.
+/// 방향은 조금 앞(약 220m)을 보고, 앞뒤로 고르게 편 뒤 도는 속도를 묶어(최대 회전) 이어지게 푼 값.
+/// 줌은 길 길이에 맞춘 높이에서 굽은 곳일수록 살짝 가까이. Kotlin은 이 배열을 그대로 섞어 읽기만 한다.
 pub(crate) fn flight(line: &[Point], n: usize) -> Vec<FlightFrame> {
-    let line = simplified(line);
-    if line.len() < 2 {
+    let line = catmull_rom(&simplified(line), 4);
+    if line.len() < 2 || n < 2 {
         return line.iter().map(|p| FlightFrame { lat: p.lat, lon: p.lon, bearing: 0.0, zoom: 14.0 }).collect();
     }
     let total = line_length_m(&line);
     let pts = resample(&line, n);
-    let step = total / (n - 1) as f64;
-    let ahead = ((total * 0.06).max(600.0) / step.max(1e-6)).ceil() as usize;
+    let step = (total / (n - 1) as f64).max(1e-6);
+    let ahead = (FLIGHT_LOOK_AHEAD_M / step).ceil().max(1.0) as usize;
     let raw: Vec<f64> = (0..n)
         .map(|i| {
             let j = (i + ahead).min(n - 1);
             if j > i { bearing_deg(pts[i], pts[j]) } else { bearing_deg(pts[i.saturating_sub(ahead)], pts[i]) }
         })
         .collect();
-    // 각도 평균은 단위 벡터로 (359°와 1° 평균이 180°가 되지 않게)
-    let win = (n / 25).max(2);
+    let unwrapped = unwrap_deg(&raw);
+    // 앞뒤로 고르게 (이어지게 푼 값이라 그냥 평균해도 된다)
+    let win = (FLIGHT_BEARING_SMOOTH_M / step).ceil().max(1.0) as usize;
+    let mut prefix = vec![0.0; n + 1];
+    for i in 0..n {
+        prefix[i + 1] = prefix[i] + unwrapped[i];
+    }
     let smooth: Vec<f64> = (0..n)
         .map(|i| {
             let (lo, hi) = (i.saturating_sub(win), (i + win).min(n - 1));
-            let (s, c) = raw[lo..=hi].iter().fold((0.0, 0.0), |(s, c), b| (s + b.to_radians().sin(), c + b.to_radians().cos()));
-            s.atan2(c).to_degrees().rem_euclid(360.0)
+            (prefix[hi + 1] - prefix[lo]) / (hi - lo + 1) as f64
         })
         .collect();
-    let zoom = flight_zoom(total);
-    let mut prev = smooth[0];
-    smooth
-        .iter()
-        .zip(&pts)
-        .map(|(&b, p)| {
-            let mut d = (b - prev.rem_euclid(360.0)).rem_euclid(360.0);
-            if d > 180.0 {
-                d -= 360.0;
-            }
-            prev += d;
-            FlightFrame { lat: p.lat, lon: p.lon, bearing: prev, zoom }
+    // 도는 속도 묶기: 앞으로 한 번, 뒤로 한 번 묶어 평균 (한쪽으로만 늦게 따라가지 않게)
+    let max_turn = (FLIGHT_MAX_TURN_PER_M * step).min(12.0);
+    let limit = |xs: &mut Vec<f64>| {
+        for i in 1..xs.len() {
+            let d = (xs[i] - xs[i - 1]).clamp(-max_turn, max_turn);
+            xs[i] = xs[i - 1] + d;
+        }
+    };
+    let mut fwd = smooth.clone();
+    limit(&mut fwd);
+    let mut back: Vec<f64> = smooth.iter().rev().copied().collect();
+    limit(&mut back);
+    back.reverse();
+    let bearing: Vec<f64> = fwd.iter().zip(&back).map(|(a, b)| (a + b) / 2.0).collect();
+    // 굽은 정도: 앞뒤 약 300m 사이에 방향이 얼마나 바뀌는지 (90° 이상이면 가장 굽은 길)
+    let span = (300.0 / step).ceil().max(1.0) as usize;
+    let base = flight_zoom(total).min(15.6 - FLIGHT_CURVE_ZOOM);
+    let curve: Vec<f64> = (0..n)
+        .map(|i| {
+            let (lo, hi) = (i.saturating_sub(span), (i + span).min(n - 1));
+            ((smooth[hi] - smooth[lo]).abs() / 90.0).min(1.0)
+        })
+        .collect();
+    // 줌도 갑자기 바뀌지 않게 넓게 편다
+    let zwin = span * 2;
+    (0..n)
+        .map(|i| {
+            let (lo, hi) = (i.saturating_sub(zwin), (i + zwin).min(n - 1));
+            let c = curve[lo..=hi].iter().sum::<f64>() / (hi - lo + 1) as f64;
+            FlightFrame { lat: pts[i].lat, lon: pts[i].lon, bearing: bearing[i], zoom: base + FLIGHT_CURVE_ZOOM * c }
         })
         .collect()
+}
+
+/// 0~360 각도들을 끊김 없이 이어지게 푼다 (359 → 1을 359 → 361로).
+fn unwrap_deg(raw: &[f64]) -> Vec<f64> {
+    let mut out = Vec::with_capacity(raw.len());
+    let mut prev = match raw.first() {
+        Some(&b) => b,
+        None => return out,
+    };
+    for &b in raw {
+        let mut d = (b - prev.rem_euclid(360.0)).rem_euclid(360.0);
+        if d > 180.0 {
+            d -= 360.0;
+        }
+        prev += d;
+        out.push(prev);
+    }
+    out
+}
+
+/// 꺾인 선을 Catmull-Rom으로 매끈하게 (원래 점을 모두 지나고, 한 구간을 [sub]개로 나눈다). 처음 · 끝 점은 그대로.
+fn catmull_rom(line: &[Point], sub: usize) -> Vec<Point> {
+    if line.len() < 3 || sub < 2 {
+        return line.to_vec();
+    }
+    let at = |i: isize| line[i.clamp(0, line.len() as isize - 1) as usize];
+    let mut out = Vec::with_capacity((line.len() - 1) * sub + 1);
+    for i in 0..line.len() - 1 {
+        let (p0, p1, p2, p3) = (at(i as isize - 1), at(i as isize), at(i as isize + 1), at(i as isize + 2));
+        for k in 0..sub {
+            let t = k as f64 / sub as f64;
+            let (t2, t3) = (t * t, t * t * t);
+            let f = |a: f64, b: f64, c: f64, d: f64| 0.5 * (2.0 * b + (c - a) * t + (2.0 * a - 5.0 * b + 4.0 * c - d) * t2 + (3.0 * b - 3.0 * c + d - a) * t3);
+            out.push(Point { lat: f(p0.lat, p1.lat, p2.lat, p3.lat), lon: f(p0.lon, p1.lon, p2.lon, p3.lon) });
+        }
+    }
+    out.push(*line.last().unwrap());
+    out
 }
 
 /// 비행 중 "지금: 이름"을 보여 줄 거리(m, 풍경 앞뒤로). 길이 길면 길 길이의 [SIGHT_WINDOW_FRAC]만큼.

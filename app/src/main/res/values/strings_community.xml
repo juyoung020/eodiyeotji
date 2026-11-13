@@ -166,6 +166,16 @@
     <string name="drive_fly">3D로 미리 달리기</string>
     <string name="drive_fly_stop">미리 달리기 멈추기</string>
     <string name="drive_fly_now">지금: %1$s</string>
+    <!-- 미리 달리기 도착 카드: 끝점 · 거리 (%1$s = 끝점, %2$s = 거리) -->
+    <string name="drive_fly_arrived">%1$s까지 %2$s, 함께 달려요</string>
+    <string name="drive_fly_again">다시 보기</string>
+    <!-- 도착 카드 첫 줄: 가 보고 싶게 (언제 좋은 길인지에 맞춰) -->
+    <string name="drive_invite_night">오늘 밤, 이 길 어때요?</string>
+    <string name="drive_invite_sunset">해 질 무렵, 이 길 어때요?</string>
+    <string name="drive_invite_morning">토요일 아침, 이 길 어때요?</string>
+    <string name="drive_invite_day">이번 주말, 이 길 어때요?</string>
+    <string name="drive_invite_foliage">단풍 들 때, 이 길 어때요?</string>
+    <string name="drive_invite_blossom">벚꽃 필 때, 이 길 어때요?</string>
     <string name="drive_navi_hint">시작점까지 안내하고, 도착하면 끝점까지 이어서 안내해요</string>
     <string name="drive_navigate_end">끝점으로 바로 안내</string>
     <string name="drive_navi_on_way">시작점으로 가는 중 · 도착하면 끝점까지 자동으로 이어서 안내해요</string>

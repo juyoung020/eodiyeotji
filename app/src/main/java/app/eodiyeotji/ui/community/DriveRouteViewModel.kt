@@ -53,8 +53,8 @@ data class DriveRouteDetail(
     val flyWhenReady: Boolean = false,
     val naviFailed: Boolean = false,
 ) {
-    /** 비행 시간: 길 1km에 약 0.9초, 20~30초. */
-    val flightMs: Long get() = (item.route.distanceM * 0.9).toLong().coerceIn(20_000L, 30_000L)
+    /** 달리는 시간: 길 1km에 약 0.3초, 8~15초 (일정한 빠르기, 처음 · 끝만 천천히). */
+    val flightMs: Long get() = (item.route.distanceM * 0.3).toLong().coerceIn(8_000L, 15_000L)
 }
 
 @Immutable
@@ -126,7 +126,7 @@ class DriveRouteViewModel @Inject constructor(
         val id = item.route.id
         viewModelScope.launch {
             // 지도 · 비행 장면 · 구간은 서로 상관없다 → 동시에
-            val framesJob = async { runCatching { core.driveRouteFlight(id) }.getOrDefault(emptyList()) }
+            val framesJob = async { runCatching { core.driveRouteFlight(id, flightFrames(item.route.distanceM)) }.getOrDefault(emptyList()) }
             val legsJob = async { runCatching { core.driveRouteLegs(id) }.getOrDefault(emptyList()) }
             val sightsJob = async { runCatching { core.driveRouteFlightSights(id) }.getOrDefault(emptyList()) }
             val style = runCatching { ScenicMapStyle.build(context, item.route.theme, core.driveRouteMap(id).geojson) }
@@ -228,6 +228,9 @@ class DriveRouteViewModel @Inject constructor(
         const val TAG = "EodiDriveRoutes"
         const val MAP_PADDING_DP = 72f
         const val FLY_AFTER_MS = 600L
+
+        /** 비행 장면 수: 약 20m마다 한 장면 (매 화면 섞어 읽어도 뚝뚝 끊기지 않게) */
+        fun flightFrames(distanceM: Double): Int = (distanceM / 20.0).toInt().coerceIn(300, 4_000)
     }
 }
 

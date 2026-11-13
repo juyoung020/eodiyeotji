@@ -132,6 +132,8 @@ fun PhoneApp(shell: PhoneShellViewModel = hiltViewModel()) {
                 // 앱이 소리 내어 읽는 말 (답 · 회상)을 위쪽에 자막으로
                 // 길 안내 중에는 위쪽 다음 안내 배너를 가리지 않게 아래 막대 바로 위에
                 SpokenCaption(bottomInset = if (navigating) 120.dp else null)
+                // 에이전트가 먼저 거는 말 한 장 (ui/agent/ProactiveCard.kt)
+                app.eodiyeotji.ui.agent.ProactiveCard()
                 // 시트는 맨 위에 (아래 탭 · 운전 중 띠까지 덮는다)
                 PhoneSheetHost(sheets)
                 // 공유 결과 같은 앱 안 알림은 시트 위, 아래 탭을 피해서 (ui/share/ShareNotice.kt)
@@ -156,6 +158,7 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     // 내 장소 (저장한 곳 · 자주 가는 곳 · 집 · 회사 · 숨긴 기록): 내 기록 머리의 ♥ 버튼으로 연다
     var placesOpen by rememberSaveable { mutableStateOf(false) }
+    var calendarOpen by rememberSaveable { mutableStateOf(false) }
     val agent: AgentViewModel = hiltViewModel()
     val guide: CourseGuideViewModel = hiltViewModel()
     val moving by shell.moving.collectAsStateWithLifecycle()
@@ -302,6 +305,9 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 RecordingStatusChip(Modifier.weight(1f, fill = false), quietWhenWaiting = true)
                                 Spacer(Modifier.width(12.dp))
+                                // 날짜로 찾기: 몇 달 전 날도 달력에서 바로 (기록 있는 날만 누를 수 있다)
+                                RoundIconButton(app.eodiyeotji.ui.theme.EodiIcons.Calendar, stringResource(R.string.phone_calendar_open), { calendarOpen = true }, containerColor = EodiTheme.colors.surface, contentColor = EodiTheme.colors.textSecondary, iconSize = 36.dp)
+                                Spacer(Modifier.width(12.dp))
                                 RoundIconButton(CommunityIcons.Heart, stringResource(R.string.nav_places), { placesOpen = true }, containerColor = EodiTheme.colors.surface, contentColor = EodiTheme.colors.textSecondary, iconSize = 36.dp)
                                 Spacer(Modifier.width(12.dp))
                                 RoundIconButton(PhoneIcons.Tune, stringResource(R.string.phone_settings), { settingsOpen = true }, containerColor = EodiTheme.colors.surface, contentColor = EodiTheme.colors.textSecondary, iconSize = 36.dp)
@@ -344,6 +350,17 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
         }
     }
 
+    if (calendarOpen) {
+        val ts by timeline.state.collectAsStateWithLifecycle()
+        val loaded = ts.days as? app.eodiyeotji.ui.timeline.DaysState.Loaded
+        if (loaded != null) PhoneDateCalendarSheet(
+            days = loaded.days,
+            today = loaded.today,
+            selected = ts.selectedDay,
+            onPick = { day -> timeline.openDay(day, null) },
+            onDismiss = { calendarOpen = false },
+        )
+    }
     if (settingsOpen) {
         PhoneSettingsSheet(
             permissions = permissions,

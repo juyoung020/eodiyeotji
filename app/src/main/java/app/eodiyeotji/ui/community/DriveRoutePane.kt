@@ -3,6 +3,11 @@ package app.eodiyeotji.ui.community
 import app.eodiyeotji.ui.gallery.MyPhotoStrip
 import app.eodiyeotji.ui.gallery.MyPhotoViewer
 import app.eodiyeotji.ui.common.agoText
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import app.eodiyeotji.ui.theme.mapInk
 import androidx.compose.foundation.BorderStroke
 
 import androidx.activity.compose.BackHandler
@@ -351,6 +356,9 @@ private fun DriveRouteDetailScreen(
                         LaunchedEffect(r.id, w, h) { onMapSize(w, h) }
                         // 비행 진행(0~1): 매 화면 바뀌므로 상태 하나에 두고 진행 막대는 그리기 단계에서만 읽는다
                         val flightT = remember(r.id) { mutableFloatStateOf(0f) }
+                        // 끝까지 달려 도착했으면 끝점 카드(가 보고 싶게 한 줄 + 안내 · 다시 보기)를 띄운다 (다시 달리면 감춘다)
+                        var arrived by remember(r.id) { mutableStateOf(false) }
+                        LaunchedEffect(d.flying) { if (d.flying) arrived = false }
                         if (driving) {
                             RouteSnapshotImage(r, description, Modifier.fillMaxSize())
                         } else {
@@ -365,10 +373,20 @@ private fun DriveRouteDetailScreen(
                                 contentDescription = description,
                                 modifier = Modifier.fillMaxSize(),
                                 onFlightProgress = { flightT.floatValue = it },
+                                onArrive = { arrived = true },
                             )
+                        }
+                        AnimatedVisibility(
+                            visible = arrived && !driving,
+                            enter = fadeIn(tween(900, delayMillis = 500)),
+                            exit = fadeOut(tween(500)),
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(start = 18.dp, end = 18.dp, bottom = 52.dp),
+                        ) {
+                            ArrivedCard(r, distanceText(r.distanceM), onNavigate = onNavigate, onReplay = onFly, canNavigate = d.legs.isNotEmpty())
                         }
                         if (!driving && d.flying) {
                             LaunchedEffect(Unit) { flightT.floatValue = 0f }
+                            SightPopup(flightT, d.sights, Modifier.align(Alignment.TopCenter).padding(top = 96.dp))
                             FlightProgressBar(flightT, d.sights, Modifier.align(Alignment.BottomCenter).padding(start = 18.dp, end = 18.dp, bottom = 52.dp))
                         }
                         BestTimeBadge(r.bestTime, r.theme, Modifier.align(Alignment.TopStart).padding(18.dp))
@@ -500,6 +518,70 @@ private fun FlightProgressBar(t: FloatState, sights: List<FlightSight>, modifier
     }
 }
 
+/**
+ * 지나는 풍경 카드: 풍경 구간에 들어서면 이름이 1.6초쯤 살며시 떴다 사라진다.
+ * 진행 값은 매 화면 바뀌지만 이 카드는 지나는 풍경이 바뀔 때만 다시 그린다. (풍경마다 사진은 아직 없어 이름만)
+ */
+@Composable
+private fun SightPopup(t: FloatState, sights: List<FlightSight>, modifier: Modifier = Modifier) {
+    val now by remember(sights) { derivedStateOf { sights.firstOrNull { t.floatValue in it.from..it.to }?.name } }
+    var shown by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(now) {
+        val n = now ?: return@LaunchedEffect
+        shown = n
+        delay(SIGHT_SHOW_MS)
+        shown = null
+    }
+    AnimatedVisibility(shown != null, modifier, enter = fadeIn(tween(450)), exit = fadeOut(tween(650))) {
+        var last by remember { mutableStateOf("") }
+        shown?.let { last = it }
+        Row(
+            Modifier.background(FlightScrim, RoundedCornerShape(28.dp)).padding(horizontal = 22.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(10.dp).background(FlightFill, CircleShape))
+            Spacer(Modifier.width(12.dp))
+            Text(last, style = EodiTheme.type.label, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** 미리 달리기 도착 카드: 끝점 · 가 보고 싶게 한 줄("주말 아침, 이 길 어때요?") · 거리 + [이 코스로 안내] [다시 보기]. */
+@Composable
+private fun ArrivedCard(r: DriveRoute, distance: String, onNavigate: () -> Unit, onReplay: () -> Unit, canNavigate: Boolean) {
+    Column(
+        Modifier.fillMaxWidth().background(FlightScrim, RoundedCornerShape(20.dp)).padding(horizontal = 24.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(stringResource(arrivedInvite(r.bestTime)), style = EodiTheme.type.title, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            stringResource(R.string.drive_fly_arrived, r.endName, distance),
+            style = EodiTheme.type.label,
+            color = FlightTextSoft,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            PrimaryPill(stringResource(R.string.course_navigate), EodiIcons.Navi, onNavigate, Modifier.weight(1f), enabled = canNavigate)
+            SecondaryPill(stringResource(R.string.drive_fly_again), CommunityIcons.Play, onReplay)
+        }
+    }
+}
+
+private fun arrivedInvite(b: BestTime): Int = when (b) {
+    BestTime.NIGHT -> R.string.drive_invite_night
+    BestTime.SUNSET -> R.string.drive_invite_sunset
+    BestTime.MORNING -> R.string.drive_invite_morning
+    BestTime.DAY -> R.string.drive_invite_day
+    BestTime.FOLIAGE -> R.string.drive_invite_foliage
+    BestTime.BLOSSOM -> R.string.drive_invite_blossom
+}
+
+private const val SIGHT_SHOW_MS = 1_600L
 private val FlightScrim = Color(0xCC111722)
-private val FlightFill = Color(0xFFFFB547)
+
+/** 진행 막대 · 도착 글: 앱의 길 색(파랑, 어두운 띠 위라 밤 색) */
+private val FlightFill = mapInk(true).trip
+private val FlightTextSoft = Color.White.copy(alpha = 0.82f)
 private val FlightTrack = Color(0x55FFFFFF)

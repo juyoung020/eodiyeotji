@@ -6,6 +6,10 @@
 // - /llm/ 은 개발 PC의 Qwen(llama-server)으로 Cloudflare 터널을 거쳐 넘긴다 (터널 주소는 LLM_ORIGIN, 바뀌면 scripts/llm/expose-llm.ps1이 고친다).
 // 비밀값(wrangler secret): KAKAO_REST_API_KEY, GOOGLE_PLACES_API_KEY, APP_TOKEN, LLM_ORIGIN, LLM_ORIGIN_KEY
 
+import { convoy } from './convoy.js';
+
+export { ConvoyHub } from './convoy.js';
+
 const ROUTES = [
   // 카카오 로컬: 장소 이름 (카테고리 · 키워드 · 좌표→주소)
   { prefix: '/kakao/', upstream: 'https://dapi.kakao.com/', allow: /^v2\/local\/(search\/category|search\/keyword|geo\/coord2address)\.json$/, auth: 'kakao' },
@@ -26,6 +30,8 @@ export default {
       return json({ error: 'forbidden' }, 403);
     }
     if (url.pathname.startsWith('/llm/')) return llm(request, env, url);
+    // 같이 가기: 차들 위치 나누기 (src/convoy.js)
+    if (url.pathname === '/convoy' || url.pathname.startsWith('/convoy/')) return convoy(request, env);
     const route = ROUTES.find((r) => url.pathname.startsWith(r.prefix));
     if (!route) return json({ error: 'not found' }, 404);
     const path = url.pathname.slice(route.prefix.length);

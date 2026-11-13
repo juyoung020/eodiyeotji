@@ -77,6 +77,7 @@ class RecordingService : LifecycleService() {
     @Inject lateinit var platform: RecordingPlatform
     @Inject lateinit var monitor: RecordingMonitor
     @Inject lateinit var recall: RecallCenter
+    @Inject lateinit var proactive: app.eodiyeotji.agent.ProactiveCenter
     @Inject lateinit var handoff: app.eodiyeotji.handoff.HandoffRepository
     @Inject lateinit var cabin: app.eodiyeotji.platform.CabinSource
     @Inject lateinit var energy: app.eodiyeotji.platform.EnergySource
@@ -158,6 +159,7 @@ class RecordingService : LifecycleService() {
                 cabinJob = lifecycleScope.startCabin()
                 lifecycleScope.launch(Dispatchers.IO) { recordEnergy(edge.tMs) }
                 recall.onDriveStart()
+                proactive.onDriveStart() // 에이전트가 먼저 말 걸기: 출발 · 잔량 (agent/ProactiveCenter.kt)
                 if (SENDS_PARKING) lifecycleScope.launch(Dispatchers.IO) { handoff.sendMoving(edge.tMs) }
             } else if (!edge.active && current != null) {
                 current.cancelAndJoin() // 위치 수신 중지 + 남은 묶음 저장까지 끝난 뒤 돌아온다
@@ -172,6 +174,7 @@ class RecordingService : LifecycleService() {
                 naviSession = null
                 lastFix = null
                 recall.onDriveEnd()
+                proactive.onDriveEnd() // 도착(주차) 제안
                 lifecycleScope.launch(Dispatchers.IO) { recordEnergy(edge.tMs) }
                 // 차: 주차한 자리를 연결된 폰으로 ("내 차 어디였지" · 차에서 내려 가게까지 걸어서)
                 if (SENDS_PARKING) lifecycleScope.launch(Dispatchers.IO) {

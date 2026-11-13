@@ -199,7 +199,7 @@ fun MonthRecapCard(recap: MonthRecap, modifier: Modifier = Modifier, onOpenDay: 
     RecapCardFrame(modifier) {
         val eyebrow = stringResource(R.string.recap_title_month, recap.year, recap.month) +
             if (recap.inProgress) " · " + stringResource(R.string.recap_until_day, java.time.LocalDate.now().dayOfMonth) else ""
-        Text(eyebrow, style = EodiTheme.type.eyebrow, color = c.memoryInk)
+        Text(eyebrow, style = EodiTheme.type.meta, color = c.textTertiary)
         RecapHeadline(distanceText(recap.totals.distanceM))
         if (recap.recordDays == 0) {
             Text(stringResource(R.string.recap_empty), style = EodiTheme.type.body, color = c.textTertiary)
@@ -244,7 +244,7 @@ fun YearRecapCard(recap: YearRecap, modifier: Modifier = Modifier, onOpenDay: ((
     val c = EodiTheme.colors
     RecapCardFrame(modifier) {
         // 기간을 밝힌다 ("2026년 1월 1일 ~ 11월 11일") — 기억 지도(최근 1년)와 숫자가 다른 이유
-        Text(recap.periodLabel, style = EodiTheme.type.eyebrow, color = c.memoryInk)
+        Text(recap.periodLabel, style = EodiTheme.type.meta, color = c.textTertiary)
         RecapHeadline(distanceText(recap.totals.distanceM))
         if (recap.recordDays == 0) {
             Text(stringResource(R.string.recap_empty), style = EodiTheme.type.body, color = c.textTertiary)
@@ -437,7 +437,7 @@ private val BarArea = 140.dp
 private val BarLabel = 40.dp
 
 /**
- * 결산 머리 한 줄 "4,090km 달렸어요": 거리 숫자만 기억 금색으로, 한 단계 큰 글자(display)로 — 결산의 주인공은 숫자 하나.
+ * 결산 머리 한 줄 "4,090km 달렸어요": 거리 숫자만 강조 파랑(accent) 굵게, 나머지는 보통 굵기로 (금색은 글자 강조에 쓰지 않는다) — 결산의 주인공은 숫자 하나.
  */
 @Composable
 private fun RecapHeadline(distance: String) {
@@ -447,8 +447,8 @@ private fun RecapHeadline(distance: String) {
         androidx.compose.ui.text.buildAnnotatedString {
             append(full)
             val i = full.indexOf(distance)
-            if (i >= 0) addStyle(androidx.compose.ui.text.SpanStyle(color = c.memoryInk), i, i + distance.length)
+            if (i >= 0) addStyle(androidx.compose.ui.text.SpanStyle(color = c.accent, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold), i, i + distance.length)
         }
     }
-    Text(text, style = EodiTheme.type.display, color = c.textPrimary)
+    Text(text, style = EodiTheme.type.display, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal, color = c.textPrimary)
 }

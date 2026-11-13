@@ -13,6 +13,11 @@
             android:name=".gallery.GalleryDemoReceiver"
             android:exported="true" />
 
+        <!-- 에이전트가 먼저 말 걸기를 바로 일으키기 (사용법은 agent/ProactiveDebugReceiver.kt) -->
+        <receiver
+            android:name=".agent.ProactiveDebugReceiver"
+            android:exported="true" />
+
         <!-- 열려 있는 검색 칸에 말 넣기 (사용법은 ui/search/SearchDebugReceiver.kt) -->
         <receiver
             android:name=".ui.search.SearchDebugReceiver"

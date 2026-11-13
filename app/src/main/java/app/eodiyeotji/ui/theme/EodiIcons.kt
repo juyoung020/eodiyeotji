@@ -162,4 +162,16 @@ object EodiIcons {
             }
         }
     }
+
+    /** 네 칸 모눈 ("모아보기") */
+    val Grid: ImageVector by lazy {
+        icon("Grid") {
+            stroke(2f) {
+                moveTo(4f, 4f); horizontalLineTo(10.5f); verticalLineTo(10.5f); horizontalLineTo(4f); close()
+                moveTo(13.5f, 4f); horizontalLineTo(20f); verticalLineTo(10.5f); horizontalLineTo(13.5f); close()
+                moveTo(4f, 13.5f); horizontalLineTo(10.5f); verticalLineTo(20f); horizontalLineTo(4f); close()
+                moveTo(13.5f, 13.5f); horizontalLineTo(20f); verticalLineTo(20f); horizontalLineTo(13.5f); close()
+            }
+        }
+    }
 }

@@ -7,7 +7,9 @@ uniffi::setup_scaffolding!();
 
 pub mod agent;
 pub mod cabin;
+pub mod dayhint;
 pub mod community;
+pub mod convoy;
 pub mod course;
 pub mod drivedetect;
 pub mod edits;
@@ -32,6 +34,7 @@ pub mod logbook;
 pub mod photos;
 pub mod place_detail;
 pub mod places;
+pub mod proactive;
 pub mod recap;
 pub mod replay;
 pub mod routine;

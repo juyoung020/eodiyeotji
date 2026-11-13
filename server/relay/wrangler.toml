@@ -2,3 +2,12 @@ name = "eodi-relay"
 main = "src/index.js"
 compatibility_date = "2025-10-01"
 workers_dev = true
+
+# 같이 가기: 모임 상태를 Durable Object 하나의 메모리에 둔다 (src/convoy.js)
+[[durable_objects.bindings]]
+name = "CONVOY"
+class_name = "ConvoyHub"
+
+[[migrations]]
+tag = "v1-convoy"
+new_sqlite_classes = ["ConvoyHub"]

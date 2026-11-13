@@ -315,7 +315,7 @@ fun SearchResults(
     val open: (SearchRow) -> Unit = open@{ r ->
         val place = r.place
         if (r.kind == SearchRowKind.PLACE && place != null) {
-            // 장소 줄: 결과 위에 장소 상세 창 (별점 · 리뷰 · 내 방문). 닫으면 검색 결과로 돌아온다. 그날 기록은 [지도] 버튼.
+            // 장소 줄: 결과 위에 장소 상세 창 (별점 · 리뷰 · 내 방문). 닫으면 검색 결과로 돌아온다. 
             keyboard?.hide()
             focus.clearFocus()
             viewModel.remember()
@@ -328,13 +328,6 @@ fun SearchResults(
             SearchRowKind.COURSE -> r.course?.let(actions.openCourse)
             SearchRowKind.REVIEW -> r.reviewPlace?.let(actions.openReview)
             SearchRowKind.POST -> r.post?.let(actions.openPost)
-        }
-    }
-    val map: (SearchRow) -> Unit = { r ->
-        val day = r.day
-        if (day != null) {
-            leave()
-            actions.openDay(day, r.place?.let { "s${it.arriveMs}" })
         }
     }
     val navigate: (SearchRow) -> Unit = { r ->
@@ -382,13 +375,13 @@ fun SearchResults(
                 else -> {
                     val ai = answer.askAi
                     if (ai != null && ai.primary) full("ai-top") { AskAiCard(ai, primary = true, onAsk = ask) }
-                    if (answer.dateLabel != null || answer.total > 0) {
-                        full("meta") { MetaLine(answer.dateLabel, answer.total, answer.elapsedMicros) }
+                    if (answer.dateLabel != null) {
+                        full("meta") { MetaLine(answer.dateLabel) }
                     }
                     if (answer.groups.isEmpty()) {
                         full("empty") { NoResults() }
                     }
-                    answer.groups.forEach { g -> group(g, columns, open, map, navigate, state.saved, viewModel::toggleSaved, state.offers, state.courseOffers) }
+                    answer.groups.forEach { g -> group(g, columns, open, navigate, state.offers, state.courseOffers) }
                     if (ai != null && !ai.primary) full("ai-bottom") { AskAiCard(ai, primary = false, onAsk = ask) }
                     full("bottom-space") { Spacer(Modifier.height(24.dp)) }
                 }
@@ -423,10 +416,7 @@ private fun LazyGridScope.group(
     g: SearchGroup,
     columns: Int,
     onOpen: (SearchRow) -> Unit,
-    onMap: (SearchRow) -> Unit,
     onNavigate: (SearchRow) -> Unit,
-    saved: Map<String, Boolean> = emptyMap(),
-    onHeart: (SearchRow) -> Unit = {},
     offers: Map<String, List<PartnerOffer>> = emptyMap(),
     courseOffers: Map<String, CourseOffers> = emptyMap(),
 ) {
@@ -444,9 +434,7 @@ private fun LazyGridScope.group(
             // 장소 · 하루 · 리뷰 · 글: 촘촘한 한 줄 (썸네일 · 이름 · 마지막 방문). 큰 사진 카드는 2~3건만 보여 결과가 안 보였다.
             // 썸네일 사진은 묶음 위쪽 몇 줄만 (구글 사진 요청을 적게), 나머지는 종류 아이콘.
             else -> ResultRow(
-                r, onOpen = onOpen, onMap = onMap, onNavigate = onNavigate,
-                saved = if (r.kind == SearchRowKind.PLACE && place != null) saved[r.key] ?: false else null,
-                onHeart = onHeart,
+                r, onOpen = onOpen, onNavigate = onNavigate,
                 offers = offers[r.key].orEmpty(),
                 courseOffers = courseOffers[r.key],
                 photo = place != null && place.name.isNotBlank() && index < PhotoRows * columns,
@@ -481,19 +469,13 @@ private fun MoreLine(more: Int) {
 
 /** 기간 글 ("기간: 10월 26일 ~ 11월 1일") · (디버그) 결과 수와 Rust 검색 시간. */
 @Composable
-private fun MetaLine(dateLabel: String?, total: Int, elapsedMicros: Long) {
+private fun MetaLine(dateLabel: String) {
+    // 결과 수는 묶음 머리("날짜 · 기록 6")가 말하므로 여기서는 날짜 범위만
     val c = EodiTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, top = 4.dp)) {
-        if (dateLabel != null) {
-            Icon(EodiIcons.Calendar, null, tint = c.accent, modifier = Modifier.size(26.dp))
-            Spacer(Modifier.width(10.dp))
-            Text(stringResource(R.string.search_date_range, dateLabel), style = EodiTheme.type.label, color = c.accent, maxLines = 1)
-            Spacer(Modifier.width(20.dp))
-        }
-        // 결과 수만 (걸린 시간 같은 개발용 숫자는 보이지 않는다, 0건이면 아래 빈 화면이 말한다)
-        if (total > 0) {
-            Text(stringResource(R.string.search_count, total), style = EodiTheme.type.caption, color = c.textTertiary, maxLines = 1)
-        }
+        Icon(EodiIcons.Calendar, null, tint = c.accent, modifier = Modifier.size(26.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(stringResource(R.string.search_date_range, dateLabel), style = EodiTheme.type.label, color = c.accent, maxLines = 1)
     }
 }
 
@@ -507,15 +489,12 @@ private fun NoResults() {
     }
 }
 
-/** 결과 한 줄: [썸네일 · 그림] 제목 / 부제 / 날짜 줄(마지막 방문) · [저장] [지도] [안내]. 줄을 누르면 열기 (장소는 장소 창, 하루는 그날 기록). */
+/** 결과 한 줄: [썸네일 · 그림] 제목 / 날짜 줄 한 줄 · [안내] 하나. 차 화면에서 한눈에 읽히게 줄 수 · 버튼 수를 줄였다. 줄을 누르면 열기 (장소는 장소 창, 하루는 그날 기록). */
 @Composable
 private fun ResultRow(
     r: SearchRow,
     onOpen: (SearchRow) -> Unit,
-    onMap: (SearchRow) -> Unit,
     onNavigate: (SearchRow) -> Unit,
-    saved: Boolean? = null,
-    onHeart: (SearchRow) -> Unit = {},
     offers: List<PartnerOffer> = emptyList(),
     courseOffers: CourseOffers? = null,
     photo: Boolean = false,
@@ -555,32 +534,32 @@ private fun ResultRow(
                         )
                     }
                 }
-                if (r.subtitle.isNotBlank()) {
-                    Text(r.subtitle, style = EodiTheme.type.meta, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // 둘째 줄은 하나만: 날짜(마지막 방문) 줄, 없으면 부제. 들른 곳 나열 · 주소는 줄을 눌러 연 화면에서 본다.
+                val secondary = r.dateLine.ifBlank { r.subtitle }
+                if (secondary.isNotBlank() || offers.isNotEmpty() || courseOffers != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            secondary,
+                            style = EodiTheme.type.meta,
+                            color = c.textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        // 제휴 쿠폰은 새 줄을 만들지 않고 같은 줄 끝에 (장소 · 리뷰 줄은 혜택, 코스 줄은 "쿠폰 2곳")
+                        if (offers.isNotEmpty()) {
+                            Spacer(Modifier.width(10.dp))
+                            PlaceCouponBadge(offers)
+                        }
+                        if (courseOffers != null) {
+                            Spacer(Modifier.width(10.dp))
+                            CourseCouponBadge(courseOffers)
+                        }
+                    }
                 }
-                if (r.dateLine.isNotBlank()) {
-                    Text(r.dateLine, style = EodiTheme.type.meta, color = c.textTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                // 제휴 쿠폰 (장소 · 리뷰 줄은 혜택, 코스 줄은 "쿠폰 2곳")
-                PlaceCouponBadge(offers)
-                if (courseOffers != null) CourseCouponBadge(courseOffers)
             }
-            val canMap = r.day != null && r.place != null && (r.kind == SearchRowKind.PLACE || r.kind == SearchRowKind.DAY)
+            // 줄마다 동작은 하나만 (안내). 저장 · 그날 지도는 줄을 눌러 연 화면에 있다.
             val canNavi = r.place != null && (r.kind == SearchRowKind.PLACE || r.kind == SearchRowKind.DAY || r.kind == SearchRowKind.REVIEW)
-            if (saved != null) {
-                // 장소 저장(♥): 저장한 곳은 내 장소에 모인다
-                Spacer(Modifier.width(8.dp))
-                RowAction(
-                    if (saved) CommunityIcons.HeartFilled else CommunityIcons.Heart,
-                    stringResource(if (saved) R.string.edit_saved else R.string.places_save),
-                    filled = false,
-                    tint = if (saved) c.heart else null,
-                ) { onHeart(r) }
-            }
-            if (canMap) {
-                Spacer(Modifier.width(8.dp))
-                RowAction(EodiIcons.Map, stringResource(R.string.search_map), filled = false) { onMap(r) }
-            }
             if (canNavi) {
                 Spacer(Modifier.width(8.dp))
                 RowAction(EodiIcons.Navi, stringResource(R.string.search_navigate), filled = true) { onNavigate(r) }
@@ -654,7 +633,7 @@ private fun AskAiCard(ai: AskAi, primary: Boolean, onAsk: (String) -> Unit) {
                 SparkleBadge(size = 72.dp)
                 Spacer(Modifier.width(20.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.search_ask_ai), style = EodiTheme.type.bodyStrong, fontWeight = FontWeight.Bold, color = c.memoryInk)
+                    Text(stringResource(R.string.search_ask_ai), style = EodiTheme.type.bodyStrong, fontWeight = FontWeight.Bold, color = c.textPrimary)
                     Text(
                         stringResource(R.string.search_ask_ai_body, ai.text),
                         style = EodiTheme.type.body,
@@ -805,62 +784,94 @@ private fun FilterChips(
     onReset: () -> Unit,
     onPickMonth: () -> Unit,
 ) {
+    // 차 화면: 칩을 줄줄이 늘어놓지 않고 한 줄에 셋만 ("기간 ▾" · "종류 ▾" · 처음 간 곳). 고르는 건 작은 창에서 큰 알약으로.
     val c = EodiTheme.colors
-    val hiddenSet = filter.period == SearchPeriod.CUSTOM || filter.kinds.isNotEmpty() || filter.firstVisitOnly
-    var more by rememberSaveable { mutableStateOf(false) }
-    val expanded = more || hiddenSet
+    var picking by rememberSaveable { mutableStateOf<String?>(null) }
+    val periods = listOf(
+        SearchPeriod.ANY to stringResource(R.string.search_period_any),
+        SearchPeriod.THIS_WEEK to stringResource(R.string.search_period_week),
+        SearchPeriod.THIS_MONTH to stringResource(R.string.search_period_month),
+        SearchPeriod.THIS_YEAR to stringResource(R.string.search_period_year),
+    )
+    val custom = filter.period == SearchPeriod.CUSTOM
+    val from = filter.from
+    val to = filter.to
+    val customLabel = when {
+        !custom || from == null || to == null -> stringResource(R.string.search_period_custom)
+        // 한 달을 골랐으면 "10월" (올해가 아니면 "작년 10월")
+        from.dayOfMonth == 1 && to == from.plusMonths(1).minusDays(1) -> when (from.year) {
+            LocalDate.now().year -> stringResource(R.string.search_month, from.monthValue)
+            LocalDate.now().year - 1 -> stringResource(R.string.search_month_last_year, from.monthValue)
+            else -> stringResource(R.string.search_month_year, from.year, from.monthValue)
+        }
+        else -> stringResource(R.string.search_period_custom_range, shortDate(from), shortDate(to))
+    }
+    val kinds = listOf(
+        listOf(EpisodeKind.TRIP) to stringResource(R.string.search_kind_trip),
+        listOf(EpisodeKind.OUTING) to stringResource(R.string.search_kind_outing),
+        listOf(EpisodeKind.ERRAND) to stringResource(R.string.search_kind_errand),
+        listOf(EpisodeKind.COMMUTE_TO_WORK, EpisodeKind.COMMUTE_HOME) to stringResource(R.string.search_kind_commute),
+    )
+    val all = stringResource(R.string.search_filter_all)
+    val periodValue = when (filter.period) {
+        SearchPeriod.ANY -> all
+        SearchPeriod.CUSTOM -> customLabel
+        else -> periods.first { it.first == filter.period }.second
+    }
+    val onKinds = kinds.filter { (ks, _) -> ks.all { it in filter.kinds } }.map { it.second }
+    val kindValue = when (onKinds.size) {
+        0 -> all
+        1 -> onKinds[0]
+        else -> stringResource(R.string.search_filter_kind_more, onKinds[0], onKinds.size - 1)
+    }
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val periods = listOf(
-            SearchPeriod.ANY to stringResource(R.string.search_period_any),
-            SearchPeriod.THIS_WEEK to stringResource(R.string.search_period_week),
-            SearchPeriod.THIS_MONTH to stringResource(R.string.search_period_month),
-            SearchPeriod.THIS_YEAR to stringResource(R.string.search_period_year),
+        TogglePill(
+            stringResource(R.string.search_filter_period, periodValue), filter.period != SearchPeriod.ANY,
+            { picking = "period" }, minHeight = ChipHeight, role = Role.Button,
         )
-        periods.forEach { (p, label) -> TogglePill(label, filter.period == p, { onPeriod(p, null, null) }, minHeight = ChipHeight) }
-        if (!expanded) {
-            TextButton(onClick = { more = true }, modifier = Modifier.heightIn(min = ChipHeight)) {
-                Text(stringResource(R.string.search_filter_more), style = EodiTheme.type.label, color = c.accent)
-            }
-            return@Row
-        }
-        val custom = filter.period == SearchPeriod.CUSTOM
-        val from = filter.from
-        val to = filter.to
-        val customLabel = when {
-            !custom || from == null || to == null -> stringResource(R.string.search_period_custom)
-            // 한 달을 골랐으면 "10월" (올해가 아니면 "작년 10월")
-            from.dayOfMonth == 1 && to == from.plusMonths(1).minusDays(1) -> when (from.year) {
-                LocalDate.now().year -> stringResource(R.string.search_month, from.monthValue)
-                LocalDate.now().year - 1 -> stringResource(R.string.search_month_last_year, from.monthValue)
-                else -> stringResource(R.string.search_month_year, from.year, from.monthValue)
-            }
-            else -> stringResource(R.string.search_period_custom_range, shortDate(from), shortDate(to))
-        }
-        TogglePill(customLabel, custom, onPickMonth, minHeight = ChipHeight)
-        Box(Modifier.size(width = 2.dp, height = 36.dp).background(c.outline))
-        val kinds = listOf(
-            listOf(EpisodeKind.TRIP) to stringResource(R.string.search_kind_trip),
-            listOf(EpisodeKind.OUTING) to stringResource(R.string.search_kind_outing),
-            listOf(EpisodeKind.ERRAND) to stringResource(R.string.search_kind_errand),
-            listOf(EpisodeKind.COMMUTE_TO_WORK, EpisodeKind.COMMUTE_HOME) to stringResource(R.string.search_kind_commute),
+        TogglePill(
+            stringResource(R.string.search_filter_kind, kindValue), filter.kinds.isNotEmpty(),
+            { picking = "kind" }, minHeight = ChipHeight, role = Role.Button,
         )
-        kinds.forEach { (ks, label) ->
-            TogglePill(label, ks.all { it in filter.kinds }, { ks.forEach(onKind) }, minHeight = ChipHeight)
-        }
-        Box(Modifier.size(width = 2.dp, height = 36.dp).background(c.outline))
         TogglePill(stringResource(R.string.search_first_only), filter.firstVisitOnly, onFirstVisit, minHeight = ChipHeight)
-        if (!hiddenSet) {
-            TextButton(onClick = { more = false }, modifier = Modifier.heightIn(min = ChipHeight)) {
-                Text(stringResource(R.string.search_filter_less), style = EodiTheme.type.label, color = c.accent)
-            }
-        }
         if (filter.isSet) {
             TextButton(onClick = onReset, modifier = Modifier.heightIn(min = ChipHeight)) {
-                Text(stringResource(R.string.search_filter_reset), style = EodiTheme.type.label, color = c.accent)
+                Text(stringResource(R.string.search_filter_reset), style = EodiTheme.type.label, color = c.accent, maxLines = 1)
+            }
+        }
+    }
+    when (picking) {
+        "period" -> FilterSheet(stringResource(R.string.search_filter_pick_period), onDismiss = { picking = null }) {
+            periods.forEach { (p, label) ->
+                TogglePill(label, filter.period == p, { onPeriod(p, null, null); picking = null }, minHeight = ChipHeight, role = Role.RadioButton)
+            }
+            TogglePill(customLabel, custom, { picking = null; onPickMonth() }, minHeight = ChipHeight, role = Role.RadioButton)
+        }
+        "kind" -> FilterSheet(stringResource(R.string.search_filter_pick_kind), onDismiss = { picking = null }) {
+            kinds.forEach { (ks, label) ->
+                TogglePill(label, ks.all { it in filter.kinds }, { ks.forEach(onKind) }, minHeight = ChipHeight, role = Role.Checkbox)
+            }
+        }
+    }
+}
+
+/** 조건 고르는 작은 창: 제목 · 큰 알약들 · 닫기. 차는 가운데 카드, 폰은 아래 시트 ([OverlayCard]). */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FilterSheet(title: String, onDismiss: () -> Unit, options: @Composable () -> Unit) {
+    val c = EodiTheme.colors
+    OverlayCard(onDismiss = onDismiss, maxWidth = 900.dp) {
+        Column(Modifier.padding(32.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            Text(title, style = EodiTheme.type.title, color = c.textPrimary, modifier = Modifier.semantics { heading() })
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { options() }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = ChipHeight)) {
+                    Text(stringResource(R.string.search_filter_done), style = EodiTheme.type.label, color = c.accent)
+                }
             }
         }
     }

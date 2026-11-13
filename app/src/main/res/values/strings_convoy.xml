@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 같이 가기 (여러 차가 같은 목적지로 함께, ui/convoy) -->
+<resources>
+    <string name="convoy_title">같이 가기</string>
+    <string name="convoy_sharing">위치 공유 중</string>
+    <string name="convoy_sharing_count">위치 공유 중 · %d대</string>
+    <string name="convoy_create">새로 만들기</string>
+    <string name="convoy_join">코드로 참여</string>
+    <string name="convoy_name_label">내 이름 (다른 차에 보여요)</string>
+    <string name="convoy_default_name">내 차</string>
+    <string name="convoy_code_label">참여 코드 6자리</string>
+    <string name="convoy_dest">목적지 · %s</string>
+    <string name="convoy_dest_none">목적지 없음 · 장소 창에서 \'같이 가기\'를 누르면 그곳이 목적지가 돼요</string>
+    <string name="convoy_code">참여 코드</string>
+    <string name="convoy_share">코드 보내기</string>
+    <string name="convoy_share_text">어디였지 같이 가기 코드: %1$s · 목적지: %2$s</string>
+    <string name="convoy_navigate">목적지로 함께 안내</string>
+    <string name="convoy_navi_ok">내비에 목적지를 보냈어요</string>
+    <string name="convoy_navi_fail">내비에 보내지 못했어요</string>
+    <string name="convoy_leave">나가기</string>
+    <string name="convoy_close">닫기</string>
+    <string name="convoy_connecting">연결 중…</string>
+    <string name="convoy_error_connect">연결하지 못했어요. 코드와 인터넷을 확인해 주세요.</string>
+    <string name="convoy_waiting">아직 다른 차가 없어요. 참여 코드를 알려 주세요.</string>
+    <string name="convoy_offline">잠시 연결이 끊겼어요 · 마지막 위치로 보여요</string>
+    <string name="convoy_local">이 기기 안 시연 모드 (중계 서버 없음)</string>
+    <string name="convoy_privacy">같이 가기를 켠 동안만 내 위치를 나눠요. 목적지에 도착하거나 12시간이 지나면 끝나요.</string>
+    <string name="convoy_tts_ended">목적지에 도착해 같이 가기를 끝냈어요.</string>
+    <string name="convoy_map_description">같이 가는 차들의 위치 지도</string>
+</resources>

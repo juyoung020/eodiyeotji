@@ -26,6 +26,10 @@ data class BizUiState(
     /** 거래처 목록 · 거래처로 권할 곳 (Rust `bizclient.rs`) */
     val clients: List<BizClient> = emptyList(),
     val suggestions: List<BizClient> = emptyList(),
+    /** 열어 둔 출장 (경비 내역 창, `BizTrip.episodeId`) */
+    val selected: Long? = null,
+    /** 방금 "출장 아님"으로 뺀 날 (되돌리기 줄) */
+    val removedDay: String? = null,
 )
 
 /** 출장 관리. 계산은 모두 Rust(`biztrip.rs`): 여기서는 부르고 상태에 담기만 한다. */
@@ -40,19 +44,33 @@ class BizViewModel @Inject constructor(private val core: EodiCore) : ViewModel()
         load()
     }
 
-    fun close() = _state.update { it.copy(open = false) }
+    fun close() = _state.update { it.copy(open = false, selected = null, removedDay = null) }
+
+    /** 출장 한 건의 경비 내역을 연다 (같은 것을 다시 누르면 닫는다). */
+    fun select(episodeId: Long?) = _state.update { it.copy(selected = if (it.selected == episodeId) null else episodeId) }
 
     fun shift(by: Int) {
         val next = _state.value.ym.plusMonths(by.toLong())
         if (next > YearMonth.now()) return
-        _state.update { it.copy(ym = next) }
+        _state.update { it.copy(ym = next, selected = null, removedDay = null) }
         load()
     }
 
     /** "출장 아님": 그날을 자동 판정에서 뺀다 (Rust `set_biz_mark`). */
     fun markNotBiz(day: String) {
+        _state.update { it.copy(selected = null, removedDay = day) }
         viewModelScope.launch {
             runCatching { core.setBizMark(day, false) }
+            load(keep = true)
+        }
+    }
+
+    /** "출장 아님" 되돌리기: 자동 판정으로 돌린다. */
+    fun undoNotBiz() {
+        val day = _state.value.removedDay ?: return
+        _state.update { it.copy(removedDay = null) }
+        viewModelScope.launch {
+            runCatching { core.setBizMark(day, null) }
             load(keep = true)
         }
     }

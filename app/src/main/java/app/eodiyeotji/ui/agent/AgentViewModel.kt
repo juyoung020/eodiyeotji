@@ -11,6 +11,16 @@ import app.eodiyeotji.core.MemoryHit
 import app.eodiyeotji.core.StopFact
 import app.eodiyeotji.agent.RecommendedCourse
 import app.eodiyeotji.core.lastKnownLocation
+import app.eodiyeotji.agent.ProactiveVoice
+import app.eodiyeotji.convoy.ConvoyPhase
+import app.eodiyeotji.convoy.ConvoyPlace
+import app.eodiyeotji.convoy.ConvoyRepository
+import app.eodiyeotji.core.rust.FollowUpIntent
+import app.eodiyeotji.core.rust.agentFollowUpIntent
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import app.eodiyeotji.platform.SpeechInput
 import app.eodiyeotji.platform.SpeechOutput
 import app.eodiyeotji.platform.SpeechResult
@@ -143,6 +153,8 @@ class AgentViewModel @Inject constructor(
     private val core: EodiCore,
     private val speech: SpeechInput,
     private val tts: SpeechOutput,
+    private val convoy: ConvoyRepository,
+    @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
     private val turn = MutableStateFlow<AgentTurn?>(null)
@@ -180,6 +192,13 @@ class AgentViewModel @Inject constructor(
     private var actionJob: Job? = null
     private var noteJob: Job? = null
     private var lastId = 0L
+    /**
+     * 여러 단계 대화: 앞에서 짠 코스(추천 코스 목록 · 안내 제안이 있는 차례). "같이 갈 사람 초대해줘" · "출발하자"가 이것을 쓴다.
+     * 다음 말의 뜻은 Rust `proactive::follow_up_intent`가 먼저 규칙으로 알아듣고, 아니면 기억 에이전트(LLM 포함)에 그대로 묻는다.
+     */
+    private var planTurn: AgentTurn? = null
+    /** "출발하자"를 코스 고르기 질문으로 바꿔 물었다 → 이 차례에 안내 제안이 오면 바로 실행한다 (운전자가 이미 가자고 했다). */
+    private var autoConfirmId: Long? = null
     /** 불러오는 중인 지도 (차례 id, 번호를 맞출 들른 곳) — 같은 지도를 두 번 부르지 않게. */
     private var mapKey: Pair<Long, List<StopFact>>? = null
 
@@ -262,7 +281,29 @@ class AgentViewModel @Inject constructor(
                 null
             }
             val context = AgentContext(nowMs = System.currentTimeMillis(), currentLocation = here, isDriving = isDriving)
-            agent.ask(question, context)
+            val plan = planTurn
+            var query = question
+            when (val intent = runCatching { agentFollowUpIntent(question, plan != null) }.getOrDefault(FollowUpIntent.Pass)) {
+                // "주말에 바다 가자" → 에이전트가 알아듣는 코스 추천 질문으로 (말풍선은 한 말 그대로)
+                is FollowUpIntent.Plan -> query = intent.query
+                FollowUpIntent.Invite -> {
+                    invite(id, plan)
+                    return@launch
+                }
+                FollowUpIntent.Start -> {
+                    val proposal = plan?.proposals?.firstOrNull()
+                    if (plan != null && proposal != null) {
+                        startPlan(id, plan, proposal)
+                        return@launch
+                    }
+                    if (plan != null && plan.courses.isNotEmpty()) {
+                        query = "${plan.courseFocus + 1}번으로 가자"
+                        autoConfirmId = id
+                    }
+                }
+                FollowUpIntent.Pass -> Unit
+            }
+            agent.ask(query, context)
                 .catch { e ->
                     if (e is CancellationException) throw e
                     Log.w(TAG, "에이전트 질문 실패", e)
@@ -274,6 +315,8 @@ class AgentViewModel @Inject constructor(
 
     /** 처음 화면으로 (운전 중 "취소" 포함). 진행 중인 질문·행동도 멈춘다. */
     fun clear() {
+        planTurn = null
+        autoConfirmId = null
         askJob?.cancel()
         actionJob?.cancel()
         tts.stop()
@@ -314,6 +357,8 @@ class AgentViewModel @Inject constructor(
     }
 
     private fun onSpeech(r: SpeechResult) {
+        // 먼저 말 걸기 카드가 "응/아니"를 듣는 중이면 그 말은 질문이 아니다 (agent/ProactiveCenter.kt)
+        if (ProactiveVoice.claimed) return
         if (dictating.value) {
             dictating.value = false
             when (r) {
@@ -517,6 +562,14 @@ class AgentViewModel @Inject constructor(
                     val t = if (it.coursesFresh) it else it.copy(courses = emptyList(), courseFocus = 0)
                     if (t.phase == AnswerPhase.Failed) t else t.copy(phase = AnswerPhase.Done)
                 }
+                turn.value?.takeIf { it.id == id && it.error == null && (it.courses.isNotEmpty() || it.proposals.isNotEmpty()) }?.let { planTurn = it }
+                if (autoConfirmId == id) {
+                    autoConfirmId = null
+                    turn.value?.takeIf { it.id == id }?.proposals?.firstOrNull()?.let { p ->
+                        updateTurn(id) { it.copy(answer = it.answer.trimEnd() + " " + appContext.getString(app.eodiyeotji.R.string.agent_start_line)) }
+                        confirm(p)
+                    }
+                }
                 speakIfDriving(id)
             }
             is AgentEvent.Error -> {
@@ -525,6 +578,53 @@ class AgentViewModel @Inject constructor(
             }
         }
     }
+
+    /** "출발하자": 앞에서 짠 코스의 안내 제안을 그대로 실행한다 (구간 나누기 · 다음 구간은 AgentBridge · CourseGuide가). */
+    private fun startPlan(id: Long, plan: AgentTurn, proposal: AgentEvent.ActionProposal) {
+        updateTurn(id) {
+            it.copy(
+                answer = appContext.getString(app.eodiyeotji.R.string.agent_start_line),
+                phase = AnswerPhase.Done,
+                proposals = listOf(proposal),
+                courses = plan.courses,
+                courseFocus = plan.courseFocus,
+                coursesFresh = true,
+            )
+        }
+        confirm(proposal)
+        speakIfDriving(id)
+    }
+
+    /**
+     * "같이 갈 사람 초대해줘": 앞에서 짠 코스의 목적지로 같이 가기 모임을 만들고(`convoy/ConvoyRepository`) 참여 코드를 알려 준다.
+     * 안내 제안 · 코스 목록은 그대로 남겨 다음 말 "출발하자"로 이어 간다.
+     */
+    private suspend fun invite(id: Long, plan: AgentTurn?) {
+        val dest = plan?.let(::planDestination)
+        if (plan == null || dest == null) {
+            updateTurn(id) { it.copy(answer = appContext.getString(app.eodiyeotji.R.string.agent_invite_no_plan), phase = AnswerPhase.Done) }
+            speakIfDriving(id)
+            return
+        }
+        val cur = convoy.state.value
+        if (cur.phase == ConvoyPhase.IDLE) convoy.create(cur.name.ifBlank { DEFAULT_CONVOY_NAME }, dest) else convoy.goTogether(dest)
+        val st = withTimeoutOrNull(INVITE_WAIT_MS) { convoy.state.first { it.phase == ConvoyPhase.ACTIVE || it.error != null } }
+        val answer = if (st?.phase == ConvoyPhase.ACTIVE && st.code.isNotBlank()) {
+            appContext.getString(app.eodiyeotji.R.string.agent_invite_created, st.code, dest.name)
+        } else {
+            appContext.getString(app.eodiyeotji.R.string.agent_invite_failed)
+        }
+        updateTurn(id) {
+            it.copy(answer = answer, phase = AnswerPhase.Done, proposals = plan.proposals, courses = plan.courses, courseFocus = plan.courseFocus, coursesFresh = true)
+        }
+        turn.value?.takeIf { it.id == id }?.let { planTurn = it }
+        speakIfDriving(id)
+    }
+
+    /** 짠 코스의 목적지: 추천 길이면 끝점, 기억 코스면 마지막 들를 곳. */
+    private fun planDestination(t: AgentTurn): ConvoyPlace? =
+        t.courses.getOrNull(t.courseFocus)?.route?.let { ConvoyPlace(it.endName, it.end.lat, it.end.lon) }
+            ?: t.recommendations.firstOrNull()?.stops?.lastOrNull()?.let { ConvoyPlace(it.name, it.lat, it.lon) }
 
     /**
      * 첫 추천 카드의 하루 지도 (Rust가 만든 GeoJSON, 핀 번호는 카드 사진 줄 순서로 맞춘 것). 이미 맞는 지도가 있거나
@@ -572,6 +672,8 @@ class AgentViewModel @Inject constructor(
         const val FOLLOW_UP_LISTEN_MS = 7_000L
         /** 대화 기록은 최근 이만큼만 (오래된 것부터 지운다). */
         const val MAX_HISTORY = 30
+        const val INVITE_WAIT_MS = 8_000L
+        const val DEFAULT_CONVOY_NAME = "나"
         const val MSG_FAILED = "기억을 찾다가 문제가 생겼어요. 다시 물어봐 주세요."
         const val MSG_NO_SPEECH = "말씀을 듣지 못했어요. 마이크를 누르고 다시 말씀해 주세요."
         const val MSG_NO_MIC = "마이크 권한이 있어야 말로 물을 수 있어요."

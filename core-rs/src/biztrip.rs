@@ -63,6 +63,35 @@ pub struct BizStop {
     pub leave_ms: i64,
     pub lat: f64,
     pub lon: f64,
+    /// 장소 분류 (예: "음식점 > 한식", 모르면 빈 문자열)
+    pub category: String,
+}
+
+/// 경비 항목 종류 (화면 아이콘).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum BizExpenseKind {
+    /// 충전 · 주유
+    Energy,
+    /// 고속도로 통행료
+    Toll,
+    Parking,
+    /// 식사 · 카페
+    Meal,
+    Other,
+}
+
+/// 출장 경비 한 줄 (카드 내역처럼).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct BizExpense {
+    pub kind: BizExpenseKind,
+    /// "고속도로 통행료 · 가는 길", "점심 · 현대자동차 남양연구소 근처"
+    pub title: String,
+    /// 어림 근거 ("배터리 16% × 347원/kWh")
+    pub detail: String,
+    pub t_ms: i64,
+    pub won: i64,
+    /// true = 차 기록 · 들른 곳으로 어림한 값, false = 실제 결제 (카드 연동이 생기면)
+    pub estimated: bool,
 }
 
 /// 출장 한 건 (정산서 한 줄).
@@ -88,8 +117,10 @@ pub struct BizTrip {
     /// 쓴 배터리 · 연료 (%p, 기록이 없으면 None)
     pub energy_pct: Option<f64>,
     pub ev: bool,
-    /// 경비 어림 (원, 100원 단위)
+    /// 경비 어림 (원, 100원 단위) = [expenses] 합
     pub cost_won: i64,
+    /// 경비 내역 (시각순, [biz_expenses])
+    pub expenses: Vec<BizExpense>,
     /// 사용자가 직접 출장으로 정했나 (false = 자동으로 찾음)
     pub marked: bool,
     /// 거래처에 들른 주행인가 (`bizclient.rs`)
@@ -177,7 +208,7 @@ impl EodiStore {
                     continue;
                 }
                 let keep = |s: &crate::memory::StopFact| away(s) || is_client(s);
-                let mut t = trip(&e, &day, wd, keep, &odo, &energy, mark == Some(true));
+                let mut t = trip(&e, &day, wd, keep, &odo, &energy, mark == Some(true), self.tz_offset_minutes);
                 if visits_client {
                     t.client = true;
                     // 거래처 이름이 있으면 제목에 쓴다 ("한빛전자 방문")
@@ -218,6 +249,7 @@ impl EodiStore {
 
 const WEEKDAYS: [&str; 7] = ["일", "월", "화", "수", "목", "금", "토"];
 
+#[allow(clippy::too_many_arguments)]
 fn trip(
     e: &Episode,
     day: &str,
@@ -226,6 +258,7 @@ fn trip(
     odo: &[(i64, f64)],
     energy: &[(i64, f64, bool)],
     marked: bool,
+    tz_offset_minutes: i32,
 ) -> BizTrip {
     let f = &e.facts;
     // 행선지: 멀리 들른 곳 (사용자가 정한 날이면 들른 곳 모두)
@@ -233,7 +266,15 @@ fn trip(
         .stops
         .iter()
         .filter(|s| marked || away(s))
-        .map(|s| BizStop { name: s.name.clone(), address: s.address.clone(), arrive_ms: s.arrive_ms, leave_ms: s.leave_ms, lat: s.lat, lon: s.lon })
+        .map(|s| BizStop {
+            name: s.name.clone(),
+            address: s.address.clone(),
+            arrive_ms: s.arrive_ms,
+            leave_ms: s.leave_ms,
+            lat: s.lat,
+            lon: s.lon,
+            category: s.category.clone(),
+        })
         .collect();
     let stay_min: i64 = f.stops.iter().map(|s| (s.leave_ms - s.arrive_ms).max(0)).sum::<i64>() / 60_000;
     let nearest = |t: i64| odo.iter().filter(|(at, _)| (at - t).abs() <= MATCH_MS).min_by_key(|(at, _)| (at - t).abs()).map(|&(_, v)| v);
@@ -246,7 +287,22 @@ fn trip(
     let e_sum = crate::energy::summarize(&rows);
     let energy_pct = (e_sum.known && rows.len() >= 2).then_some(e_sum.used_pct);
     let ev = e_sum.known && e_sum.ev;
-    let cost = cost_won(energy_pct, ev, distance_km);
+    // 경비 내역은 들른 곳 모두로 (출장지 근처 식당 · 주차장도 넣으려고)
+    let all: Vec<BizStop> = f
+        .stops
+        .iter()
+        .map(|s| BizStop {
+            name: s.name.clone(),
+            address: s.address.clone(),
+            arrive_ms: s.arrive_ms,
+            leave_ms: s.leave_ms,
+            lat: s.lat,
+            lon: s.lon,
+            category: s.category.clone(),
+        })
+        .collect();
+    let expenses = biz_expenses(&all, f.end_ms, distance_km, energy_pct, ev, tz_offset_minutes);
+    let cost = expenses.iter().map(|x| x.won).sum();
     let region = f.region.clone();
     let title = if region.is_empty() {
         stops.first().map(|s| format!("{} 출장", s.name)).unwrap_or_else(|| "출장".into())
@@ -268,6 +324,7 @@ fn trip(
         energy_pct,
         ev,
         cost_won: cost,
+        expenses,
         marked,
         client: false,
     }
@@ -281,6 +338,98 @@ pub fn cost_won(energy_pct: Option<f64>, ev: bool, distance_km: f64) -> i64 {
         None => distance_km * if ev { WON_PER_KM_EV } else { WON_PER_KM_FUEL },
     };
     ((won / 100.0).round() as i64) * 100
+}
+
+/// 고속도로 통행료 어림: 기본 [TOLL_BASE_WON] + km당 [TOLL_WON_PER_KM] × 고속도로 비율 [TOLL_HIGHWAY_SHARE].
+const TOLL_BASE_WON: f64 = 900.0;
+const TOLL_WON_PER_KM: f64 = 44.3;
+const TOLL_HIGHWAY_SHARE: f64 = 0.7;
+/// 한 길(가는 길 · 오는 길)이 이만큼(km) 넘어야 고속도로를 탔다고 본다.
+const TOLL_MIN_LEG_KM: f64 = 20.0;
+/// 식사 · 카페 · 주차 어림 단가 (시연용 평균값).
+const MEAL_WON: i64 = 9_000;
+const CAFE_WON: i64 = 4_500;
+const PARKING_WON_PER_30MIN: i64 = 1_000;
+const PARKING_MAX_WON: i64 = 20_000;
+
+fn round100(won: f64) -> i64 {
+    ((won / 100.0).round() as i64) * 100
+}
+
+/// 출장 한 건의 경비 내역 (시각순). 카드 연동이 없으므로 모두 **어림**(`estimated = true`)이다.
+/// - 충전 · 주유: 쓴 에너지 × 단가 ([cost_won]). 충전소 · 주유소에 들렀으면 그곳 이름 · 시각으로
+/// - 통행료: 왕복이면 가는 길 · 오는 길 따로, 한 길이 [TOLL_MIN_LEG_KM] 넘을 때만
+/// - 식사 · 카페: 분류가 음식점 · 카페인 들른 곳. 그런 곳이 없고 행선지에 12:00~12:30을 넘겨 머물렀으면 "점심 · ○○ 근처"
+/// - 주차: 분류가 주차장인 곳, 머문 시간 30분당 단가 (상한 있음)
+pub fn biz_expenses(
+    stops: &[BizStop],
+    end_ms: i64,
+    distance_km: f64,
+    energy_pct: Option<f64>,
+    ev: bool,
+    tz_offset_minutes: i32,
+) -> Vec<BizExpense> {
+    let mut out = Vec::new();
+    let has = |s: &BizStop, keys: &[&str]| keys.iter().any(|k| s.category.contains(k) || s.name.contains(k));
+    let item = |kind, title: String, detail: String, t_ms, won| BizExpense { kind, title, detail, t_ms, won, estimated: true };
+    // 충전 · 주유
+    let energy_won = cost_won(energy_pct, ev, distance_km);
+    if energy_won > 0 {
+        let station = stops.iter().find(|s| has(s, &["충전소", "주유소"]));
+        let (title, t) = match station {
+            Some(s) => (s.name.clone(), s.arrive_ms),
+            None => ((if ev { "충전비" } else { "주유비" }).to_string(), end_ms),
+        };
+        let detail = match energy_pct {
+            Some(p) if ev => format!("배터리 {p:.0}% × {EV_WON_PER_KWH:.0}원/kWh"),
+            Some(p) => format!("연료 {p:.0}% × {FUEL_WON_PER_L:.0}원/L"),
+            None => format!("{distance_km:.1}km × {:.0}원/km", if ev { WON_PER_KM_EV } else { WON_PER_KM_FUEL }),
+        };
+        out.push(item(BizExpenseKind::Energy, title, detail, t, energy_won));
+    }
+    // 통행료: 들른 곳이 있으면 왕복으로 보고 반씩
+    let legs: Vec<(&str, i64)> = match (stops.first(), stops.last()) {
+        (Some(a), Some(b)) => vec![("가는 길", a.arrive_ms), ("오는 길", b.leave_ms)],
+        _ => vec![("", end_ms)],
+    };
+    let leg_km = distance_km / legs.len() as f64;
+    if leg_km > TOLL_MIN_LEG_KM {
+        let won = round100(TOLL_BASE_WON + TOLL_WON_PER_KM * leg_km * TOLL_HIGHWAY_SHARE);
+        for (name, t) in legs {
+            let title = if name.is_empty() { "고속도로 통행료".to_string() } else { format!("고속도로 통행료 · {name}") };
+            out.push(item(BizExpenseKind::Toll, title, format!("{leg_km:.0}km 중 고속도로 어림"), t, won));
+        }
+    }
+    // 식사 · 카페 · 주차
+    let mut ate = false;
+    for s in stops {
+        let stay = (s.leave_ms - s.arrive_ms).max(0);
+        if has(s, &["카페", "커피"]) {
+            out.push(item(BizExpenseKind::Meal, s.name.clone(), "카페 평균 단가".into(), s.arrive_ms, CAFE_WON));
+        } else if has(s, &["음식점", "식당"]) {
+            ate = true;
+            out.push(item(BizExpenseKind::Meal, s.name.clone(), "1인 식사 평균 단가".into(), s.arrive_ms, MEAL_WON));
+        } else if has(s, &["주차장"]) {
+            let won = (((stay + 29 * 60_000) / (30 * 60_000)) * PARKING_WON_PER_30MIN).min(PARKING_MAX_WON);
+            if won > 0 {
+                out.push(item(BizExpenseKind::Parking, s.name.clone(), format!("{}분 주차", stay / 60_000), s.arrive_ms, won));
+            }
+        }
+    }
+    if !ate {
+        let local_min = |ms: i64| ms / 60_000 + tz_offset_minutes as i64;
+        if let Some(s) = stops.iter().find(|s| {
+            let (a, l) = (local_min(s.arrive_ms), local_min(s.leave_ms));
+            let noon = a - a.rem_euclid(1440) + 12 * 60;
+            a <= noon && l >= noon + 30
+        }) {
+            let name = if s.name.is_empty() { "출장지".to_string() } else { s.name.clone() };
+            let t = s.arrive_ms + (12 * 60 - local_min(s.arrive_ms).rem_euclid(1440)) * 60_000;
+            out.push(item(BizExpenseKind::Meal, format!("점심 · {name} 근처"), "점심시간에 머묾 · 식대 평균 단가".into(), t, MEAL_WON));
+        }
+    }
+    out.sort_by_key(|x| x.t_ms);
+    out
 }
 
 /// 출장 정산서 CSV (UTF-8 BOM, 줄바꿈 CRLF). 시각은 `tz_offset_minutes` 현지 시각.
@@ -399,8 +548,12 @@ mod tests {
         assert_eq!((b.day.as_str(), b.weekday.as_str()), ("2026-11-05", "목"));
         assert!(!b.gps_distance && (b.distance_km - 98.4).abs() < 1e-9);
         assert_eq!(b.energy_pct, Some(16.0));
-        // 16% × 77.4kWh × 347원 = 4,297원 → 4,300원
-        assert_eq!(b.cost_won, 4_300);
+        // 충전 16% × 77.4kWh × 347원 = 4,297원 → 4,300원, 통행료 49km씩 왕복 2,400원 × 2, 점심(12시를 넘겨 머묾) 9,000원
+        let kinds: Vec<BizExpenseKind> = b.expenses.iter().map(|x| x.kind).collect();
+        assert_eq!(kinds, [BizExpenseKind::Toll, BizExpenseKind::Meal, BizExpenseKind::Toll, BizExpenseKind::Energy], "{:?}", b.expenses);
+        assert_eq!(b.expenses.iter().find(|x| x.kind == BizExpenseKind::Energy).unwrap().won, 4_300);
+        assert!(b.expenses.iter().all(|x| x.estimated && x.won > 0));
+        assert_eq!(b.cost_won, 4_300 + 2 * 2_400 + 9_000);
         assert!(b.title.ends_with("출장") && !b.stops.is_empty());
         assert!(b.drive_min > 0 && b.drive_min < (b.end_ms - b.start_ms) / 60_000);
 
@@ -415,11 +568,57 @@ mod tests {
         let lines: Vec<&str> = csv.trim_end().split("\r\n").collect();
         assert_eq!(lines.len(), 3);
         assert!(lines[1].starts_with("2026-11-05,목,10:00,"), "{}", lines[1]);
-        assert!(lines[1].contains(",98.4,") && lines[1].contains(",16,4300,"), "{}", lines[1]);
+        assert!(lines[1].contains(",98.4,") && lines[1].contains(",16,18100,"), "{}", lines[1]);
         assert!(lines[2].contains("합계 1건"));
         assert!(s.biz_trips("2026-1".into()).is_err());
         drop(s);
         let _ = std::fs::remove_file(&path);
+    }
+
+    fn stop(name: &str, category: &str, arrive_h: f64, stay_min: i64) -> BizStop {
+        // 2026-11-05 00:00 KST = 1_793_804_400_000
+        let a = 1_793_804_400_000 + (arrive_h * 3_600_000.0) as i64;
+        BizStop { name: name.into(), address: String::new(), arrive_ms: a, leave_ms: a + stay_min * 60_000, lat: 0.0, lon: 0.0, category: category.into() }
+    }
+
+    #[test]
+    fn expenses_come_from_visited_places() {
+        let stops = [
+            stop("판교 주차장", "교통,수송 > 주차장", 10.0, 95),
+            stop("스타벅스 판교점", "음식점 > 카페", 11.7, 20),
+            stop("판교 국밥", "음식점 > 한식", 12.2, 40),
+            stop("환승 충전소", "주유소,충전소 > 충전소", 15.0, 25),
+        ];
+        let end = stops[3].leave_ms + 3_600_000;
+        let x = biz_expenses(&stops, end, 30.0, Some(10.0), true, 540);
+        let got: Vec<(BizExpenseKind, &str, i64)> = x.iter().map(|e| (e.kind, e.title.as_str(), e.won)).collect();
+        // 30km 왕복이면 한 길 15km라 통행료 없음, 주차 95분 → 4칸 4,000원, 충전은 충전소 이름으로
+        assert_eq!(
+            got,
+            [
+                (BizExpenseKind::Parking, "판교 주차장", 4_000),
+                (BizExpenseKind::Meal, "스타벅스 판교점", 4_500),
+                (BizExpenseKind::Meal, "판교 국밥", 9_000),
+                (BizExpenseKind::Energy, "환승 충전소", 2_700),
+            ]
+        );
+        assert!(x.iter().all(|e| e.estimated));
+    }
+
+    #[test]
+    fn lunch_only_when_staying_over_noon_and_no_restaurant() {
+        let morning = [stop("남양연구소", "연구소", 10.0, 90)];
+        assert!(biz_expenses(&morning, morning[0].leave_ms, 10.0, None, true, 540).iter().all(|e| e.kind != BizExpenseKind::Meal));
+        let over_noon = [stop("남양연구소", "연구소", 10.5, 180)];
+        let x = biz_expenses(&over_noon, over_noon[0].leave_ms + 3_600_000, 90.0, None, false, 540);
+        let lunch = x.iter().find(|e| e.kind == BizExpenseKind::Meal).unwrap();
+        assert_eq!(lunch.title, "점심 · 남양연구소 근처");
+        assert_eq!(lunch.t_ms, 1_793_804_400_000 + 12 * 3_600_000);
+        // 왕복 90km → 한 길 45km: 900 + 44.3 × 45 × 0.7 = 2,295 → 2,300원씩 2번, 연료 기록 없음 → 90km × 140원
+        let tolls: Vec<i64> = x.iter().filter(|e| e.kind == BizExpenseKind::Toll).map(|e| e.won).collect();
+        assert_eq!(tolls, [2_300, 2_300]);
+        assert_eq!(x.iter().find(|e| e.kind == BizExpenseKind::Energy).unwrap().won, 12_600);
+        assert!(biz_expenses(&[], 0, 0.0, None, true, 540).is_empty());
     }
 
     #[test]

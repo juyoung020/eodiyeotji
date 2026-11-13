@@ -52,6 +52,12 @@ pub fn review_keyword_limit() -> u32 {
     crate::community::MAX_REVIEW_KEYWORDS as u32
 }
 
+/// 홈 날짜 줄 귀띔: 날마다 그날 stop_names를 받아 늘 가는 곳을 뺀 짧은 한 단어 (`dayhint::day_hints`).
+#[uniffi::export]
+pub fn day_hints(days: Vec<Vec<String>>) -> Vec<String> {
+    crate::dayhint::day_hints(&days)
+}
+
 /// 경로 단순화. 남길 점의 인덱스를 오름차순으로 돌려준다.
 #[uniffi::export]
 pub fn simplify_route(points: Vec<GeoPoint>, tolerance_m: f64) -> Vec<u32> {
@@ -356,5 +362,72 @@ impl EodiStore {
     /// 내가 올린 드라이브 코스의 사진을 통째로 바꾼다.
     pub fn set_drive_route_photos(&self, id: String, paths: Vec<String>) -> Result<(), crate::store::CoreError> {
         crate::gallery::set_route_photos(self, &id, paths)
+    }
+}
+
+/// 같이 가기 계산기 (`convoy` 모듈). 같이 가기를 시작할 때 하나 만들고, 서버에서 차 위치를 받을 때마다 [ConvoyTracker::update].
+#[derive(uniffi::Object)]
+pub struct ConvoyTracker {
+    inner: Mutex<crate::convoy::Tracker>,
+}
+
+#[uniffi::export]
+impl ConvoyTracker {
+    #[uniffi::constructor]
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self { inner: Mutex::new(crate::convoy::Tracker::default()) })
+    }
+
+    /// 차들 마지막 위치(나 제외) + 내 위치 + 목적지 → 화면 · 음성에 쓸 상태.
+    pub fn update(
+        &self,
+        now_ms: i64,
+        me: Option<crate::convoy::ConvoyMe>,
+        dest: Option<crate::convoy::ConvoyDest>,
+        others: Vec<crate::convoy::ConvoyMemberIn>,
+    ) -> crate::convoy::ConvoyView {
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).update(now_ms, me, dest, &others)
+    }
+}
+
+// ---- 먼저 말 걸기 (`proactive.rs`) ----
+
+/// 짧은 대답 하나를 응/아니로 ("응 넣어줘" → Yes).
+#[uniffi::export]
+pub fn proactive_reply_intent(text: String) -> crate::proactive::ReplyIntent {
+    crate::proactive::reply_intent(&text)
+}
+
+/// 에이전트 대화의 다음 말 ("주말에 바다 가자" · "같이 갈 사람 초대해줘" · "출발하자"). [has_plan]: 앞에서 코스를 짰다.
+#[uniffi::export]
+pub fn agent_follow_up_intent(text: String, has_plan: bool) -> crate::proactive::FollowUpIntent {
+    crate::proactive::follow_up_intent(&text, has_plan)
+}
+
+#[uniffi::export]
+impl EodiStore {
+    /// 차 상태로 먼저 말 걸 제안 하나 (없으면 None). 보여 줬으면 [Self::proactive_mark_shown].
+    pub fn proactive_suggest(
+        &self,
+        event: crate::proactive::ProactiveEvent,
+        now_ms: i64,
+        vehicle: crate::proactive::VehicleSnapshot,
+    ) -> Result<Option<crate::proactive::ProactiveSuggestion>, crate::store::CoreError> {
+        crate::proactive::suggestion(self, event, now_ms, vehicle)
+    }
+
+    /// 제안을 보여 줬다 (하루 횟수 · 간격을 센다).
+    pub fn proactive_mark_shown(&self, event: crate::proactive::ProactiveEvent, now_ms: i64) -> Result<(), crate::store::CoreError> {
+        crate::proactive::mark_shown(self, event, now_ms)
+    }
+
+    /// "아니"라고 했다 (오늘은 그 계기로 다시 묻지 않는다).
+    pub fn proactive_mark_declined(&self, event: crate::proactive::ProactiveEvent, now_ms: i64) -> Result<(), crate::store::CoreError> {
+        crate::proactive::mark_declined(self, event, now_ms)
+    }
+
+    /// 횟수 기록 지우기 (시연).
+    pub fn proactive_reset(&self) -> Result<(), crate::store::CoreError> {
+        crate::proactive::reset(self)
     }
 }

@@ -20,7 +20,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /*
- * 하루 지도 위 "내 사진": 사진을 찍은 곳에 작은 카메라 핀을 찍고, 핀을 누르면 그 자리에서 사진이 말풍선으로 뜬다.
+ * 하루 지도 위 "내 사진": 사진을 찍은 곳에 작은 사진 썸네일 핀을 찍고, 한 장짜리 핀을 누르면 말풍선, 여러 장 묶인 핀을 누르면 바로 크게 보기(넘겨 보기).
  * (사진을 전부 펼치면 길과 지도가 가려진다 → 핀만 두고 고른 것 하나만 크게.) 말풍선을 누르면 크게 보기.
  * 자리는 Rust(`gallery::map_spots`)가 정하고, 여기서는 핀 · 말풍선 그림을 그리고 GeoJSON으로 옮기기만 한다.
  * 가까운 사진끼리는 지도(MapLibre 묶기)가 한 핀으로 묶고, 묶인 핀에는 장수 배지가 붙는다.
@@ -46,15 +46,27 @@ internal fun myPhotoGeoJson(spots: List<MapPhotoSpot>): String {
     return JSONObject().put("type", "FeatureCollection").put("features", features).toString()
 }
 
-/** 핀 · 배지 그림 (사진은 읽지 않는다 — 말풍선을 띄울 때만 그 한 장을 읽는다). 배경 스레드에서 부른다. */
-internal fun buildMyPhotoIcons(spots: List<MapPhotoSpot>, density: Float): MyPhotoIcons? {
+/**
+ * 핀 · 배지 그림. [thumbs]가 있으면(핀 번호 → 작은 사진) 그 자리 핀은 사진 썸네일(`gpth<번호>`)로 그린다.
+ * 묶인 핀은 대표(가장 이른) 사진 썸네일. 썸네일이 없으면 흰 카메라 핀 [PIN]. 배경 스레드에서 부른다.
+ */
+internal fun buildMyPhotoIcons(spots: List<MapPhotoSpot>, density: Float, thumbs: Map<Int, Bitmap> = emptyMap()): MyPhotoIcons? {
     if (spots.isEmpty()) return null
     val images = HashMap<String, Bitmap>()
-    images[PIN] = cameraPin(selected = false, density)
-    images[PIN_SEL] = cameraPin(selected = true, density)
+    images[PIN] = photoPin(null, density)
+    images[PIN_SEL] = selectedRing(density)
+    thumbs.forEach { (i, b) -> images["$THUMB_PREFIX$i"] = photoPin(b, density) }
     val maxBadge = spots.size.coerceAtMost(MAX_BADGE)
     for (n in 2..maxBadge) images["$BADGE_PREFIX$n"] = countBadge(if (n == MAX_BADGE && spots.size > MAX_BADGE) "$MAX_BADGE+" else "$n", density)
     return MyPhotoIcons(myPhotoGeoJson(spots), images, maxBadge)
+}
+
+/** 핀 썸네일용 작은 사진들 (Coil 캐시를 거친다). 못 읽은 사진은 빠진다 → 그 핀은 카메라 핀으로 남는다. */
+internal suspend fun loadPinThumbs(context: Context, spots: List<MapPhotoSpot>, density: Float): Map<Int, Bitmap> {
+    val px = (PIN_DP * density).roundToInt()
+    val out = HashMap<Int, Bitmap>()
+    spots.forEachIndexed { i, s -> runCatching { decodeThumb(context, s.uri, px) }.getOrNull()?.let { out[i] = it } }
+    return out
 }
 
 private suspend fun decodeThumb(context: Context, uri: String, px: Int): Bitmap? {
@@ -64,7 +76,7 @@ private suspend fun decodeThumb(context: Context, uri: String, px: Int): Bitmap?
 }
 
 /**
- * 고른 핀의 사진 말풍선: [spots]의 첫 사진(가장 이른 것)을 크게, 금색 테두리 · 아래 꼬리. 여러 장이면 오른쪽 위에 "+N".
+ * 고른 핀의 사진 말풍선: [spots]의 첫 사진(가장 이른 것)을 크게, 흰 테두리 · 아래 꼬리. 여러 장이면 오른쪽 위에 "+N".
  * 사진을 못 읽으면 null. [maxHeightPx] = 지도 높이.
  */
 internal suspend fun buildPhotoBubble(context: Context, spots: List<MapPhotoSpot>, density: Float, maxHeightPx: Int): Bitmap? {
@@ -82,7 +94,7 @@ internal suspend fun buildPhotoBubble(context: Context, spots: List<MapPhotoSpot
     val c = Canvas(out)
     val rect = RectF(shadow, shadow * 0.6f, shadow + w, shadow * 0.6f + h)
     val frame = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = MEMORY
+        color = 0xFFFFFFFF.toInt()
         setShadowLayer(shadow * 0.9f, 0f, shadow * 0.4f, 0x66000000)
     }
     c.drawRoundRect(rect, r, r, frame)
@@ -92,7 +104,7 @@ internal suspend fun buildPhotoBubble(context: Context, spots: List<MapPhotoSpot
         lineTo(rect.centerX(), rect.bottom + tail)
         close()
     }
-    c.drawPath(tip, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = MEMORY })
+    c.drawPath(tip, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() })
     val inner = RectF(rect.left + border, rect.top + border, rect.right - border, rect.bottom - border)
     val innerR = max(0f, r - border)
     val scale = max(inner.width() / photo.width, inner.height() / photo.height)
@@ -121,33 +133,90 @@ internal suspend fun buildPhotoBubble(context: Context, spots: List<MapPhotoSpot
     return out
 }
 
-/** 카메라 핀: 흰 동그라미 + 진한 카메라 그림. 고른 핀은 조금 크고 금색. */
-private fun cameraPin(selected: Boolean, density: Float): Bitmap {
-    val d = (if (selected) PIN_SEL_DP else PIN_DP) * density
+/** 핀 몸통(둥근 네모) 자리. 그림 높이 = 그림자 + 몸통 + 꼬리 → 꼬리 끝이 그림 맨 아래 가운데 (icon-anchor = bottom). */
+private fun pinBody(density: Float): RectF {
+    val d = PIN_DP * density
     val shadow = SHADOW_DP * density
-    val size = (d + shadow * 2).roundToInt()
-    val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    return RectF(shadow, shadow, shadow + d, shadow + d)
+}
+
+private fun pinBitmap(density: Float): Bitmap {
+    val d = PIN_DP * density
+    val shadow = SHADOW_DP * density
+    return Bitmap.createBitmap((d + shadow * 2).roundToInt(), (shadow + d + PIN_TAIL_DP * density).roundToInt(), Bitmap.Config.ARGB_8888)
+}
+
+private fun tailPath(rect: RectF, tail: Float) = android.graphics.Path().apply {
+    moveTo(rect.centerX() - tail * 0.75f, rect.bottom - 1f)
+    lineTo(rect.centerX() + tail * 0.75f, rect.bottom - 1f)
+    lineTo(rect.centerX(), rect.bottom + tail)
+    close()
+}
+
+/**
+ * 사진 핀: 흰 테두리 둥근 네모 + 부드러운 그림자 + 아래 작은 꼬리(꼬리 끝 = 찍은 자리).
+ * [photo]가 있으면 그 사진을 채워 넣고, 없으면 흰 바탕에 진한 카메라 그림.
+ */
+private fun photoPin(photo: Bitmap?, density: Float): Bitmap {
+    val out = pinBitmap(density)
     val c = Canvas(out)
-    val cx = size / 2f
-    val cy = size / 2f
-    c.drawCircle(cx, cy, d / 2, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = if (selected) MEMORY else 0xFFFFFFFF.toInt()
-        setShadowLayer(shadow * 0.8f, 0f, shadow * 0.35f, 0x55000000)
-    })
+    val rect = pinBody(density)
+    val shadow = SHADOW_DP * density
+    val tail = PIN_TAIL_DP * density
+    val r = PIN_RADIUS_DP * density
+    val white = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFFFFFFF.toInt()
+        setShadowLayer(shadow * 0.8f, 0f, shadow * 0.3f, 0x59000000)
+    }
+    c.drawRoundRect(rect, r, r, white)
+    c.drawPath(tailPath(rect, tail), Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() })
+    val b = PIN_BORDER_DP * density
+    val inner = RectF(rect.left + b, rect.top + b, rect.right - b, rect.bottom - b)
+    val innerR = max(0f, r - b)
+    if (photo != null) {
+        val scale = max(inner.width() / photo.width, inner.height() / photo.height)
+        val m = Matrix().apply {
+            setScale(scale, scale)
+            postTranslate(inner.centerX() - photo.width * scale / 2, inner.centerY() - photo.height * scale / 2)
+        }
+        c.drawRoundRect(inner, innerR, innerR, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+            shader = BitmapShader(photo, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply { setLocalMatrix(m) }
+        })
+        return out
+    }
     // 카메라: 둥근 몸통 + 위 돌기 + 렌즈 (선으로)
-    val u = d / 24f
+    val cx = rect.centerX()
+    val cy = rect.centerY()
+    val u = rect.width() / 24f
     val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = if (selected) ON_MEMORY else 0xFF16191C.toInt()
+        color = 0xFF16191C.toInt()
         style = Paint.Style.STROKE
         strokeWidth = 1.8f * u
         strokeJoin = Paint.Join.ROUND
     }
-    val body = RectF(cx - 6.2f * u, cy - 3.6f * u, cx + 6.2f * u, cy + 5.2f * u)
-    c.drawRoundRect(body, 1.6f * u, 1.6f * u, ink)
+    c.drawRoundRect(RectF(cx - 6.2f * u, cy - 3.6f * u, cx + 6.2f * u, cy + 5.2f * u), 1.6f * u, 1.6f * u, ink)
     c.drawLine(cx - 2.4f * u, cy - 3.6f * u, cx - 1.4f * u, cy - 5.4f * u, ink)
     c.drawLine(cx - 1.4f * u, cy - 5.4f * u, cx + 1.4f * u, cy - 5.4f * u, ink)
     c.drawLine(cx + 1.4f * u, cy - 5.4f * u, cx + 2.4f * u, cy - 3.6f * u, ink)
     c.drawCircle(cx, cy + 0.9f * u, 2.5f * u, ink)
+    return out
+}
+
+/** 고른 핀 표시: 같은 모양의 파란(강조색) 테두리만 그린 그림. 핀 위에 겹쳐 그린다. */
+private fun selectedRing(density: Float): Bitmap {
+    val out = pinBitmap(density)
+    val c = Canvas(out)
+    val rect = pinBody(density)
+    val w = PIN_BORDER_DP * density
+    val half = w / 2
+    val ring = RectF(rect.left + half, rect.top + half, rect.right - half, rect.bottom - half)
+    val r = PIN_RADIUS_DP * density - half
+    c.drawRoundRect(ring, r, r, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ACCENT
+        style = Paint.Style.STROKE
+        strokeWidth = w
+    })
+    c.drawPath(tailPath(rect, PIN_TAIL_DP * density), Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ACCENT })
     return out
 }
 
@@ -167,7 +236,7 @@ private fun countBadge(text: String, density: Float): Bitmap {
     c.drawRoundRect(rect, h / 2, h / 2, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() })
     val b = 1.5f * density
     val inner = RectF(rect.left + b, rect.top + b, rect.right - b, rect.bottom - b)
-    c.drawRoundRect(inner, inner.height() / 2, inner.height() / 2, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF0064FF.toInt() })
+    c.drawRoundRect(inner, inner.height() / 2, inner.height() / 2, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ACCENT })
     val fm = tp.fontMetrics
     c.drawText(text, rect.centerX(), rect.centerY() - (fm.ascent + fm.descent) / 2, tp)
     return out
@@ -176,9 +245,15 @@ private fun countBadge(text: String, density: Float): Bitmap {
 internal const val PIN = "gpin"
 internal const val PIN_SEL = "gpinsel"
 internal const val BUBBLE = "gpbubble"
-/** 카메라 핀 지름(dp): 길을 가리지 않게 작게. 고른 핀은 조금 크게 */
-internal const val PIN_DP = 34f
-internal const val PIN_SEL_DP = 42f
+internal const val THUMB_PREFIX = "gpth"
+/** 사진 핀 한 변(dp, 흰 테두리 포함): 길을 가리지 않게 작게 */
+internal const val PIN_DP = 40f
+private const val PIN_BORDER_DP = 3f
+private const val PIN_RADIUS_DP = 10f
+/** 핀 아래 꼬리 (끝 = 찍은 자리) */
+internal const val PIN_TAIL_DP = 7f
+/** 꼬리 끝에서 핀 위끝까지 높이(dp) — 배지 · 말풍선 자리 */
+internal const val PIN_HEIGHT_DP = PIN_DP + PIN_TAIL_DP
 /** 사진 말풍선 (dp) */
 private const val BUBBLE_W_DP = 248f
 private const val BUBBLE_H_DP = 166f
@@ -187,9 +262,8 @@ private const val BUBBLE_RADIUS_DP = 12f
 internal const val BUBBLE_TAIL_DP = 12f
 private const val BUBBLE_MAX_MAP_FRACTION = 0.55f
 private const val BUBBLE_MIN_SCALE = 0.6f
-/** 기억 색 (ui/theme/Color.kt memory · onMemory와 같은 값) */
-private const val MEMORY = 0xFFFFC233.toInt()
-private const val ON_MEMORY = 0xFF3A2600.toInt()
+/** 강조색 (ui/theme/Color.kt accent와 같은 값) */
+private const val ACCENT = 0xFF0064FF.toInt()
 internal const val BADGE_PREFIX = "gpn"
 /** 이보다 많이 묶이면 "N+"로 */
 internal const val MAX_BADGE = 30

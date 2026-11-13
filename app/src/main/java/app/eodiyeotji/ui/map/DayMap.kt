@@ -263,6 +263,13 @@ private fun DayMapContent(
     LaunchedEffect(controller, myPhotos) {
         picked = null
         controller.setMyPhotos(withContext(Dispatchers.Default) { buildMyPhotoIcons(myPhotos, density) })
+        // 핀을 먼저 그린 뒤 작은 썸네일을 읽어 사진 핀으로 바꾼다 (배경)
+        if (myPhotos.isEmpty()) return@LaunchedEffect
+        val withThumbs = withContext(Dispatchers.Default) {
+            val thumbs = loadPinThumbs(context.applicationContext, myPhotos, density)
+            if (thumbs.isEmpty()) null else buildMyPhotoIcons(myPhotos, density, thumbs)
+        }
+        withThumbs?.let { controller.setMyPhotos(it) }
     }
     // 고른 핀의 사진 말풍선: 그 한 장만 줄여 읽어 그린다 (배경)
     LaunchedEffect(controller, picked) {

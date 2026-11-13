@@ -8,7 +8,7 @@ import androidx.compose.ui.graphics.Color
  * 색 토큰 — "길 위의 앨범" (docs/90_디자인_컨셉.md). 차의 낮 · 밤 모드를 따라 바뀐다.
  * - 라이트 = 낮, 종이 앨범: 종이색 바탕에 흰 카드, 먹색 글자.
  * - 다크 = 밤, 검은 앨범: 검은 종이 바탕에 흰 글자 (밤 운전에 눈이 덜 부시다).
- * 파랑은 쓰지 않는다. 의미 색은 셋: 금색(달린 길 · 기억) · 먹색/흰색(머문 곳 · 주된 동작) · 초록(지금 여기).
+ * 파랑은 정보 강조(info, 출장 경비 · 날짜)에만 쓴다. 의미 색은 셋: 금색(달린 길 · 기억) · 먹색/흰색(머문 곳 · 주된 동작) · 초록(지금 여기).
  * 대비: 본문 글자는 바탕 대비 4.5:1 이상, 색 글자(20sp 굵게 이상)와 아이콘은 3:1 이상 (WCAG AA, 값은 컨셉 문서에).
  */
 
@@ -56,7 +56,10 @@ data class EodiColors(
     val coupon: Color,
     val couponSoft: Color,
     val couponInk: Color,
-    /** 떠 있는 안내 띠(코스 안내 중)처럼 테마와 상관없이 진한 남색 판 */
+    /** 정보 강조 파랑 (앱 아이콘과 같은 산뜻한 파랑, 남색 아님). 출장 경비 · 날짜 강조. 넓은 면은 [infoSoft] */
+    val info: Color,
+    val infoSoft: Color,
+    /** 떠 있는 안내 띠(코스 안내 중)처럼 테마와 상관없이 진한 먹색 판 */
     val ink: Color,
     val onInk: Color,
     val onInkMuted: Color,
@@ -68,18 +71,18 @@ data class EodiColors(
 internal val LightColors = EodiColors(
     background = Color(0xFFF7F7F5),
     surface = Color(0xFFFFFFFF),
-    surfaceHigh = Color(0xFFECECE8),
-    outline = Color(0xFFDCDCD8),
-    textPrimary = Color(0xFF16191C),
-    textSecondary = Color(0xFF4A525B),
-    textTertiary = Color(0xFF6B7178),
-    accent = Color(0xFF16191C),
+    surfaceHigh = Color(0xFFEDECE8),
+    outline = Color(0xFFDEDCD7),
+    textPrimary = Color(0xFF0F1419),
+    textSecondary = Color(0xFF52504B),
+    textTertiary = Color(0xFF6F6C66),
+    accent = Color(0xFF0064FF),
     onAccent = Color(0xFFFFFFFF),
-    accentSoft = Color(0xFFECECE8),
-    trip = Color(0xFFA86A00),
-    tripSoft = Color(0xFFFFF3D1),
-    stay = Color(0xFF2A2E33),
-    staySoft = Color(0xFFECECE8),
+    accentSoft = Color(0xFFE8F0FF),
+    trip = Color(0xFF0064FF),
+    tripSoft = Color(0xFFE8F0FF),
+    stay = Color(0xFF2C2B28),
+    staySoft = Color(0xFFEDECE8),
     here = Color(0xFF008F4F),
     hereSoft = Color(0xFFDDF5E8),
     onMarker = Color(0xFFFFFFFF),
@@ -94,31 +97,33 @@ internal val LightColors = EodiColors(
     coupon = Color(0xFFF26B1D),
     couponSoft = Color(0xFFFFF0E5),
     couponInk = Color(0xFFB6460A),
-    ink = Color(0xFF16191C),
+    info = Color(0xFF2F6BEB),
+    infoSoft = Color(0xFFE6EEFD),
+    ink = Color(0xFF141B2B),
     onInk = Color(0xFFFFFFFF),
-    onInkMuted = Color(0xFFCFD2D4),
-    scrim = Color(0x8C101214),
+    onInkMuted = Color(0xFFD0CEC9),
+    scrim = Color(0x8C121211),
     isDark = false,
 )
 
 internal val DarkColors = EodiColors(
-    background = Color(0xFF101214),
-    surface = Color(0xFF1A1D20),
-    surfaceHigh = Color(0xFF25292D),
-    outline = Color(0xFF353A40),
-    textPrimary = Color(0xFFF1F1EE),
-    textSecondary = Color(0xFFCFD2D4),
-    textTertiary = Color(0xFF8D949C),
-    accent = Color(0xFFF1F1EE),
-    onAccent = Color(0xFF101214),
-    accentSoft = Color(0xFF2A2E33),
-    trip = Color(0xFFF0C36A),
-    tripSoft = Color(0xFF332A14),
+    background = Color(0xFF121211),
+    surface = Color(0xFF1C1B1A),
+    surfaceHigh = Color(0xFF282725),
+    outline = Color(0xFF3A3936),
+    textPrimary = Color(0xFFF2F1EE),
+    textSecondary = Color(0xFFD0CEC9),
+    textTertiary = Color(0xFF95928C),
+    accent = Color(0xFF3A87FF),
+    onAccent = Color(0xFFFFFFFF),
+    accentSoft = Color(0xFF16294A),
+    trip = Color(0xFF3A87FF),
+    tripSoft = Color(0xFF16294A),
     stay = Color(0xFFE9E9E4),
-    staySoft = Color(0xFF2A2E33),
+    staySoft = Color(0xFF2C2B28),
     here = Color(0xFF2FD98C),
     hereSoft = Color(0xFF0F3324),
-    onMarker = Color(0xFF101214),
+    onMarker = Color(0xFF121211),
     error = Color(0xFFFF6B57),
     memory = Color(0xFFF0C36A),
     memorySoft = Color(0xFF332A14),
@@ -130,16 +135,18 @@ internal val DarkColors = EodiColors(
     coupon = Color(0xFFFF8A4C),
     couponSoft = Color(0xFF3A2416),
     couponInk = Color(0xFFFFB083),
-    ink = Color(0xFF2A2E33),
-    onInk = Color(0xFFF1F1EE),
-    onInkMuted = Color(0xFFCFD2D4),
-    scrim = Color(0x99101214),
+    info = Color(0xFF7FA6FF),
+    infoSoft = Color(0xFF1C2A44),
+    ink = Color(0xFF22304B),
+    onInk = Color(0xFFF2F1EE),
+    onInkMuted = Color(0xFFD0CEC9),
+    scrim = Color(0x99121211),
     isDark = true,
 )
 
 /**
  * 지도 위 경로 · 핀 색. 바탕 지도가 낮에는 밝은 지도, 밤에는 어두운 지도(MapStyleSource가 색을 바꾼다)라
- * 지도 위 색도 둘이다. 뜻은 같다: 길은 금색, 머문 곳은 점(낮 = 먹색, 밤 = 흰색), 지금 있는 곳은 초록.
+ * 지도 위 색도 둘이다. 뜻은 같다: 길은 파랑, 머문 곳은 점(낮 = 먹색, 밤 = 흰색), 지금 있는 곳은 초록.
  */
 internal class MapInk(
     val trip: Color,
@@ -153,25 +160,25 @@ internal class MapInk(
 )
 
 private val MapInkDay = MapInk(
-    trip = Color(0xFFF2A100),
+    trip = Color(0xFF0064FF),
     casing = Color(0xFFFFFFFF),
-    stay = Color(0xFF2A2E33),
+    stay = Color(0xFF2C2B28),
     here = Color(0xFF00A35A),
     selectedStroke = Color(0xFFFFFFFF),
     onMarker = Color(0xFFFFFFFF),
-    label = Color(0xFF16191C),
+    label = Color(0xFF0F1419),
     labelHalo = Color(0xFFFFFFFF),
 )
 
 private val MapInkNight = MapInk(
-    trip = Color(0xFFF0B84A),
-    casing = Color(0xFF101214),
+    trip = Color(0xFF3A87FF),
+    casing = Color(0xFF121211),
     stay = Color(0xFFE9E9E4),
     here = Color(0xFF2FD98C),
-    selectedStroke = Color(0xFFF0C36A),
-    onMarker = Color(0xFF101214),
-    label = Color(0xFFF1F1EE),
-    labelHalo = Color(0xFF101214),
+    selectedStroke = Color(0xFF9DBBFF),
+    onMarker = Color(0xFF121211),
+    label = Color(0xFFF2F1EE),
+    labelHalo = Color(0xFF121211),
 )
 
 internal fun mapInk(dark: Boolean): MapInk = if (dark) MapInkNight else MapInkDay

@@ -426,3 +426,27 @@ fn seeded_route_flight_sights_follow_highlights() {
     assert!(sights.iter().all(|s| r.route.highlights.iter().any(|h| h.name == s.name)));
     assert!(store.drive_route_flight_sights("없음".into()).is_err());
 }
+
+#[test]
+fn flight_turns_gently_at_a_sharp_corner_and_passes_through_the_line() {
+    // 동쪽으로 3km 가다가 직각으로 북쪽 3km: 방향은 한 번에 꺾이지 않고 여러 장면에 걸쳐 돈다
+    let mut line: Vec<Point> = (0..=30).map(|i| Point { lat: 37.0, lon: 127.0 + i as f64 * 0.00113 }).collect();
+    let corner = *line.last().unwrap();
+    line.extend((1..=30).map(|i| Point { lat: corner.lat + i as f64 * 0.0009, lon: corner.lon }));
+    let f = flight(&line, 600);
+    let step = line_length_m(&line) / 599.0; // 편 선은 모퉁이에서 조금 짧다 → 5% 여유
+    let max_turn = f.windows(2).map(|w| (w[1].bearing - w[0].bearing).abs()).fold(0.0, f64::max);
+    assert!(max_turn <= FLIGHT_MAX_TURN_PER_M * step * 1.05, "{max_turn}");
+    let turning = f.windows(2).filter(|w| (w[1].bearing - w[0].bearing).abs() > 0.05).count();
+    assert!(turning >= 40, "{turning}");
+    // 처음은 동쪽, 끝은 북쪽을 본다 (앞뒤로 펴서 몇 도는 넘칠 수 있다)
+    assert!((f[0].bearing.rem_euclid(360.0) - 90.0).abs() < 10.0, "{}", f[0].bearing);
+    let end = f[599].bearing.rem_euclid(360.0);
+    assert!(!(10.0..350.0).contains(&end), "{end}");
+    // 모퉁이에서 조금 더 가까이 (줌이 곧은 곳보다 크다)
+    let mid = f.iter().map(|x| x.zoom).fold(0.0, f64::max);
+    assert!(mid > f[0].zoom + 0.05, "{mid} vs {}", f[0].zoom);
+    // 매끈하게 편 선도 원래 처음 · 끝 점을 지난다
+    assert!(haversine_m(Point { lat: f[0].lat, lon: f[0].lon }, line[0]) < 1.0);
+    assert!(haversine_m(Point { lat: f[599].lat, lon: f[599].lon }, *line.last().unwrap()) < 1.0);
+}

@@ -49,6 +49,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineBreak
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -70,7 +72,7 @@ import java.time.LocalDate
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-private val RailWidth = 116.dp
+private val RailWidth = 140.dp
 private val InfoWidth = 640.dp
 private val TopWidth = 580.dp
 private val SheetWidth = 600.dp
@@ -303,7 +305,19 @@ private fun DateRail(days: List<DaySummary>, today: LocalDate, selected: String?
                         .clickable(role = Role.Button) { onSelect(s.day) }
                         .padding(6.dp),
                 ) {
-                    DateTile(s.day, s.day == today.toString(), on)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        DateTile(s.day, s.day == today.toString(), on)
+                        // 그날 귀띔 한 단어 (숫자 > 요일 > 귀띔 위계의 맨 아래): 늘 가는 곳을 뺀 그날 특별한 곳의 짧은 이름 (Rust `day_hints`).
+                        // 이름 있는 곳이 없는 날도 빈 줄로 자리를 지켜 칸 높이가 흔들리지 않는다.
+                        Text(
+                            s.hint,
+                            // 이름은 줄이지 않고 낱말 단위로 두 줄까지 감싼다 (넘칠 때만 "…")
+                            style = EodiTheme.type.label.copy(fontWeight = FontWeight.Normal, lineBreak = LineBreak.Heading),
+                            color = c.textSecondary,
+                            maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = EodiTheme.space.xs).width(RailWidth - 16.dp),
+                        )
+                    }
                 }
             }
         }

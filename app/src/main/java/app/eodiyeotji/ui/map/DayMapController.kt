@@ -202,7 +202,7 @@ internal class DayMapController(
         val m = map ?: return
         val p = m.projection.toScreenLocation(LatLng(b.lat, b.lon))
         val margin = 12f * density
-        val needTop = b.image.height + (PIN_SEL_DP / 2 + 2f) * density + margin
+        val needTop = b.image.height + (PIN_HEIGHT_DP + 2f) * density + margin
         val half = b.image.width / 2f + margin
         val toX = p.x.coerceIn(half, (mapView.width - half).coerceAtLeast(half))
         val toY = p.y.coerceIn(needTop.coerceAtMost(mapView.height - margin), mapView.height - margin)
@@ -365,12 +365,19 @@ internal class DayMapController(
         )
         s.addSource(photos)
         photoSource = photos
-        val photoLayout = arrayOf(iconAllowOverlap(true), iconIgnorePlacement(true), iconAnchor(Property.ICON_ANCHOR_CENTER))
-        s.addLayer(SymbolLayer(PHOTO, PHOTO_SOURCE_ID).withProperties(*photoLayout, iconImage(PIN)))
+        // 핀은 꼬리 끝이 찍은 자리 (anchor = bottom). 그림은 그 핀(묶음이면 가장 이른) 사진 썸네일, 아직 없으면 카메라 핀.
+        val photoLayout = arrayOf(iconAllowOverlap(true), iconIgnorePlacement(true), iconAnchor(Property.ICON_ANCHOR_BOTTOM))
+        s.addLayer(
+            SymbolLayer(PHOTO, PHOTO_SOURCE_ID).withProperties(
+                *photoLayout,
+                iconImage(coalesce(Expression.image(concat(literal(THUMB_PREFIX), Expression.toString(get("rep")))), Expression.image(literal(PIN)))),
+            ),
+        )
         s.addLayer(
             SymbolLayer(PHOTO_BADGE, PHOTO_SOURCE_ID).withFilter(has("point_count")).withProperties(
                 *photoLayout,
-                iconOffset(arrayOf(PHOTO_BADGE_X_DP, -PHOTO_BADGE_LIFT_DP)),
+                iconAnchor(Property.ICON_ANCHOR_CENTER),
+                iconOffset(arrayOf(PIN_DP / 2 - 2f, -(PIN_HEIGHT_DP + SHADOW_DP - 4f))),
                 iconImage(concat(literal(BADGE_PREFIX), Expression.toString(Expression.min(get("point_count"), literal(MAX_BADGE))))),
             ),
         )
@@ -410,7 +417,7 @@ internal class DayMapController(
                 iconAllowOverlap(true),
                 iconIgnorePlacement(true),
                 iconAnchor(Property.ICON_ANCHOR_BOTTOM),
-                iconOffset(arrayOf(0f, -(PIN_SEL_DP / 2 + 2f))),
+                iconOffset(arrayOf(0f, -(PIN_HEIGHT_DP + 4f))),
                 iconImage(BUBBLE),
             ),
         )
@@ -657,8 +664,20 @@ internal class DayMapController(
             src.getClusterLeaves(f, PHOTO_LEAVES_MAX, 0).features().orEmpty().mapNotNull { it.idxOrNull() }
         } else {
             listOfNotNull(f.idxOrNull())
+        }.distinct().sorted() // 번호 = Rust가 찍은 시각순으로 준 순서
+        when {
+            idx.isEmpty() -> Unit
+            // 한 장: 그 자리에 말풍선
+            idx.size == 1 -> onSelectPhotos(idx, at.latitude(), at.longitude())
+            // 여러 장: 말풍선은 첫 장만 보여 주고 다른 카드에 가려질 수 있다 → 바로 크게 보기로 전부 (넘겨 보기 "1 / N")
+            else -> {
+                if (bubble != null) {
+                    setPhotoBubble(null)
+                    onSelectPhotos(emptyList(), 0.0, 0.0)
+                }
+                onOpenPhotos(idx)
+            }
         }
-        if (idx.isNotEmpty()) onSelectPhotos(idx.sorted(), at.latitude(), at.longitude())
     }
 
     private fun org.maplibre.geojson.Feature.idxOrNull(): Int? =
@@ -697,8 +716,6 @@ internal class DayMapController(
         const val PHOTO_BUBBLE = "eodi-my-photo-bubble"
 
         /** 사진 카드를 찍은 곳(핀) 아래로 내리는 거리(dp) · 배지 자리 · 묶는 반경(화면 px 기준) */
-        const val PHOTO_BADGE_X_DP = 14f
-        const val PHOTO_BADGE_LIFT_DP = 14f
         const val PHOTO_CLUSTER_RADIUS = 36
         const val PHOTO_CLUSTER_MAX_ZOOM = 17
         const val PHOTO_LEAVES_MAX = 200L

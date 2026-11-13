@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -61,6 +62,8 @@ import app.eodiyeotji.ui.review.ReviewViewModel
 import app.eodiyeotji.ui.search.SearchActions
 import app.eodiyeotji.ui.search.SearchViewModel
 import app.eodiyeotji.ui.places.PlacesRoute
+import app.eodiyeotji.ui.collections.CollectionsRoute
+import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.search.rememberSearchSlot
 import app.eodiyeotji.ui.search.searchHint
 import app.eodiyeotji.ui.search.searchScope
@@ -75,7 +78,7 @@ import app.eodiyeotji.ui.timeline.TimelineRoute
 import java.util.Locale
 
 /** 왼쪽 레일 목적지. */
-enum class HomeTab { TIMELINE, COMMUNITY, PLACES }
+enum class HomeTab { TIMELINE, COMMUNITY, PLACES, COLLECTIONS }
 
 /**
  * 앱 첫 화면 (MainActivity가 부른다).
@@ -94,6 +97,8 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
         if (agentState.isDriving && agentViewModel.drivingLocksScreen) {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).fillMaxWidth()) { AgentPanel(onClose = null, viewModel = agentViewModel) }
+                // 같이 가는 중이면 큰 카드 1장 (가장 뒤처진 차 · 도착 차이). 목록은 정차 중에만.
+                app.eodiyeotji.ui.convoy.ConvoyDrivingCard(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 16.dp))
                 // 주행 중에는 버튼 없이 진행 상황 한 줄만 (몇 번째 구간 · 다음 들를 곳)
                 CourseGuideBanner(
                     Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 20.dp),
@@ -109,7 +114,13 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
             val communitySearchVm: SearchViewModel = hiltViewModel(key = "search-community")
             // 내 기록 · 커뮤니티 머리: 검색 칸이 묻기까지 맡는다 (찾은 결과 아래 "AI에게 물어보기"). 물어보기 버튼을 따로 두면 같은 일을 하는 칸이 둘이 된다.
             // 기록 상태는 알릴 게 있을 때만 (기록 중 · 설정이 꺼져 있을 때)
-            val entry: @Composable () -> Unit = { RecordingStatusChip(quietWhenWaiting = true) }
+            val entry: @Composable () -> Unit = {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // 같이 가기 (여러 차가 함께): 켜져 있으면 "위치 공유 중 · N대"
+                    app.eodiyeotji.ui.convoy.ConvoyEntryChip()
+                    RecordingStatusChip(quietWhenWaiting = true)
+                }
+            }
             var communityTab by rememberSaveable { mutableStateOf(CommunityTab.COURSES) }
             val timeline: TimelineViewModel = hiltViewModel()
             val courses: CourseViewModel = hiltViewModel()
@@ -156,7 +167,7 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                 hint = stringResource(communityTab.searchHint()),
             )
             Row(Modifier.fillMaxSize().background(EodiTheme.colors.background)) {
-                NavRail(tab, onSelect = { tab = it })
+                NavRail(tab, driving = agentState.isDriving, onSelect = { tab = it })
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     // 탭을 바꾸면 새 화면이 살짝 떠오르며 들어온다 (한 번만 · 그리기 단계만 바뀜, 지도 두 장을 겹쳐 그리지 않는다)
                     Box(Modifier.weight(1f).fillMaxWidth().enterRise(tab)) {
@@ -165,6 +176,8 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                                 headerAction = entry,
                                 search = recordsSearch,
                                 onOpenTrips = { recordsSearchVm.openKind(EpisodeKind.TRIP) },
+                                // 입구 띠는 왼쪽 레일 "모아보기"로 옮겼다 → 목록 위를 비운다
+                                showEntries = false,
                             )
                             HomeTab.COMMUNITY -> CommunityRoute(
                                 search = communitySearch,
@@ -176,6 +189,15 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                                 tab = HomeTab.TIMELINE
                                 recordsSearchVm.submit(name)
                             })
+                            // 여행 모음 · 이번 달 요약 · 올해 결산 · 기억 지도 · 출장 관리. 요약 · 결산 · 지도 · 출장 창은 내 기록 화면 위에 뜬다.
+                            HomeTab.COLLECTIONS -> CollectionsRoute(
+                                driving = agentState.isDriving,
+                                onOpenTrips = {
+                                    tab = HomeTab.TIMELINE
+                                    recordsSearchVm.openKind(EpisodeKind.TRIP)
+                                },
+                                onOpenRecords = { tab = HomeTab.TIMELINE },
+                            )
                         }
                     }
                     // 코스 안내 중이면 어느 탭에서든 맨 아래에 진행 카드 (내비에서 돌아왔을 때 몇 번째 구간인지 바로 보이게).
@@ -189,13 +211,15 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                 BackHandler(onBack = closeAgent)
                 AgentPanel(onClose = closeAgent, viewModel = agentViewModel)
             }
+            // 같이 가기 창 (만들기 · 참여 · 지도). 주행 중에는 그리지 않는다.
+            app.eodiyeotji.ui.convoy.ConvoyHost(driving = agentState.isDriving)
         }
     }
 }
 
-/** 왼쪽 레일: 앱 표시(BrandMark) + 목적지 3개 (내 기록 · 커뮤니티 · 내 장소) (한 칸 112dp, 아이콘 + 이름). 좁은 창(약 840dp)에서도 폭 120dp만 쓴다. */
+/** 왼쪽 레일: 앱 표시(BrandMark) + 목적지 4개 (내 기록 · 커뮤니티 · 내 장소 · 모아보기) (한 칸 112dp, 아이콘 + 이름). 좁은 창(약 840dp)에서도 폭 120dp만 쓴다. */
 @Composable
-private fun NavRail(selected: HomeTab, onSelect: (HomeTab) -> Unit) {
+private fun NavRail(selected: HomeTab, driving: Boolean, onSelect: (HomeTab) -> Unit) {
     val c = EodiTheme.colors
     Column(
         Modifier
@@ -214,11 +238,15 @@ private fun NavRail(selected: HomeTab, onSelect: (HomeTab) -> Unit) {
         // 받은 쿠폰이 있으면 내 장소 칸에 장 수 배지 (쿠폰함이 내 장소 안에 있다는 걸 보이게)
         val coupons = app.eodiyeotji.ui.offers.LocalCoupons.current?.claimed?.collectAsStateWithLifecycle()?.value?.size ?: 0
         RailItem(CommunityIcons.Heart, stringResource(R.string.nav_places), selected == HomeTab.PLACES, badge = coupons) { onSelect(HomeTab.PLACES) }
+        // 모아보기: 정차 중에만 (주행 중에는 흐리게 · 누를 수 없음)
+        RailItem(EodiIcons.Grid, stringResource(R.string.nav_collections), selected == HomeTab.COLLECTIONS, enabled = !driving) {
+            onSelect(HomeTab.COLLECTIONS)
+        }
     }
 }
 
 @Composable
-private fun RailItem(icon: ImageVector, label: String, selected: Boolean, badge: Int = 0, onClick: () -> Unit) {
+private fun RailItem(icon: ImageVector, label: String, selected: Boolean, badge: Int = 0, enabled: Boolean = true, onClick: () -> Unit) {
     val c = EodiTheme.colors
     val badgeText = if (badge > 0) stringResource(R.string.coupon_rail_badge, badge) else null
     val motion = EodiTheme.motion
@@ -230,7 +258,8 @@ private fun RailItem(icon: ImageVector, label: String, selected: Boolean, badge:
             .heightIn(min = 112.dp)
             .clip(RoundedCornerShape(EodiTheme.space.radiusM))
             .background(bg)
-            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
+            .selectable(selected = selected, enabled = enabled, role = Role.Tab, onClick = onClick)
+            .alpha(if (enabled) 1f else 0.38f)
             .then(if (badgeText != null) Modifier.semantics { stateDescription = badgeText } else Modifier)
             .padding(vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

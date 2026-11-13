@@ -21,6 +21,26 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.addPathNodes
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import app.eodiyeotji.core.rust.BizExpense
+import app.eodiyeotji.core.rust.BizExpenseKind
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -102,31 +122,56 @@ fun BizOverlay(viewModel: BizViewModel, onOpenDay: (String) -> Unit) {
                 val canNext = state.ym < YearMonth.now()
                 RoundIconButton(EodiIcons.Chevron, stringResource(R.string.biz_next), { viewModel.shift(1) }, Modifier.alpha(if (canNext) 1f else 0.35f), enabled = canNext, containerColor = c.surface)
             }
-            Box(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = EodiTheme.space.page, vertical = 8.dp),
-                contentAlignment = Alignment.TopCenter,
-            ) {
-                // 차 화면(2560dp)에서 1280dp로 묶으면 오른쪽 절반이 비어 보인다 → 머리 줄과 같은 폭까지 쓴다
-                val inner = Modifier.widthIn(max = 2000.dp).fillMaxWidth().padding(bottom = EodiTheme.space.page)
-                when (val m = state.month) {
-                    Load.Loading -> LoadingBox(Modifier.padding(top = 80.dp))
-                    Load.Failed -> CenterMessage(stringResource(R.string.biz_failed), Modifier.padding(top = 48.dp))
-                    is Load.Ready -> Column(inner, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Text(stringResource(R.string.biz_hint), style = EodiTheme.type.meta, color = c.textSecondary)
-                        SummaryRow(m.value)
-                        ClientSection(state.clients, state.suggestions, viewModel::setClient)
-                        if (m.value.trips.isEmpty()) {
-                            CenterMessage(stringResource(R.string.biz_empty), Modifier.padding(top = 32.dp))
+            val ready = (state.month as? Load.Ready)?.value
+            val selected = ready?.trips?.firstOrNull { it.episodeId == state.selected }
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                // 넓은 차 화면은 목록 옆에 내역 창, 좁은 화면(폰)은 내역이 목록 자리를 덮는다
+                val wide = maxWidth >= 1100.dp
+                Row(Modifier.fillMaxSize()) {
+                    if (wide || selected == null) {
+                        Box(
+                            Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())
+                                .padding(start = EodiTheme.space.page, end = if (selected != null) 12.dp else EodiTheme.space.page, top = 8.dp),
+                            contentAlignment = Alignment.TopCenter,
+                        ) {
+                            val inner = Modifier.widthIn(max = 2000.dp).fillMaxWidth().padding(bottom = EodiTheme.space.page)
+                            when (val m = state.month) {
+                                Load.Loading -> LoadingBox(Modifier.padding(top = 80.dp))
+                                Load.Failed -> CenterMessage(stringResource(R.string.biz_failed), Modifier.padding(top = 48.dp))
+                                is Load.Ready -> Column(inner, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                    SummaryRow(m.value)
+                                    HowToggle()
+                                    state.removedDay?.let { UndoBar(it, viewModel::undoNotBiz) }
+                                    if (m.value.trips.isEmpty()) {
+                                        CenterMessage(stringResource(R.string.biz_empty), Modifier.padding(vertical = 32.dp))
+                                    } else {
+                                        Surface(shape = RoundedCornerShape(28.dp), color = c.surface, modifier = Modifier.fillMaxWidth()) {
+                                            Column {
+                                                m.value.trips.forEachIndexed { i, t ->
+                                                    key(t.episodeId) {
+                                                        if (i > 0) HorizontalDivider(Modifier.padding(horizontal = 24.dp), color = c.outline)
+                                                        TripRow(t, t.episodeId == state.selected) { viewModel.select(t.episodeId) }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    ClientSection(state.clients, state.suggestions, viewModel::setClient)
+                                }
+                            }
                         }
+                    }
+                    if (selected != null) {
                         val openReplay = LocalOpenReplay.current
-                        m.value.trips.forEach { t ->
-                            TripCard(
-                                t,
-                                onOpenDay = { viewModel.close(); onOpenDay(t.day) },
-                                onReplay = { openReplay(t.day) },
-                                onNotBiz = { viewModel.markNotBiz(t.day) },
-                            )
-                        }
+                        DetailPane(
+                            selected,
+                            onClose = { viewModel.select(null) },
+                            onReplay = { openReplay(selected.day) },
+                            onOpenDay = { viewModel.close(); onOpenDay(selected.day) },
+                            onNotBiz = { viewModel.markNotBiz(selected.day) },
+                            modifier = Modifier.weight(1f).fillMaxHeight()
+                                .padding(start = if (wide) 12.dp else EodiTheme.space.page, end = EodiTheme.space.page, top = 8.dp, bottom = EodiTheme.space.page),
+                        )
                     }
                 }
             }
@@ -136,83 +181,210 @@ fun BizOverlay(viewModel: BizViewModel, onOpenDay: (String) -> Unit) {
 
 @Composable
 private fun SummaryRow(m: BizMonth) {
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-        Tile(stringResource(R.string.biz_count, m.trips.size), stringResource(R.string.biz_count_label), Modifier.weight(1f))
-        // 아래 줄("계기판 89.8km")과 같은 숫자 · 같은 기준을 적는다 (하루 상세 거리는 GPS · 하루 전체라 다르다)
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+        Tile(stringResource(R.string.biz_count_label), stringResource(R.string.biz_count, m.trips.size), Modifier.weight(1f))
         Tile(
-            stringResource(R.string.biz_km_value, m.totalKm),
             stringResource(if (m.totalHasGps) R.string.biz_km_label_mixed else R.string.biz_km_label),
+            stringResource(R.string.biz_km_value, m.totalKm),
             Modifier.weight(1f),
         )
-        Tile(durationText(m.totalMin * 60_000), stringResource(R.string.biz_time_label), Modifier.weight(1f))
-        Tile(wonText(m.totalWon), stringResource(R.string.biz_cost_label), Modifier.weight(1f), accent = true)
+        Tile(stringResource(R.string.biz_time_tile), durationText(m.totalMin * 60_000), Modifier.weight(1f))
+        Tile(stringResource(R.string.biz_cost_tile), wonPlain(m.totalWon), Modifier.weight(1f), accent = true)
     }
 }
 
 @Composable
-private fun Tile(value: String, label: String, modifier: Modifier, accent: Boolean = false) {
+private fun Tile(label: String, value: String, modifier: Modifier, accent: Boolean = false) {
     val c = EodiTheme.colors
-    Surface(shape = RoundedCornerShape(24.dp), color = if (accent) c.accentSoft else c.surface, modifier = modifier) {
-        Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
-            Text(value, style = EodiTheme.type.title, fontWeight = FontWeight.Bold, color = if (accent) c.accent else c.textPrimary, maxLines = 1)
-            Text(label, style = EodiTheme.type.meta, color = c.textSecondary, maxLines = 1)
+    Surface(shape = RoundedCornerShape(24.dp), color = if (accent) c.infoSoft else c.surface, modifier = modifier.fillMaxHeight()) {
+        Column(Modifier.padding(horizontal = 24.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(label, style = EodiTheme.type.meta, color = if (accent) c.info else c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(value, style = EodiTheme.type.title, fontWeight = FontWeight.Bold, color = if (accent) c.info else c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** ⓘ 어떻게 계산하나요 — 누르면 규칙 설명을 펼친다. */
+@Composable
+private fun HowToggle() {
+    val c = EodiTheme.colors
+    var open by rememberSaveable { mutableStateOf(false) }
+    Column {
+        Row(
+            Modifier.clip(RoundedCornerShape(38.dp)).clickable { open = !open }.heightIn(min = 76.dp).padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(BizIcons.Info, null, tint = c.textSecondary, modifier = Modifier.size(32.dp))
+            Spacer(Modifier.width(10.dp))
+            Text(stringResource(R.string.biz_how), style = EodiTheme.type.meta, color = c.textSecondary)
+            Spacer(Modifier.width(6.dp))
+            Icon(EodiIcons.Chevron, null, tint = c.textSecondary, modifier = Modifier.size(24.dp).rotate(if (open) 270f else 90f))
+        }
+        if (open) {
+            Text(
+                stringResource(R.string.biz_hint) + "\n" + stringResource(R.string.biz_detail_note),
+                style = EodiTheme.type.meta,
+                color = c.textSecondary,
+                modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+            )
         }
     }
 }
 
 @Composable
-private fun TripCard(t: BizTrip, onOpenDay: () -> Unit, onReplay: () -> Unit, onNotBiz: () -> Unit) {
+private fun UndoBar(day: String, onUndo: () -> Unit) {
     val c = EodiTheme.colors
-    // 카드를 누르면 그날 기록, 버튼은 다른 화면과 같은 이름의 "그날로 돌아가기"(사진 · 지도로 다시 보기)
-    Surface(onClick = onOpenDay, shape = RoundedCornerShape(28.dp), color = c.surface, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            // 날짜 칸 (회사 · 연구소는 장소 사진이 엉뚱한 경우가 많아 사진 대신 날짜로)
-            val dd = java.time.LocalDate.parse(t.day)
-            Column(
-                Modifier.size(120.dp).clip(RoundedCornerShape(24.dp)).background(c.accentSoft),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text("${dd.dayOfMonth}", style = EodiTheme.type.title, fontWeight = FontWeight.Bold, color = c.accent)
-                Text(t.weekday, style = EodiTheme.type.meta, color = c.accent)
+    val d = java.time.LocalDate.parse(day)
+    Surface(shape = RoundedCornerShape(24.dp), color = c.ink, contentColor = c.onInk, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(start = 24.dp, end = 8.dp).heightIn(min = 88.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.biz_removed, "${d.monthValue}/${d.dayOfMonth}"), style = EodiTheme.type.body, modifier = Modifier.weight(1f))
+            Surface(onClick = onUndo, shape = RoundedCornerShape(38.dp), color = c.ink, contentColor = c.onInk) {
+                Box(Modifier.heightIn(min = 76.dp).padding(horizontal = 24.dp), contentAlignment = Alignment.Center) {
+                    Text(stringResource(R.string.biz_undo), style = EodiTheme.type.bodyStrong, fontWeight = FontWeight.Bold)
+                }
             }
-            Spacer(Modifier.width(24.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                val d = java.time.LocalDate.parse(t.day)
-                Text(
-                    stringResource(R.string.biz_date, d.monthValue, d.dayOfMonth, t.weekday),
-                    style = EodiTheme.type.meta,
-                    color = c.accent,
-                    fontWeight = FontWeight.Bold,
-                )
+        }
+    }
+}
+
+/** 출장 한 줄: 날짜 · 제목 / 행선지 · 운전 · 거리 / 오른쪽 금액(굵은 파랑) ›. 줄 전체를 누르면 경비 내역. */
+@Composable
+private fun TripRow(t: BizTrip, selected: Boolean, onClick: () -> Unit) {
+    val c = EodiTheme.colors
+    val d = java.time.LocalDate.parse(t.day)
+    Surface(onClick = onClick, color = if (selected) c.infoSoft else c.surface, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.heightIn(min = 112.dp).padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.width(88.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("${d.dayOfMonth}", style = EodiTheme.type.title, fontWeight = FontWeight.Bold, color = c.info)
+                Text(t.weekday, style = EodiTheme.type.meta, color = c.textSecondary)
+            }
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(t.title, style = EodiTheme.type.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val where = t.stops.firstOrNull()?.name?.ifBlank { null } ?: t.region
                 Text(
-                    t.stops.map { s -> "${s.name} (${durationText(s.leaveMs - s.arriveMs)})" }.joinToString(" · "),
+                    stringResource(R.string.biz_row_meta, where, durationText(t.driveMin * 60_000), t.distanceKm),
                     style = EodiTheme.type.meta,
                     color = c.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                val km = stringResource(if (t.gpsDistance) R.string.biz_km_gps else R.string.biz_km_odo, t.distanceKm)
-                val drive = stringResource(R.string.biz_drive, durationText(t.driveMin * 60_000))
-                val energy = t.energyPct?.let { stringResource(if (t.ev) R.string.biz_battery else R.string.biz_fuel, it.toInt()) }
-                val parts = listOfNotNull(km, drive, energy)
-                Text(parts.joinToString("  ·  "), style = EodiTheme.type.meta, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Spacer(Modifier.width(16.dp))
-            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(wonText(t.costWon), style = EodiTheme.type.title, fontWeight = FontWeight.Bold, color = c.accent)
-                Text(
-                    stringResource(if (t.marked) R.string.biz_marked else if (t.client) R.string.biz_client_visit else R.string.biz_auto),
-                    style = EodiTheme.type.meta,
-                    color = c.textTertiary,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SecondaryPill(stringResource(R.string.replay_open), EodiIcons.Play, onReplay)
-                    SecondaryPill(stringResource(R.string.biz_not_biz), EodiIcons.Close, onNotBiz)
+            Text(wonPlain(t.costWon), style = EodiTheme.type.titleSmall, fontWeight = FontWeight.Bold, color = c.info, maxLines = 1)
+            Spacer(Modifier.width(8.dp))
+            Icon(EodiIcons.Chevron, stringResource(R.string.biz_open_detail), tint = c.textTertiary, modifier = Modifier.size(28.dp))
+        }
+    }
+}
+
+/** 경비 내역 창: 카드 내역처럼 한 줄씩 (아이콘 · 이름 · 시각 · 금액 · 추정/실제), 아래 합계와 "출장 아님". 항목은 Rust `biz_expenses`. */
+@Composable
+private fun DetailPane(t: BizTrip, onClose: () -> Unit, onReplay: () -> Unit, onOpenDay: () -> Unit, onNotBiz: () -> Unit, modifier: Modifier) {
+    val c = EodiTheme.colors
+    val d = java.time.LocalDate.parse(t.day)
+    Surface(shape = RoundedCornerShape(28.dp), color = c.surface, modifier = modifier) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f).clickable(onClick = onOpenDay)) {
+                    Text(
+                        stringResource(R.string.biz_date, d.monthValue, d.dayOfMonth, t.weekday) + "  " +
+                            stringResource(R.string.biz_detail_range, hm(t.startMs), hm(t.endMs)),
+                        style = EodiTheme.type.meta,
+                        color = c.info,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(t.title, style = EodiTheme.type.title, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+                RoundIconButton(EodiIcons.Close, stringResource(R.string.biz_detail_close), onClose, containerColor = c.surfaceHigh)
+            }
+            val km = stringResource(if (t.gpsDistance) R.string.biz_km_gps else R.string.biz_km_odo, t.distanceKm)
+            val energy = t.energyPct?.let { stringResource(if (t.ev) R.string.biz_battery else R.string.biz_fuel, it.toInt()) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    listOfNotNull(km, stringResource(R.string.biz_drive, durationText(t.driveMin * 60_000)), energy).joinToString("  ·  "),
+                    style = EodiTheme.type.meta,
+                    color = c.textSecondary,
+                    modifier = Modifier.weight(1f),
+                )
+                SecondaryPill(stringResource(R.string.replay_open), EodiIcons.Map, onReplay)
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(stringResource(R.string.biz_detail_title), style = EodiTheme.type.titleSmall, fontWeight = FontWeight.Bold)
+            if (t.expenses.isEmpty()) {
+                Text(stringResource(R.string.biz_detail_empty), style = EodiTheme.type.meta, color = c.textSecondary)
+            }
+            t.expenses.forEach { x -> ExpenseRow(x) }
+            HorizontalDivider(color = c.outline, modifier = Modifier.padding(vertical = 4.dp))
+            Row(Modifier.fillMaxWidth().heightIn(min = 76.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.biz_detail_total), style = EodiTheme.type.bodyStrong, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                EstTag(t.expenses.all { it.estimated })
+                Spacer(Modifier.width(12.dp))
+                Text(wonPlain(t.costWon), style = EodiTheme.type.title, fontWeight = FontWeight.Bold, color = c.info)
+            }
+            Text(stringResource(R.string.biz_detail_note), style = EodiTheme.type.meta, color = c.textTertiary)
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.biz_not_biz_hint), style = EodiTheme.type.meta, color = c.textTertiary, modifier = Modifier.weight(1f))
+                SecondaryPill(stringResource(R.string.biz_not_biz), EodiIcons.Close, onNotBiz)
             }
         }
+    }
+}
+
+@Composable
+private fun ExpenseRow(x: BizExpense) {
+    val c = EodiTheme.colors
+    Row(Modifier.fillMaxWidth().heightIn(min = 88.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(56.dp).clip(CircleShape).background(c.infoSoft), contentAlignment = Alignment.Center) {
+            Icon(BizIcons.of(x.kind), null, tint = c.info, modifier = Modifier.size(30.dp))
+        }
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(x.title, style = EodiTheme.type.bodyStrong, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("${hm(x.tMs)} · ${x.detail}", style = EodiTheme.type.meta, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Spacer(Modifier.width(12.dp))
+        EstTag(x.estimated)
+        Spacer(Modifier.width(12.dp))
+        Text(wonPlain(x.won), style = EodiTheme.type.bodyStrong, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.widthIn(min = 120.dp))
+    }
+}
+
+/** "추정"(회색) / "실제"(파랑) 작은 표. */
+@Composable
+private fun EstTag(estimated: Boolean) {
+    val c = EodiTheme.colors
+    Text(
+        stringResource(if (estimated) R.string.biz_tag_est else R.string.biz_tag_real),
+        style = EodiTheme.type.meta,
+        color = if (estimated) c.textSecondary else c.info,
+        modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(if (estimated) c.surfaceHigh else c.infoSoft).padding(horizontal = 10.dp, vertical = 2.dp),
+    )
+}
+
+private val hmFormat = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+private fun hm(ms: Long): String = java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault()).format(hmFormat)
+
+/** 경비 아이콘 (Material 기호 모양을 옮긴 24 격자 경로). */
+private object BizIcons {
+    private fun icon(name: String, path: String) = ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f)
+        .addPath(addPathNodes(path), fill = SolidColor(Color.Black))
+        .build()
+
+    val Energy = icon("bolt", "M7,2v11h3v9l7,-12h-4l4,-8z")
+    val Toll = icon("road", "M11,4h2v3h-2zM11,10h2v4h-2zM11,17h2v3h-2zM4,20L7,4h2L6,20zM18,20L15,4h2L20,20z")
+    val Parking = icon("parking", "M13,3H6v18h4v-6h3c3.31,0 6,-2.69 6,-6s-2.69,-6 -6,-6zM13.2,11H10V7h3.2c1.1,0 2,0.9 2,2s-0.9,2 -2,2z")
+    val Meal = icon("meal", "M11,9H9V2H7v7H5V2H3v7c0,2.12 1.66,3.84 3.75,3.97V22h2.5v-9.03C11.34,12.84 13,11.12 13,9V2h-2V9zM16,6v8h2.5v8H21V2C18.24,2 16,4.24 16,6z")
+    val Other = icon("receipt", "M18,17H6v-2h12v2zM18,13H6v-2h12v2zM18,9H6V7h12v2zM3,22l1.5,-1.5L6,22l1.5,-1.5L9,22l1.5,-1.5L12,22l1.5,-1.5L15,22l1.5,-1.5L18,22l1.5,-1.5L21,22V2l-1.5,1.5L18,2l-1.5,1.5L15,2l-1.5,1.5L12,2l-1.5,1.5L9,2L7.5,3.5L6,2L4.5,3.5L3,2v20z")
+    val Info = icon("info", "M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM13,17h-2v-6h2v6zM13,9h-2V7h2v2z")
+
+    fun of(k: BizExpenseKind) = when (k) {
+        BizExpenseKind.ENERGY -> Energy
+        BizExpenseKind.TOLL -> Toll
+        BizExpenseKind.PARKING -> Parking
+        BizExpenseKind.MEAL -> Meal
+        BizExpenseKind.OTHER -> Other
     }
 }
 
@@ -246,18 +418,9 @@ private fun ClientSection(clients: List<BizClient>, suggestions: List<BizClient>
     }
 }
 
-/** 4300 → "약 4,300원", 12300 → "약 1만 2,300원". */
+/** 4300 → "4,300원" (칸 · 내역용, "추정" 표시는 따로). */
 @Composable
-private fun wonText(won: Long): String {
-    val man = won / 10_000
-    val rest = won % 10_000
-    val body = when {
-        man == 0L -> "%,d원".format(rest)
-        rest == 0L -> "${man}만 원"
-        else -> "${man}만 %,d원".format(rest)
-    }
-    return stringResource(R.string.biz_about, body)
-}
+private fun wonPlain(won: Long): String = stringResource(R.string.biz_won, "%,d".format(won))
 
 /** 정산서 CSV를 캐시 share/에 저장하고 공유 시트(메일 · 드라이브 · 카톡)로 넘긴다. */
 private suspend fun share(context: Context, viewModel: BizViewModel, m: BizMonth) {

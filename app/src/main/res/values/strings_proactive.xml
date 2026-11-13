@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 에이전트가 먼저 말 걸기 (agent/ProactiveCenter.kt · ui/agent/ProactiveCard.kt) -->
+<resources>
+    <string name="proactive_yes">예</string>
+    <string name="proactive_no">아니요</string>
+    <string name="proactive_close">닫기</string>
+    <string name="proactive_listening">"응" 또는 "아니"라고 말씀하세요</string>
+    <string name="proactive_running">하는 중…</string>
+    <string name="proactive_done_navigate">내비에 안내를 보냈어요.</string>
+    <string name="proactive_done_waypoint">경유지로 넣어 다시 안내해요.</string>
+    <string name="proactive_done_biz">출장으로 기록했어요.</string>
+    <string name="proactive_failed">지금은 하지 못했어요. 잠시 뒤 다시 해 주세요.</string>
+    <string name="proactive_badge_routine">출발</string>
+    <string name="proactive_badge_charge">잔량</string>
+    <string name="proactive_badge_recall">도착</string>
+    <string name="proactive_badge_biz">도착</string>
+    <!-- 여러 단계 대화 (AgentViewModel) -->
+    <string name="agent_invite_created">같이 갈 모임을 만들었어요. 참여 코드 %1$s를 알려 주세요. 목적지는 %2$s예요.</string>
+    <string name="agent_invite_failed">모임을 만들지 못했어요. 같이 가기 화면에서 다시 해 주세요.</string>
+    <string name="agent_invite_no_plan">먼저 어디로 갈지 정해 주세요. 예: "주말에 바다 가자"</string>
+    <string name="agent_start_line">좋아요, 안내를 시작할게요.</string>
+</resources>

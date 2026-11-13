@@ -166,7 +166,10 @@ class EodiCore @Inject constructor(
 
     /** 기록이 있는 날, 최신순. */
     suspend fun daySummaries(limit: Int = 400): List<DaySummary> = coreCall("daySummaries") {
-        store.daySummaries(limit.toUInt()).map { it.toModel() }
+        val days = store.daySummaries(limit.toUInt())
+        // 날짜 줄 귀띔: 늘 가는 곳을 뺀 짧은 한 단어 (Rust, 날들을 한꺼번에 봐야 늘 가는 곳을 안다)
+        val hints = app.eodiyeotji.core.rust.dayHints(days.map { it.stopNames })
+        days.mapIndexed { i, d -> d.toModel().copy(hint = hints.getOrElse(i) { "" }) }
     }
 
     /** 하루 상세 ("YYYY-MM-DD"). */
@@ -432,6 +435,8 @@ data class DaySummary(
     val lastMs: Long,
     /** 그날 이름 있는 머문 곳 앞 3개 (도착 순서). 예: ["경포해변", "초당순두부마을", "안목해변"] */
     val stopNames: List<String> = emptyList(),
+    /** 날짜 줄 귀띔 한 단어 (늘 가는 곳을 뺀 그날 특별한 곳의 짧은 이름, 늘 가는 곳만이면 "출퇴근", Rust `day_hints`). */
+    val hint: String = "",
     /** 하루 제목 (LLM, 예: "비 오는 날 강릉 순두부 원정"; 평범한 날은 규칙 제목). 아직 없으면 null. */
     val title: String? = null,
     val tags: List<String> = emptyList(),

@@ -82,4 +82,22 @@
     <string name="logbook_export">내보내기</string>
     <string name="logbook_subject">운행기록부 %1$s</string>
 
+    <!-- 날짜로 찾기 달력 (PhoneDateCalendar.kt) -->
+    <string name="phone_calendar_open">날짜로 찾기</string>
+    <string name="phone_calendar_title">%1$d년 %2$d월</string>
+    <string name="phone_calendar_prev">이전 달</string>
+    <string name="phone_calendar_next">다음 달</string>
+    <string name="phone_calendar_pick">해와 달 고르기</string>
+    <string name="phone_calendar_today">이번 달</string>
+    <string name="phone_calendar_today_suffix">, 오늘</string>
+    <string name="phone_calendar_month_count">이 달에 기록한 날 %1$d일</string>
+    <string name="phone_calendar_month_days">%1$d일</string>
+    <string name="phone_calendar_month_empty">이 달에는 기록이 없어요</string>
+    <string name="phone_calendar_no_records">아직 기록이 없어요. 차로 다니면 날이 채워져요</string>
+    <string name="phone_calendar_day_recorded">%1$d월 %2$d일, 기록 있음</string>
+    <string name="phone_calendar_day_empty">%1$d월 %2$d일, 기록 없음</string>
+    <string-array name="phone_calendar_weekdays">
+        <item>일</item><item>월</item><item>화</item><item>수</item><item>목</item><item>금</item><item>토</item>
+    </string-array>
+
 </resources>

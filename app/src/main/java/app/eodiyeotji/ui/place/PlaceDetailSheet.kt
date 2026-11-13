@@ -336,7 +336,7 @@ fun HalfStars(halves: Int, modifier: Modifier = Modifier, size: Dp = 24.dp) {
     }
 }
 
-/** [안내] [저장 ♥] [리뷰 쓰기]: 한 칸 76dp 이상 (Pleos 터치 크기). */
+/** [안내] [저장 ♥] [리뷰 쓰기] [같이 가기]: 한 칸 76dp 이상 (Pleos 터치 크기). */
 @Composable
 private fun ActionRow(d: PlaceDetail?, vm: PlaceDetailViewModel) {
     val c = EodiTheme.colors
@@ -358,6 +358,8 @@ private fun ActionRow(d: PlaceDetail?, vm: PlaceDetailViewModel) {
             Modifier.weight(1f),
             enabled = d?.lastVisit != null,
         )
+        // 같이 가기: 여러 차가 이곳으로 함께 (ui/convoy)
+        ActionTile(CommunityIcons.People, stringResource(R.string.convoy_title), vm::goTogether, Modifier.weight(1f))
     }
 }
 

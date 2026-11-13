@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   이 PC의 Qwen(start-llm.ps1, :8181)을 Cloudflare 터널로 밖에 열고, 그 주소를 중계 서버(server/relay)에 알린다.
 .DESCRIPTION

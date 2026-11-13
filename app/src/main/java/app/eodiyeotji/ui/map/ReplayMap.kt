@@ -431,10 +431,11 @@ private class ReplayMapController(mapView: MapView) {
         const val TAG = "EodiReplayMap"
         const val DONE = "replay-done"
         const val LEG = "replay-leg"
-        val HALO = Color(0xFFFF9E3D).toArgb()
-        val GLOW = Color(0xFFFFC15E).toArgb()
-        val CORE = Color(0xFFFFF6DD).toArgb()
-        val GOLD = Color(0xFFFFB938).toArgb()
+        // 길 색은 앱의 길 색(파랑) 토큰을 따른다 (주황 · 금빛을 쓰지 않는다)
+        val HALO = app.eodiyeotji.ui.theme.mapInk(true).trip.toArgb()
+        val GLOW = app.eodiyeotji.ui.theme.mapInk(true).trip.toArgb()
+        val CORE = Color.White.toArgb()
+        val GOLD = app.eodiyeotji.ui.theme.mapInk(false).trip.toArgb()
     }
 }
 

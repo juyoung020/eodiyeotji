@@ -91,6 +91,8 @@ fun RecapListTop(
     modifier: Modifier = Modifier,
     onOpenBiz: (() -> Unit)? = null,
     onOpenTrips: (() -> Unit)? = null,
+    /** 입구 띠를 그릴지. 차 홈은 왼쪽 레일 "모아보기"가 맡으므로 false, 폰은 그대로 true. */
+    showEntries: Boolean = true,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -107,7 +109,7 @@ fun RecapListTop(
                 if (onOpenBiz != null) add(stringResource(R.string.biz_entry) to onOpenBiz)
             }
         }
-        EntryStrip(entries)
+        if (showEntries) EntryStrip(entries)
         // 다가오는 날(늘 가던 날)이 지난 날(N년 전 오늘)보다 먼저. 카드는 지우지 않고 한 줄로 접어 둘 수 있다 (누르면 다시 편다)
         val routine = state.routine?.takeUnless { state.driving }
         val folded = state.routineFolded
@@ -176,7 +178,7 @@ private fun RoutineChip(nudge: RoutineNudge, onExpand: () -> Unit) {
     val c = EodiTheme.colors
     val shape = RoundedCornerShape(EodiTheme.space.radiusM)
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 76.dp).clip(shape).background(c.surface).border(2.dp, c.memory, shape)
+        Modifier.fillMaxWidth().heightIn(min = 76.dp).clip(shape).background(c.surface).border(1.dp, c.outline, shape)
             .clickable(role = Role.Button, onClickLabel = stringResource(R.string.routine_expand), onClick = onExpand)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -211,7 +213,7 @@ fun RoutineCard(nudge: RoutineNudge, onNavigate: () -> Unit, onFold: () -> Unit,
     Surface(
         shape = RoundedCornerShape(EodiTheme.space.radiusL),
         color = c.surface,
-        modifier = modifier.fillMaxWidth().border(2.dp, c.memory, RoundedCornerShape(EodiTheme.space.radiusL)),
+        modifier = modifier.fillMaxWidth().border(1.dp, c.outline, RoundedCornerShape(EodiTheme.space.radiusL)),
     ) {
         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -266,7 +268,7 @@ fun OnThisDayCard(
     Surface(
         shape = RoundedCornerShape(EodiTheme.space.radiusL),
         color = c.surface,
-        modifier = modifier.fillMaxWidth().border(2.dp, c.memory, RoundedCornerShape(EodiTheme.space.radiusL)),
+        modifier = modifier.fillMaxWidth().border(1.dp, c.outline, RoundedCornerShape(EodiTheme.space.radiusL)),
     ) {
         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -308,7 +310,7 @@ fun OnThisDayCard(
             if (otd.replayable) Button(
                 onClick = { openReplay(otd.day) },
                 shape = CircleShape,
-                colors = ButtonDefaults.buttonColors(containerColor = c.memory, contentColor = c.onMemory),
+                colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = c.onAccent),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 84.dp),
             ) {
                 Icon(EodiIcons.Play, contentDescription = null, modifier = Modifier.size(32.dp))

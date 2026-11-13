@@ -24,7 +24,6 @@
     <string name="search_empty_title">맞는 기록이 없어요</string>
     <string name="search_empty_body">다른 말로 찾거나, 문장으로 AI에게 물어보세요.</string>
     <string name="search_more">%1$d개 더 있어요 · 말을 더 넣어 좁혀 보세요</string>
-    <string name="search_count">%1$d건</string>
 
     <string name="search_open">열기</string>
     <string name="search_map">지도</string>
@@ -46,10 +45,15 @@
     <string name="search_kind_errand">볼일</string>
     <string name="search_kind_commute">출퇴근</string>
     <string name="search_first_only">처음 간 곳</string>
-    <string name="search_filter_reset">조건 지우기</string>
+    <string name="search_filter_period">기간: %1$s ▾</string>
+    <string name="search_filter_kind">종류: %1$s ▾</string>
+    <string name="search_filter_all">전체</string>
+    <string name="search_filter_kind_more">%1$s 외 %2$d</string>
+    <string name="search_filter_pick_period">기간</string>
+    <string name="search_filter_pick_kind">종류 (여러 개 고를 수 있어요)</string>
+    <string name="search_filter_done">닫기</string>
+    <string name="search_filter_reset">× 초기화</string>
     <!-- 조건 칩은 기간 4개만 기본, 나머지(직접 고르기 · 종류 · 처음 간 곳)는 더보기로 -->
-    <string name="search_filter_more">더보기</string>
-    <string name="search_filter_less">접기</string>
     <string name="search_pick_range">기간 고르기</string>
     <string name="search_month">%1$d월</string>
     <string name="search_month_last_year">작년 %1$d월</string>
