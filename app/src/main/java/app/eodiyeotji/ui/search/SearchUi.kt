@@ -342,6 +342,7 @@ fun SearchResults(
         actions.askAi(t)
     }
     var pickingMonth by rememberSaveable { mutableStateOf(false) }
+    var picking by rememberSaveable { mutableStateOf<FilterPick?>(null) }
     BoxWithConstraints(modifier.background(c.background)) {
         val columns = if (maxWidth >= TwoColumns) 2 else 1
         LazyVerticalGrid(
@@ -358,14 +359,12 @@ fun SearchResults(
                 full("filters") {
                     FilterChips(
                         filter = state.filter,
-                        onPeriod = viewModel::setPeriod,
-                        onKind = viewModel::toggleKind,
+                        onOpenPicker = {
+                            keyboard?.hide()
+                            picking = it
+                        },
                         onFirstVisit = viewModel::toggleFirstVisit,
                         onReset = viewModel::clearFilter,
-                        onPickMonth = {
-                            keyboard?.hide()
-                            pickingMonth = true
-                        },
                     )
                 }
             }
@@ -387,6 +386,17 @@ fun SearchResults(
                     full("bottom-space") { Spacer(Modifier.height(24.dp)) }
                 }
             }
+        }
+        // 조건 창은 목록 밖(화면 전체 위)에 띄운다. 목록 칸 안에 두면 어둡게 덮는 판이 그 칸에만 깔린다.
+        picking?.let { pick ->
+            FilterPicker(
+                pick = pick,
+                filter = state.filter,
+                onPeriod = viewModel::setPeriod,
+                onKind = viewModel::toggleKind,
+                onPickMonth = { pickingMonth = true },
+                onDismiss = { picking = null },
+            )
         }
         if (pickingMonth) {
             MonthPicker(
@@ -779,47 +789,20 @@ private fun SuggestionChip(chip: SearchChip, onClick: () -> Unit) {
 @Composable
 private fun FilterChips(
     filter: SearchFilter,
-    onPeriod: (SearchPeriod, LocalDate?, LocalDate?) -> Unit,
-    onKind: (EpisodeKind) -> Unit,
+    onOpenPicker: (FilterPick) -> Unit,
     onFirstVisit: () -> Unit,
     onReset: () -> Unit,
-    onPickMonth: () -> Unit,
 ) {
     // 차 화면: 칩을 줄줄이 늘어놓지 않고 한 줄에 셋만 ("기간 ▾" · "종류 ▾" · 처음 간 곳). 고르는 건 작은 창에서 큰 알약으로.
     val c = EodiTheme.colors
-    var picking by rememberSaveable { mutableStateOf<String?>(null) }
-    val periods = listOf(
-        SearchPeriod.ANY to stringResource(R.string.search_period_any),
-        SearchPeriod.THIS_WEEK to stringResource(R.string.search_period_week),
-        SearchPeriod.THIS_MONTH to stringResource(R.string.search_period_month),
-        SearchPeriod.THIS_YEAR to stringResource(R.string.search_period_year),
-    )
-    val custom = filter.period == SearchPeriod.CUSTOM
-    val from = filter.from
-    val to = filter.to
-    val customLabel = when {
-        !custom || from == null || to == null -> stringResource(R.string.search_period_custom)
-        // 한 달을 골랐으면 "10월" (올해가 아니면 "작년 10월")
-        from.dayOfMonth == 1 && to == from.plusMonths(1).minusDays(1) -> when (from.year) {
-            LocalDate.now().year -> stringResource(R.string.search_month, from.monthValue)
-            LocalDate.now().year - 1 -> stringResource(R.string.search_month_last_year, from.monthValue)
-            else -> stringResource(R.string.search_month_year, from.year, from.monthValue)
-        }
-        else -> stringResource(R.string.search_period_custom_range, shortDate(from), shortDate(to))
-    }
-    val kinds = listOf(
-        listOf(EpisodeKind.TRIP) to stringResource(R.string.search_kind_trip),
-        listOf(EpisodeKind.OUTING) to stringResource(R.string.search_kind_outing),
-        listOf(EpisodeKind.ERRAND) to stringResource(R.string.search_kind_errand),
-        listOf(EpisodeKind.COMMUTE_TO_WORK, EpisodeKind.COMMUTE_HOME) to stringResource(R.string.search_kind_commute),
-    )
     val all = stringResource(R.string.search_filter_all)
+    val periods = periodOptions()
     val periodValue = when (filter.period) {
         SearchPeriod.ANY -> all
-        SearchPeriod.CUSTOM -> customLabel
+        SearchPeriod.CUSTOM -> customPeriodLabel(filter)
         else -> periods.first { it.first == filter.period }.second
     }
-    val onKinds = kinds.filter { (ks, _) -> ks.all { it in filter.kinds } }.map { it.second }
+    val onKinds = kindOptions().filter { (ks, _) -> ks.all { it in filter.kinds } }.map { it.second }
     val kindValue = when (onKinds.size) {
         0 -> all
         1 -> onKinds[0]
@@ -832,11 +815,11 @@ private fun FilterChips(
     ) {
         TogglePill(
             stringResource(R.string.search_filter_period, periodValue), filter.period != SearchPeriod.ANY,
-            { picking = "period" }, minHeight = ChipHeight, role = Role.Button,
+            { onOpenPicker(FilterPick.PERIOD) }, minHeight = ChipHeight, role = Role.Button,
         )
         TogglePill(
             stringResource(R.string.search_filter_kind, kindValue), filter.kinds.isNotEmpty(),
-            { picking = "kind" }, minHeight = ChipHeight, role = Role.Button,
+            { onOpenPicker(FilterPick.KIND) }, minHeight = ChipHeight, role = Role.Button,
         )
         TogglePill(stringResource(R.string.search_first_only), filter.firstVisitOnly, onFirstVisit, minHeight = ChipHeight)
         if (filter.isSet) {
@@ -845,15 +828,65 @@ private fun FilterChips(
             }
         }
     }
-    when (picking) {
-        "period" -> FilterSheet(stringResource(R.string.search_filter_pick_period), onDismiss = { picking = null }) {
-            periods.forEach { (p, label) ->
-                TogglePill(label, filter.period == p, { onPeriod(p, null, null); picking = null }, minHeight = ChipHeight, role = Role.RadioButton)
-            }
-            TogglePill(customLabel, custom, { picking = null; onPickMonth() }, minHeight = ChipHeight, role = Role.RadioButton)
+}
+
+/** 칩에서 여는 조건 창 종류. */
+private enum class FilterPick { PERIOD, KIND }
+
+@Composable
+private fun periodOptions() = listOf(
+    SearchPeriod.ANY to stringResource(R.string.search_period_any),
+    SearchPeriod.THIS_WEEK to stringResource(R.string.search_period_week),
+    SearchPeriod.THIS_MONTH to stringResource(R.string.search_period_month),
+    SearchPeriod.THIS_YEAR to stringResource(R.string.search_period_year),
+)
+
+@Composable
+private fun kindOptions() = listOf(
+    listOf(EpisodeKind.TRIP) to stringResource(R.string.search_kind_trip),
+    listOf(EpisodeKind.OUTING) to stringResource(R.string.search_kind_outing),
+    listOf(EpisodeKind.ERRAND) to stringResource(R.string.search_kind_errand),
+    listOf(EpisodeKind.COMMUTE_TO_WORK, EpisodeKind.COMMUTE_HOME) to stringResource(R.string.search_kind_commute),
+)
+
+/** "직접 고르기"로 고른 기간 이름. 한 달이면 "10월" (올해가 아니면 "작년 10월"). */
+@Composable
+private fun customPeriodLabel(filter: SearchFilter): String {
+    val from = filter.from
+    val to = filter.to
+    return when {
+        filter.period != SearchPeriod.CUSTOM || from == null || to == null -> stringResource(R.string.search_period_custom)
+        from.dayOfMonth == 1 && to == from.plusMonths(1).minusDays(1) -> when (from.year) {
+            LocalDate.now().year -> stringResource(R.string.search_month, from.monthValue)
+            LocalDate.now().year - 1 -> stringResource(R.string.search_month_last_year, from.monthValue)
+            else -> stringResource(R.string.search_month_year, from.year, from.monthValue)
         }
-        "kind" -> FilterSheet(stringResource(R.string.search_filter_pick_kind), onDismiss = { picking = null }) {
-            kinds.forEach { (ks, label) ->
+        else -> stringResource(R.string.search_period_custom_range, shortDate(from), shortDate(to))
+    }
+}
+
+/** 기간 · 종류 고르는 작은 창. 기간은 하나 고르면 닫히고, 종류는 여러 개 켜고 끈 뒤 [닫기]. */
+@Composable
+private fun FilterPicker(
+    pick: FilterPick,
+    filter: SearchFilter,
+    onPeriod: (SearchPeriod, LocalDate?, LocalDate?) -> Unit,
+    onKind: (EpisodeKind) -> Unit,
+    onPickMonth: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    when (pick) {
+        FilterPick.PERIOD -> FilterSheet(stringResource(R.string.search_filter_pick_period), onDismiss) {
+            periodOptions().forEach { (p, label) ->
+                TogglePill(label, filter.period == p, { onPeriod(p, null, null); onDismiss() }, minHeight = ChipHeight, role = Role.RadioButton)
+            }
+            TogglePill(
+                customPeriodLabel(filter), filter.period == SearchPeriod.CUSTOM,
+                { onDismiss(); onPickMonth() }, minHeight = ChipHeight, role = Role.RadioButton,
+            )
+        }
+        FilterPick.KIND -> FilterSheet(stringResource(R.string.search_filter_pick_kind), onDismiss) {
+            kindOptions().forEach { (ks, label) ->
                 TogglePill(label, ks.all { it in filter.kinds }, { ks.forEach(onKind) }, minHeight = ChipHeight, role = Role.Checkbox)
             }
         }
