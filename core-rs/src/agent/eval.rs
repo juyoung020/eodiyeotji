@@ -190,6 +190,24 @@ fn live_eval_llm_only() {
     run_set(false);
 }
 
+/// "어제 어디 갔지" — 어제 기록이 하나 · 여럿 · 없음 (Gemini로 바꾼 뒤 "답을 정리하지 못했어요"가 나오던 질문).
+#[test]
+fn live_yesterday() {
+    if !live() {
+        return;
+    }
+    for (label, day, fast_path) in [("어제=11/01 하나", 2, true), ("어제=10/30 하나", 31, true), ("어제 없음", 6, true), ("LLM만 어제=11/01", 2, false), ("LLM만 어제 없음", 6, false)] {
+        let (m, d) = if day == 31 { (10, 31) } else { (11, day) };
+        let agent = MemoryAgent::with_backend(FakeBackend::new(), cfg(&url()), AgentOptions { fast_path, llm_when_confident: true, ..Default::default() });
+        let cx = AgentContext { now_ms: super::tests::ms(2026, m, d, 10), ..ctx(true) };
+        let r = ask(&agent, "어제 어디 갔지", cx);
+        let done = r.events().into_iter().find_map(|e| if let Ev::Done(d) = e { Some(d) } else { None });
+        let answer = done.as_ref().map(|d| d.answer.clone()).unwrap_or_default();
+        println!("[{label}] LLM={} 답={answer}", done.as_ref().map(|d| d.timing.llm_calls).unwrap_or(0));
+        assert!(!answer.is_empty() && !answer.contains("정리하지 못했"), "{label}: {answer}");
+    }
+}
+
 // ---------------------------------------------------------------- 근처 추천 코스
 
 struct CourseCase {

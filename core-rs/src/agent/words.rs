@@ -217,8 +217,10 @@ fn push(v: &mut Vec<String>, s: &str) {
     }
 }
 
-fn is_noise(w: &str) -> bool {
+pub(crate) fn is_noise(w: &str) -> bool {
     w.is_empty()
+        // "갔지·갔어·갔었나·왔지·다녀왔어·들렀지": 다녀온 일을 묻는 말 자체 (어미가 한 글자에 붙어 VERB_ENDINGS로는 못 뗀다)
+        || ["갔", "왔", "다녀", "들렀", "들른", "가봤", "가본"].iter().any(|p| w.starts_with(p))
         || STOP.contains(&w)
         || is_date_word(w)
         || w.starts_with("어디")

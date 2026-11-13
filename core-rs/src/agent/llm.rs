@@ -145,6 +145,9 @@ impl LlmClient {
                 return Err(LlmError::Cancelled);
             }
             let line = line.map_err(|e| LlmError::Unreachable(format!("읽기 실패: {e}")))?;
+            if dump_raw() && !line.trim().is_empty() {
+                eprintln!("[llm raw] {line}");
+            }
             let piece = acc.on_line(&line)?;
             if first.is_none() && acc.saw_output {
                 first = Some(start.elapsed().as_millis() as u64);
@@ -197,6 +200,11 @@ impl LlmClient {
     }
 }
 
+/// 개발 PC 평가에서 받은 SSE 줄을 그대로 보려면 `EODI_LLM_DUMP=1` (기기에서는 쓰지 않는다).
+fn dump_raw() -> bool {
+    std::env::var("EODI_LLM_DUMP").as_deref() == Ok("1")
+}
+
 /// 보내기 실패 (안에서만 쓴다).
 enum Sent {
     Status(u16, String),
@@ -233,14 +241,14 @@ pub fn parse_completion(raw: &str, total_ms: u64) -> Result<ChatResult, LlmError
                     Some(ToolCall {
                         id: c["id"].as_str().filter(|s| !s.is_empty()).map(String::from).unwrap_or(format!("call_{i}")),
                         name: f["name"].as_str().unwrap_or("").trim().to_string(),
-                        arguments: f["arguments"].as_str().map(String::from).unwrap_or_else(|| f["arguments"].to_string()),
+                        arguments: args_text(&f["arguments"]),
                     })
                 })
                 .collect()
         })
         .unwrap_or_default();
     let mut vis = VisibleText::default();
-    let mut content = vis.feed(msg["content"].as_str().unwrap_or(""));
+    let mut content = vis.feed(&content_text(&msg["content"]));
     content.push_str(&vis.flush());
     if calls.is_empty() {
         calls = vis.leaked_tool_calls();
@@ -253,6 +261,28 @@ pub fn parse_completion(raw: &str, total_ms: u64) -> Result<ChatResult, LlmError
         total_ms,
         timings: root.get("timings").cloned(),
     })
+}
+
+/// 도구 인자: 보통 JSON 문자열, 어떤 서버(Gemini 호환 층 등)는 객체로 준다 → 문자열로. 없음(null)은 빈 글.
+fn args_text(v: &Value) -> String {
+    match v {
+        Value::Null => String::new(),
+        Value::String(s) => s.clone(),
+        other => other.to_string(),
+    }
+}
+
+/// 답 글: 문자열, 또는 `[{"type":"text","text":…}]` 부분 목록(생각 부분 `thought: true`는 뺀다). null·없음은 빈 글.
+fn content_text(v: &Value) -> String {
+    match v {
+        Value::String(s) => s.clone(),
+        Value::Array(parts) => parts
+            .iter()
+            .filter(|p| !p["thought"].as_bool().unwrap_or(false) && p["type"].as_str().is_none_or(|t| t == "text"))
+            .filter_map(|p| p["text"].as_str().or(p.as_str()))
+            .collect(),
+        _ => String::new(),
+    }
 }
 
 #[derive(Default)]
@@ -297,7 +327,8 @@ impl SseAccumulator {
         // reasoning_content(생각 글)는 버린다
         if let Some(arr) = delta["tool_calls"].as_array() {
             for (i, c) in arr.iter().enumerate() {
-                let parts = self.calls.entry(c["index"].as_i64().unwrap_or(i as i64)).or_default();
+                let key = self.call_key(c, i);
+                let parts = self.calls.entry(key).or_default();
                 if let Some(id) = c["id"].as_str().filter(|s| !s.is_empty()) {
                     parts.id = Some(id.to_string());
                 }
@@ -307,20 +338,36 @@ impl SseAccumulator {
                             parts.name.push_str(n);
                         }
                     }
-                    if let Some(a) = f["arguments"].as_str() {
-                        parts.args.push_str(a);
-                    }
+                    parts.args.push_str(&args_text(&f["arguments"]));
                 }
                 self.saw_output = true;
             }
         }
-        let Some(piece) = delta["content"].as_str() else { return Ok(None) };
-        if !piece.is_empty() {
-            self.saw_output = true;
+        let piece = content_text(&delta["content"]);
+        if piece.is_empty() {
+            return Ok(None);
         }
-        let shown = self.visible.feed(piece);
+        self.saw_output = true;
+        let shown = self.visible.feed(&piece);
         self.text.push_str(&shown);
         Ok(Some(shown))
+    }
+
+    /// 도구 호출 조각을 어느 호출에 붙일지. llama.cpp는 `index`를 주고 한 호출을 여러 조각으로 나눠 보낸다.
+    /// Gemini(OpenAI 호환)는 `index` 없이 호출 하나를 통째로 한 조각에 보내고, 여러 호출이면 조각마다 하나씩 →
+    /// 배열 자리(0)로 묶으면 두 호출이 하나로 섞였다. 그래서 `index`가 없으면 새 id = 새 호출, id 없는 조각 = 앞 호출에 이어 붙임.
+    fn call_key(&self, c: &Value, pos: usize) -> i64 {
+        if let Some(i) = c["index"].as_i64() {
+            return i;
+        }
+        let next = self.calls.keys().next_back().map_or(0, |k| k + 1);
+        match c["id"].as_str().filter(|s| !s.is_empty()) {
+            Some(id) => self.calls.iter().find(|(_, p)| p.id.as_deref() == Some(id)).map_or(next, |(k, _)| *k),
+            None if self.calls.is_empty() => pos as i64,
+            // 이름이 새로 오면 새 호출, 아니면 앞 호출의 인자 조각
+            None if c["function"]["name"].as_str().is_some_and(|n| !n.is_empty()) && self.calls.values().next_back().is_some_and(|p| !p.name.is_empty()) => next,
+            None => next - 1,
+        }
     }
 
     pub fn finish(mut self, first_token_ms: Option<u64>, total_ms: u64) -> ChatResult {

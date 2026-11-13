@@ -29,6 +29,8 @@ pub const NAV: &str = "nav";
 pub const COURSES: &str = "courses";
 
 const MAX_TERMS: usize = 3;
+/// 검색어로 쓸모없는 일반 말 (모델이 q를 비우지 않고 채워 넣는 말)
+const FILLER: &[&str] = &["장소", "방문", "이동", "일정", "기록", "들른곳", "다녀온곳", "가다", "들르다", "출발", "도착", "여행지", "목적지", "위치", "어디", "곳", "곳들"];
 const MAX_HITS: usize = 5;
 const MAX_STOP_NAMES: usize = 5;
 const MAX_DAY_EPISODES: usize = 6;
@@ -44,11 +46,11 @@ pub fn definitions() -> &'static Value {
         };
         json!([
             f(FIND, "기억 검색. 기억 질문이면 먼저 쓴다.", json!({
-                "q":{"type":"array","items":{"type":"string"},"description":"낱말+동의어 3개까지"},
+                "q":{"type":"array","items":{"type":"string"},"description":"장소·테마 낱말+동의어 3개까지. 날짜만 물으면(어제 어디 갔지) 비움"},
                 "from":{"type":"string","description":"YYYY-MM 또는 YYYY-MM-DD"},
                 "to":{"type":"string"},
                 "kind":{"type":"string","enum":["trip","outing","errand","commute"]}
-            }), &["q"]),
+            }), &[]),
             f(DAY, "하루의 들른 곳 보기.", json!({"d":{"type":"string","description":"YYYY-MM-DD"}}), &["d"]),
             f(COURSE, "기억의 코스 순서·거리.", json!({"id":{"type":"integer"},"here":{"type":"boolean","description":"지금 위치에서 가장 짧은 순서"}}), &["id"]),
             f(COURSES, "근처 인기 드라이브 코스 추천(남들이 공유한 코스). 추천·갈 만한 곳 질문에 쓴다.", json!({
@@ -140,10 +142,14 @@ pub fn run(call: &ToolCall, c: &mut Ctx) -> Outcome {
 }
 
 fn find(call: &ToolCall, a: &Value, c: &mut Ctx) -> Result<Outcome, Bad> {
-    let terms: Vec<String> = strings(a.get("q").or_else(|| a.get("terms")))?.into_iter().take(MAX_TERMS).collect();
-    if terms.is_empty() {
-        return Err(Bad("q(찾을 낱말 목록)가 필요합니다.".into()));
-    }
+    // "어디·곳·방문·장소" 같은 묻는 말 · 빈 낱말은 뺀다 — Gemini는 "어제 어디 갔지"에 q=["어디","곳","방문"]을 채워 보내
+    // 아무 기록과도 맞지 않았다 (낱말 없이 기간만 있으면 그 기간 기록 전체).
+    let terms: Vec<String> = strings(a.get("q").or_else(|| a.get("terms")).filter(|v| !v.is_null()))?
+        .into_iter()
+        .map(|w| w.trim().to_string())
+        .filter(|w| !super::words::is_noise(w) && !FILLER.contains(&w.as_str()))
+        .take(MAX_TERMS)
+        .collect();
     let tz = c.ctx.tz_offset_minutes;
     let today = local_days(c.ctx.now_ms, tz);
     let from = opt_day(a, "from", false)?;
@@ -152,6 +158,9 @@ fn find(call: &ToolCall, a: &Value, c: &mut Ctx) -> Result<Outcome, Bad> {
         (Some(f), Some(t)) if t < f => (Some(t), Some(f)),
         x => x,
     };
+    if terms.is_empty() && from.is_none() && to.is_none() {
+        return Err(Bad("q(찾을 낱말 목록) 또는 from·to 기간이 필요합니다.".into()));
+    }
     let kinds = match a.get("kind").and_then(Value::as_str) {
         None | Some("") => vec![],
         Some("trip") => vec![EpisodeKind::Trip],
@@ -167,7 +176,12 @@ fn find(call: &ToolCall, a: &Value, c: &mut Ctx) -> Result<Outcome, Bad> {
         kinds,
         limit: MAX_HITS as u32,
     };
-    let hits: Vec<MemoryHit> = c.backend.search_memories(q).map_err(|e| Bad(format!("검색 오류: {e}.")))?.into_iter().take(MAX_HITS).collect();
+    let narrow = matches!((from, to), (Some(f), Some(t)) if t - f <= 2);
+    let mut hits: Vec<MemoryHit> = c.backend.search_memories(q.clone()).map_err(|e| Bad(format!("검색 오류: {e}.")))?.into_iter().take(MAX_HITS).collect();
+    // 하루 · 이틀처럼 좁은 기간인데 낱말이 하나도 안 맞으면 그 기간 기록 전체를 본다 ("어제 들른 곳" → q=["들른곳"])
+    if hits.is_empty() && narrow && !q.terms.is_empty() {
+        hits = c.backend.search_memories(MemoryQuery { terms: vec![], ..q }).map_err(|e| Bad(format!("검색 오류: {e}.")))?.into_iter().take(MAX_HITS).collect();
+    }
     c.cache.remember(&hits);
     let mut data = json!({"count": hits.len(), "hits": hits.iter().map(|h| hit_json(h, tz)).collect::<Vec<_>>()});
     if hits.is_empty() {

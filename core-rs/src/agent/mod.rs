@@ -58,6 +58,8 @@ mod scene_tests;
 #[cfg(test)]
 mod eval;
 #[cfg(test)]
+mod gemini_tests;
+#[cfg(test)]
 mod tests;
 
 use std::collections::{HashMap, VecDeque};

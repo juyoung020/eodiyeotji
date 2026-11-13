@@ -567,8 +567,16 @@ impl MemoryAgent {
         let cancelled = || self.cancel_gen.load(Ordering::SeqCst) != gen;
         let mut strikes = 0;
         let mut nudged = false;
-        for round in 0..=MAX_TOOL_ROUNDS {
-            let allow_tools = round < MAX_TOOL_ROUNDS;
+        // 빈 답을 받으면 도구 없이 "받은 결과로 답하라"로 한 번 더 묻는다 (Gemini는 결과가 비면 글 없이 끝내기도 한다)
+        let mut wrap_retry = false;
+        let mut round = 0;
+        while round <= MAX_TOOL_ROUNDS + 1 {
+            let allow_tools = round < MAX_TOOL_ROUNDS && !wrap_retry;
+            if round > MAX_TOOL_ROUNDS && !wrap_retry {
+                break;
+            }
+            round += 1;
+            let round = round - 1;
             let mut messages: Vec<Value> = vec![json!({"role": "system", "content": prompts::AGENT_SYSTEM})];
             messages.extend(s.turns.iter().flatten().cloned());
             messages.extend(t.msgs.iter().cloned());
@@ -608,6 +616,11 @@ impl MemoryAgent {
             }
             if r.tool_calls.is_empty() || !allow_tools {
                 let text = tidy_answer(&said, ctx.is_driving);
+                if text.is_empty() && !wrap_retry {
+                    alog!("[agent] 빈 답 (finish={:?}, 도구 {}개) → 도구 없이 다시 물음", r.finish_reason, r.tool_calls.len());
+                    wrap_retry = true;
+                    continue;
+                }
                 t.say(if text.is_empty() { EMPTY_ANSWER } else { &text });
                 t.msgs.push(json!({"role": "assistant", "content": t.answer.clone()}));
                 return Ok(());
