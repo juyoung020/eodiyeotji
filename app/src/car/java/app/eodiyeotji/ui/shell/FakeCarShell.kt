@@ -156,9 +156,21 @@ fun FakeCarShell(content: @Composable () -> Unit) {
         // 틀 전체(2560x1440dp)가 화면에 들어가는 밀도: 이 안에서는 1dp가 에뮬레이터의 1px이다
         val scale = min(box.width / FRAME_W.toFloat(), box.height / FRAME_H.toFloat())
         CompositionLocalProvider(LocalDensity provides Density(scale, LocalDensity.current.fontScale)) {
-            Box(Modifier.requiredSize(FRAME_W.dp, FRAME_H.dp)) {
+            // 마지막으로 화면을 누른 때. 누름은 여기(부모)에서 먼저 보기만 하고 그대로 아래 화면에 흘려보낸다
+            // (화면 위에 따로 덮은 칸에서 보면 그 칸이 누름을 가로채 아래 버튼이 하나도 안 눌린다)
+            var touched by remember { mutableStateOf(0L) }
+            Box(
+                Modifier.requiredSize(FRAME_W.dp, FRAME_H.dp).pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            awaitPointerEvent(PointerEventPass.Initial)
+                            touched = System.nanoTime()
+                        }
+                    }
+                },
+            ) {
                 Shell(content)
-                ScreenSaver()
+                ScreenSaver(touched, onWake = { touched = System.nanoTime() })
             }
         }
     }
@@ -292,32 +304,21 @@ private fun CarSketch(modifier: Modifier) {
 /**
  * 화면 보호기: 기어가 P · N인 채로 [SAVER_AFTER_MS] 동안 화면을 누르지 않으면 검은 화면으로 덮고, 시계만 [SAVER_MOVE_MS]마다 자리를 옮겨 보인다.
  * 아무 데나 누르면 걷힌다 (그 누름은 아래 화면에 전달하지 않는다). 주행 중(D · R)에는 뜨지 않는다.
+ * [touched] = 마지막으로 화면을 누른 때 (부모가 지켜본다).
  */
 @Composable
-private fun ScreenSaver() {
+private fun ScreenSaver(touched: Long, onWake: () -> Unit) {
     val context = LocalContext.current
     val vehicle = remember { EntryPointAccessors.fromApplication(context.applicationContext, ShellEntryPoint::class.java).vehicle() }
     val gear by vehicle.gear.collectAsStateWithLifecycle()
-    // 마지막으로 화면을 누른 때 (누를 때마다 바뀌어 아래 기다림을 다시 시작시킨다)
-    var touched by remember { mutableStateOf(0L) }
     var on by remember { mutableStateOf(false) }
+    // 누를 때마다([touched]) · 기어가 바뀔 때마다 기다림을 다시 시작한다
     LaunchedEffect(touched, gear) {
         on = false
         if (TabletVehicle.isMoving(gear)) return@LaunchedEffect
         delay(SAVER_AFTER_MS)
         on = true
     }
-    // 누름을 지켜보기만 한다 (먼저 보고 그대로 흘려보낸다)
-    Box(
-        Modifier.fillMaxSize().pointerInput(Unit) {
-            awaitPointerEventScope {
-                while (true) {
-                    awaitPointerEvent(PointerEventPass.Initial)
-                    touched = System.nanoTime()
-                }
-            }
-        },
-    )
     if (!on) return
     val spot by produceState(0) {
         while (true) {
@@ -327,7 +328,7 @@ private fun ScreenSaver() {
     }
     val clock by produceState(initialValue = clockText(), spot) { value = clockText() }
     Box(
-        Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) { detectTapGestures { touched = System.nanoTime() } },
+        Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) { detectTapGestures { onWake() } },
     ) {
         Text(
             clock,
