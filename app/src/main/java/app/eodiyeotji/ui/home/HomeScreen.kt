@@ -126,7 +126,8 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     // 같이 가기 (여러 차가 함께): 켜져 있으면 "위치 공유 중 · N대"
                     app.eodiyeotji.ui.convoy.ConvoyEntryChip()
-                    RecordingStatusChip(quietWhenWaiting = true)
+                    // 좁은 창(나눈 화면)에서는 점만: "기록 중" 글자가 검색 칸을 밀어 넣은 글자가 앞에서 잘렸다
+                    RecordingStatusChip(quietWhenWaiting = true, dotOnly = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 1100)
                     // 인터넷이 끊기면 "오프라인" (기록 · 검색은 기기 안에서 그대로 된다)
                     app.eodiyeotji.ui.common.OfflineBadge()
                 }

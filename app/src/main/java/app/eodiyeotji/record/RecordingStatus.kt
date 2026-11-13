@@ -203,6 +203,8 @@ fun RecordingStatusChip(
     interactive: Boolean = true,
     /** true면 평소(시동을 기다리는 중)에는 아무것도 그리지 않는다: 기록 중이거나 설정이 꺼져 있을 때만 보인다 */
     quietWhenWaiting: Boolean = false,
+    /** true면 경고가 아닐 때 점만 (좁은 창 머리: 글자가 검색 칸 자리를 먹었다). 읽어 주기 설명은 그대로 */
+    dotOnly: Boolean = false,
     viewModel: RecordingStatusViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -220,6 +222,7 @@ fun RecordingStatusChip(
     Box(
         modifier
             .heightIn(min = EodiTheme.space.touch)
+            .widthIn(min = EodiTheme.space.touch)
             .clip(CircleShape)
             .then(if (interactive) Modifier.clickable(role = Role.Button) { open = true } else Modifier)
             .semantics(mergeDescendants = true) { contentDescription = a11y },
@@ -239,6 +242,7 @@ fun RecordingStatusChip(
         ) {
             // 주행 화면(누를 수 없는 표시)에서는 숨 쉬는 점을 멈춘다: 주행 중 반복 애니메이션 최소화 (Pleos 주행 안전 설계 가이드)
             StatusDot(headline, if (interactive) 14.dp else 20.dp, pulse = interactive)
+            if (!(dotOnly && !warn)) {
             Spacer(Modifier.width(if (interactive) 10.dp else 14.dp))
             Text(
                 label,
@@ -253,6 +257,7 @@ fun RecordingStatusChip(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            }
         }
     }
     if (open) {
