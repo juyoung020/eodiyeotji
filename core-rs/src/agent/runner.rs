@@ -584,7 +584,8 @@ impl MemoryAgent {
         let at = s.candidates.iter().position(|c| c.episode.facts.id == f.id);
         let text = match at {
             Some(0) if n > 1 && !t.picked => {
-                format!("비슷한 기억을 찾았어요. 가장 비슷한 1번은 {}{ask}", describe(top, today))
+                // "비슷한"은 빼고 개수만: "부산 여행 언제 갔지"처럼 딱 맞게 찾은 때도 얼버무리는 말로 들렸다
+                format!("기억 {n}개를 찾았어요. 1번은 {}{ask}", describe(top, today))
             }
             Some(i) if n > 1 => format!("{}번은 {}{ask}", i + 1, describe(top, today)),
             // 같은 곳을 여러 번 다녀옴 (후보 하나로 합쳐짐): "태조감자국이에요. 1월 25일, 11월 1일 두 번 다녀오셨어요."

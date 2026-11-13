@@ -101,7 +101,7 @@ fn vague_question_shows_numbered_candidates_and_picks_by_number() {
     assert_eq!((r.focus(), r.first_id()), (0, order[0]), "1번이 자세한 카드");
     // 목록은 화면 후보 칸이 보이고, 말은 짧게 한 줄
     let text = r.text.lock().unwrap().clone();
-    assert!(text.starts_with("비슷한 기억을 찾았어요. 가장 비슷한 1번은"), "{text}");
+    assert!(text.starts_with(&format!("기억 {}개를 찾았어요. 1번은", order.len())), "{text}");
     // "옛날에": 최근 한 달 기록(11월 7일 경포)보다 지난 기록이 1번
     let cands = r.cands.lock().unwrap().0.clone();
     assert!(cands[0].episode.facts.day.as_str() < "2026-10-08", "1번 {}", cands[0].episode.facts.day);
