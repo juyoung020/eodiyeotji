@@ -267,6 +267,62 @@ pub struct KeywordCount {
     pub ratio: f32,
 }
 
+/// 신고 · 숨기기 대상 (사용자 · AI가 만든 글, Pleos 앱 심사 가이드 "콘텐츠 필터링 · 신고").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum ReportTarget {
+    Course,
+    Review,
+    BoardPost,
+    BoardComment,
+}
+
+impl ReportTarget {
+    /// 숨긴 글 표(`hidden_item.kind`)에 쓰는 이름 = 그 글이 있는 표 이름.
+    pub(crate) fn table(self) -> &'static str {
+        match self {
+            ReportTarget::Course => "community_course",
+            ReportTarget::Review => "place_review",
+            ReportTarget::BoardPost => "board_post",
+            ReportTarget::BoardComment => "board_comment",
+        }
+    }
+}
+
+/// 신고 이유.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum ReportReason {
+    Inappropriate,
+    Spam,
+    PrivacyExposure,
+    Other,
+}
+
+impl ReportReason {
+    fn key(self) -> &'static str {
+        match self {
+            ReportReason::Inappropriate => "inappropriate",
+            ReportReason::Spam => "spam",
+            ReportReason::PrivacyExposure => "privacy",
+            ReportReason::Other => "other",
+        }
+    }
+}
+
+/// DB 구조 버전 21: 신고해서 숨긴 글. (표 이름, 글 id)로 묶는다 (표마다 id가 겹칠 수 있다).
+pub(crate) const SCHEMA_V21: &str = "
+CREATE TABLE IF NOT EXISTS hidden_item (
+    kind TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    created_ms INTEGER NOT NULL,
+    PRIMARY KEY (kind, item_id)
+) WITHOUT ROWID;
+";
+
+/// 예전 버전 DB를 흉내 내는 테스트용 (v21 표 지우기).
+#[cfg(test)]
+pub(crate) const DROP_V21: &str = "DROP TABLE hidden_item;";
+
 /// 정렬 기준.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum CommunitySort {
@@ -874,6 +930,27 @@ impl EodiStore {
         Ok(posts)
     }
 
+    /// 신고 · 숨기기: 이 기기 피드에서 바로 빠진다 (같은 글을 다시 신고해도 그대로). 빈 id면 `InvalidInput`.
+    /// 서버(relay)에는 아직 커뮤니티 주소가 없어 신고는 기기 안에만 남는다.
+    pub fn report_community_item(&self, target: ReportTarget, id: String, reason: ReportReason, now_ms: i64) -> Result<(), CoreError> {
+        if id.trim().is_empty() {
+            return Err(CoreError::InvalidInput("신고할 글 id가 비었다".into()));
+        }
+        let conn = self.lock_community()?;
+        conn.execute(
+            "INSERT OR IGNORE INTO hidden_item (kind, item_id, reason, created_ms) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![target.table(), id, reason.key(), now_ms],
+        )?;
+        Ok(())
+    }
+
+    /// 숨긴 글 수 (확인 · 테스트용).
+    pub fn hidden_item_count(&self) -> Result<u32, CoreError> {
+        let conn = self.snapshot()?;
+        let n: i64 = conn.query_row("SELECT count(*) FROM hidden_item", [], |r| r.get(0))?;
+        Ok(n.clamp(0, u32::MAX as i64) as u32)
+    }
+
     /// 게시판 글 하나 (없으면 None).
     pub fn board_post(&self, id: String) -> Result<Option<BoardPost>, CoreError> {
         let conn = self.snapshot()?;
@@ -885,7 +962,9 @@ impl EodiStore {
         let conn = self.snapshot()?;
         let mut st = conn.prepare_cached(
             "SELECT id, post_id, author, mine, body, created_ms, others_hearts + my_heart, my_heart
-             FROM board_comment WHERE post_id = ?1 ORDER BY created_ms, id",
+             FROM board_comment WHERE post_id = ?1
+               AND id NOT IN (SELECT item_id FROM hidden_item WHERE kind = 'board_comment')
+             ORDER BY created_ms, id",
         )?;
         let rows = st.query_map([post_id], comment_from_row)?;
         Ok(rows.collect::<Result<_, _>>()?)
@@ -1354,7 +1433,8 @@ pub(crate) fn load_reviews(conn: &Connection, id: Option<&str>) -> Result<Vec<Pl
 }
 
 const BOARD_COLS: &str = "id, title, body, author, mine, region, tags, created_ms, others_hearts + my_heart, my_heart,
-     (SELECT count(*) FROM board_comment c WHERE c.post_id = board_post.id)";
+     (SELECT count(*) FROM board_comment c WHERE c.post_id = board_post.id
+       AND c.id NOT IN (SELECT item_id FROM hidden_item WHERE kind = 'board_comment'))";
 
 fn board_from_row(r: &Row) -> rusqlite::Result<BoardPost> {
     Ok(BoardPost {
@@ -1390,6 +1470,7 @@ fn comment_from_row(r: &Row) -> rusqlite::Result<BoardComment> {
 }
 
 /// 표 [table]의 줄 전부 또는 id 하나.
+/// 신고해서 숨긴 글은 뺀다 (`hidden_item.kind` = 표 이름).
 fn load_rows<T>(
     conn: &Connection,
     table: &str,
@@ -1397,15 +1478,16 @@ fn load_rows<T>(
     id: Option<&str>,
     f: fn(&Row) -> rusqlite::Result<T>,
 ) -> Result<Vec<T>, CoreError> {
+    const NOT_HIDDEN: &str = "id NOT IN (SELECT item_id FROM hidden_item WHERE kind = ?1)";
     let rows = match id {
         Some(id) => {
-            let mut st = conn.prepare_cached(&format!("SELECT {cols} FROM {table} WHERE id = ?1"))?;
-            let rows = st.query_map([id], f)?;
+            let mut st = conn.prepare_cached(&format!("SELECT {cols} FROM {table} WHERE {NOT_HIDDEN} AND id = ?2"))?;
+            let rows = st.query_map([table, id], f)?;
             rows.collect::<Result<Vec<_>, _>>()?
         }
         None => {
-            let mut st = conn.prepare_cached(&format!("SELECT {cols} FROM {table}"))?;
-            let rows = st.query_map([], f)?;
+            let mut st = conn.prepare_cached(&format!("SELECT {cols} FROM {table} WHERE {NOT_HIDDEN}"))?;
+            let rows = st.query_map([table], f)?;
             rows.collect::<Result<Vec<_>, _>>()?
         }
     };

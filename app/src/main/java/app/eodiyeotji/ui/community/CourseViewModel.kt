@@ -148,6 +148,12 @@ class CourseViewModel @Inject constructor(
         _state.update { it.copy(detail = null) }
     }
 
+    /** 코스를 신고해 숨겼을 때: 상세를 닫고 피드를 다시 읽는다. */
+    fun onHidden() {
+        closeDetail()
+        reload()
+    }
+
     /**
      * 이 코스로 안내: 첫 구간(경유지 2개 + 목적지, Rust `course_legs`)을 내비에 보내고, 도착할 때마다 다음 구간은
      * [CourseGuide]가 알아서 이어 보낸다. 이미 이 코스를 안내 중이면 도착을 기다리지 않고 다음 구간으로 넘긴다.

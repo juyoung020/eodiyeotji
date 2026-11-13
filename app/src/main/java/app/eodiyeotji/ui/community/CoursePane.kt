@@ -155,6 +155,7 @@ internal fun CourseDetailScreen(
     onNavigate: () -> Unit,
     onOpenPlace: (StopFact) -> Unit,
     onStopGuide: () -> Unit = {},
+    onHidden: () -> Unit = {},
 ) {
     val colors = EodiTheme.colors
     val p = d.course.post
@@ -250,6 +251,7 @@ internal fun CourseDetailScreen(
                         HeartButton(p.hearts, p.heartedByMe, onHeart)
                         // 이 코스를 사진 카드로 공유 (폰 판만 보인다, ui/share)
                         ShareImageButton(ShareTarget.Course(p.id), style = ShareButtonStyle.ICON)
+                        if (!p.mine) ReportButton(app.eodiyeotji.core.ReportTarget.COURSE, p.id, onHidden)
                         val label = when {
                             progress == null -> stringResource(R.string.course_navigate)
                             progress.hasNextLeg -> stringResource(R.string.course_navigate_next, progress.leg + 1, progress.total)

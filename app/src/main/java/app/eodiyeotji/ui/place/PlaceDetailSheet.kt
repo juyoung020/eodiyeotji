@@ -252,7 +252,7 @@ private fun PlaceDetailContent(opened: StopFact, s: PlaceDetailUiState, vm: Plac
                     } else {
                         items(d.reviews, key = { "r-${it.review.id}" }, contentType = { "review" }) { r ->
                             Box(Modifier.padding(start = pad, end = pad, bottom = 12.dp)) {
-                                RichReviewCard(r, onHeart = { vm.toggleHeart(r.review.id) }, showPlace = false)
+                                RichReviewCard(r, onHeart = { vm.toggleHeart(r.review.id) }, showPlace = false, onHidden = vm::retry)
                             }
                         }
                     }

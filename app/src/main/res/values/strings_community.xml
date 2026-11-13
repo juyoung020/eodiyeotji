@@ -195,4 +195,13 @@
     <string name="drive_share_trimmed">집·회사 근처 1.2km는 자동으로 지웠어요</string>
     <string name="community_from_record">직접 달린 기록</string>
     <string name="community_from_record_description">글쓴이가 직접 달린 주행 기록에서 올린 코스</string>
+    <!-- 신고 · 숨기기 -->
+    <string name="report_action">신고 · 숨기기</string>
+    <string name="report_title">이 글 신고 · 숨기기</string>
+    <string name="report_body">신고한 글은 바로 내 화면에서 사라집니다.</string>
+    <string name="report_reason_inappropriate">부적절한 내용</string>
+    <string name="report_reason_spam">스팸 · 광고</string>
+    <string name="report_reason_privacy">개인정보 노출</string>
+    <string name="report_reason_other">기타</string>
+    <string name="report_submit">신고하고 숨기기</string>
 </resources>

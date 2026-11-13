@@ -83,6 +83,18 @@ class BoardViewModel @Inject constructor(private val core: EodiCore) : ViewModel
         _state.update { it.copy(thread = null) }
     }
 
+    /** 글을 신고해 숨겼을 때: 글을 닫고 목록을 다시 읽는다. */
+    fun onPostHidden() {
+        close()
+        reload()
+    }
+
+    /** 댓글을 신고해 숨겼을 때: 댓글 · 댓글 수를 다시 읽는다. */
+    fun onCommentHidden() {
+        _state.value.thread?.post?.id?.let(::loadComments)
+        reload()
+    }
+
     private fun loadComments(postId: String) {
         viewModelScope.launch {
             val r = try {

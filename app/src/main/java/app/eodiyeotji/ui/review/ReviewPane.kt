@@ -142,6 +142,7 @@ fun ReviewPane(viewModel: ReviewViewModel = hiltViewModel(), courses: CourseView
                 onNavigate = courses::navigate,
                 onOpenPlace = openPlace,
                 onStopGuide = courses::stopGuide,
+                onHidden = courses::onHidden,
             )
         }
         // 검색 결과의 리뷰 줄을 누르면 앱 공통 장소 상세 창으로 연다 (별점 · 리뷰 · 안내 · 리뷰 쓰기)

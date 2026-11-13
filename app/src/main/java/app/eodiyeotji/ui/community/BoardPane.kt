@@ -45,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
 import app.eodiyeotji.core.BoardComment
 import app.eodiyeotji.core.BoardPost
+import app.eodiyeotji.core.ReportTarget
 import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
 
@@ -97,6 +98,8 @@ fun BoardPane(viewModel: BoardViewModel = hiltViewModel()) {
                 onHeart = { viewModel.togglePostHeart(t.post.id) },
                 onCommentHeart = viewModel::toggleCommentHeart,
                 onSend = viewModel::sendComment,
+                onPostHidden = viewModel::onPostHidden,
+                onCommentHidden = viewModel::onCommentHidden,
             )
         }
         if (state.writing) {
@@ -158,6 +161,8 @@ private fun ThreadScreen(
     onHeart: () -> Unit,
     onCommentHeart: (String) -> Unit,
     onSend: (String, () -> Unit) -> Unit,
+    onPostHidden: () -> Unit,
+    onCommentHidden: () -> Unit,
 ) {
     val c = EodiTheme.colors
     val p = t.post
@@ -188,6 +193,10 @@ private fun ThreadScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     CommentCount(p.commentCount)
                                     Spacer(Modifier.weight(1f))
+                                    if (!p.mine) {
+                                        ReportButton(ReportTarget.BOARD_POST, p.id, onPostHidden)
+                                        Spacer(Modifier.width(12.dp))
+                                    }
                                     HeartButton(p.hearts, p.heartedByMe, onHeart)
                                 }
                             }
@@ -207,7 +216,7 @@ private fun ThreadScreen(
                                     )
                                 }
                             } else {
-                                items(cs.items, key = { it.id }) { cm -> CommentRow(cm) { onCommentHeart(cm.id) } }
+                                items(cs.items, key = { it.id }) { cm -> CommentRow(cm, onHidden = onCommentHidden) { onCommentHeart(cm.id) } }
                             }
                     }
                 }
@@ -229,7 +238,7 @@ private fun ThreadScreen(
 }
 
 @Composable
-private fun CommentRow(cm: BoardComment, onHeart: () -> Unit) {
+private fun CommentRow(cm: BoardComment, onHidden: () -> Unit, onHeart: () -> Unit) {
     val c = EodiTheme.colors
     Surface(color = c.surface, shape = RoundedCornerShape(EodiTheme.space.radiusM), modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(start = 24.dp, end = 16.dp, top = 16.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -242,6 +251,10 @@ private fun CommentRow(cm: BoardComment, onHeart: () -> Unit) {
                 Text(cm.body, style = EodiTheme.type.body, color = c.textSecondary)
             }
             Spacer(Modifier.width(12.dp))
+            if (!cm.mine) {
+                ReportButton(ReportTarget.BOARD_COMMENT, cm.id, onHidden)
+                Spacer(Modifier.width(12.dp))
+            }
             HeartButton(cm.hearts, cm.heartedByMe, onHeart, compact = true)
         }
     }

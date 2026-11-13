@@ -90,7 +90,13 @@ private const val CollapsedLines = 3
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun RichReviewCard(t: TravelReview, onHeart: () -> Unit, modifier: Modifier = Modifier, showPlace: Boolean = true) {
+internal fun RichReviewCard(
+    t: TravelReview,
+    onHeart: () -> Unit,
+    modifier: Modifier = Modifier,
+    showPlace: Boolean = true,
+    onHidden: (() -> Unit)? = null,
+) {
     val c = EodiTheme.colors
     val r = t.review
     var expanded by rememberSaveable(r.id) { mutableStateOf(false) }
@@ -154,6 +160,10 @@ internal fun RichReviewCard(t: TravelReview, onHeart: () -> Unit, modifier: Modi
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (showPlace) PlaceCouponBadge(t.offers)
                 Spacer(Modifier.weight(1f))
+                if (onHidden != null && !r.mine) {
+                    app.eodiyeotji.ui.community.ReportButton(app.eodiyeotji.core.ReportTarget.REVIEW, r.id, onHidden)
+                    Spacer(Modifier.width(12.dp))
+                }
                 HeartButton(r.hearts, r.heartedByMe, onHeart, compact = true)
             }
         }

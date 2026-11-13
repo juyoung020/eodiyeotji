@@ -203,6 +203,34 @@ suspend fun EodiCore.toggleBoardPostHeart(id: String): Int = coreCall("toggleBoa
 
 suspend fun EodiCore.toggleBoardCommentHeart(id: String): Int = coreCall("toggleBoardCommentHeart") { rust.toggleBoardCommentHeart(id).toInt() }
 
+// ---- 신고 · 숨기기 ----
+
+/** 신고할 글 종류. */
+enum class ReportTarget { COURSE, REVIEW, BOARD_POST, BOARD_COMMENT }
+
+/** 신고 이유 (부적절 · 스팸 · 개인정보 노출 · 기타). */
+enum class ReportReason { INAPPROPRIATE, SPAM, PRIVACY, OTHER }
+
+/** 신고하고 이 기기 피드에서 바로 숨긴다 (Rust `report_community_item`). 아직 서버로는 보내지 않는다 (relay에 커뮤니티 주소 없음). */
+suspend fun EodiCore.reportCommunityItem(target: ReportTarget, id: String, reason: ReportReason) = coreCall("reportCommunityItem") {
+    rust.reportCommunityItem(
+        when (target) {
+            ReportTarget.COURSE -> app.eodiyeotji.core.rust.ReportTarget.COURSE
+            ReportTarget.REVIEW -> app.eodiyeotji.core.rust.ReportTarget.REVIEW
+            ReportTarget.BOARD_POST -> app.eodiyeotji.core.rust.ReportTarget.BOARD_POST
+            ReportTarget.BOARD_COMMENT -> app.eodiyeotji.core.rust.ReportTarget.BOARD_COMMENT
+        },
+        id,
+        when (reason) {
+            ReportReason.INAPPROPRIATE -> app.eodiyeotji.core.rust.ReportReason.INAPPROPRIATE
+            ReportReason.SPAM -> app.eodiyeotji.core.rust.ReportReason.SPAM
+            ReportReason.PRIVACY -> app.eodiyeotji.core.rust.ReportReason.PRIVACY_EXPOSURE
+            ReportReason.OTHER -> app.eodiyeotji.core.rust.ReportReason.OTHER
+        },
+        System.currentTimeMillis(),
+    )
+}
+
 // ---- 내부 ----
 
 private const val ROAD_TAG = "EodiCourseRoad"

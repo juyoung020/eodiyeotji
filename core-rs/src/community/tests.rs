@@ -787,3 +787,55 @@ fn many_reviews_group_and_search_stay_fast() {
     eprintln!("popular_places {grouped:?}, search {searched:?}");
     assert!(searched.as_millis() < 300, "검색 {searched:?}");
 }
+
+// ---- 신고 · 숨기기 ----
+
+#[test]
+fn reported_items_disappear_from_every_feed_at_once() {
+    let (_db, store) = seeded("report");
+    let course = store.community_courses(CommunitySort::Recent, None, 500).unwrap()[0].id.clone();
+    let review = store.place_reviews(CommunitySort::Recent, None, 500).unwrap()[0].id.clone();
+    let post = store.board_posts(CommunitySort::Recent, 500).unwrap().into_iter().find(|p| p.comment_count > 0).unwrap();
+    let comment = store.board_comments(post.id.clone()).unwrap()[0].id.clone();
+    let (nc, nr, nb) = (
+        store.community_courses(CommunitySort::Recent, None, 500).unwrap().len(),
+        store.place_reviews(CommunitySort::Recent, None, 500).unwrap().len(),
+        store.board_posts(CommunitySort::Recent, 500).unwrap().len(),
+    );
+
+    store.report_community_item(ReportTarget::Course, course.clone(), ReportReason::Spam, NOW).unwrap();
+    store.report_community_item(ReportTarget::Review, review.clone(), ReportReason::Inappropriate, NOW).unwrap();
+    store.report_community_item(ReportTarget::BoardComment, comment.clone(), ReportReason::PrivacyExposure, NOW).unwrap();
+    // 같은 글을 다시 신고해도 한 번
+    store.report_community_item(ReportTarget::Course, course.clone(), ReportReason::Other, NOW).unwrap();
+    assert_eq!(store.hidden_item_count().unwrap(), 3);
+
+    let courses = store.community_courses(CommunitySort::Recent, None, 500).unwrap();
+    assert_eq!(courses.len(), nc - 1);
+    assert!(courses.iter().all(|c| c.id != course));
+    let reviews = store.place_reviews(CommunitySort::Recent, None, 500).unwrap();
+    assert_eq!(reviews.len(), nr - 1);
+    assert!(reviews.iter().all(|r| r.id != review));
+    assert!(store.board_comments(post.id.clone()).unwrap().iter().all(|c| c.id != comment));
+    assert_eq!(store.board_post(post.id.clone()).unwrap().unwrap().comment_count, post.comment_count - 1);
+
+    store.report_community_item(ReportTarget::BoardPost, post.id.clone(), ReportReason::Spam, NOW).unwrap();
+    assert_eq!(store.board_posts(CommunitySort::Recent, 500).unwrap().len(), nb - 1);
+    assert!(store.board_post(post.id).unwrap().is_none());
+    assert!(matches!(
+        store.report_community_item(ReportTarget::Review, " ".into(), ReportReason::Spam, NOW),
+        Err(CoreError::InvalidInput(_))
+    ));
+}
+
+#[test]
+fn hidden_items_survive_reopen() {
+    let db = TempDb::new("report-reopen");
+    let store = db.open();
+    store.seed_community_demo(NOW).unwrap();
+    let review = store.place_reviews(CommunitySort::Recent, None, 500).unwrap()[0].id.clone();
+    store.report_community_item(ReportTarget::Review, review.clone(), ReportReason::Spam, NOW).unwrap();
+    drop(store);
+    let store = db.open();
+    assert!(store.place_reviews(CommunitySort::Recent, None, 500).unwrap().iter().all(|r| r.id != review));
+}

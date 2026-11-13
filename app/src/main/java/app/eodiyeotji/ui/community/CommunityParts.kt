@@ -112,6 +112,16 @@ object CommunityIcons {
         lineTo(12f, 17f); lineTo(6.3f, 20.2f); lineTo(7.6f, 13.8f); lineTo(2.8f, 9.4f); lineTo(9.2f, 8.7f); close()
     }
 
+    /** 신고 (깃발) */
+    val Flag: ImageVector by lazy {
+        icon("Flag") {
+            stroke(2.2f) {
+                moveTo(5f, 21f); lineTo(5f, 4f)
+                moveTo(5f, 4.5f); curveTo(9f, 2.5f, 11f, 6.5f, 19f, 4.5f); lineTo(19f, 13.5f); curveTo(11f, 15.5f, 9f, 11.5f, 5f, 13.5f)
+            }
+        }
+    }
+
     val Heart: ImageVector by lazy { icon("Heart") { stroke(2.2f) { heart() } } }
     val HeartFilled: ImageVector by lazy { icon("HeartFilled") { path(fill = Ink) { heart() } } }
     val Star: ImageVector by lazy { icon("Star") { path(fill = Ink) { star() } } }
