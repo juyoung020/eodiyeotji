@@ -170,6 +170,12 @@ class DriveRouteViewModel @Inject constructor(
         _state.update { it.copy(detail = null) }
     }
 
+    /** 드라이브 코스를 신고해 숨겼을 때: 상세를 닫고 목록을 다시 읽는다. */
+    fun onHidden() {
+        closeDetail()
+        reload()
+    }
+
     /** 미리보기 비행 시작/멈춤 (주행 중에는 시작하지 않는다). */
     fun toggleFlight() {
         if (isDriving.value) return

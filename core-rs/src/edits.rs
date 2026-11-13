@@ -184,6 +184,23 @@ impl EodiStore {
         Ok(())
     }
 
+    /// "이 요약이 이상해요": 그날의 AI 하루 요약(제목 · 한두 문장 · 태그)을 숨기고 규칙 제목 · 규칙 요약으로 돌아간다.
+    /// 기기 안 `hidden_item`(kind `day_story`)에 남아 AI 요약을 다시 받아도 계속 숨긴다. 같은 날을 다시 눌러도 그대로.
+    /// 틀린 날짜면 `InvalidInput`. 검색 색인도 규칙 제목으로 다시 쓴다.
+    pub fn hide_day_story(&self, day: String, now_ms: i64) -> Result<(), CoreError> {
+        let d = parse_day(&day).ok_or_else(|| CoreError::InvalidInput(format!("day {day:?}")))?;
+        let mut conn = self.lock()?;
+        self.flush_all(&mut conn)?;
+        let tx = conn.transaction()?;
+        tx.execute(
+            "INSERT OR IGNORE INTO hidden_item (kind, item_id, reason, created_ms) VALUES ('day_story', ?1, 'ai_wrong', ?2)",
+            params![d.to_string(), now_ms],
+        )?;
+        crate::memory::reindex_day(&tx, d)?;
+        tx.commit()?;
+        Ok(())
+    }
+
     /// 머문 곳 하나를 숨긴다 (`arrive_ms` = 그 머문 곳의 `StaySummary.arrive_ms`). 지금 보이는 곳이 아니면 `InvalidInput`.
     pub fn hide_stay(&self, arrive_ms: i64, now_ms: i64) -> Result<(), CoreError> {
         let mut conn = self.lock()?;

@@ -1026,7 +1026,10 @@ pub(crate) fn course_stops(conn: &Connection, id: i64) -> Result<Option<Vec<Stop
 
 /// 화면에 쓸 LLM 하루 제목 (`day_memory` 표 SQL 식). LLM이 필요한 날(`needs_llm`)에만 쓴다 — 기록이 바뀌어 이제 출퇴근 ·
 /// 짧은 이동뿐인 날에 남은 옛 AI 제목("단풍 구경")은 지우지 않고 규칙 제목 뒤로 숨긴다.
-pub(crate) const LLM_TITLE: &str = "CASE WHEN needs_llm = 1 THEN title END";
+/// "이 요약이 이상해요"로 AI 요약을 숨긴 날(`hidden_item.kind = 'day_story'`, [crate::store::EodiStore::hide_day_story])은 AI 제목 · 요약 · 태그 대신 규칙 것을 쓴다.
+pub(crate) const LLM_TITLE: &str = "CASE WHEN needs_llm = 1 AND day NOT IN (SELECT CAST(item_id AS INTEGER) FROM hidden_item WHERE kind = 'day_story') THEN title END";
+/// AI 요약을 숨긴 날 목록 (SQL 부분 질의, 날짜 번호).
+pub(crate) const AI_HIDDEN_DAYS: &str = "(SELECT CAST(item_id AS INTEGER) FROM hidden_item WHERE kind = 'day_story')";
 
 /// 하루 제목·태그 (`DaySummary.title`·`tags`): 사용자가 고친 제목(`day_user_title`)이 있으면 그것, 다음은 LLM 제목([LLM_TITLE])이 있으면 그것과 LLM 태그, 없으면 규칙 제목, 없으면 None.
 pub(crate) fn day_title(conn: &Connection, d: i64) -> Result<(Option<String>, Vec<String>), CoreError> {
@@ -1048,17 +1051,17 @@ pub(crate) fn day_title(conn: &Connection, d: i64) -> Result<(Option<String>, Ve
 }
 
 /// 하루 요약 글 (`DaySummary.story`): LLM 제목이 있는 날([LLM_TITLE])은 LLM이 쓴 한두 문장,
-/// 그 밖의 날(출퇴근 · 동네 볼일)은 규칙으로 만든 한두 문장([rule_story]). 쓸 말이 없으면 None.
-pub(crate) fn day_story(conn: &Connection, d: i64, tz_minutes: i32) -> Result<Option<String>, CoreError> {
+/// 그 밖의 날(출퇴근 · 동네 볼일)은 규칙으로 만든 한두 문장([rule_story]). 쓸 말이 없으면 None. 두 번째 값 = AI가 쓴 글인가.
+pub(crate) fn day_story(conn: &Connection, d: i64, tz_minutes: i32) -> Result<(Option<String>, bool), CoreError> {
     let llm = conn
-        .prepare_cached("SELECT CASE WHEN needs_llm = 1 AND title IS NOT NULL THEN nullif(summary, '') END FROM day_memory WHERE day = ?1")?
+        .prepare_cached(&format!("SELECT CASE WHEN needs_llm = 1 AND title IS NOT NULL AND day NOT IN {AI_HIDDEN_DAYS} THEN nullif(summary, '') END FROM day_memory WHERE day = ?1"))?
         .query_row([d], |r| r.get::<_, Option<String>>(0))
         .optional()?
         .flatten();
     if llm.is_some() {
-        return Ok(llm);
+        return Ok((llm, true));
     }
-    Ok(rule_story(&episodes_of_day(conn, d)?, tz_minutes))
+    Ok((rule_story(&episodes_of_day(conn, d)?, tz_minutes), false))
 }
 
 /// 규칙으로 쓰는 하루 요약 (LLM 없이): 묶음마다 한 문장, 앞에서 [RULE_STORY_MAX]개까지. LLM 요약과 같은 해요체.
@@ -1101,7 +1104,7 @@ pub(crate) fn reindex_day(conn: &Connection, d: i64) -> Result<(), CoreError> {
     let (title, summary, tags): (String, String, String) = conn
         .prepare_cached(&format!(
             "SELECT coalesce((SELECT title FROM day_user_title WHERE day = ?1), {LLM_TITLE}, rule_title, ''),
-                    CASE WHEN needs_llm = 1 THEN summary ELSE '' END, CASE WHEN needs_llm = 1 THEN tags ELSE '' END
+                    CASE WHEN {LLM_TITLE} IS NOT NULL THEN summary ELSE '' END, CASE WHEN {LLM_TITLE} IS NOT NULL THEN tags ELSE '' END
              FROM day_memory WHERE day = ?1"
         ))?
         .query_row([d], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))

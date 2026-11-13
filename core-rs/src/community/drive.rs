@@ -970,15 +970,17 @@ fn route_from_row(r: &Row) -> rusqlite::Result<RouteRow> {
     })
 }
 
+/// 신고해서 숨긴 길(`hidden_item.kind = 'drive_route'`)은 목록 · 추천 · 상세 어디에도 나오지 않는다.
 pub(crate) fn load_routes(conn: &Connection, id: Option<&str>) -> Result<Vec<RouteRow>, CoreError> {
+    const NOT_HIDDEN: &str = "id NOT IN (SELECT item_id FROM hidden_item WHERE kind = 'drive_route')";
     let rows = match id {
         Some(id) => {
-            let mut st = conn.prepare_cached(&format!("SELECT {ROUTE_COLS} FROM drive_route WHERE id = ?1"))?;
+            let mut st = conn.prepare_cached(&format!("SELECT {ROUTE_COLS} FROM drive_route WHERE {NOT_HIDDEN} AND id = ?1"))?;
             let rows = st.query_map([id], route_from_row)?;
             rows.collect::<Result<Vec<_>, _>>()?
         }
         None => {
-            let mut st = conn.prepare_cached(&format!("SELECT {ROUTE_COLS} FROM drive_route"))?;
+            let mut st = conn.prepare_cached(&format!("SELECT {ROUTE_COLS} FROM drive_route WHERE {NOT_HIDDEN}"))?;
             let rows = st.query_map([], route_from_row)?;
             rows.collect::<Result<Vec<_>, _>>()?
         }

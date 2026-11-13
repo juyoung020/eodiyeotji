@@ -450,3 +450,23 @@ fn flight_turns_gently_at_a_sharp_corner_and_passes_through_the_line() {
     assert!(haversine_m(Point { lat: f[0].lat, lon: f[0].lon }, line[0]) < 1.0);
     assert!(haversine_m(Point { lat: f[599].lat, lon: f[599].lon }, *line.last().unwrap()) < 1.0);
 }
+
+// ---- 신고 · 숨기기 ----
+
+#[test]
+fn reported_drive_route_disappears_from_list_recommend_and_detail() {
+    use crate::community::{ReportReason, ReportTarget};
+    let (_db, store) = seeded("drive-report");
+    let all = store.drive_routes(DriveRouteSort::Popular, None, 500).unwrap();
+    let id = all[0].route.id.clone();
+    assert!(ids(&store.recommend_drive_routes(None, 0.0, 20).unwrap()).contains(&id.as_str()));
+
+    store.report_community_item(ReportTarget::DriveRoute, id.clone(), ReportReason::Spam, NOW).unwrap();
+    let after = store.drive_routes(DriveRouteSort::Popular, None, 500).unwrap();
+    assert_eq!(after.len(), all.len() - 1);
+    assert!(!ids(&after).contains(&id.as_str()));
+    assert!(!ids(&store.recommend_drive_routes(None, 0.0, 20).unwrap()).contains(&id.as_str()));
+    assert!(matches!(store.drive_route(id.clone()), Err(CoreError::InvalidInput(_))));
+    // 같은 id의 다른 종류 글은 그대로 (kind로 나뉜다)
+    assert_eq!(store.hidden_item_count().unwrap(), 1);
+}

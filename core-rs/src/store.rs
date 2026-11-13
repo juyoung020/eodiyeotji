@@ -120,6 +120,8 @@ pub struct DaySummary {
     /// 하루 요약 한두 문장. LLM 제목이 있는 날은 LLM이 쓴 글 (예: "경포해변을 걷고 초당순두부를 먹었다."),
     /// 출퇴근 · 동네 볼일뿐인 날은 규칙으로 쓴 글 (예: "07:53에 출근하며 스타벅스 왕십리역점에 들렀다.", 하루 상세에서만 채운다).
     pub story: Option<String>,
+    /// [story]가 AI(LLM)가 쓴 글이면 true → 하루 화면에 "이 요약이 이상해요"를 띄운다 ([EodiStore::hide_day_story]).
+    pub ai_story: bool,
     /// "그날로 돌아가기"로 다시 볼 것이 있는 날: 이름 있는 머문 곳이 1곳 이상이거나 5km 이상 달렸다 ([`is_replayable`]).
     pub replayable: bool,
 }
@@ -297,7 +299,7 @@ impl EodiStore {
         let acc = self.collect_days(&conn, d, d, true)?.remove(&d).unwrap_or_default();
         let mut summary = acc.summary(d);
         (summary.title, summary.tags) = crate::memory::day_title(&conn, d)?;
-        summary.story = crate::memory::day_story(&conn, d, self.tz_minutes())?;
+        (summary.story, summary.ai_story) = crate::memory::day_story(&conn, d, self.tz_minutes())?;
         let entries = acc.entries();
         Ok(DayDetail { day: format_day(d), trips: acc.trips, stays: acc.stays, summary, entries })
     }
@@ -672,6 +674,7 @@ impl DayAcc {
             title: None,
             tags: Vec::new(),
             story: None,
+            ai_story: false,
         }
     }
 
@@ -769,10 +772,10 @@ impl EodiStore {
         let conn = self.read()?;
         let mut st = conn.prepare_cached(
             "SELECT s.day, s.trip_count, s.stay_count, s.distance_m, s.drive_millis, s.first_ms, s.last_ms, s.stop_names,
-                    coalesce(u.title, CASE WHEN m.needs_llm = 1 THEN m.title END, m.rule_title),
-                    CASE WHEN m.title IS NULL OR m.needs_llm = 0 THEN '' ELSE m.tags END,
-                    CASE WHEN m.title IS NOT NULL AND m.needs_llm = 1 THEN nullif(m.summary, '') END
-             FROM day_summary s LEFT JOIN day_memory m ON m.day = s.day LEFT JOIN day_user_title u ON u.day = s.day ORDER BY s.day DESC LIMIT ?1",
+                    coalesce(u.title, CASE WHEN m.needs_llm = 1 AND NOT ai_hidden THEN m.title END, m.rule_title),
+                    CASE WHEN m.title IS NULL OR m.needs_llm = 0 OR ai_hidden THEN '' ELSE m.tags END,
+                    CASE WHEN m.title IS NOT NULL AND m.needs_llm = 1 AND NOT ai_hidden THEN nullif(m.summary, '') END
+             FROM (SELECT *, day IN (SELECT CAST(item_id AS INTEGER) FROM hidden_item WHERE kind = 'day_story') AS ai_hidden FROM day_summary) s LEFT JOIN day_memory m ON m.day = s.day LEFT JOIN day_user_title u ON u.day = s.day ORDER BY s.day DESC LIMIT ?1",
         )?;
         let rows = st.query_map([limit], |r| {
             let distance_m: f64 = r.get(3)?;
@@ -789,6 +792,7 @@ impl EodiStore {
                 stop_names,
                 title: r.get(8)?,
                 tags: split_names(&r.get::<_, Option<String>>(9)?.unwrap_or_default()),
+                ai_story: r.get::<_, Option<String>>(10)?.is_some(),
                 story: r.get(10)?,
             })
         })?;

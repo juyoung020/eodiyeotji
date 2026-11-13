@@ -442,6 +442,8 @@ data class DaySummary(
     val tags: List<String> = emptyList(),
     /** AI가 쓴 하루 요약 한두 문장 (AI 제목이 있는 날에만, 없으면 null) */
     val story: String? = null,
+    /** [story]가 AI가 쓴 글이면 true ("이 요약이 이상해요" 버튼, Rust `hide_day_story`). */
+    val aiStory: Boolean = false,
     /** 그날로 돌아가기로 다시 볼 것이 있다 (이름 있는 머문 곳 1곳 이상 또는 5km 이상, Rust `is_replayable`). */
     val replayable: Boolean = false,
     /** 그날 가장 많이 탄 인원 (좌석 센서, 하루 상세에서만 채운다). 모르면 0. */
@@ -601,6 +603,7 @@ private fun RDaySummary.toModel() = DaySummary(
     title = title,
     tags = tags,
     story = story,
+    aiStory = aiStory,
     replayable = replayable,
 )
 

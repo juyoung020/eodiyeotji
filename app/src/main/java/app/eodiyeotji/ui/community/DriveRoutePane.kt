@@ -137,6 +137,7 @@ fun DriveRoutePane(viewModel: DriveRouteViewModel = hiltViewModel()) {
                 onFly = viewModel::toggleFlight,
                 onFlightEnd = viewModel::stopFlight,
                 onMapSize = viewModel::onMapSize,
+                onHidden = viewModel::onHidden,
             )
         }
         if (sharing) {
@@ -339,6 +340,7 @@ private fun DriveRouteDetailScreen(
     onFly: () -> Unit,
     onFlightEnd: () -> Unit,
     onMapSize: (Float, Float) -> Unit,
+    onHidden: () -> Unit,
 ) {
     val colors = EodiTheme.colors
     val r = d.item.route
@@ -447,6 +449,7 @@ private fun DriveRouteDetailScreen(
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         HeartButton(r.hearts, r.heartedByMe, onHeart)
+                        if (!r.mine) ReportButton(app.eodiyeotji.core.ReportTarget.DRIVE_ROUTE, r.id, onHidden)
                         val label = when {
                             progress == null -> stringResource(R.string.course_navigate)
                             progress.hasNextLeg -> stringResource(R.string.drive_navigate_end)

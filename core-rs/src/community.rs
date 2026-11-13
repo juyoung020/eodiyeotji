@@ -274,6 +274,8 @@ pub enum ReportTarget {
     Review,
     BoardPost,
     BoardComment,
+    /// 드라이브 코스(경치 길, `community/drive.rs`)
+    DriveRoute,
 }
 
 impl ReportTarget {
@@ -284,6 +286,7 @@ impl ReportTarget {
             ReportTarget::Review => "place_review",
             ReportTarget::BoardPost => "board_post",
             ReportTarget::BoardComment => "board_comment",
+            ReportTarget::DriveRoute => "drive_route",
         }
     }
 }

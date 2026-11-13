@@ -386,6 +386,7 @@ mod tests {
                 title: None,
                 tags: Vec::new(),
                 story: None,
+                ai_story: false,
             },
             entries: Vec::new(),
         }

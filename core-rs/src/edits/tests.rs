@@ -597,3 +597,45 @@ fn day_detail_list_and_replay_count_the_same_visits() {
     // 강릉: 집 → 경포해변 → 초당할머니순두부 → 집. 돌아와 머문 집은 세지 않는다
     assert_eq!(store.day_detail("2026-10-10".into()).unwrap().summary.stay_count, 2);
 }
+
+// ---- "이 요약이 이상해요" (AI 하루 요약 숨기기) ----
+
+#[test]
+fn hiding_a_day_story_falls_back_to_rule_title_and_story_and_survives_reopen() {
+    let db = TempDb::new("hide-story");
+    let store = db.open();
+    store.set_home_office(Some(pt(HOME)), Some(pt(OFFICE))).unwrap();
+    small_week(&store);
+    let day = |s: &EodiStore| summary_of(&s.day_summaries(30).unwrap(), "2026-10-11").unwrap().clone();
+    let rule = day(&store);
+    let rule_story = store.day_detail("2026-10-11".into()).unwrap().summary.story;
+    assert!(rule_story.is_some());
+    store
+        .set_day_enrichment(DayEnrichment {
+            day: "2026-10-11".into(),
+            title: "대림창고에서 커피".into(),
+            summary: "엉뚱한 AI 요약".into(),
+            tags: vec!["카페".into()],
+            episodes: vec![],
+        })
+        .unwrap();
+    let ai = day(&store);
+    assert_eq!(ai.title.as_deref(), Some("대림창고에서 커피"));
+    assert_eq!(ai.story.as_deref(), Some("엉뚱한 AI 요약"));
+    assert!(ai.ai_story && store.day_detail("2026-10-11".into()).unwrap().summary.ai_story);
+    assert_eq!(search(&store, "엉뚱한"), ["2026-10-11"]);
+
+    store.hide_day_story("2026-10-11".into(), NOW).unwrap();
+    store.hide_day_story("2026-10-11".into(), NOW).unwrap(); // 다시 눌러도 그대로
+    let hidden = day(&store);
+    assert_eq!(hidden.title, rule.title, "규칙 제목으로 돌아간다");
+    assert_eq!(hidden.story, rule.story, "규칙 요약으로 돌아간다");
+    assert!(hidden.tags.is_empty());
+    assert!(!hidden.ai_story && !store.day_detail("2026-10-11".into()).unwrap().summary.ai_story);
+    assert_eq!(store.day_detail("2026-10-11".into()).unwrap().summary.story, rule_story, "하루 화면은 규칙 요약 문장");
+    assert!(search(&store, "엉뚱한").is_empty(), "검색 색인에서도 빠진다");
+    drop(store);
+    let store = db.open();
+    assert_eq!(day(&store).title, rule.title, "다시 열어도 숨긴 채");
+    assert!(store.hide_day_story("2026-13-01".into(), NOW).is_err(), "틀린 날짜");
+}

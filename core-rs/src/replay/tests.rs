@@ -47,6 +47,7 @@ fn day(trips: Vec<TripSummary>, stays: Vec<StaySummary>) -> DayDetail {
             title: Some("강릉 바다 하루".into()),
             tags: Vec::new(),
             story: None,
+            ai_story: false,
         },
         entries: Vec::new(),
     }

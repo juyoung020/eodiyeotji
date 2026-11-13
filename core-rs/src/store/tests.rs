@@ -400,6 +400,7 @@ fn entries_merge_trips_and_stays_in_time_order() {
             title: None,
             tags: Vec::new(),
             story: None,
+            ai_story: false,
         }
     );
 }

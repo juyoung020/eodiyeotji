@@ -248,6 +248,10 @@ private fun StageInfo(summary: DaySummary, today: LocalDate, loaded: Boolean, on
         summary.story?.let {
             Spacer(Modifier.height(10.dp))
             Text(it, style = EodiTheme.type.body, color = c.textPrimary, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            if (summary.aiStory) {
+                Spacer(Modifier.height(10.dp))
+                AiStoryReportButton(summary.day, summary.aiStory)
+            }
         }
         Spacer(Modifier.height(20.dp))
         DayActions(summary, loaded, onShare, moreInline = false)

@@ -50,8 +50,8 @@ use crate::store::{split_names, CoreError};
 
 const CANDIDATES: u32 = 300;
 /// 결과의 하루 제목 · 태그 (`day_memory d`). LLM 제목은 LLM이 필요한 날에만 (`episode::LLM_TITLE`과 같은 규칙).
-const DAY_TITLE: &str = "CASE WHEN d.needs_llm = 1 THEN d.title END, d.rule_title";
-const DAY_TAGS: &str = "CASE WHEN d.title IS NULL OR d.needs_llm = 0 THEN '' ELSE d.tags END";
+const DAY_TITLE: &str = "CASE WHEN d.needs_llm = 1 AND d.day NOT IN (SELECT CAST(item_id AS INTEGER) FROM hidden_item WHERE kind = 'day_story') THEN d.title END, d.rule_title";
+const DAY_TAGS: &str = "CASE WHEN d.title IS NULL OR d.needs_llm = 0 OR d.day IN (SELECT CAST(item_id AS INTEGER) FROM hidden_item WHERE kind = 'day_story') THEN '' ELSE d.tags END";
 const YEAR_MS: f64 = 365.0 * 86_400_000.0;
 /// "멀리 다녀온 이동"으로 볼 거리(m). 출장 · 여행 행선지는 도착점만 남고 머문 시간이 0일 때가 있다.
 pub(crate) const NOTABLE_DRIVE_M: f64 = 30_000.0;

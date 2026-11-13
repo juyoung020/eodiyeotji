@@ -22,6 +22,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -79,10 +81,13 @@ fun ReportButton(target: ReportTarget, id: String, onHidden: () -> Unit, modifie
     // 확인 창을 연 채로 출발하면 닫는다
     LaunchedEffect(driving) { if (driving) open = false }
     if (open) {
-        ReportSheet(
-            onReport = { reason -> vm.report(target, id, reason) { open = false; onHidden() } },
-            onDismiss = { open = false },
-        )
+        // 버튼이 목록(LazyColumn) 안에 있어 그 자리에 바로 그리면 높이가 무한이 된다 → 화면 전체 창(Dialog)에 띄운다
+        Dialog(onDismissRequest = { open = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            ReportSheet(
+                onReport = { reason -> vm.report(target, id, reason) { open = false; onHidden() } },
+                onDismiss = { open = false },
+            )
+        }
     }
 }
 

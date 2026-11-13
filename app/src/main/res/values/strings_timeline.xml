@@ -54,4 +54,7 @@
     <!-- 아이콘 버튼에 붙이는 짧은 글자 (Pleos 가이드: 아이콘은 텍스트 라벨과 함께) -->
     <string name="timeline_share_icon_label">올리기</string>
     <string name="action_more">더보기</string>
+    <!-- AI 하루 요약 신고 (정차 중에만) -->
+    <string name="timeline_story_wrong">이 요약이 이상해요</string>
+    <string name="timeline_story_wrong_description">AI가 쓴 이 요약을 숨기고 기본 요약으로 바꾸기</string>
 </resources>

@@ -206,7 +206,7 @@ suspend fun EodiCore.toggleBoardCommentHeart(id: String): Int = coreCall("toggle
 // ---- 신고 · 숨기기 ----
 
 /** 신고할 글 종류. */
-enum class ReportTarget { COURSE, REVIEW, BOARD_POST, BOARD_COMMENT }
+enum class ReportTarget { COURSE, REVIEW, BOARD_POST, BOARD_COMMENT, DRIVE_ROUTE }
 
 /** 신고 이유 (부적절 · 스팸 · 개인정보 노출 · 기타). */
 enum class ReportReason { INAPPROPRIATE, SPAM, PRIVACY, OTHER }
@@ -219,6 +219,7 @@ suspend fun EodiCore.reportCommunityItem(target: ReportTarget, id: String, reaso
             ReportTarget.REVIEW -> app.eodiyeotji.core.rust.ReportTarget.REVIEW
             ReportTarget.BOARD_POST -> app.eodiyeotji.core.rust.ReportTarget.BOARD_POST
             ReportTarget.BOARD_COMMENT -> app.eodiyeotji.core.rust.ReportTarget.BOARD_COMMENT
+            ReportTarget.DRIVE_ROUTE -> app.eodiyeotji.core.rust.ReportTarget.DRIVE_ROUTE
         },
         id,
         when (reason) {
