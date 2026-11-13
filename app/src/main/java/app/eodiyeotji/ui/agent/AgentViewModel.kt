@@ -580,9 +580,11 @@ class AgentViewModel @Inject constructor(
     /** 운전자가 고른 행동 실행 (예: 이 코스로 안내). 같은 질문 안에서 한 번에 하나만. */
     fun confirm(proposal: AgentEvent.ActionProposal) {
         val id = turn.value?.id ?: return
-        if (turn.value?.action is ActionState.Running) return
+        // 버튼과 말 "응"이 거의 같이 와도 한 번만: 실행 중 표시를 코루틴 밖에서 원자적으로 먼저 건다
+        var claimed = false
+        updateTurn(id) { claimed = false; if (it.action is ActionState.Running) it else { claimed = true; it.copy(action = ActionState.Running(proposal.id)) } }
+        if (!claimed) return
         actionJob = viewModelScope.launch(Dispatchers.Default) {
-            updateTurn(id) { it.copy(action = ActionState.Running(proposal.id)) }
             val result = try {
                 if (roadside.owns(proposal.id)) {
                     val line = roadside.confirm(proposal)

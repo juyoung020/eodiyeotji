@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -137,8 +138,10 @@ class ProactiveCenter @Inject constructor(
 
     /** 카드 "예" 또는 말 "응". */
     fun accept() {
-        val cur = _state.value ?: return
-        if (cur.phase == ProactiveUi.Phase.Running || cur.phase == ProactiveUi.Phase.Done) return
+        // 카드 누름과 말 "응"이 거의 같이 오면 두 번 실행(경유지 · 안내 요청 두 번)되지 않게, 실행 중 표시를 먼저 원자적으로 건다
+        val busy = setOf(ProactiveUi.Phase.Running, ProactiveUi.Phase.Done)
+        val cur = _state.getAndUpdate { if (it != null && it.phase !in busy) it.copy(phase = ProactiveUi.Phase.Running, standby = false) else it } ?: return
+        if (cur.phase in busy) return
         speech.cancel()
         ProactiveVoice.claimed = false
         scope.launch { run(cur) }
