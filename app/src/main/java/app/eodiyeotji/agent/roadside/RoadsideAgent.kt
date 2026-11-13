@@ -64,7 +64,12 @@ data class RoadsideOption(
     val kind: String,
     /** "12km · 8분 앞" */
     val ahead: String,
+    /** 공공데이터포털 기기 목록에서 온 곳 (카드에 출처 표시) */
+    val publicData: Boolean = false,
 )
+
+/** Rust `roadside::BUNDLED_SOURCE`와 같은 값: 공공데이터포털 휴게소 · 졸음쉼터 표준데이터에서 온 곳. */
+const val ROADSIDE_PUBLIC_SOURCE = "공공데이터"
 
 /** 길 위 카드: 1순위 + 다른 선택 (주행 중엔 1·2번만, 정차 중엔 3개까지). */
 @Immutable
@@ -258,7 +263,7 @@ class RoadsideAgent @Inject constructor(
         val hits = runCatching { core.searchMemories(MemoryQuery(terms = query.split(' ').filter { it.isNotBlank() }.take(3), limit = 10)) }.getOrDefault(emptyList())
         val stops = hits.mapNotNull { it.bestStop }.distinctBy { it.name }
         val cands = stops.map { s ->
-            RoadsidePlace(s.name, if (s.name.contains("휴게소")) RoadsideCategory.REST_AREA else RoadsideCategory.FOOD, s.lat, s.lon, s.address, false, "내 기록")
+            RoadsidePlace(s.name, if (s.name.contains("휴게소")) RoadsideCategory.REST_AREA else RoadsideCategory.FOOD, s.lat, s.lon, s.address, false, "내 기록", "")
         }
         val here = drive.here ?: return JSONObject().put("ok", true).put("places", JSONArray(stops.take(3).map { it.name })).toString()
         val ranked = roadsideRank(drive.route, here, drive.headingDeg, drive.speedKmh, cands, 10_000.0, 3u)
@@ -364,7 +369,7 @@ class RoadsideAgent @Inject constructor(
             km < 10 -> String.format(Locale.ROOT, "%.1fkm", km).replace(".0km", "km")
             else -> "${Math.round(km)}km"
         }
-        return RoadsideOption(hit.place.name, kindWord(hit.place.category), context.getString(R.string.roadside_ahead, dist, hit.etaMin.toInt()))
+        return RoadsideOption(hit.place.name, kindWord(hit.place.category), context.getString(R.string.roadside_ahead, dist, hit.etaMin.toInt()), hit.place.source == ROADSIDE_PUBLIC_SOURCE)
     }
 
     private fun kindWord(c: RoadsideCategory) = when (c) {

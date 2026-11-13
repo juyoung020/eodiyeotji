@@ -5,7 +5,7 @@
 //! - 여기(Rust)는 무거운 일과 규칙을 맡는다:
 //!   1. [need]: 흔한 말은 규칙으로 바로 알아듣는다 (LLM이 없거나 느릴 때의 빠른 길, 같은 도구를 그대로 쓴다).
 //!   2. [rank]: 경로(꺾은선) + 내 위치 + 후보 → 경로를 따라 앞쪽 거리 · 옆으로 벗어나는 거리 · 도착 분. 지나온 곳 · 반대 방향 휴게소는 뺀다.
-//!   3. [bundled]: 기기에 넣어 둔 고속도로 휴게소 · 졸음쉼터 (끊겨도 동작).
+//!   3. [bundled]: 기기에 넣어 둔 고속도로 휴게소 · 졸음쉼터 (공공데이터포털 표준데이터, 끊겨도 동작). 시설 유무(화장실 · 주유 · 전기차 충전 · 음식점 · 매점)로 종류를 고른다.
 //!   4. [parse_kakao]: 카카오 로컬 검색 응답 → 후보.
 //!   5. [tool_specs] · [parse_call] · [say]: 도구 정의(공급자 중립 JSON 스키마), 도구 인자 검증, 규칙 답 문장.
 //!
@@ -108,8 +108,10 @@ pub struct RoadsidePlace {
     pub address: String,
     /// 한쪽 방향 차로에서만 들어가는 시설 (고속도로 휴게소 "부산방향") → 진행 방향 오른쪽일 때만
     pub one_way: bool,
-    /// "기기 목록" · "카카오"
+    /// "공공데이터" · "카카오" · "내 기록"
     pub source: String,
+    /// 휴게소 대표 음식 (공공데이터에 있으면, 없으면 "")
+    pub food: String,
 }
 
 /// 경로 앞쪽에서 찾은 곳.
@@ -226,7 +228,7 @@ fn project(p: Point, a: Point, b: Point) -> (f64, f64, f64) {
 }
 
 /// "○○방향"의 도시 (휴게소 · 졸음쉼터 이름에 나오는 것).
-const DIRECTION_CITIES: [(&str, f64, f64); 22] = [
+const DIRECTION_CITIES: [(&str, f64, f64); 58] = [
     ("서울", 37.5665, 126.978),
     ("부산", 35.1796, 129.0756),
     ("강릉", 37.7519, 128.8761),
@@ -249,6 +251,43 @@ const DIRECTION_CITIES: [(&str, f64, f64); 22] = [
     ("여주", 37.2983, 127.637),
     ("원주", 37.3422, 127.9202),
     ("천안", 36.8151, 127.1139),
+    // 공공데이터 졸음쉼터 "○○기점 + ××종점"의 종점 (분기점 · 나들목 이름 포함)
+    ("하남", 37.539, 127.2149),
+    ("양평", 37.4917, 127.4876),
+    ("구리", 37.5943, 127.1296),
+    ("양주", 37.7853, 127.0458),
+    ("포천", 37.8949, 127.2003),
+    ("파주", 37.7599, 126.7802),
+    ("일산", 37.6584, 126.7697),
+    ("판교", 37.3947, 127.1112),
+    ("제천", 37.1326, 128.191),
+    ("청주", 36.6424, 127.489),
+    ("세종", 36.48, 127.289),
+    ("공주", 36.4465, 127.119),
+    ("논산", 36.1872, 127.0987),
+    ("회덕", 36.3916, 127.4269),
+    ("남이", 36.5334, 127.4416),
+    ("산내", 36.2717, 127.4747),
+    ("서천", 36.0803, 126.6919),
+    ("전주", 35.8242, 127.148),
+    ("완주", 35.9047, 127.1622),
+    ("익산", 35.9483, 126.9576),
+    ("새만금", 35.8, 126.6),
+    ("장수", 35.6473, 127.5211),
+    ("함양", 35.5205, 127.7251),
+    ("고창", 35.4358, 126.702),
+    ("담양", 35.3211, 126.9882),
+    ("영암", 34.8002, 126.6966),
+    ("무안", 34.9904, 126.4817),
+    ("달서", 35.8299, 128.5327),
+    ("동대구", 35.8794, 128.6286),
+    ("서부산", 35.152, 128.987),
+    ("기장", 35.2445, 129.2222),
+    ("언양", 35.5652, 129.1195),
+    ("산인", 35.2894, 128.4222),
+    ("영덕", 36.415, 129.3655),
+    ("속초", 38.207, 128.5918),
+    ("삼척", 37.4499, 129.1652),
 ];
 
 /// 방향이 정해진 시설에 지금 방향으로 들어갈 수 있나.
@@ -258,7 +297,8 @@ fn same_direction(name: &str, at: Point, p: &Proj) -> bool {
     let city = name.split_whitespace().find_map(|w| {
         let w = w.trim_matches(|c: char| c == '(' || c == ')');
         let head = w.strip_suffix("방향")?;
-        DIRECTION_CITIES.iter().find(|(n, _, _)| head.ends_with(n))
+        // 긴 이름 먼저 ("동대구"가 "대구"보다)
+        DIRECTION_CITIES.iter().filter(|(n, _, _)| head.ends_with(n)).max_by_key(|(n, _, _)| n.len())
     });
     match city {
         Some(&(_, lat, lon)) => {
@@ -427,34 +467,60 @@ pub fn probe_points(route: &[GeoPoint], here: GeoPoint, heading_deg: Option<f64>
 
 const BUNDLED_JSON: &str = include_str!("roadside_places.json");
 
-/// 기기에 넣어 둔 휴게소 · 졸음쉼터 (출처는 json "source"). 휴게소 · 졸음쉼터에는 화장실이 있다 → 화장실을 찾으면 둘 다 낸다.
+/// 기기에 넣어 둔 공공데이터에서 [c]에 맞는 시설인가.
+/// 휴게소 · 졸음쉼터는 그대로, 나머지는 휴게소(졸음쉼터)의 시설 유무로: 화장실 → 화장실유무, 주유 → 주유소유무,
+/// 충전 → 전기차충전소유무, 식당 → 음식점유무, 편의점 → 매점유무. 카페는 표준데이터에 없다 (카카오로).
+/// 화물차휴게소는 승용차가 들르는 곳이 아니라 뺀다.
+fn bundled_matches(p: &Value, c: RoadsideCategory) -> bool {
+    let kind = p["kind"].as_str().unwrap_or("");
+    let rest = kind == "rest_area" && p["type"].as_str() != Some("화물차휴게소");
+    let shelter = kind == "drowsy_shelter";
+    let has = |k: &str| p[k].as_bool() == Some(true);
+    match c {
+        RoadsideCategory::RestArea => rest,
+        RoadsideCategory::DrowsyShelter => shelter,
+        RoadsideCategory::Toilet => (rest || shelter) && has("toilet"),
+        RoadsideCategory::Gas => rest && has("gas"),
+        RoadsideCategory::EvCharger => rest && has("ev_charger"),
+        RoadsideCategory::Food => rest && has("restaurant"),
+        RoadsideCategory::Convenience => rest && has("store"),
+        RoadsideCategory::Cafe => false,
+    }
+}
+
+/// 방향이 정해진 시설인가: 공공데이터 도로노선방향("상행" · "하행" · "서울기점 + 부산종점")이나 이름의 "○○방향".
+fn bundled_one_way(p: &Value) -> bool {
+    let dir = p["dir"].as_str().unwrap_or("").trim();
+    let toward = p["toward"].as_str().unwrap_or("");
+    !toward.is_empty() || matches!(dir, "상행" | "하행") || dir.contains("종점")
+}
+
+/// 기기에 넣어 둔 휴게소 · 졸음쉼터 (공공데이터포털 표준데이터, json "source"). 찾는 종류마다 맞는 시설을 그 종류로 낸다
+/// (예: 충전을 찾으면 전기차 충전소가 있는 휴게소가 "충전소" 후보).
 pub fn bundled(categories: &[RoadsideCategory]) -> Vec<RoadsidePlace> {
     let Ok(root) = serde_json::from_str::<Value>(BUNDLED_JSON) else { return Vec::new() };
-    let want_rest = categories.iter().any(|c| matches!(c, RoadsideCategory::RestArea));
-    let want_shelter = categories.iter().any(|c| matches!(c, RoadsideCategory::DrowsyShelter));
-    root["places"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|p| {
-            let cat = match p["kind"].as_str()? {
-                "rest_area" if want_rest => RoadsideCategory::RestArea,
-                "drowsy_shelter" if want_shelter => RoadsideCategory::DrowsyShelter,
-                _ => return None,
-            };
-            let dir = p["dir"].as_str().unwrap_or("");
-            Some(RoadsidePlace {
-                name: p["name"].as_str()?.to_string(),
-                category: cat,
-                lat: p["lat"].as_f64()?,
-                lon: p["lon"].as_f64()?,
+    let places = root["places"].as_array().cloned().unwrap_or_default();
+    let mut out = Vec::new();
+    for &c in categories {
+        for p in places.iter().filter(|p| bundled_matches(p, c)) {
+            let (Some(name), Some(lat), Some(lon)) = (p["name"].as_str(), p["lat"].as_f64(), p["lng"].as_f64()) else { continue };
+            out.push(RoadsidePlace {
+                name: name.to_string(),
+                category: c,
+                lat,
+                lon,
                 address: p["road"].as_str().unwrap_or("").to_string(),
-                one_way: !dir.is_empty(),
-                source: "기기 목록".into(),
-            })
-        })
-        .collect()
+                one_way: bundled_one_way(p),
+                source: BUNDLED_SOURCE.into(),
+                food: p["food"].as_str().unwrap_or("").trim().to_string(),
+            });
+        }
+    }
+    out
 }
+
+/// 기기 목록 출처 이름 (앱이 "출처: 공공데이터포털"을 붙이는 기준).
+pub const BUNDLED_SOURCE: &str = "공공데이터";
 
 /// 카카오 로컬 검색(keyword.json · category.json) 응답 → 후보. 휴게소를 찾을 땐 "고속도로휴게소" 분류만 (휴게소 안 가게는 뺀다).
 pub fn parse_kakao(json: &str, category: RoadsideCategory) -> Vec<RoadsidePlace> {
@@ -484,6 +550,7 @@ pub fn parse_kakao(json: &str, category: RoadsideCategory) -> Vec<RoadsidePlace>
                 lon,
                 address,
                 source: "카카오".into(),
+                food: String::new(),
             })
         })
         .collect()
@@ -702,6 +769,7 @@ pub fn hits_json(hits: &[RoadsideHit], ids: &[String]) -> String {
                 "ahead_km": round1(h.along_m / 1000.0),
                 "eta_min": h.eta_min,
                 "detour_km": round1(h.detour_m / 1000.0),
+                "food": h.place.food,
             })
         })
         .collect();
@@ -767,6 +835,13 @@ pub fn pick(order: &[RoadsideCategory], hits: &[RoadsideHit], can_add_waypoint: 
     if let Some(s) = &second {
         if s.place.category != p.place.category && s.along_m < p.along_m {
             line.push_str(&format!(" {} {} 앞이에요.", eun(s.place.category.word()), distance_words(s.along_m)));
+        }
+    }
+    // 배고플 때: 대표 음식이 있으면 짧게
+    if order.contains(&RoadsideCategory::Food) && !p.place.food.is_empty() {
+        let food: String = p.place.food.split([',', '/', '·']).next().unwrap_or("").trim().chars().take(12).collect();
+        if !food.is_empty() {
+            line.push_str(&format!(" 대표 음식은 {food}{}.", if has_batchim(&food) { "이에요" } else { "예요" }));
         }
     }
     line.push_str(if can_add_waypoint { " 경유지로 넣을까요?" } else { " 안내할까요?" });

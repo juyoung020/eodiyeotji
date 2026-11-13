@@ -5,7 +5,7 @@ fn gp(lat: f64, lon: f64) -> GeoPoint {
 }
 
 fn place(name: &str, cat: RoadsideCategory, lat: f64, lon: f64, one_way: bool) -> RoadsidePlace {
-    RoadsidePlace { name: name.into(), category: cat, lat, lon, address: String::new(), one_way, source: "test".into() }
+    RoadsidePlace { name: name.into(), category: cat, lat, lon, address: String::new(), one_way, source: "test".into(), food: String::new() }
 }
 
 /// 남쪽으로 곧게 가는 길 (경도 127.1, 위도 37.4 → 36.9, 약 55 km).
@@ -101,23 +101,67 @@ fn probe_points_walk_ahead_on_route() {
 }
 
 #[test]
-fn bundled_has_gyeongbu_rest_areas_and_shelters() {
+fn bundled_is_public_data_with_real_rows() {
     let rest = bundled(&[RoadsideCategory::RestArea]);
-    assert!(rest.len() >= 30);
-    assert!(rest.iter().any(|p| p.name.contains("기흥") && p.one_way));
+    // 표준데이터 215곳 중 화물차휴게소(21) 뺀 것
+    assert_eq!(rest.len(), 194);
+    // 실제 행: 기흥(부산), 경부선 하행, 37.2350/127.1046 근처
+    let giheung = rest.iter().find(|p| p.name == "기흥휴게소 부산방향").expect("기흥");
+    assert!(giheung.one_way && giheung.address == "경부고속도로" && giheung.source == BUNDLED_SOURCE);
+    assert!((giheung.lat - 37.235).abs() < 0.01 && (giheung.lon - 127.104).abs() < 0.01, "{giheung:?}");
+    // 양방향 휴게소(행담도)는 방향이 없다
+    assert!(rest.iter().any(|p| p.name == "행담도휴게소" && !p.one_way));
     let shelters = bundled(&[RoadsideCategory::DrowsyShelter]);
-    assert!(shelters.len() >= 20);
+    assert_eq!(shelters.len(), 253);
+    // 실제 행: 오산 졸음쉼터 "서울기점 + 부산종점" → 부산방향
+    assert!(shelters.iter().any(|p| p.name == "오산졸음쉼터 부산방향" && p.one_way));
     assert!(shelters.iter().all(|p| p.category == RoadsideCategory::DrowsyShelter));
+    // 모든 좌표가 우리나라 안
+    assert!(rest.iter().chain(&shelters).all(|p| (33.0..38.7).contains(&p.lat) && (124.5..131.0).contains(&p.lon)));
 }
 
 #[test]
-fn bundled_ranks_on_real_gyeongbu_southbound() {
-    // 서울 → 대전 (경부, 대략의 꺾은선): 양재 → 기흥 → 안성 → 천안 → 청주
-    let route = vec![gp(37.47, 127.04), gp(37.33, 127.10), gp(37.235, 127.104), gp(37.01, 127.145), gp(36.79, 127.17), gp(36.66, 127.37)];
-    let all = bundled(&[RoadsideCategory::RestArea, RoadsideCategory::DrowsyShelter]);
-    let hits = rank(&route, gp(37.40, 127.07), None, Some(100.0), all, 2_000.0, 5);
-    assert!(!hits.is_empty());
-    assert!(hits.iter().all(|h| !h.place.name.contains("서울방향")), "{:?}", hits.iter().map(|h| &h.place.name).collect::<Vec<_>>());
+fn bundled_maps_categories_to_amenity_flags() {
+    use RoadsideCategory as C;
+    // 화장실: 휴게소 + 졸음쉼터 (화장실유무 Y), 종류는 화장실로
+    let toilets = bundled(&[C::Toilet]);
+    assert_eq!(toilets.len(), 194 + 253);
+    assert!(toilets.iter().all(|p| p.category == C::Toilet));
+    // 충전: 전기차충전소유무 Y 휴게소만 (졸음쉼터 없음)
+    let ev = bundled(&[C::EvCharger]);
+    assert!(!ev.is_empty() && ev.len() <= 194);
+    assert!(ev.iter().all(|p| p.name.contains("휴게소") && p.category == C::EvCharger));
+    // 식당: 음식점유무 Y
+    assert!(bundled(&[C::Food]).iter().all(|p| p.name.contains("휴게소")));
+    // 카페는 표준데이터에 없다
+    assert!(bundled(&[C::Cafe]).is_empty());
+    // 두 종류를 찾으면 각각
+    assert_eq!(bundled(&[C::RestArea, C::DrowsyShelter]).len(), 194 + 253);
+}
+
+#[test]
+fn bundled_matches_reads_flags_and_skips_truck_stops() {
+    let ok: Value = serde_json::from_str(r#"{"kind":"rest_area","type":"일반휴게소","toilet":true,"gas":true,"ev_charger":false,"restaurant":true,"store":true}"#).unwrap();
+    let truck: Value = serde_json::from_str(r#"{"kind":"rest_area","type":"화물차휴게소","toilet":true,"gas":true}"#).unwrap();
+    assert!(bundled_matches(&ok, RoadsideCategory::Gas));
+    assert!(!bundled_matches(&ok, RoadsideCategory::EvCharger));
+    assert!(!bundled_matches(&truck, RoadsideCategory::RestArea));
+    let shelter: Value = serde_json::from_str(r#"{"dir":"순천기점 + 천안종점","toward":"천안"}"#).unwrap();
+    assert!(bundled_one_way(&shelter));
+    let both: Value = serde_json::from_str(r#"{"dir":"양방향","toward":""}"#).unwrap();
+    assert!(!bundled_one_way(&both));
+}
+
+#[test]
+fn direction_uses_public_toward_city() {
+    // 북쪽으로 가는 길 위 "하남방향" 졸음쉼터 (중부선, 하남은 북쪽) → 같은 방향, "통영방향" → 반대
+    let north: Vec<GeoPoint> = (0..=50).map(|i| gp(36.9 + i as f64 * 0.01, 127.4)).collect();
+    let c = vec![
+        place("곤지암졸음쉼터 하남방향", RoadsideCategory::DrowsyShelter, 37.1, 127.4 + 2.0 * E100, true),
+        place("곤지암졸음쉼터 통영방향", RoadsideCategory::DrowsyShelter, 37.1, 127.4 - 2.0 * E100, true),
+    ];
+    let hits = rank(&north, gp(36.95, 127.4), None, None, c, 2_000.0, 5);
+    assert_eq!(hits.iter().map(|h| h.place.name.as_str()).collect::<Vec<_>>(), vec!["곤지암졸음쉼터 하남방향"]);
 }
 
 #[test]
@@ -203,6 +247,12 @@ fn pick_says_one_short_sentence_like_the_spec() {
     assert_eq!(p2.line, "다음 기흥휴게소까지 8.4km, 약 6분이에요. 경유지로 넣을까요?");
     let jj = r#"{"documents":[{"place_name":"오산시운수종사자쉼터","category_name":"교통,수송 > 휴게소","x":"127.0","y":"37.1"}]}"#;
     assert!(parse_kakao(jj, RoadsideCategory::RestArea).is_empty());
+    // 배고플 때 대표 음식이 있으면 짧게 덧붙인다
+    let mut f = hit("안성휴게소 부산방향", RoadsideCategory::RestArea, 5_000.0, 4);
+    f.place.food = "안성국밥, 우동".into();
+    let hungry = pick(&[RoadsideCategory::RestArea, RoadsideCategory::Food], &[f.clone()], true);
+    assert_eq!(hungry.line, "다음 안성휴게소 부산방향까지 5km, 약 4분이에요. 대표 음식은 안성국밥이에요. 경유지로 넣을까요?");
+    assert!(!pick(&[RoadsideCategory::RestArea], &[f], true).line.contains("대표 음식"));
     let nav = pick(&[RoadsideCategory::Cafe], &[hit("카페B", RoadsideCategory::Cafe, 900.0, 1)], false);
     assert_eq!(nav.line, "다음 카페B까지 900m, 약 1분이에요. 안내할까요?");
 }

@@ -46,6 +46,7 @@ internal fun DrivingRoadsideCard(card: RoadsideCard, modifier: Modifier = Modifi
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            PublicDataCredit(card)
         }
     }
 }
@@ -55,7 +56,15 @@ internal fun DrivingRoadsideCard(card: RoadsideCard, modifier: Modifier = Modifi
 internal fun RoadsideOptionsBlock(card: RoadsideCard, modifier: Modifier = Modifier) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = modifier.fillMaxWidth()) {
         card.options.take(3).forEachIndexed { i, o -> RoadsideRow(i, o) }
+        PublicDataCredit(card)
     }
+}
+
+/** 공공데이터포털 목록에서 온 곳이 있으면 작은 출처 한 줄 (공공누리 출처 표시). */
+@Composable
+private fun PublicDataCredit(card: RoadsideCard) {
+    if (card.options.none { it.publicData }) return
+    Text(stringResource(R.string.roadside_public_credit), style = EodiTheme.type.meta, color = EodiTheme.colors.textTertiary, modifier = Modifier.padding(top = 8.dp))
 }
 
 @Composable
