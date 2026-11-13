@@ -8,3 +8,10 @@ import app.eodiyeotji.phone.ui.PhoneApp
 fun AppRoot() {
     PhoneApp()
 }
+
+/**
+ * 앱 화면 위를 덮는 화면(그날로 돌아가기)까지 포함한 전체 크기 비율. 폰 판은 [PhoneScale] 비율로 그린다
+ * (이게 없으면 덮는 화면만 차 크기로 그려져 폰에서 두 배로 커 보인다).
+ */
+@Composable
+fun AppScale(content: @Composable () -> Unit) = app.eodiyeotji.phone.ui.PhoneScale(content)

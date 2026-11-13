@@ -20,7 +20,8 @@ class MainActivity : ComponentActivity() {
                 app.eodiyeotji.ui.offers.CouponScope {
                     app.eodiyeotji.ui.place.PlaceDetailScope {
                         // 그날로 돌아가기도 어느 화면에서든 LocalOpenReplay로 연다 (앱 화면 위를 전부 덮는다)
-                        app.eodiyeotji.ui.replay.ReplayScope { app.eodiyeotji.ui.share.ShareNoticeScope { AppRoot() } }
+                        // AppScale: 판마다의 크기 비율 (폰은 0.62배). 덮는 화면도 같은 비율로 그리도록 여기서 감싼다
+                        AppScale { app.eodiyeotji.ui.replay.ReplayScope { app.eodiyeotji.ui.share.ShareNoticeScope { AppRoot() } } }
                     }
                 }
             }

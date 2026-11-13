@@ -5,10 +5,6 @@
     <string name="replay_open_day_list">그날 기록 보기</string>
     <string name="replay_road_photo">%1$s에 찍은 사진</string>
     <string name="replay_close">닫기</string>
-    <string name="replay_prev">이전 장소</string>
-    <string name="replay_next">다음 장소</string>
-    <string name="replay_pause">멈춤</string>
-    <string name="replay_resume">다시 재생</string>
     <string name="replay_again">처음부터</string>
     <string name="replay_loading">그날을 불러오는 중</string>
     <string name="replay_failed">그날을 불러오지 못했어요</string>

@@ -68,7 +68,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -239,12 +238,20 @@ private fun Player(r: DayReplay, roadPhotos: List<MapPhotoSpot>, onClose: () -> 
             Crossfade(targetState = passing.takeIf { step > 0 && !arrived }, animationSpec = tween(FADE_MS), label = "replay-road-photo") { p ->
                 if (p != null) RoadPhotoCard(p.spot, wide) else Box(Modifier.fillMaxSize())
             }
-            // 손짓 판: 누르면 멈춤/다시 재생, 옆으로 밀면 이전 · 다음 (지도 위도 덮는다)
+            // 손짓 판 (지도 위도 덮는다): 화면을 셋으로 나눠 왼쪽을 누르면 이전, 가운데는 멈춤/다시 재생, 오른쪽은 다음. 옆으로 밀어도 이전 · 다음
             var drag by remember { mutableStateOf(0f) }
             Box(
                 Modifier
                     .fillMaxSize()
-                    .pointerInput(r) { detectTapGestures { paused = !paused } }
+                    .pointerInput(r) {
+                        detectTapGestures { at ->
+                            when {
+                                at.x < size.width / 3f -> go(currentStep - 1)
+                                at.x > size.width * 2f / 3f -> go(currentStep + 1)
+                                else -> paused = !paused
+                            }
+                        }
+                    }
                     .pointerInput(r) {
                         detectHorizontalDragGestures(
                             onDragStart = { drag = 0f },
@@ -266,36 +273,15 @@ private fun Player(r: DayReplay, roadPhotos: List<MapPhotoSpot>, onClose: () -> 
                 visible = step > 0 && arrived,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = if (wide) 104.dp else 116.dp, end = if (wide) 32.dp else 16.dp)
+                    .padding(top = 120.dp, end = if (wide) 32.dp else 16.dp)
                     .width(mapW)
                     .height(mapW * 0.68f)
                     .graphicsLayer { alpha = insetAlpha.value }
                     .clip(RoundedCornerShape(24.dp)),
             )
-            // 좁은 창(폰 세로): 버튼을 작게 하고 진행 줄은 버튼 아래로 내린다 (넓은 창 값 그대로면 버튼끼리 겹친다)
-            val button = if (wide) 76.dp else 56.dp
-            val edge = if (wide) 28.dp else 16.dp
-            Progress(
-                n, step,
-                if (wide) Modifier.align(Alignment.TopCenter).padding(top = 28.dp, start = 140.dp, end = 320.dp)
-                else Modifier.align(Alignment.TopCenter).padding(top = 92.dp, start = 16.dp, end = 16.dp),
-            )
-            RoundButton(AgentIcons.Close, stringResource(R.string.replay_close), onClose, Modifier.align(Alignment.TopStart).padding(edge), button)
-            // 이전 · 멈춤 · 다음: 오른쪽 위 한 줄 (사진 카드 · 자막과 겹치지 않는 자리, 반투명 바탕)
-            Row(
-                Modifier.align(Alignment.TopEnd).padding(top = if (wide) 20.dp else 16.dp, end = if (wide) 32.dp else 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(if (wide) 12.dp else 8.dp),
-            ) {
-                RoundButton(EodiIcons.Back, stringResource(R.string.replay_prev), { go(step - 1) }, Modifier.alpha(if (step > 0) 1f else 0.4f), button)
-                RoundButton(
-                    if (paused) EodiIcons.Play else EodiIcons.Pause,
-                    stringResource(if (paused) R.string.replay_resume else R.string.replay_pause),
-                    { paused = !paused },
-                    Modifier,
-                    button,
-                )
-                RoundButton(EodiIcons.Chevron, stringResource(R.string.replay_next), { go(step + 1) }, Modifier, button)
-            }
+            // 위쪽에는 닫기와 진행 줄만 둔다 (이전 · 멈춤 · 다음은 화면을 눌러서 한다)
+            Progress(n, step, Modifier.align(Alignment.TopCenter).padding(top = 63.dp, start = 132.dp, end = 32.dp))
+            RoundButton(AgentIcons.Close, stringResource(R.string.replay_close), onClose, Modifier.align(Alignment.TopStart).padding(28.dp))
             if (paused) {
                 Box(Modifier.align(Alignment.Center).size(140.dp).background(Color.Black.copy(alpha = 0.45f), CircleShape), contentAlignment = Alignment.Center) {
                     Icon(EodiIcons.Pause, contentDescription = null, tint = Color.White, modifier = Modifier.size(64.dp))
@@ -413,8 +399,8 @@ private fun SceneCard(r: DayReplay, s: ReplayScene, paused: Boolean, wide: Boole
     // 장면마다 움직이는 방향을 번갈아 (홀수: 오른쪽 위로, 짝수: 왼쪽 아래로)
     val dir = if (s.order % 2 == 1) 1f else -1f
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        // 카드 폭: 넓은 창은 화면 폭 28% (낮은 창에서는 카드 높이가 화면 높이 40%를 넘지 않게), 좁은 창(폰 세로)은 화면 폭 62%
-        val cardW = if (wide) minOf(maxWidth * 0.28f, maxHeight * 0.4f * (4f / 3f)) else maxWidth * 0.62f
+        // 카드 폭: 넓은 창은 화면 폭 28% (낮은 창에서는 카드 높이가 화면 높이 40%를 넘지 않게), 좁은 창(폰 세로)은 화면 폭 50%
+        val cardW = if (wide) minOf(maxWidth * 0.28f, maxHeight * 0.4f * (4f / 3f)) else maxWidth * 0.5f
         val scrim = Brush.verticalGradient(0f to Color.Transparent, 0.2f to Color.Black.copy(alpha = 0.78f), 1f to Color.Black.copy(alpha = 0.9f))
         val photo: @Composable () -> Unit = {
             val shape = RoundedCornerShape(24.dp)
@@ -496,25 +482,41 @@ private fun EndScreen(r: DayReplay, wide: Boolean, onNavigate: () -> Unit, onAga
             Text(r.summaryLine, style = EodiTheme.type.hero, color = Color.White)
             if (r.statsLine.isNotBlank()) Text(r.statsLine, style = EodiTheme.type.body, color = Color.White.copy(alpha = 0.75f))
             Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                // 출퇴근 날은 숨긴다 (늘 다니는 길, Rust `can_guide`)
-                if (r.canGuide) {
-                    Button(
-                        onClick = onNavigate,
-                        shape = CircleShape,
-                        colors = ButtonDefaults.buttonColors(containerColor = EodiTheme.colors.accent, contentColor = EodiTheme.colors.onAccent),
-                        modifier = Modifier.heightIn(min = 76.dp),
-                    ) {
-                        Icon(AgentIcons.Navigate, contentDescription = null, modifier = Modifier.size(30.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.recap_navigate), style = EodiTheme.type.label, fontWeight = FontWeight.Bold)
-                    }
+            // 출퇴근 날은 안내 버튼을 숨긴다 (늘 다니는 길, Rust `can_guide`)
+            val guide: @Composable (Modifier) -> Unit = { bm ->
+                Button(
+                    onClick = onNavigate,
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = EodiTheme.colors.accent, contentColor = EodiTheme.colors.onAccent),
+                    modifier = bm.heightIn(min = 76.dp),
+                ) {
+                    Icon(AgentIcons.Navigate, contentDescription = null, modifier = Modifier.size(30.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.recap_navigate), style = EodiTheme.type.label, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
-                FilledTonalButton(onClick = onAgain, shape = CircleShape, modifier = Modifier.heightIn(min = 76.dp)) {
-                    Text(stringResource(R.string.replay_again), style = EodiTheme.type.label, fontWeight = FontWeight.Bold)
+            }
+            val again: @Composable (Modifier) -> Unit = { bm ->
+                FilledTonalButton(onClick = onAgain, shape = CircleShape, modifier = bm.heightIn(min = 76.dp)) {
+                    Text(stringResource(R.string.replay_again), style = EodiTheme.type.label, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
-                FilledTonalButton(onClick = onClose, shape = CircleShape, modifier = Modifier.heightIn(min = 76.dp)) {
-                    Text(stringResource(R.string.replay_close), style = EodiTheme.type.label, fontWeight = FontWeight.Bold)
+            }
+            val close: @Composable (Modifier) -> Unit = { bm ->
+                FilledTonalButton(onClick = onClose, shape = CircleShape, modifier = bm.heightIn(min = 76.dp)) {
+                    Text(stringResource(R.string.replay_close), style = EodiTheme.type.label, fontWeight = FontWeight.Bold, maxLines = 1)
+                }
+            }
+            if (wide) {
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    if (r.canGuide) guide(Modifier)
+                    again(Modifier)
+                    close(Modifier)
+                }
+            } else {
+                // 좁은 창(폰 세로): 한 줄에 셋을 두면 글자가 세로로 꺾이고 닫기가 화면 밖으로 밀린다 → 안내는 한 줄, 나머지 둘은 반씩
+                if (r.canGuide) guide(Modifier.fillMaxWidth())
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    again(Modifier.weight(1f))
+                    close(Modifier.weight(1f))
                 }
             }
         }
@@ -549,12 +551,12 @@ private fun Progress(n: Int, step: Int, modifier: Modifier) {
 }
 
 @Composable
-private fun RoundButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit, modifier: Modifier, size: Dp = 76.dp) {
+private fun RoundButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit, modifier: Modifier) {
     Box(
-        modifier.size(size).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)).clickable(role = Role.Button, onClick = onClick),
+        modifier.size(76.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)).clickable(role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = description, tint = Color.White, modifier = Modifier.size(size * 0.47f))
+        Icon(icon, contentDescription = description, tint = Color.White, modifier = Modifier.size(36.dp))
     }
 }
 

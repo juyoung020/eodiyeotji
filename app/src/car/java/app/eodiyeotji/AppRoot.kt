@@ -28,3 +28,7 @@ fun AppRoot() {
         app.eodiyeotji.ui.share.HandoffSyncLoop()
     }
 }
+
+/** 앱 화면 위를 덮는 화면(그날로 돌아가기)까지 포함한 전체 크기 비율. 차 판은 토큰 크기 그대로 그린다. */
+@Composable
+fun AppScale(content: @Composable () -> Unit) = content()
