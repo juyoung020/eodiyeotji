@@ -104,8 +104,9 @@ fun RecapListTop(viewModel: RecapViewModel, onOpenDay: (String) -> Unit, modifie
         if (routine != null && !state.driving) {
             RoutineCard(routine, onNavigate = viewModel::navigateRoutine, onDismiss = viewModel::dismissRoutine)
         }
+        if (state.undoRoutine != null && !state.driving) RoutineUndo(viewModel::undoDismissRoutine)
         // 카드는 한 번에 하나만 (둘이 같이 뜨면 날짜 목록이 화면 밖으로 밀린다): 늘 가던 날을 닫으면 N년 전 오늘이 나온다
-        val otd = state.onThisDay.takeIf { routine == null }
+        val otd = state.onThisDay.takeIf { routine == null && state.undoRoutine == null }
         if (otd != null && !state.driving) {
             OnThisDayCard(
                 otd = otd,
@@ -155,6 +156,24 @@ private fun EntryStrip(entries: List<Pair<String, () -> Unit>>) {
             ) {
                 Text(text, style = EodiTheme.type.label, fontWeight = FontWeight.Bold, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+        }
+    }
+}
+
+/** 늘 가던 날 카드를 닫은 직후 잠깐 뜨는 줄: 실수로 닫았으면 되돌린다. */
+@Composable
+private fun RoutineUndo(onUndo: () -> Unit) {
+    val c = EodiTheme.colors
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(EodiTheme.space.radiusM)).background(c.surfaceHigh).padding(start = 24.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(stringResource(R.string.routine_dismissed), style = EodiTheme.type.label, color = c.textSecondary, modifier = Modifier.weight(1f))
+        Box(
+            Modifier.heightIn(min = 76.dp).clickable(role = Role.Button, onClick = onUndo).padding(horizontal = 28.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(stringResource(R.string.routine_undo), style = EodiTheme.type.label, fontWeight = FontWeight.Bold, color = c.memoryInk)
         }
     }
 }
