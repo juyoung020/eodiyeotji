@@ -121,6 +121,8 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                     // 같이 가기 (여러 차가 함께): 켜져 있으면 "위치 공유 중 · N대"
                     app.eodiyeotji.ui.convoy.ConvoyEntryChip()
                     RecordingStatusChip(quietWhenWaiting = true)
+                    // 인터넷이 끊기면 "오프라인" (기록 · 검색은 기기 안에서 그대로 된다)
+                    app.eodiyeotji.ui.common.OfflineBadge()
                 }
             }
             var communityTab by rememberSaveable { mutableStateOf(CommunityTab.COURSES) }

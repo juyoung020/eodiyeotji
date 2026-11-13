@@ -257,7 +257,9 @@ class PhoneSpeechOutput @Inject constructor(@ApplicationContext private val cont
         val engine = tts
         if (engine != null && ready) {
             engine.setAudioAttributes(attributes)
-            engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "eodi-$my")
+            // 선행 묵음 150ms: 출력 경로가 열리는 동안 첫 음절이 잘리지 않게
+            engine.playSilentUtterance(PREROLL_MS, TextToSpeech.QUEUE_FLUSH, "eodi-pre")
+            engine.speak(text, TextToSpeech.QUEUE_ADD, null, "eodi-$my")
             return
         }
         tts = TextToSpeech(context) { status ->
@@ -304,5 +306,7 @@ class PhoneSpeechOutput @Inject constructor(@ApplicationContext private val cont
     private companion object {
         const val TAG = "EodiTts"
         const val MAX_WAIT_MS = 8_000L
+        /** 읽기 앞 묵음 (Pleos 음성 안내 가이드 권장 150~200ms) */
+        const val PREROLL_MS = 150L
     }
 }

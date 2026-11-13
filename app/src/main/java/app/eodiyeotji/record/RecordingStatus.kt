@@ -216,7 +216,8 @@ fun RecordingStatusChip(
                 ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            StatusDot(headline, if (interactive) 14.dp else 20.dp)
+            // 주행 화면(누를 수 없는 표시)에서는 숨 쉬는 점을 멈춘다: 주행 중 반복 애니메이션 최소화 (Pleos 주행 안전 설계 가이드)
+            StatusDot(headline, if (interactive) 14.dp else 20.dp, pulse = interactive)
             Spacer(Modifier.width(if (interactive) 10.dp else 14.dp))
             Text(
                 label,
@@ -240,14 +241,14 @@ fun RecordingStatusChip(
 
 /** 상태 점: 기록 중 = 파랑(길 색)이 숨 쉼, 대기 = 초록(지금), 경고 = 코랄. */
 @Composable
-private fun StatusDot(headline: StatusHeadline, size: androidx.compose.ui.unit.Dp = 14.dp) {
+private fun StatusDot(headline: StatusHeadline, size: androidx.compose.ui.unit.Dp = 14.dp, pulse: Boolean = true) {
     val c = EodiTheme.colors
     val color = when {
         headline == StatusHeadline.DRIVING -> c.accent
         headline.isWarning() -> c.stay
         else -> c.here
     }
-    if (headline == StatusHeadline.DRIVING) {
+    if (pulse && headline == StatusHeadline.DRIVING) {
         // 값은 그리기 단계에서만 읽는다 (graphicsLayer) → 매 프레임 재구성 없이 투명도만 바뀐다
         val pulse = rememberInfiniteTransition(label = "rec").animateFloat(
             initialValue = 1f,

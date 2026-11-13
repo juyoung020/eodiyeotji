@@ -13,6 +13,7 @@ import android.os.Handler
 import android.os.Looper
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import app.eodiyeotji.BuildConfig
 import app.eodiyeotji.core.rust.speakableText
 import app.eodiyeotji.platform.SpeechOutput
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -174,7 +175,8 @@ class PleosTts @Inject constructor(@ApplicationContext private val context: Cont
     private fun play(text: String) {
         val my = seq
         playAtMs = System.currentTimeMillis()
-        Log.i(TAG, "읽기 #$my 한 번에 ${text.length}자: $text")
+        // 읽는 말에는 장소 · 질문 같은 개인 정보가 들어 있어 디버그 빌드에서만 내용을 남긴다
+        Log.i(TAG, "읽기 #$my 한 번에 ${text.length}자" + if (BuildConfig.DEBUG) ": $text" else "")
         if (pleosReady && !pleosBroken) {
             pleosTurn = my
             runCatching { pleos?.speak(text, true) }
@@ -188,7 +190,9 @@ class PleosTts @Inject constructor(@ApplicationContext private val context: Cont
         val tts = fallback
         if (tts != null && fallbackReady) {
             tts.setAudioAttributes(attributes)
-            tts.speak(text, AndroidTts.QUEUE_FLUSH, null, "eodi-$my")
+            // 선행 묵음(Pleos 음성 안내 가이드 150~200ms): 출력 경로가 열리는 동안 첫 음절이 잘리지 않게
+            tts.playSilentUtterance(PREROLL_MS, AndroidTts.QUEUE_FLUSH, "eodi-pre")
+            tts.speak(text, AndroidTts.QUEUE_ADD, null, "eodi-$my")
             return
         }
         fallback = AndroidTts(context) { status ->
@@ -252,5 +256,7 @@ class PleosTts @Inject constructor(@ApplicationContext private val context: Cont
         /** 내비 안내가 끝나기를 이만큼까지만 기다린다 (그 뒤의 답은 이미 늦다) */
         const val MAX_WAIT_MS = 8_000L
         const val OWN_FOCUS_GRACE_MS = 1_000L
+        /** 읽기 앞 묵음 (Pleos 가이드 권장 150~200ms) */
+        const val PREROLL_MS = 150L
     }
 }

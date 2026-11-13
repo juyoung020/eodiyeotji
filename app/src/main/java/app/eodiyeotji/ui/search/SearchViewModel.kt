@@ -212,7 +212,7 @@ class SearchViewModel @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.w(TAG, "검색 실패: ${s.query}", e)
+            Log.w(TAG, "검색 실패 (${s.query.length}자)", e)
             return
         }
         if (BuildConfig.DEBUG) Log.i(TAG, "검색 \"${s.query}\" ${s.scope}: ${answer.total}건, Rust ${answer.elapsedMicros}µs")

@@ -893,7 +893,11 @@ private fun DrivingAgent(
             Column(Modifier.fillMaxSize().padding(48.dp)) {
                 if (turn == null) {
                     // 지금 이 주행을 알아서 기록하고 있다는 표시 (누를 수 없는 작은 점 + 글)
-                    RecordingStatusChip(interactive = false)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        RecordingStatusChip(interactive = false)
+                        // 인터넷이 끊기면 "오프라인": 답은 기기 안 기록으로 계속한다
+                        app.eodiyeotji.ui.common.OfflineBadge()
+                    }
                     Spacer(Modifier.height(16.dp))
                     // 지나가며 떠오른 기억이 있으면 마이크 위에 큰 사진 카드로 (화면 위쪽 절반, ui/recap, 없으면 그리지 않는다)
                     RecallDrivingCard(Modifier.weight(1.3f))

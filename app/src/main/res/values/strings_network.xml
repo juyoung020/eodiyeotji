@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 인터넷이 끊겼을 때 머리에 보이는 표시 (ui/common/OfflineBadge.kt). Pleos 기획 가이드: 오프라인 모드 안내 UI -->
+    <string name="offline_badge">오프라인</string>
+    <string name="offline_a11y">인터넷 연결 끊김. 기기 안 기록으로 계속 동작해요</string>
+</resources>
