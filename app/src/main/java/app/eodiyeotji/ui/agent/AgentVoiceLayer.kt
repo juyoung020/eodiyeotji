@@ -77,8 +77,9 @@ internal fun BoxScope.AgentVoiceLayer(
         visible = voice.listening,
         enter = fadeIn(),
         exit = fadeOut(),
-        // 주행 중에는 가운데 (아래쪽 큰 "안내"·"취소" 버튼을 가리지 않게), 정차 중에는 아래쪽
-        modifier = Modifier.align(if (driving) Alignment.Center else Alignment.BottomCenter).safeDrawingPadding().padding(24.dp),
+        // 주행 중에는 아래쪽 큰 "안내"·"취소" 버튼 바로 위 (가운데에 두면 두 줄짜리 답 글을 덮었다), 정차 중에는 맨 아래
+        modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding()
+            .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = if (driving) DrivingButtonsClearance else 24.dp),
     ) {
         ListeningCard(voice, driving, onMic, onCancelListening)
     }
@@ -163,3 +164,6 @@ private fun ListeningCard(voice: VoiceUi, driving: Boolean, onMic: () -> Unit, o
         }
     }
 }
+
+/** 주행 중 답 화면 아래쪽 큰 버튼 줄(높이 + 여백)을 비켜 듣기 알약을 그 위에 둔다. */
+private val DrivingButtonsClearance = 264.dp

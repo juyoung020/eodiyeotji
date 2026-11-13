@@ -923,9 +923,9 @@ private fun DrivingAgent(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false),
                         )
-                        // "대답을 기다려요"는 아래 듣기 알약이 같은 말을 크게 보인다 → 주행 중 같은 글이 두 번 보이지 않게 여기선 뺀다
+                        // 생각 중 · 말하는 중만: "대답을 기다려요"는 아래 듣기 알약이 크게 보이고, "대기 중"은 "경유지로 넣을까요?" 옆에서 엇갈려 보였다
                         val gleo = LocalGleoStatus.current
-                        if (gleo != GleoStatus.Asking) GleoStatusChip(gleo, large = true)
+                        if (gleo == GleoStatus.Thinking || gleo == GleoStatus.Speaking) GleoStatusChip(gleo, large = true)
                     }
                     Spacer(Modifier.height(28.dp))
                     // 길 위의 필요(화장실 · 졸음): 1순위 곳 + 거리 · 분 크게, 다른 선택 한 줄
