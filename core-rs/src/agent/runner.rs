@@ -907,11 +907,16 @@ struct Asked<'a> {
     range: Option<DayRange>,
 }
 
-/// 날짜만 물었을 때 답할 기억 순서: 출퇴근이 아닌 것 먼저, 그다음 들른 곳에 오래 머문 것 (같으면 원래 순서).
+/// 날짜만 물었을 때 "멀리 다녀온 이동"으로 볼 운전 거리(m). 출장 · 여행 행선지는 도착점만 남고 머문 시간이 0일 때가 있다.
+const NOTABLE_DRIVE_M: f64 = 30_000.0;
+
+/// 날짜만 물었을 때 답할 기억 순서: 출퇴근이 아닌 것 먼저, 그다음 멀리 다녀온 것(여행 · [NOTABLE_DRIVE_M] 이상 운전),
+/// 그다음 들른 곳에 오래 머문 것 (같으면 원래 순서).
 pub(crate) fn order_by_notability(hits: &mut [MemoryHit]) {
     let commute = |h: &MemoryHit| matches!(h.episode.facts.kind, EpisodeKind::CommuteToWork | EpisodeKind::CommuteHome);
+    let far = |h: &MemoryHit| h.episode.facts.kind == EpisodeKind::Trip || h.episode.facts.distance_m >= NOTABLE_DRIVE_M;
     let dwell = |h: &MemoryHit| h.episode.facts.stops.iter().map(|s| (s.leave_ms - s.arrive_ms).max(0)).sum::<i64>();
-    hits.sort_by_key(|h| (commute(h), std::cmp::Reverse(dwell(h))));
+    hits.sort_by_key(|h| (commute(h), !far(h), std::cmp::Reverse(dwell(h))));
 }
 
 /// "옛날에 · 예전에" 순서: ① 잘 맞는 기억(1위 점수의 [LONG_AGO_STRONG_RATIO] 이상) 중 오래된 것부터 → ② 나머지는 점수순 →
@@ -1148,6 +1153,23 @@ mod tidy_tests {
         super::order_by_notability(&mut v);
         assert_eq!(v[0].episode.facts.id, 80);
         assert!(v[1..].iter().all(|h| matches!(h.episode.facts.kind, super::EpisodeKind::CommuteHome)));
+    }
+    #[test]
+    fn date_only_question_prefers_far_trip_over_long_cafe_stay() {
+        use crate::memory::{EpisodeFacts, MemoryHit, StopFact};
+        // 2025-12-25: 아침 스타벅스 40분 (볼일) · 회사 → 대전컨벤션센터 → 회사 (도착점만 남아 머문 시간 0)
+        let stop = |name: &str, lat: f64, lon: f64, stay_ms: i64| StopFact {
+            name: name.into(), category: String::new(), address: String::new(), arrive_ms: 1_000, leave_ms: 1_000 + stay_ms, lat, lon, first_visit: false,
+        };
+        let ep = |id: i64, kind: super::EpisodeKind, distance_m: f64, stops: Vec<StopFact>| {
+            let facts = EpisodeFacts { id, day: "2025-12-25".into(), kind, rule_label: String::new(), start_ms: id, end_ms: id + 1, distance_m, from_name: "회사".into(), to_name: "회사".into(), stops, region: String::new() };
+            MemoryHit { day_title: None, episode: crate::memory::Episode { facts, title: None, tags: vec![] }, score: 1.0, best_stop: None, matched_tags: vec![], visit_days: vec![], visit_note: String::new(), people: None }
+        };
+        let cafe = ep(1, super::EpisodeKind::Errand, 2_500.0, vec![stop("스타벅스 왕십리역점", 37.5614, 127.0369, 40 * 60_000)]);
+        let dcc = ep(2, super::EpisodeKind::Errand, 290_000.0, vec![stop("대전컨벤션센터", 36.3755, 127.3880, 0)]);
+        let mut v = vec![cafe, dcc];
+        super::order_by_notability(&mut v);
+        assert_eq!(v[0].episode.facts.stops[0].name, "대전컨벤션센터");
     }
     #[test]
     fn hit_data_carries_the_spoken_date() {
