@@ -677,7 +677,9 @@ private fun EmptyState(onAsk: (String) -> Unit, modifier: Modifier = Modifier) {
 private fun AnswerBlock(turn: AgentTurn, onRetry: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         QuestionBubble(turn.question, Modifier.align(Alignment.End))
-        GleoStatusChip(LocalGleoStatus.current)
+        // 생각 · 말하기 · 듣기 중일 때만: 답이 끝난 뒤 "대기 중"이 질문과 답 사이에 남아 뜻 없는 줄이 됐다
+        val gleo = LocalGleoStatus.current
+        if (gleo != GleoStatus.Standby && gleo != GleoStatus.Sleep) GleoStatusChip(gleo)
         Row(verticalAlignment = Alignment.Top) {
             SparkleBadge(size = 52.dp)
             Spacer(Modifier.width(20.dp))
