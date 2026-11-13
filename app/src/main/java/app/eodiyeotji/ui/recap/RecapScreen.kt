@@ -377,7 +377,9 @@ private fun PlacesAndRegions(places: List<RecapPlace>, regions: List<RecapRegion
 private fun TopPlaces(places: List<RecapPlace>) {
     if (places.isEmpty()) return
     val c = EodiTheme.colors
-    SectionTitle(stringResource(R.string.recap_top_places), Modifier.padding(top = 8.dp), icon = EodiIcons.Sparkle)
+    // 모두 하루씩만 간 달(달 초)에는 "자주 간 곳"이 맞지 않는다 → "다녀온 곳"
+    val repeat = places.any { it.days.toInt() > 1 }
+    SectionTitle(stringResource(if (repeat) R.string.recap_top_places else R.string.recap_visited_places), Modifier.padding(top = 8.dp), icon = EodiIcons.Sparkle)
     val openPlace = LocalOpenPlace.current
     places.forEachIndexed { i, p ->
         // 줄 전체가 누르는 자리 (전에는 76dp 사진만 눌렸다)
