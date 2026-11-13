@@ -319,6 +319,7 @@ fn recent_searches_keep_newest_twenty() {
     // 한글 조합 중에 눌린 낱자만의 검색은 남기지 않는다 (숫자 · 영문 · 완성 글자가 하나라도 있으면 남긴다)
     st.remember_search("ㅁ".into(), 5).unwrap();
     st.remember_search("ㄱㅅ ".into(), 6).unwrap();
+    st.remember_search("\u{AA24}".into(), 6).unwrap(); // 입력기 오류로 들어간 다른 문자 하나
     assert_eq!(st.search_suggestions().unwrap().recent, s(&["바다", "카페"]));
     // 거르기 전에 저장된 옛 낱자 검색도 보이지 않는다
     st.lock().unwrap().execute("INSERT INTO search_recent (text, used_ms) VALUES ('ㅎㅎ', 7)", []).unwrap();

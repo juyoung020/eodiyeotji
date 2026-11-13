@@ -947,12 +947,8 @@ fn frequent_places(conn: &Connection, n: usize) -> Result<Vec<String>, CoreError
 
 /// 최근 검색어로 남길 만한 말인가: 비어 있지 않고, 낱자가 아닌 글자(완성 한글 · 영문 · 숫자)가 하나라도 있다.
 fn worth_remembering(t: &str) -> bool {
-    t.chars().any(|c| c.is_alphanumeric() && !is_hangul_jamo(c))
-}
-
-/// 한글 낱자(자모)인가: 첫가끝 · 호환 자모 · 확장 A/B.
-fn is_hangul_jamo(c: char) -> bool {
-    matches!(c, '\u{1100}'..='\u{11FF}' | '\u{3130}'..='\u{318F}' | '\u{A960}'..='\u{A97F}' | '\u{D7B0}'..='\u{D7FF}')
+    // 완성 한글 · 영문 · 숫자가 하나라도 있어야 한다 (입력기 오류로 들어간 다른 문자 하나도 버린다)
+    t.chars().any(|c| c.is_ascii_alphanumeric() || ('가'..='힣').contains(&c))
 }
 
 #[cfg(test)]
