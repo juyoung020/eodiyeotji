@@ -9,6 +9,10 @@ import androidx.compose.ui.layout.ContentScale
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import android.content.pm.PackageManager
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -87,7 +91,8 @@ import kotlinx.coroutines.delay
  * - 기준 크기는 Pleos 에뮬레이터 화면(2560x1440, 밀도 1.0)이다. 틀 전체를 그 크기로 그린 뒤 태블릿 화면에 맞게 줄인다.
  * - 동작하는 것: 시계, 기어(P R N D — D · R이면 앱이 주행 중으로 바뀌고 시연 주행을 기록한다, platform/TabletVehicle.kt),
  *   속도(시연 주행의 값), 실내 온도 올리고 내리기.
- * - 이 화면이 떠 있는 동안에는 화면이 꺼지지 않는다 (앱을 벗어나면 기기 설정대로).
+ * - 이 화면이 떠 있는 동안에는 화면이 꺼지지 않는다 (앱을 벗어나면 기기 설정대로). 대신 서 있는 채로 [SAVER_AFTER_MS] 동안 손대지 않으면
+ *   화면 보호기(검은 화면 + 자리를 옮겨 다니는 시계)가 덮는다 — 같은 그림이 오래 켜져 화면에 자국이 남지 않게. 누르면 돌아온다.
  * - 그림뿐인 것: 주행 가능 거리 · 음악 · 홈 · 내비 · 전화 · 앱 버튼 (눌러도 아무 일도 없다).
  * - 꾸밈 그림(선택): 기기의 `files/shell/panel.png`(주행 정보 화면의 차 그림 · 음악 줄)와 `bar.png`(하단 바)가 있으면
  *   직접 그린 것 대신 그 그림을 쓴다. 에뮬레이터 화면에서 오려 넣는 것이라 저장소에는 두지 않는다 (scripts/demo-shell/push_shell.py).
@@ -137,7 +142,10 @@ fun FakeCarShell(content: @Composable () -> Unit) {
         // 틀 전체(2560x1440dp)가 화면에 들어가는 밀도: 이 안에서는 1dp가 에뮬레이터의 1px이다
         val scale = min(box.width / FRAME_W.toFloat(), box.height / FRAME_H.toFloat())
         CompositionLocalProvider(LocalDensity provides Density(scale, LocalDensity.current.fontScale)) {
-            Box(Modifier.requiredSize(FRAME_W.dp, FRAME_H.dp)) { Shell(content) }
+            Box(Modifier.requiredSize(FRAME_W.dp, FRAME_H.dp)) {
+                Shell(content)
+                ScreenSaver()
+            }
         }
     }
 }
@@ -266,6 +274,63 @@ private fun CarSketch(modifier: Modifier) {
         }
     }
 }
+
+/**
+ * 화면 보호기: 기어가 P · N인 채로 [SAVER_AFTER_MS] 동안 화면을 누르지 않으면 검은 화면으로 덮고, 시계만 [SAVER_MOVE_MS]마다 자리를 옮겨 보인다.
+ * 아무 데나 누르면 걷힌다 (그 누름은 아래 화면에 전달하지 않는다). 주행 중(D · R)에는 뜨지 않는다.
+ */
+@Composable
+private fun ScreenSaver() {
+    val context = LocalContext.current
+    val vehicle = remember { EntryPointAccessors.fromApplication(context.applicationContext, ShellEntryPoint::class.java).vehicle() }
+    val gear by vehicle.gear.collectAsStateWithLifecycle()
+    // 마지막으로 화면을 누른 때 (누를 때마다 바뀌어 아래 기다림을 다시 시작시킨다)
+    var touched by remember { mutableStateOf(0L) }
+    var on by remember { mutableStateOf(false) }
+    LaunchedEffect(touched, gear) {
+        on = false
+        if (TabletVehicle.isMoving(gear)) return@LaunchedEffect
+        delay(SAVER_AFTER_MS)
+        on = true
+    }
+    // 누름을 지켜보기만 한다 (먼저 보고 그대로 흘려보낸다)
+    Box(
+        Modifier.fillMaxSize().pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) {
+                    awaitPointerEvent(PointerEventPass.Initial)
+                    touched = System.nanoTime()
+                }
+            }
+        },
+    )
+    if (!on) return
+    val spot by produceState(0) {
+        while (true) {
+            delay(SAVER_MOVE_MS)
+            value++
+        }
+    }
+    val clock by produceState(initialValue = clockText(), spot) { value = clockText() }
+    Box(
+        Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) { detectTapGestures { touched = System.nanoTime() } },
+    ) {
+        Text(
+            clock,
+            color = Color(0xFF8A9099),
+            fontSize = 96.sp,
+            fontWeight = FontWeight.Light,
+            modifier = Modifier.align(SAVER_SPOTS[spot % SAVER_SPOTS.size]).padding(160.dp),
+        )
+    }
+}
+
+/** 손대지 않고 이만큼 지나면 화면 보호기 */
+private const val SAVER_AFTER_MS = 180_000L
+
+/** 화면 보호기의 시계가 자리를 옮기는 간격 */
+private const val SAVER_MOVE_MS = 30_000L
+private val SAVER_SPOTS = listOf(Alignment.Center, Alignment.TopStart, Alignment.BottomEnd, Alignment.TopEnd, Alignment.BottomStart, Alignment.CenterStart, Alignment.CenterEnd)
 
 /** 위 상태 줄: 시연용 화면이라는 표시 · 사용자 · 시계 (시계는 실제 시각). */
 @Composable
