@@ -8,6 +8,11 @@
             android:name=".record.DemoSeedReceiver"
             android:exported="true" />
 
+        <!-- 테스트로 쌓인 하루 기록 지우기 (사용법은 record/DeleteDayReceiver.kt) -->
+        <receiver
+            android:name=".record.DeleteDayReceiver"
+            android:exported="true" />
+
         <!-- 시연용 내 사진(갤러리) 넣기 (사용법은 gallery/GalleryDemoReceiver.kt) -->
         <receiver
             android:name=".gallery.GalleryDemoReceiver"
