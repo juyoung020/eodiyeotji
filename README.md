@@ -69,10 +69,10 @@ cd eodiyeotji
 |---|---|---|
 | `KAKAO_REST_API_KEY` | 머문 곳의 장소 이름 (카카오 로컬) | OpenStreetMap 주소 이름으로 대신 |
 | `GOOGLE_PLACES_API_KEY` | 들른 곳 대표 사진 · 별점 | 사진 칸이 지도 핀 모양으로 |
-| `RELAY_URL` · `RELAY_TOKEN` | 중계 서버 (`server/relay`): 카카오 · 구글 · Qwen을 키 없이 이 서버로 부른다. 넣으면 키는 APK에 들어가지 않는다 | 아래 키로 직접 |
-| `LLM_BASE_URL` · `LLM_MODEL` · `LLM_API_KEY` | AI 하루 제목 · 어려운 질문 (OpenAI 호환, 기본은 중계 서버의 `/llm/v1` → 개발 PC의 Qwen3.5-9B, 중계가 없으면 `http://10.0.2.2:8181/v1`) | 기기 안 빠른 검색으로 답합니다 (날짜 · 장소 · 사람 · 이어 묻기 · "○○ 빼고" 코스는 LLM 없이 동작) |
+| `RELAY_URL` · `RELAY_TOKEN` | 중계 서버 (`server/relay`): 카카오 · 구글 · Gemini를 키 없이 이 서버로 부른다. 넣으면 키는 APK에 들어가지 않는다 | 아래 키로 직접 |
+| `LLM_BASE_URL` · `LLM_MODEL` · `LLM_API_KEY` | AI 하루 제목 · 어려운 질문 (OpenAI 호환, 기본은 중계 서버의 `/llm/v1` → Google Gemini `gemini-flash-lite-latest`, 중계가 없으면 개발 PC의 `http://10.0.2.2:8181/v1`) | 기기 안 빠른 검색으로 답합니다 (날짜 · 장소 · 사람 · 이어 묻기 · "○○ 빼고" 코스는 LLM 없이 동작) |
 
-- Qwen 띄우기 (개발 PC): `scripts/llm/start-llm.ps1` + 밖에서 쓰게 열기 `scripts/llm/expose-llm.ps1` (`server/relay/README.md`)
+- AI는 클라우드 중계 서버 + Gemini로 답하므로 **개발 PC가 꺼져 있어도 심사 기기에서 동작**합니다. 개발 PC의 Qwen(`scripts/llm/`)은 로컬 개발용 선택 사항입니다 (`server/relay/README.md`)
 - 오프라인 지도 파일(60MB)은 저장소 밖에서 만듭니다: `scripts/map/build-map.ps1` → `push-map.ps1`. 없으면 온라인 밑그림으로 그립니다.
 - 시연용 1년치 기록: 디버그 빌드에서 `adb shell am broadcast --user 10 -n app.eodiyeotji/.record.DemoSeedReceiver`
 

@@ -11,3 +11,12 @@ class_name = "ConvoyHub"
 [[migrations]]
 tag = "v1-convoy"
 new_sqlite_classes = ["ConvoyHub"]
+
+# Gemini 호출만 미국 서부에서 (지역 제한 피하기, src/gemini.js GeminiEgress)
+[[durable_objects.bindings]]
+name = "GEMINI_EGRESS"
+class_name = "GeminiEgress"
+
+[[migrations]]
+tag = "v2-gemini-egress"
+new_sqlite_classes = ["GeminiEgress"]

@@ -3,12 +3,14 @@
 // - 정해 둔 길만 통과시킨다 (남이 아무 요청이나 대신 보내는 데 쓰지 못하게).
 // - 앱이 보내는 X-Eodi-App 값이 맞아야 한다 (APK 안에 있는 값이라 막는 힘은 약하다 → 진짜 한도는 각 API 콘솔의 하루 한도).
 // - 구글 사진은 Cloudflare 캐시에 30일 둔다 → 같은 사진은 구글에 다시 묻지 않는다 (하루 한도 절약).
-// - /llm/ 은 개발 PC의 Qwen(llama-server)으로 Cloudflare 터널을 거쳐 넘긴다 (터널 주소는 LLM_ORIGIN, 바뀌면 scripts/llm/expose-llm.ps1이 고친다).
-// 비밀값(wrangler secret): KAKAO_REST_API_KEY, GOOGLE_PLACES_API_KEY, APP_TOKEN, LLM_ORIGIN, LLM_ORIGIN_KEY
+// - /llm/ 은 Google Gemini(OpenAI 호환, src/gemini.js)로 넘긴다. GEMINI_API_KEY가 없으면 예전처럼 LLM_ORIGIN(개발 PC Qwen 터널)으로.
+// 비밀값(wrangler secret): KAKAO_REST_API_KEY, GOOGLE_PLACES_API_KEY, APP_TOKEN, GEMINI_API_KEY (선택: GEMINI_MODELS, LLM_ORIGIN, LLM_ORIGIN_KEY)
 
 import { convoy } from './convoy.js';
+import { gemini, egressFetch } from './gemini.js';
 
 export { ConvoyHub } from './convoy.js';
+export { GeminiEgress } from './gemini.js';
 
 const ROUTES = [
   // 카카오 로컬: 장소 이름 (카테고리 · 키워드 · 좌표→주소)
@@ -75,10 +77,11 @@ export default {
   },
 };
 
-// Qwen (OpenAI 호환): 대화 · 모델 목록만. 응답(스트리밍 포함)은 그대로 흘려보낸다.
+// LLM (OpenAI 호환): 대화 · 모델 목록만. 응답(스트리밍 포함)은 그대로 흘려보낸다.
 async function llm(request, env, url) {
   const path = url.pathname.slice('/llm/'.length);
   if (!/^v1\/(chat\/completions|models)$/.test(path)) return json({ error: 'not allowed' }, 404);
+  if (env.GEMINI_API_KEY) return gemini(request, env, path, egressFetch(env));
   if (!env.LLM_ORIGIN) return json({ error: 'llm offline' }, 503);
   const headers = new Headers({ 'Content-Type': request.headers.get('Content-Type') || 'application/json' });
   if (env.LLM_ORIGIN_KEY) headers.set('Authorization', `Bearer ${env.LLM_ORIGIN_KEY}`);

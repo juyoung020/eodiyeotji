@@ -109,17 +109,28 @@ impl LlmClient {
         &self.cfg
     }
 
-    /// 요청 본문 (공통 부분). Qwen 생각 끔, llama.cpp 앞부분 캐시 재사용.
+    /// 요청 본문 (공통 부분). 기본은 OpenAI 표준 값만 (Gemini 등).
+    /// 개발 PC의 llama.cpp(Qwen)일 때만 생각 끄기 · 앞부분 캐시 재사용 값을 더한다.
     pub fn body(&self, messages: &[Value], p: &Params) -> Value {
-        json!({
+        let mut body = json!({
             "model": self.cfg.model,
             "messages": messages,
             "temperature": p.temperature,
             "top_p": p.top_p,
             "max_tokens": p.max_tokens,
-            "cache_prompt": true,
-            "chat_template_kwargs": {"enable_thinking": false},
-        })
+        });
+        if self.is_llama_cpp() {
+            body["cache_prompt"] = json!(true);
+            body["chat_template_kwargs"] = json!({"enable_thinking": false});
+        }
+        body
+    }
+
+    /// llama.cpp 서버(로컬 Qwen)인가: 모델 이름이 qwen이거나 주소가 개발 PC · 기기 안.
+    fn is_llama_cpp(&self) -> bool {
+        let url = self.cfg.base_url.to_ascii_lowercase();
+        self.cfg.model.to_ascii_lowercase().starts_with("qwen")
+            || ["10.0.2.2", "localhost", "127.0.0.1"].iter().any(|h| url.contains(h))
     }
 
     /// 스트리밍 호출. 글 조각마다 [on_text], 줄마다 [cancelled]를 확인한다.

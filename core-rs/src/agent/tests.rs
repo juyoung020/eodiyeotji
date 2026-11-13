@@ -331,7 +331,10 @@ impl FakeServer {
 }
 
 pub(super) fn cfg(url: &str) -> LlmConfig {
-    LlmConfig { base_url: url.into(), model: "qwen3.5-9b".into(), api_key: String::new(), connect_timeout_ms: 2_000, read_timeout_ms: 30_000 }
+    // 실제 서버 평가(eval.rs, LLM_LIVE=1)는 LLM_LIVE_MODEL · LLM_LIVE_KEY로 중계 · Gemini도 잴 수 있다
+    let model = std::env::var("LLM_LIVE_MODEL").unwrap_or("qwen3.5-9b".into());
+    let api_key = std::env::var("LLM_LIVE_KEY").unwrap_or_default();
+    LlmConfig { base_url: url.into(), model, api_key, connect_timeout_ms: 2_000, read_timeout_ms: 30_000 }
 }
 
 pub(super) fn llm_only() -> AgentOptions {
@@ -935,4 +938,16 @@ fn ai_titles_may_not_call_a_short_hop_a_trip() {
     assert_eq!(label::short_move_problem(&en("경포해변 잠깐 들름", "경포해변 들름"), &short), None);
     let long = DayFacts { episodes: vec![ep(1, 236.0, 300)], total_distance_m: 236_000.0, ..short.clone() };
     assert_eq!(label::short_move_problem(&en("강릉 바다 여행", "강릉 여행"), &long), None, "긴 여행은 그대로");
+}
+
+#[test]
+fn qwen_only_fields_are_not_sent_to_cloud_llm() {
+    use super::llm::{LlmClient, Params};
+    let p = Params { temperature: 0.0, top_p: 1.0, max_tokens: 64 };
+    let cloud = LlmClient::new(LlmConfig { base_url: "https://relay.example/llm/v1".into(), model: "gemini-flash-lite-latest".into(), api_key: String::new(), connect_timeout_ms: 2_000, read_timeout_ms: 30_000 });
+    let b = cloud.body(&[], &p);
+    assert!(b.get("cache_prompt").is_none() && b.get("chat_template_kwargs").is_none(), "{b}");
+    assert_eq!(b["model"], json!("gemini-flash-lite-latest"));
+    let local = LlmClient::new(LlmConfig { base_url: "http://10.0.2.2:8181/v1".into(), model: "gemini-x".into(), api_key: String::new(), connect_timeout_ms: 2_000, read_timeout_ms: 30_000 });
+    assert_eq!(local.body(&[], &p)["cache_prompt"], json!(true));
 }

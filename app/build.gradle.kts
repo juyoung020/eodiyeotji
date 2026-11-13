@@ -22,16 +22,17 @@ val googlePlacesApiKey: String = Properties().let { props ->
     (props.getProperty("GOOGLE_PLACES_API_KEY") ?: System.getenv("GOOGLE_PLACES_API_KEY") ?: "").filter { it.isLetterOrDigit() || it == '_' || it == '-' }
 }
 
-// 기억 에이전트·하루 라벨링 LLM (agent/). OpenAI 호환 Chat Completions 서버 (개발: 개발 PC의 llama.cpp llama-server + Qwen3.5-9B).
+// 기억 에이전트·길 위 에이전트·하루 라벨링 LLM (agent/). OpenAI 호환 Chat Completions. 기본은 중계 서버 → Google Gemini (키는 중계에만).
+// 개발 PC의 llama.cpp(Qwen)를 쓰려면 LLM_BASE_URL=http://10.0.2.2:8181/v1, LLM_MODEL=qwen3.5-9b (scripts/llm, 선택).
 // local.properties → 환경 변수 → 기본값. 에뮬레이터에서 개발 PC는 10.0.2.2 로 보인다.
 val llmProps: Properties = Properties().also { props ->
     rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { props.load(it) }
 }
 fun llmSetting(name: String, default: String): String =
     (llmProps.getProperty(name) ?: System.getenv(name) ?: default).trim().filter { it != '"' && it != '\\' }
-// 중계 서버가 있으면 기본은 중계의 /llm (개발 PC의 Qwen을 터널로, scripts/llm/expose-llm.ps1) → 심사위원 기기에서도 AI가 답한다.
+// 중계 서버가 있으면 기본은 중계의 /llm (Gemini, 붐비면 중계가 다음 모델로) → 개발 PC 없이 심사위원 기기에서도 AI가 답한다.
 val llmBaseUrl = llmSetting("LLM_BASE_URL", if (relayUrl.isNotEmpty()) "${relayUrl.trimEnd('/')}/llm/v1" else "http://10.0.2.2:8181/v1")
-val llmModel = llmSetting("LLM_MODEL", "qwen3.5-9b")
+val llmModel = llmSetting("LLM_MODEL", if (relayUrl.isNotEmpty()) "gemini-flash-lite-latest" else "qwen3.5-9b")
 val llmApiKey = llmSetting("LLM_API_KEY", if (relayUrl.isNotEmpty()) relayToken else "")
 
 plugins {
