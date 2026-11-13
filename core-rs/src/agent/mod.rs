@@ -14,8 +14,14 @@
 //! LLM: OpenAI 호환 서버 (개발: 개발 PC의 llama.cpp `llama-server` + Qwen3.5-9B). 서버가 없으면 빠른 길만으로 동작한다.
 
 /// 에이전트 로그. Android에서는 표준 오류(stderr)가 버려지므로 logcat(태그 `EodiRust`)으로, 그 밖(테스트)에서는 stderr로.
+/// 로그에 하루 제목 · 장소 이름 같은 개인정보가 들어가므로 Android release(`--release`) 빌드에서는 남기지 않는다
+/// (Pleos 기획 가이드 "로그 개인정보 마스킹").
 macro_rules! alog {
-    ($($arg:tt)*) => { $crate::agent::log_line(&format!($($arg)*)) };
+    ($($arg:tt)*) => {
+        if cfg!(debug_assertions) || !cfg!(target_os = "android") {
+            $crate::agent::log_line(&format!($($arg)*))
+        }
+    };
 }
 pub(crate) use alog;
 
