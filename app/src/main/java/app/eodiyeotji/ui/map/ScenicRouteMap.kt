@@ -308,7 +308,7 @@ internal fun frameAt(frames: List<FlightFrame>, t: Float, pitch: Double = FLIGHT
 private const val FLIGHT_PITCH = 58.0
 
 /** 뒤따라가는 카메라: 위쪽 여백 비율 (차가 화면 아래 1/3쯤에 온다) */
-private const val CHASE_TOP_FRACTION = 0.4f
+private const val CHASE_TOP_FRACTION = 0.24f
 
 private const val CAR_SRC = "flight-car"
 private const val CAR = "flight-car"

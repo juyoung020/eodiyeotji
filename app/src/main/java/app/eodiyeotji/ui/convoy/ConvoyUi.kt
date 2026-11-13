@@ -113,6 +113,14 @@ fun ConvoyDrivingCard(modifier: Modifier = Modifier, vm: ConvoyViewModel = hiltV
                     color = c.accent,
                 )
             }
+            // 누가 잔량이 부족하면 한 번 누르기로 모두 같이 들를 곳을 정한다 (주행 중에도 큰 버튼 하나만)
+            if (s.low != null && s.waypoint == null) {
+                val scope = rememberCoroutineScope()
+                Spacer(Modifier.width(24.dp))
+                BigButton(stringResource(R.string.convoy_stop_together), primary = true, modifier = Modifier.width(320.dp)) {
+                    scope.launch { vm.repo.stopTogether() }
+                }
+            }
         }
     }
 }
@@ -233,6 +241,8 @@ private fun ActivePane(s: ConvoyUiState, repo: ConvoyRepository) {
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+            s.waypoint?.let { Text(stringResource(R.string.convoy_waypoint, it.name), style = EodiTheme.type.body, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            s.stopNotice?.let { Text(stringResource(it), style = EodiTheme.type.caption, color = c.textSecondary) }
             if (s.offline) Text(stringResource(R.string.convoy_offline), style = EodiTheme.type.meta, color = c.error)
             if (s.local) Text(stringResource(R.string.convoy_local), style = EodiTheme.type.caption, color = c.textTertiary)
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -243,7 +253,11 @@ private fun ActivePane(s: ConvoyUiState, repo: ConvoyRepository) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Puck(m, 52)
                         Spacer(Modifier.width(16.dp))
-                        Text(m.card, style = EodiTheme.type.bodyStrong, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Column(Modifier.weight(1f)) {
+                            Text(m.card, style = EodiTheme.type.bodyStrong, color = if (m.low) c.error else c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            // 정차 중에는 모든 차의 잔량을 보인다 (주행 중 · 지도에는 부족할 때만)
+                            if (m.energy.isNotEmpty()) Text(m.energy, style = EodiTheme.type.meta, color = if (m.low) c.error else c.textTertiary)
+                        }
                     }
                 }
             }
@@ -253,6 +267,11 @@ private fun ActivePane(s: ConvoyUiState, repo: ConvoyRepository) {
                     style = EodiTheme.type.caption,
                     color = if (it) c.textSecondary else c.error,
                 )
+            }
+            if (s.low != null && s.waypoint == null) {
+                BigButton(stringResource(R.string.convoy_stop_together), modifier = Modifier.fillMaxWidth()) {
+                    scope.launch { navi = repo.stopTogether() }
+                }
             }
             BigButton(stringResource(R.string.convoy_navigate), primary = true, enabled = s.dest != null, modifier = Modifier.fillMaxWidth()) {
                 scope.launch { navi = repo.navigate() }

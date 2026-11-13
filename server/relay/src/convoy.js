@@ -54,7 +54,7 @@ export class ConvoyStore {
 
   addMember(g, name) {
     const id = rid();
-    g.members.set(id, { id, name: cleanName(name, `차 ${g.members.size + 1}`), lat: null, lng: null, heading: 0, speed: 0, eta_s: -1, ts: this.now() });
+    g.members.set(id, { id, name: cleanName(name, `차 ${g.members.size + 1}`), lat: null, lng: null, heading: 0, speed: 0, eta_s: -1, ev: false, energy_pct: -1, range_km: -1, ts: this.now() });
     return id;
   }
 
@@ -91,7 +91,7 @@ export class ConvoyStore {
     const lat = num(b.lat);
     const lng = num(b.lng);
     if (lat == null || lng == null || Math.abs(lat) > 90 || Math.abs(lng) > 180) return { status: 400, body: { error: 'bad position' } };
-    Object.assign(m, { lat, lng, heading: num(b.heading) ?? 0, speed: num(b.speed) ?? 0, eta_s: num(b.eta_s) ?? -1, ts: this.now() });
+    Object.assign(m, { lat, lng, heading: num(b.heading) ?? 0, speed: num(b.speed) ?? 0, eta_s: num(b.eta_s) ?? -1, ev: b.ev === true, energy_pct: num(b.energy_pct) ?? -1, range_km: num(b.range_km) ?? -1, ts: this.now() });
     if (typeof b.name === 'string') m.name = cleanName(b.name, m.name);
     return { status: 200, body: this.state(g) };
   }
@@ -100,7 +100,9 @@ export class ConvoyStore {
     const [g, m] = this.member(id, b.member_id);
     if (!g) return { status: 404, body: { error: 'gone' } };
     if (!m) return { status: 403, body: { error: 'not a member' } };
-    g.dest = cleanDest(b.dest);
+    if ('dest' in b) g.dest = cleanDest(b.dest);
+    // 모두 함께 들를 곳 (충전소 · 주유소 등) 하나. null이면 뺀다
+    if ('waypoint' in b) g.waypoint = cleanDest(b.waypoint);
     return { status: 200, body: this.state(g) };
   }
 
@@ -126,8 +128,8 @@ export class ConvoyStore {
     const t = this.now();
     const members = [...g.members.values()]
       .filter((m) => m.lat != null)
-      .map((m) => ({ id: m.id, name: m.name, lat: m.lat, lng: m.lng, heading: m.heading, speed: m.speed, eta_s: m.eta_s, ts: m.ts, stale: t - m.ts > STALE_MS }));
-    return { id: g.id, code: g.code, dest: g.dest, members, expires_at: g.expires_at, now: t };
+      .map((m) => ({ id: m.id, name: m.name, lat: m.lat, lng: m.lng, heading: m.heading, speed: m.speed, eta_s: m.eta_s, ev: m.ev, energy_pct: m.energy_pct, range_km: m.range_km, ts: m.ts, stale: t - m.ts > STALE_MS }));
+    return { id: g.id, code: g.code, dest: g.dest, waypoint: g.waypoint || null, members, expires_at: g.expires_at, now: t };
   }
 
   // 요청 하나: POST /convoy, POST /convoy/join, GET /convoy/:id?member=, POST /convoy/:id/{pos,dest,leave}

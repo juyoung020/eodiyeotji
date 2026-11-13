@@ -22,12 +22,27 @@ data class ConvoyMemberDto(
     val speedMps: Double,
     val etaS: Long,
     val tsMs: Long,
+    val ev: Boolean = false,
+    /** 남은 % · 주행 가능 km (모르면 음수) */
+    val energyPct: Double = -1.0,
+    val rangeKm: Double = -1.0,
 )
 
-data class ConvoyGroupDto(val dest: ConvoyPlace?, val members: List<ConvoyMemberDto>, val nowMs: Long)
+/** [waypoint]: 모두 함께 들를 곳 (충전소 · 주유소), 없으면 null. */
+data class ConvoyGroupDto(val dest: ConvoyPlace?, val members: List<ConvoyMemberDto>, val nowMs: Long, val waypoint: ConvoyPlace? = null)
 
 /** 내 위치 한 번 보내기. */
-data class ConvoyPosition(val lat: Double, val lon: Double, val heading: Double, val speedMps: Double, val etaS: Long, val tsMs: Long)
+data class ConvoyPosition(
+    val lat: Double,
+    val lon: Double,
+    val heading: Double,
+    val speedMps: Double,
+    val etaS: Long,
+    val tsMs: Long,
+    val ev: Boolean = false,
+    val energyPct: Double = -1.0,
+    val rangeKm: Double = -1.0,
+)
 
 /** 모임 서버. 모든 함수는 막는(blocking) 호출 → IO 스레드에서, 짧은 타임아웃으로 부른다. 실패하면 예외. */
 interface ConvoyBackend {
@@ -38,6 +53,8 @@ interface ConvoyBackend {
     fun post(s: ConvoySession, p: ConvoyPosition): ConvoyGroupDto
     fun state(s: ConvoySession): ConvoyGroupDto
     fun setDest(s: ConvoySession, dest: ConvoyPlace?): ConvoyGroupDto
+    /** 모두 함께 들를 곳 (null이면 뺀다) */
+    fun setWaypoint(s: ConvoySession, stop: ConvoyPlace?): ConvoyGroupDto
     fun leave(s: ConvoySession)
 }
 
@@ -65,7 +82,8 @@ class RelayConvoyBackend(private val base: String, private val token: String) : 
         post(
             "/${s.id}/pos",
             JSONObject().put("member_id", s.memberId).put("lat", p.lat).put("lng", p.lon).put("heading", p.heading)
-                .put("speed", p.speedMps).put("eta_s", p.etaS),
+                .put("speed", p.speedMps).put("eta_s", p.etaS)
+                .put("ev", p.ev).put("energy_pct", p.energyPct).put("range_km", p.rangeKm),
         ),
     )
 
@@ -73,6 +91,9 @@ class RelayConvoyBackend(private val base: String, private val token: String) : 
 
     override fun setDest(s: ConvoySession, dest: ConvoyPlace?) =
         group(post("/${s.id}/dest", JSONObject().put("member_id", s.memberId).put("dest", dest?.toJson() ?: JSONObject.NULL)))
+
+    override fun setWaypoint(s: ConvoySession, stop: ConvoyPlace?) =
+        group(post("/${s.id}/dest", JSONObject().put("member_id", s.memberId).put("waypoint", stop?.toJson() ?: JSONObject.NULL)))
 
     override fun leave(s: ConvoySession) {
         post("/${s.id}/leave", JSONObject().put("member_id", s.memberId))
@@ -91,9 +112,12 @@ class RelayConvoyBackend(private val base: String, private val token: String) : 
                 speedMps = m.optDouble("speed", 0.0),
                 etaS = m.optLong("eta_s", -1),
                 tsMs = m.optLong("ts"),
+                ev = m.optBoolean("ev"),
+                energyPct = m.optDouble("energy_pct", -1.0),
+                rangeKm = m.optDouble("range_km", -1.0),
             )
         }
-        return ConvoyGroupDto(o.optJSONObject("dest")?.toPlace(), members, o.optLong("now", System.currentTimeMillis()))
+        return ConvoyGroupDto(o.optJSONObject("dest")?.toPlace(), members, o.optLong("now", System.currentTimeMillis()), o.optJSONObject("waypoint")?.toPlace())
     }
 
     private fun ConvoyPlace.toJson() = JSONObject().put("name", name).put("lat", lat).put("lng", lon)
@@ -107,10 +131,21 @@ class RelayConvoyBackend(private val base: String, private val token: String) : 
 class LocalConvoyBackend : ConvoyBackend {
     override val local = true
     private var dest: ConvoyPlace? = null
+    private var waypoint: ConvoyPlace? = null
     private var me: ConvoyPosition? = null
 
     /** 가짜 차: 출발점 → 목적지로 [speedMps]로 곧게 간다. */
-    private class Fake(val id: String, val name: String, val startLat: Double, val startLon: Double, val speedMps: Double, val startMs: Long)
+    private class Fake(
+        val id: String,
+        val name: String,
+        val startLat: Double,
+        val startLon: Double,
+        val speedMps: Double,
+        val startMs: Long,
+        val ev: Boolean,
+        val pct: Double,
+        val rangeKm: Double,
+    )
     private val fakes = ConcurrentHashMap<String, Fake>()
 
     override fun create(name: String, dest: ConvoyPlace?): ConvoySession {
@@ -129,7 +164,7 @@ class LocalConvoyBackend : ConvoyBackend {
     override fun state(s: ConvoySession): ConvoyGroupDto {
         val now = System.currentTimeMillis()
         val members = fakes.values.map { f -> f.at(now) }
-        return ConvoyGroupDto(dest, members, now)
+        return ConvoyGroupDto(dest, members, now, waypoint)
     }
 
     override fun setDest(s: ConvoySession, dest: ConvoyPlace?): ConvoyGroupDto {
@@ -137,16 +172,22 @@ class LocalConvoyBackend : ConvoyBackend {
         return state(s)
     }
 
+    override fun setWaypoint(s: ConvoySession, stop: ConvoyPlace?): ConvoyGroupDto {
+        waypoint = stop
+        return state(s)
+    }
+
     override fun leave(s: ConvoySession) {
         fakes.clear()
         dest = null
+        waypoint = null
     }
 
     /**
      * 가짜 차 하나 ([behindKm]: 내 위치에서 목적지 반대쪽으로 이만큼 뒤에서 출발. 음수면 앞).
      * 내 위치를 아직 모르면 목적지 근처(없으면 서울 시청)에서 출발한다.
      */
-    fun addFake(name: String, behindKm: Double, speedKmh: Double) {
+    fun addFake(name: String, behindKm: Double, speedKmh: Double, ev: Boolean = true, pct: Double = -1.0, rangeKm: Double = -1.0) {
         if (!BuildConfig.DEBUG) return
         val d = dest
         val base = me?.let { it.lat to it.lon } ?: d?.let { it.lat + 0.05 to it.lon } ?: (37.5665 to 126.9780)
@@ -156,7 +197,7 @@ class LocalConvoyBackend : ConvoyBackend {
         val lat = base.first + dLat / norm * behindKm
         val lon = base.second + dLon / norm * behindKm
         val id = "fake-${fakes.size + 1}"
-        fakes[id] = Fake(id, name, lat, lon, speedKmh / 3.6, System.currentTimeMillis())
+        fakes[id] = Fake(id, name, lat, lon, speedKmh / 3.6, System.currentTimeMillis(), ev, pct, rangeKm)
     }
 
     private fun Fake.at(now: Long): ConvoyMemberDto {
@@ -172,6 +213,6 @@ class LocalConvoyBackend : ConvoyBackend {
             val f = (t * speedMps / totalM).coerceAtMost(1.0)
             (startLat + totalLat * f) to (startLon + totalLon * f)
         }
-        return ConvoyMemberDto(id, name, lat, lon, -1.0, speedMps, -1, now)
+        return ConvoyMemberDto(id, name, lat, lon, -1.0, speedMps, -1, now, ev, pct, rangeKm)
     }
 }

@@ -390,6 +390,14 @@ impl ConvoyTracker {
     }
 }
 
+#[uniffi::export]
+impl EodiStore {
+    /// 같이 가기: 잔량이 부족한 차와 함께 들를 충전소(ev) · 주유소를 기록에서 고른다 (`convoy::energy_stop`). 없으면 None.
+    pub fn convoy_energy_stop(&self, from: GeoPoint, dest: GeoPoint, ev: bool, now_ms: i64) -> Result<Option<StopFact>, crate::store::CoreError> {
+        crate::convoy::energy_stop(self, from.into(), dest.into(), ev, now_ms)
+    }
+}
+
 // ---- 먼저 말 걸기 (`proactive.rs`) ----
 
 /// 짧은 대답 하나를 응/아니로 ("응 넣어줘" → Yes).

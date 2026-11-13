@@ -92,6 +92,7 @@ import app.eodiyeotji.ui.timeline.TimelineRoute
 import app.eodiyeotji.ui.places.PlacesRoute
 import app.eodiyeotji.ui.place.PlaceDetailHost
 import app.eodiyeotji.ui.agent.SpokenCaption
+import app.eodiyeotji.ui.agent.ProactiveCard
 import app.eodiyeotji.ui.timeline.TimelineViewModel
 
 /** 아래 탭. 가운데 [ASK](기억 에이전트)는 한 번에 닿게 크게 둔다. */
@@ -133,7 +134,7 @@ fun PhoneApp(shell: PhoneShellViewModel = hiltViewModel()) {
                 // 길 안내 중에는 위쪽 다음 안내 배너를 가리지 않게 아래 막대 바로 위에
                 SpokenCaption(bottomInset = if (navigating) 120.dp else null)
                 // 에이전트가 먼저 거는 말 한 장 (ui/agent/ProactiveCard.kt)
-                app.eodiyeotji.ui.agent.ProactiveCard()
+                ProactiveCard()
                 // 시트는 맨 위에 (아래 탭 · 운전 중 띠까지 덮는다)
                 PhoneSheetHost(sheets)
                 // 공유 결과 같은 앱 안 알림은 시트 위, 아래 탭을 피해서 (ui/share/ShareNotice.kt)

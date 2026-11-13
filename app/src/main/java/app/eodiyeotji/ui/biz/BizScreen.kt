@@ -97,30 +97,54 @@ fun BizOverlay(viewModel: BizViewModel, onOpenDay: (String) -> Unit) {
         runCatching { context.packageManager.resolveContentProvider("${context.packageName}.share", 0) != null }.getOrDefault(false)
     }
     Surface(color = c.background, contentColor = c.textPrimary, modifier = Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-            Row(
-                Modifier.fillMaxWidth().heightIn(min = 104.dp).padding(horizontal = EodiTheme.space.page, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+        BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
+        // 좁은 창(폰 세로): 머리 두 줄, 요약 칸 2x2 (한 줄에 두면 글자가 세로로 꺾인다)
+        val narrow = maxWidth < NarrowWidth
+        Column(Modifier.fillMaxSize()) {
+            val back: @Composable () -> Unit = {
                 RoundIconButton(EodiIcons.Back, stringResource(R.string.biz_back), viewModel::close, containerColor = c.surface, iconSize = 36.dp)
                 Spacer(Modifier.width(16.dp))
-                Text(stringResource(R.string.biz_title), style = EodiTheme.type.title, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            }
+            val export: @Composable () -> Unit = {
                 val ready = (state.month as? Load.Ready)?.value
                 if (canExport && ready != null && ready.trips.isNotEmpty()) {
                     SecondaryPill(stringResource(R.string.biz_export), EodiIcons.Calendar, { scope.launch { share(context, viewModel, ready) } })
-                    Spacer(Modifier.width(16.dp))
                 }
+            }
+            val month: @Composable () -> Unit = {
                 RoundIconButton(EodiIcons.Chevron, stringResource(R.string.biz_prev), { viewModel.shift(-1) }, containerColor = c.surface, iconModifier = Modifier.rotate(180f))
                 Text(
                     stringResource(R.string.biz_month, state.ym.year, state.ym.monthValue),
                     style = EodiTheme.type.bodyStrong,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
+                    maxLines = 1,
                     modifier = Modifier.widthIn(min = 150.dp).padding(horizontal = 8.dp),
                 )
                 // 이번 달 다음으로는 못 넘어간다 → 흐리게
                 val canNext = state.ym < YearMonth.now()
                 RoundIconButton(EodiIcons.Chevron, stringResource(R.string.biz_next), { viewModel.shift(1) }, Modifier.alpha(if (canNext) 1f else 0.35f), enabled = canNext, containerColor = c.surface)
+            }
+            if (narrow) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = EodiTheme.space.page, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        back()
+                        Text(stringResource(R.string.biz_title), style = EodiTheme.type.title, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f))
+                        export()
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) { month() }
+                }
+            } else {
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 104.dp).padding(horizontal = EodiTheme.space.page, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    back()
+                    Text(stringResource(R.string.biz_title), style = EodiTheme.type.title, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    export()
+                    Spacer(Modifier.width(16.dp))
+                    month()
+                }
             }
             val ready = (state.month as? Load.Ready)?.value
             val selected = ready?.trips?.firstOrNull { it.episodeId == state.selected }
@@ -139,7 +163,7 @@ fun BizOverlay(viewModel: BizViewModel, onOpenDay: (String) -> Unit) {
                                 Load.Loading -> LoadingBox(Modifier.padding(top = 80.dp))
                                 Load.Failed -> CenterMessage(stringResource(R.string.biz_failed), Modifier.padding(top = 48.dp))
                                 is Load.Ready -> Column(inner, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                                    SummaryRow(m.value)
+                                    SummaryRow(m.value, narrow)
                                     HowToggle()
                                     state.removedDay?.let { UndoBar(it, viewModel::undoNotBiz) }
                                     if (m.value.trips.isEmpty()) {
@@ -176,20 +200,32 @@ fun BizOverlay(viewModel: BizViewModel, onOpenDay: (String) -> Unit) {
                 }
             }
         }
+        }
     }
 }
 
+/** 이보다 좁으면(폰 세로) 머리 · 요약 칸을 여러 줄로 나눈다. */
+private val NarrowWidth = 760.dp
+
 @Composable
-private fun SummaryRow(m: BizMonth) {
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-        Tile(stringResource(R.string.biz_count_label), stringResource(R.string.biz_count, m.trips.size), Modifier.weight(1f))
-        Tile(
-            stringResource(if (m.totalHasGps) R.string.biz_km_label_mixed else R.string.biz_km_label),
-            stringResource(R.string.biz_km_value, m.totalKm),
-            Modifier.weight(1f),
-        )
-        Tile(stringResource(R.string.biz_time_tile), durationText(m.totalMin * 60_000), Modifier.weight(1f))
-        Tile(stringResource(R.string.biz_cost_tile), wonPlain(m.totalWon), Modifier.weight(1f), accent = true)
+private fun SummaryRow(m: BizMonth, narrow: Boolean) {
+    val count: @Composable (Modifier) -> Unit = { Tile(stringResource(R.string.biz_count_label), stringResource(R.string.biz_count, m.trips.size), it) }
+    val km: @Composable (Modifier) -> Unit = {
+        Tile(stringResource(if (m.totalHasGps) R.string.biz_km_label_mixed else R.string.biz_km_label), stringResource(R.string.biz_km_value, m.totalKm), it)
+    }
+    val time: @Composable (Modifier) -> Unit = { Tile(stringResource(R.string.biz_time_tile), durationText(m.totalMin * 60_000), it) }
+    val cost: @Composable (Modifier) -> Unit = { Tile(stringResource(R.string.biz_cost_tile), wonPlain(m.totalWon), it, accent = true) }
+    val row = Modifier.fillMaxWidth().height(IntrinsicSize.Min)
+    if (narrow) {
+        // 네 칸을 한 줄에 두면 값이 잘린다 → 두 칸씩 두 줄
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(row, horizontalArrangement = Arrangement.spacedBy(12.dp)) { count(Modifier.weight(1f)); km(Modifier.weight(1f)) }
+            Row(row, horizontalArrangement = Arrangement.spacedBy(12.dp)) { time(Modifier.weight(1f)); cost(Modifier.weight(1f)) }
+        }
+    } else {
+        Row(row, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            count(Modifier.weight(1f)); km(Modifier.weight(1f)); time(Modifier.weight(1f)); cost(Modifier.weight(1f))
+        }
     }
 }
 

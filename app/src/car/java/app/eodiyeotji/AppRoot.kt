@@ -8,6 +8,7 @@ import app.eodiyeotji.record.RecordingPermissionGate
 import app.eodiyeotji.ui.home.HomeRoute
 import app.eodiyeotji.ui.place.PlaceDetailHost
 import app.eodiyeotji.ui.agent.SpokenCaption
+import app.eodiyeotji.ui.agent.ProactiveCard
 
 /**
  * 차 판 화면 뼈대: 첫 실행에만 위치 권한을 묻고, 허용되면 자동 기록 서비스를 켠다. 화면은 왼쪽 레일 + 타임라인·커뮤니티.
@@ -23,7 +24,7 @@ fun AppRoot() {
         // 앱이 소리 내어 읽는 말 (답 · 회상)을 맨 위에 자막으로
         SpokenCaption()
         // 에이전트가 먼저 거는 말 한 장 (출발 · 잔량 · 도착, ui/agent/ProactiveCard.kt)
-        app.eodiyeotji.ui.agent.ProactiveCard()
+        ProactiveCard()
         // 공유 결과 같은 앱 안 알림을 화면 아래에 (ui/share/ShareNotice.kt)
         app.eodiyeotji.ui.share.ShareNoticeHost()
         // 연결된 휴대폰으로 기록 맞추기 (ui/share/CarHandoff.kt)

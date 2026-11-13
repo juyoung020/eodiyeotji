@@ -162,7 +162,10 @@ private class ConvoyMapController(private val view: MapView, private val meColor
         )
         s.addLayer(
             CircleLayer("convoy-car", SRC).withFilter(eq(kind, literal("car"))).withProperties(
-                circleRadius(22f), circleColor(colorExpr()), circleStrokeColor(0xFFFFFFFF.toInt()), circleStrokeWidth(4f),
+                circleRadius(22f), circleColor(colorExpr()),
+                // 잔량 부족이면 테두리를 빨갛고 굵게 (이름표에도 "배터리 부족"이 붙는다, Rust)
+                circleStrokeColor(Expression.switchCase(eq(get("low"), literal(true)), Expression.color(0xFFE5484D.toInt()), Expression.color(0xFFFFFFFF.toInt()))),
+                circleStrokeWidth(Expression.switchCase(eq(get("low"), literal(true)), literal(7f), literal(4f))),
                 circleOpacity(Expression.switchCase(eq(get("stale"), literal(true)), literal(0.45f), literal(1f))),
             ),
         )

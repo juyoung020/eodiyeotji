@@ -14,11 +14,16 @@ test('만들기 · 코드로 참여 · 위치 · 상태', async () => {
   const b = await s.handle(req('POST', '/convoy/join', { code: a.body.code, name: '민수' }));
   assert.equal(b.status, 200);
   assert.equal(b.body.dest.name, '카페');
-  const p = await s.handle(req('POST', `/convoy/${a.body.id}/pos`, { member_id: b.body.member_id, lat: 37.6, lng: 127.1, speed: 12 }));
+  const p = await s.handle(req('POST', `/convoy/${a.body.id}/pos`, { member_id: b.body.member_id, lat: 37.6, lng: 127.1, speed: 12, ev: true, energy_pct: 12, range_km: 32 }));
   assert.equal(p.status, 200);
   const g = await s.handle(req('GET', `/convoy/${a.body.id}?member=${a.body.member_id}`));
   assert.equal(g.body.members.length, 1); // 위치를 보낸 차만
   assert.equal(g.body.members[0].name, '민수');
+  assert.equal(g.body.members[0].range_km, 32);
+  assert.equal(g.body.members[0].ev, true);
+  const w = await s.handle(req('POST', `/convoy/${a.body.id}/dest`, { member_id: b.body.member_id, waypoint: { name: '충전소', lat: 37.55, lng: 127.05 } }));
+  assert.equal(w.body.waypoint.name, '충전소');
+  assert.equal(w.body.dest.name, '카페'); // 경유지만 바꿔도 목적지는 그대로
   t += STALE_MS + 1;
   assert.equal((await s.handle(req('GET', `/convoy/${a.body.id}?member=${a.body.member_id}`))).body.members[0].stale, true);
 });
