@@ -1258,14 +1258,13 @@ private val BackToTodayClearance = 96.dp
 private enum class EntryKind { Trip, Stay, Here }
 
 /**
- * 좁은 판(홈 지도 위 "전체 시간표", 600dp) 안이면 true: 시각 · 선 열을 줄이고 오른쪽 대표 사진을 뺀다
+ * 좁은 판(홈 지도 위 "전체 시간표", 600dp) 안이면 true: 선 열을 줄이고 오른쪽 대표 사진을 뺀다 (시각 "07:24"는 92dp가 다 필요하다)
  * (사진은 아래 줄에 이미 있다). 안 그러면 제목 칸이 200dp 남짓이라 장소 이름이 두 줄로 꺾였다.
  */
 internal val LocalCompactEntries = androidx.compose.runtime.staticCompositionLocalOf { false }
 
 private val TimeColumn = 92.dp
 private val RailColumn = 64.dp
-private val TimeColumnCompact = 92.dp
 private val RailColumnCompact = 44.dp
 /** 첫 줄 높이: 시각 · 노드 · 제목이 이 줄 가운데에 나란히 선다. */
 private val FirstLine = 44.dp
@@ -1312,7 +1311,7 @@ private fun EntryRow(
         Row(Modifier.height(IntrinsicSize.Min).heightIn(min = EodiTheme.space.touch)) {
             // 시각 열
             Column(
-                Modifier.width(if (compact) TimeColumnCompact else TimeColumn).padding(top = RowPadV, bottom = RowPadV, start = 12.dp),
+                Modifier.width(TimeColumn).padding(top = RowPadV, bottom = RowPadV, start = 12.dp),
                 horizontalAlignment = Alignment.Start,
             ) {
                 Box(Modifier.height(FirstLine), contentAlignment = Alignment.CenterStart) {

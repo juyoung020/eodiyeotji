@@ -209,6 +209,13 @@ private fun StartPane(s: ConvoyUiState, repo: ConvoyRepository) {
             modifier = Modifier.fillMaxWidth(),
         )
         val narrow = LocalConfiguration.current.screenWidthDp < NARROW_DP
+        // 참여: 버튼과 키보드 "이동"이 같이 쓴다
+        val join = {
+            if (!busy && code.length == 6) {
+                joining = true
+                repo.join(code, name.trim())
+            }
+        }
         if (narrow) {
             // 좁은 창: [새로 만들기] 한 줄, 아래 [코드 칸 | 코드로 참여]
             BigButton(stringResource(R.string.convoy_create), primary = true, enabled = !busy || !joining, loading = busy && !joining, modifier = Modifier.fillMaxWidth()) {
@@ -230,18 +237,10 @@ private fun StartPane(s: ConvoyUiState, repo: ConvoyRepository) {
                 textStyle = EodiTheme.type.titleSmall,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Go),
                 // 키보드의 "이동"으로도 참여 (전에는 눌러도 아무 일이 없었다)
-                keyboardActions = KeyboardActions(onGo = {
-                    if (!busy && code.length == 6) {
-                        joining = true
-                        repo.join(code, name.trim())
-                    }
-                }),
+                keyboardActions = KeyboardActions(onGo = { join() }),
                 modifier = Modifier.weight(1f),
             )
-            BigButton(stringResource(R.string.convoy_join), enabled = (busy && joining) || (!busy && code.length == 6), loading = busy && joining, modifier = Modifier.weight(0.7f)) {
-                joining = true
-                repo.join(code, name.trim())
-            }
+            BigButton(stringResource(R.string.convoy_join), enabled = (busy && joining) || (!busy && code.length == 6), loading = busy && joining, modifier = Modifier.weight(0.7f), onClick = join)
         }
         when {
             busy -> Text(stringResource(R.string.convoy_connecting), style = EodiTheme.type.body, color = c.textSecondary)
