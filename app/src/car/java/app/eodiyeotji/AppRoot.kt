@@ -32,6 +32,9 @@ fun AppRoot() {
     }
 }
 
-/** 앱 화면 위를 덮는 화면(그날로 돌아가기)까지 포함한 전체 크기 비율. 차 판은 토큰 크기 그대로 그린다. */
+/**
+ * 앱 화면 위를 덮는 화면(그날로 돌아가기)까지 포함한 전체 크기 비율. 차 판은 토큰 크기 그대로 그린다.
+ * 차가 아닌 기기(태블릿)에 깔았을 때만 가짜 인포 틀 안에 차와 같은 크기로 그린다 (ui/shell/FakeCarShell.kt).
+ */
 @Composable
-fun AppScale(content: @Composable () -> Unit) = content()
+fun AppScale(content: @Composable () -> Unit) = app.eodiyeotji.ui.shell.FakeCarShell(content)
