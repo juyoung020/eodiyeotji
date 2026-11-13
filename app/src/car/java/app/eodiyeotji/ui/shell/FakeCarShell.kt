@@ -13,7 +13,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import android.app.Activity
 import android.content.pm.PackageManager
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -130,7 +134,15 @@ fun FakeCarShell(content: @Composable () -> Unit) {
     val view = LocalView.current
     DisposableEffect(view) {
         view.keepScreenOn = true
-        onDispose { view.keepScreenOn = false }
+        // 기기의 위 상태 줄 · 아래 줄(태블릿의 작업 표시줄 포함)을 숨겨 인포 화면만 보이게 한다. 가장자리에서 쓸면 잠깐 나온다
+        val window = (view.context as? Activity)?.window
+        val bars = window?.let { WindowCompat.getInsetsController(it, view) }
+        bars?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        bars?.hide(WindowInsetsCompat.Type.systemBars())
+        onDispose {
+            view.keepScreenOn = false
+            bars?.show(WindowInsetsCompat.Type.systemBars())
+        }
     }
     var box by remember { mutableStateOf(IntSize.Zero) }
     Box(
