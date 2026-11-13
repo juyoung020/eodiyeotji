@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import kotlin.coroutines.resume
 import kotlinx.coroutines.job
 import kotlinx.coroutines.suspendCancellableCoroutine
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -151,6 +152,15 @@ private fun ScenicMapContent(
     val st = loaded
     // 구간 사이 넘어갈 때 지도를 살짝 덮는 막 (값은 그리기 단계에서만 읽는다)
     val veil = remember { Animatable(0f) }
+    // 지도 생명주기(rememberMapViewWithLifecycle) 뒤에 둔다 → 화면이 사라질 때 이쪽이 먼저(onDestroy 전에) 불려
+    // 비행 정리가 늦게 돌아도 없어진 지도 · 스타일을 만지지 않는다.
+    val guard = remember(mapView) { MapTeardownGuard() }
+    DisposableEffect(mapView) {
+        onDispose {
+            guard.close()
+            mapView.setOnTouchListener(null)
+        }
+    }
     LaunchedEffect(m, st, flying, frames) {
         if (m == null || st == null || !flying || frames.size < 2 || plan.isEmpty()) return@LaunchedEffect
         val car = st.getSourceAs<GeoJsonSource>(CAR_SRC)
@@ -211,12 +221,15 @@ private fun ScenicMapContent(
             overview?.let { m.easeTo(it.toPosition(), RETURN_MS) }
         } finally {
             mapView.setOnTouchListener(null)
-            if (!natural) m.cancelTransitions()
-            veil.snapTo(0f)
-            heavy.forEach { it.setProperties(PropertyFactory.visibility(Property.VISIBLE)) }
-            carLayer?.setProperties(PropertyFactory.iconOpacity(0f))
-            trail?.setProperties(PropertyFactory.lineOpacity(0f))
-            endFlight()
+            // 화면을 떠나는 중이면(뒤로 가기) 지도가 이미 내려갔을 수 있다 → 살아 있고 스타일이 다 뜬 때만 되돌린다
+            if (!natural) guard.run { m.cancelTransitions() }
+            guard.run(ready = { st.isFullyLoaded }) {
+                heavy.forEach { it.setProperties(PropertyFactory.visibility(Property.VISIBLE)) }
+                carLayer?.setProperties(PropertyFactory.iconOpacity(0f))
+                trail?.setProperties(PropertyFactory.lineOpacity(0f))
+            }
+            if (guard.alive) veil.snapTo(0f)
+            endFlight() // 지도를 만지지 않는다 (부른 쪽 상태만 되돌린다)
         }
     }
     Box(modifier) {
