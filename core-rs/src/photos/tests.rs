@@ -41,7 +41,7 @@ fn empty_response_is_not_found_and_bad_json_is_error() {
 
 #[test]
 fn caches_for_30_days() {
-    let path = std::env::temp_dir().join(format!("eodi-photos-{}.db", std::process::id()));
+    let path = crate::test_tmp::dir().join(format!("eodi-photos-{}.db", std::process::id()));
     let _ = std::fs::remove_file(&path);
     {
         let store = EodiStore::open(path.to_string_lossy().into_owned(), 540).unwrap();

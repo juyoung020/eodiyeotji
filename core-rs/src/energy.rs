@@ -98,7 +98,7 @@ mod tests {
 
     #[test]
     fn stores_per_day() {
-        let path = std::env::temp_dir().join(format!("eodi-energy-{}.db", std::process::id()));
+        let path = crate::test_tmp::dir().join(format!("eodi-energy-{}.db", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let s = EodiStore::open(path.to_string_lossy().into_owned(), 540).unwrap();
         let t = 1_794_013_200_000; // 2026-11-07 10:00 KST

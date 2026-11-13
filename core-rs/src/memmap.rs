@@ -316,7 +316,7 @@ mod tests {
     fn temp(name: &str) -> TempDb {
         static N: AtomicU32 = AtomicU32::new(0);
         let n = N.fetch_add(1, Ordering::Relaxed);
-        TempDb(std::env::temp_dir().join(format!("eodi-memmap-{name}-{}-{n}.db", std::process::id())))
+        TempDb(crate::test_tmp::dir().join(format!("eodi-memmap-{name}-{}-{n}.db", std::process::id())))
     }
 
     fn today() -> i64 {

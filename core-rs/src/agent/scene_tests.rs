@@ -50,7 +50,7 @@ impl Rec {
 const NOW: i64 = 1_794_013_200_000; // 2026-11-07 10:00 KST → 1년 전 강릉 여행 = 2025-11-07
 
 fn agent(name: &str) -> Arc<MemoryAgent> {
-    let path = std::env::temp_dir().join(format!("eodi-scene-{name}-{}.db", std::process::id()));
+    let path = crate::test_tmp::dir().join(format!("eodi-scene-{name}-{}.db", std::process::id()));
     let _ = std::fs::remove_file(&path);
     let s = EodiStore::open(path.to_string_lossy().into_owned(), 540).unwrap();
     s.seed_demo_data(NOW).unwrap();

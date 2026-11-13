@@ -132,7 +132,7 @@ fn a_day_without_named_places_has_no_scenes_but_a_summary() {
 #[test]
 fn seeded_on_this_day_replays_with_scenes() {
     static N: AtomicU32 = AtomicU32::new(0);
-    let path = std::env::temp_dir().join(format!("eodi-replay-{}-{}.db", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+    let path = crate::test_tmp::dir().join(format!("eodi-replay-{}-{}.db", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
     let now = days_from_civil(2026, 11, 6) * DAY_MS + 3 * 3_600_000;
     let store = EodiStore::open(path.to_string_lossy().into_owned(), KST).unwrap();
     store.seed_demo_data(now).unwrap();

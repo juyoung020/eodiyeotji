@@ -339,7 +339,7 @@ mod tests {
 
     #[test]
     fn demo_community_makes_a_partner_report() {
-        let path = std::env::temp_dir().join(format!("eodi-tour-{}.db", std::process::id()));
+        let path = crate::test_tmp::dir().join(format!("eodi-tour-{}.db", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let s = EodiStore::open(path.to_string_lossy().into_owned(), 540).unwrap();
         s.seed_community_demo(1_794_013_200_000).unwrap();

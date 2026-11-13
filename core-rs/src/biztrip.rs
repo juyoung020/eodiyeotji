@@ -501,7 +501,7 @@ mod tests {
 
     #[test]
     fn drive_that_starts_away_from_home_and_office_is_not_a_business_trip() {
-        let path = std::env::temp_dir().join(format!("eodi-biz-away-{}.db", std::process::id()));
+        let path = crate::test_tmp::dir().join(format!("eodi-biz-away-{}.db", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let s = EodiStore::open(path.to_string_lossy().into_owned(), 540).unwrap();
         let (home, office) = ((37.5530, 127.0335), (37.5672, 126.9844));
@@ -522,7 +522,7 @@ mod tests {
 
     #[test]
     fn far_weekday_visit_is_a_business_trip_with_cost() {
-        let path = std::env::temp_dir().join(format!("eodi-biz-{}.db", std::process::id()));
+        let path = crate::test_tmp::dir().join(format!("eodi-biz-{}.db", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let s = EodiStore::open(path.to_string_lossy().into_owned(), 540).unwrap();
         let home = (37.5530, 127.0335);
@@ -636,7 +636,7 @@ mod demo_tests {
 
     #[test]
     fn demo_year_has_monthly_business_trips() {
-        let path = std::env::temp_dir().join(format!("eodi-biz-demo-{}.db", std::process::id()));
+        let path = crate::test_tmp::dir().join(format!("eodi-biz-demo-{}.db", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let s = EodiStore::open(path.to_string_lossy().into_owned(), 540).unwrap();
         s.seed_demo_data(1_794_013_200_000).unwrap(); // 2026-11-07
@@ -660,7 +660,7 @@ mod topup_tests {
     /// 예전 시연 기록(출장 · 새 나들이 없음)에 보충만 덧붙인다: 기존 주행은 그대로, 출장과 감자탕 나들이가 생긴다.
     #[test]
     fn top_up_adds_business_trips_to_an_old_demo_without_touching_it() {
-        let path = std::env::temp_dir().join(format!("eodi-topup-{}.db", std::process::id()));
+        let path = crate::test_tmp::dir().join(format!("eodi-topup-{}.db", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let s = EodiStore::open(path.to_string_lossy().into_owned(), 540).unwrap();
         let now = 1_794_013_200_000; // 2026-11-07

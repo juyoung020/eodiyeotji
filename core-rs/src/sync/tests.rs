@@ -9,7 +9,7 @@ struct TempDb(PathBuf);
 impl TempDb {
     fn new(name: &str) -> Self {
         static N: AtomicU32 = AtomicU32::new(0);
-        let p = std::env::temp_dir().join(format!("eodi-sync-{name}-{}-{}.db", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+        let p = crate::test_tmp::dir().join(format!("eodi-sync-{name}-{}-{}.db", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
         let d = TempDb(p);
         d.rm();
         d

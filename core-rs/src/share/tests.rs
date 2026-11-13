@@ -182,7 +182,7 @@ struct TempDb(std::path::PathBuf);
 
 impl TempDb {
     fn new(tag: &str) -> Self {
-        let db = TempDb(std::env::temp_dir().join(format!("eodi-share-{tag}-{}.db", std::process::id())));
+        let db = TempDb(crate::test_tmp::dir().join(format!("eodi-share-{tag}-{}.db", std::process::id())));
         db.remove();
         db
     }

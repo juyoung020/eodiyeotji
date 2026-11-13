@@ -66,7 +66,7 @@ mod tests {
     use crate::store::{DriveEvent, GeoFix};
 
     fn temp_path(name: &str) -> String {
-        let p = std::env::temp_dir().join(format!("eodi-wipe-{name}-{}.db", std::process::id()));
+        let p = crate::test_tmp::dir().join(format!("eodi-wipe-{name}-{}.db", std::process::id()));
         for s in ["", "-wal", "-shm"] {
             let _ = std::fs::remove_file(format!("{}{s}", p.display()));
         }

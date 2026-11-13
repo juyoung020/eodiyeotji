@@ -221,7 +221,7 @@ mod tests {
     use crate::store::{DriveEvent, GeoFix};
 
     fn store(tag: &str) -> (std::sync::Arc<EodiStore>, std::path::PathBuf) {
-        let path = std::env::temp_dir().join(format!("eodi-park-{tag}-{}.db", std::process::id()));
+        let path = crate::test_tmp::dir().join(format!("eodi-park-{tag}-{}.db", std::process::id()));
         let _ = std::fs::remove_file(&path);
         (EodiStore::open(path.to_string_lossy().into_owned(), 540).unwrap(), path)
     }

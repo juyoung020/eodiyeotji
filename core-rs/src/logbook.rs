@@ -171,7 +171,7 @@ mod tests {
 
     #[test]
     fn month_rows_use_odometer_and_fall_back_to_gps() {
-        let path = std::env::temp_dir().join(format!("eodi-logbook-{}.db", std::process::id()));
+        let path = crate::test_tmp::dir().join(format!("eodi-logbook-{}.db", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let s = EodiStore::open(path.to_string_lossy().into_owned(), 540).unwrap();
         // 2026-11-07(토) 10:00 KST, 20분 주행 (위도 0.0002도 × 120 ≈ 2.7km)

@@ -17,7 +17,7 @@ const TODAY: i64 = 1_793_934_000_000;
 struct TempDb(std::path::PathBuf);
 impl TempDb {
     fn new(tag: &str) -> Self {
-        let db = TempDb(std::env::temp_dir().join(format!("eodi-perf-{tag}-{}.db", std::process::id())));
+        let db = TempDb(crate::test_tmp::dir().join(format!("eodi-perf-{tag}-{}.db", std::process::id())));
         db.remove();
         db
     }

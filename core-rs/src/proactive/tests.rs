@@ -253,7 +253,7 @@ impl TempDb {
     fn new(name: &str) -> Self {
         static N: AtomicU32 = AtomicU32::new(0);
         let n = N.fetch_add(1, Ordering::Relaxed);
-        TempDb(std::env::temp_dir().join(format!("eodi-proactive-{name}-{}-{n}.db", std::process::id())))
+        TempDb(crate::test_tmp::dir().join(format!("eodi-proactive-{name}-{}-{n}.db", std::process::id())))
     }
 }
 

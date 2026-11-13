@@ -27,7 +27,7 @@ mod tests {
 
     #[test]
     fn last_fix_is_the_newest_stored_point() {
-        let path = std::env::temp_dir().join(format!("eodi-lastfix-{}.db", std::process::id()));
+        let path = crate::test_tmp::dir().join(format!("eodi-lastfix-{}.db", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let store = EodiStore::open(path.to_string_lossy().into_owned(), 540).unwrap();
         assert_eq!(store.last_fix().unwrap(), None);

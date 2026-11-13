@@ -59,7 +59,7 @@ fn agent(name: &str) -> Arc<MemoryAgent> {
 
 /// 시연 기록을 [now] 기준으로 심은 에이전트 (시연 기록은 "오늘"에 맞춰 날짜가 정해진다).
 fn agent_at(name: &str, now: i64) -> Arc<MemoryAgent> {
-    let path = std::env::temp_dir().join(format!("eodi-vague-{name}-{now}-{}.db", std::process::id()));
+    let path = crate::test_tmp::dir().join(format!("eodi-vague-{name}-{now}-{}.db", std::process::id()));
     let _ = std::fs::remove_file(&path);
     let s = EodiStore::open(path.to_string_lossy().into_owned(), 540).unwrap();
     s.seed_demo_data(now).unwrap();

@@ -48,5 +48,7 @@ pub mod sync;
 pub mod trip;
 #[cfg(test)]
 mod perf_tests;
+#[cfg(test)]
+mod test_tmp;
 
 pub use geo::{Fix, Point};
