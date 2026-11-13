@@ -48,15 +48,15 @@
 
 | # | 할 일 | 담당 | 상태 |
 |---|---|---|---|
-| D2 | Vehicle SDK 연동 → 첫 API 호출 (예: Odometer 트립 거리, 권한 `CAR_DRIVE` 선언만으로 됨) | | [ ] |
-| D4 | Virtual Console로 기어·주행 값 바꿔보기 (시연 영상 준비) | | [ ] |
-| D6 | MVP ② AI 하루 요약 (서버에서 외부 LLM) + 음성 검색 (STT → 검색 → TTS) | | [ ] |
-| D7 | MVP ③ 지오펜스 회상 안내 (`addProximityAlert` + TTS) | | [ ] |
-| D8 | MVP ④ 코스 공유 목록 + 따라가기 (`NaviHelper.requestRouteWithWaypoints`) | | [ ] |
-| D9 | release APK 빌드 → `apk/팀명_어디였지_release.apk` | | [ ] |
-| D12 | 장소 이름: NaviHelper 목적지 `poiName` 우선, 없으면 역지오코딩 API | | [ ] |
-| D13 | 시연용 가짜 기록 1년치 생성기 (출퇴근 + 여행 + 드라이브) | | [ ] |
-| D14 | 성능 측정: 시작 시간 · 60fps · 검색 100ms · StrictMode (`CLAUDE.md` 목표) | | [ ] |
+| D2 | Vehicle SDK 연동 → 첫 API 호출 (예: Odometer 트립 거리, 권한 `CAR_DRIVE` 선언만으로 됨) | 주영 | [x] `pleos/PleosGauges.kt` `Odometer.getCurrentDistanceDriven` · 남은 거리 → 운행기록부 |
+| D4 | Virtual Console로 기어·주행 값 바꿔보기 (시연 영상 준비) | 주영 | [x] `scripts/vc.ps1` (기어 P↔D · 속도), 시연 영상 `video/` |
+| D6 | MVP ② AI 하루 요약 (서버에서 외부 LLM) + 음성 검색 (STT → 검색 → TTS) | 주영 | [x] `agent/DayLabeler` (중계 → Gemini), `PleosSpeech` STT → Rust 검색 → `PleosTts` |
+| D7 | MVP ③ 지오펜스 회상 안내 (`addProximityAlert` + TTS) | 주영 | [x] `addProximityAlert` 대신 위치 묶음마다 Rust 회상 후보 계산 → `recap/RecallCenter` TTS(하루 횟수 제한 · 오디오 포커스) |
+| D8 | MVP ④ 코스 공유 목록 + 따라가기 (`NaviHelper.requestRouteWithWaypoints`) | 주영 | [x] 커뮤니티 코스 · `pleos/CourseGuide` (`split_legs` 구간, 도착하면 다음 구간) |
+| D9 | release APK 빌드 → `apk/팀명_어디였지_release.apk` | 주영 | [x] 61MB라 GitHub Release [`submission-1`](https://github.com/juyoung020/eodiyeotji/releases/tag/submission-1) `Car-pe-Diem_eodiyeotji_release.apk` (소스 `367b410`), 안내 `apk/README.md`. 제공자 키 없음 확인 |
+| D12 | 장소 이름: NaviHelper 목적지 `poiName` 우선, 없으면 역지오코딩 API | 주영 | [x] `PleosNavi` poiName → `place/PlaceResolver` (카카오 로컬, 없으면 OSM) |
+| D13 | 시연용 가짜 기록 1년치 생성기 (출퇴근 + 여행 + 드라이브) | 주영 | [x] Rust `memory/demo.rs` + 디버그 `DemoSeedReceiver` (테스트 하루 지우기 `DeleteDayReceiver`) |
+| D14 | 성능 측정: 시작 시간 · 60fps · 검색 100ms · StrictMode (`CLAUDE.md` 목표) | 주영 | [x] 11/13 release: 콜드 시작 0.44~1.6초(중앙 ~1.0, 에뮬 부하 10), 스크롤 버벅임 5.9%(90th 17ms), 검색 ≤35ms, StrictMode 디버그 켬 (`EodiApp`) → README |
 
 ### 📷 사진 · 출장 (11/12 추가, 설계와 이유는 `docs/소통/2026-11-12_권혁신_사진_출장_할일.md`)
 
@@ -91,9 +91,9 @@
 | S1 | 팀 구성·참가 부문 확정 (일반인 1명이라도 있으면 일반 부문) | | [ ] |
 | S2 | 대표자 정하기 (상금은 대표자에게 일괄 지급) | | [ ] |
 | S3 | 팀원 전원 개인정보 동의서 서명·날짜 | | [ ] |
-| S4 | README 제출용 항목: 앱 이름, 한 줄 소개, 실행 방법, 테스트 환경, APK 위치 | | [ ] |
+| S4 | README 제출용 항목: 앱 이름, 한 줄 소개, 실행 방법, 테스트 환경, APK 위치 | 주영 | [x] README "심사용 요약" · "실행 방법" |
 | S5 | 저장소 제출 (11/11 확인한 새 공지, `docs/contest/17_공지_07_정리.md`): Collaborator 초대는 필요 없다. 접수 메일에 저장소 주소 + **최종 커밋 번호**를 적고, **11/16(월)까지 공개(Public)로 바꿔 11/23까지 유지**한다. 공개하지 않으면 가산점이 빠진다 → 공개 전에 저장소에 개인정보 · 비밀값이 없는지 확인 | | [ ] |
-| S7 | README에 개발에 쓴 Pleos Connect 에뮬레이터 버전과 화면 규격 적기 (같은 공지 4번) | | [ ] |
+| S7 | README에 개발에 쓴 Pleos Connect 에뮬레이터 버전과 화면 규격 적기 (같은 공지 4번) | 주영 | [x] v2.1.0 · 2560×1440 · 사용자 10 |
 | S6 | 메일 제출 → `appdevchallenge@hyundai-partners.com`, 팀원 전원 CC | | [ ] |
 
 <br>

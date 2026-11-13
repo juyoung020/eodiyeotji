@@ -35,3 +35,15 @@ submission/*_개인정보*
 
 # Playwright MCP 임시 파일
 .playwright-mcp/
+
+# 비밀값 · 기기에서 꺼낸 기록 (저장소 공개 대비)
+.env
+.env.*
+.dev.vars
+.wrangler/
+*.jks
+*.keystore
+*.db
+*.db-wal
+*.db-shm
+*.hprof

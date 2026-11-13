@@ -27,11 +27,12 @@
 
 | 항목 | 내용 |
 |---|---|
-| **앱 이름** | 어디였지 (패키지 `app.eodiyeotji`) |
+| **팀 · 앱 이름** | Car-pe Diem · 어디였지 (패키지 `app.eodiyeotji`, versionName 0.6.0) |
 | **앱 카테고리** | **라이프스타일 (Lifestyle)** — Pleos 앱 카테고리 기준. 주행 중에는 음성 + 큰 카드 1장만, 피드 · 리뷰 · 긴 목록은 정차 중에만 |
 | **한 줄 소개** | 차가 알아서 기록한 1년의 길을, 말 한마디로 다시 찾고 그대로 안내받는 드라이브 기억 앱 |
-| **APK** | [`apk/`](apk/) 폴더 · [GitHub Releases](https://github.com/juyoung020/eodiyeotji/releases) |
+| **APK** | [GitHub Release `submission-1`](https://github.com/juyoung020/eodiyeotji/releases/tag/submission-1) → [`Car-pe-Diem_eodiyeotji_release.apk`](https://github.com/juyoung020/eodiyeotji/releases/download/submission-1/Car-pe-Diem_eodiyeotji_release.apk) (61MB, GitHub 저장소 업로드 권장 용량 50MB를 넘어 Releases에 올림 · 표시 이름 `Car-pe-Diem_어디였지_release.apk`). 안내: [`apk/`](apk/) |
 | **테스트 환경** | Pleos Connect 에뮬레이터 **v2.1.0** (Android API 34, x86_64) · 기기 프로필 `Pleos_Connect_v2_0` **2560 × 1440** · 사용자 10 |
+| **성능 (release, 11/13 측정)** | 첫 화면(`am start -W`, 콜드) 0.44 ~ 1.6초 · 중앙값 약 1.0초 (에뮬레이터 부하 평균 10에서) · 목록 스크롤 버벅인 프레임 5.9% (50/90th 6/17ms) · 기기 안 검색 0.004 ~ 35ms (1년치, `cargo test --release search_is_fast`) · 디버그 빌드 StrictMode 켬 |
 | **빌드 환경** | Gradle 8.11 · compileSdk 35 · minSdk 28 · Kotlin + Jetpack Compose · Rust 코어 (UniFFI) |
 | **시연 영상** | [`video/`](video/) (버전별, 최신 v14) |
 
@@ -43,7 +44,8 @@
 
 ```powershell
 # Pleos Connect 에뮬레이터를 켠 뒤
-adb install -r apk/<APK 파일 이름>.apk
+# APK 내려받기: https://github.com/juyoung020/eodiyeotji/releases/download/submission-1/Car-pe-Diem_eodiyeotji_release.apk
+adb install -r Car-pe-Diem_eodiyeotji_release.apk
 adb shell monkey -p app.eodiyeotji -c android.intent.category.LAUNCHER 1
 ```
 
@@ -76,7 +78,8 @@ cd eodiyeotji
 
 - AI는 클라우드 중계 서버 + Gemini로 답하므로 **개발 PC가 꺼져 있어도 심사 기기에서 동작**합니다. 개발 PC의 Qwen(`scripts/llm/`)은 로컬 개발용 선택 사항입니다 (`server/relay/README.md`)
 - 오프라인 지도 파일(60MB)은 저장소 밖에서 만듭니다: `scripts/map/build-map.ps1` → `push-map.ps1`. 없으면 온라인 밑그림으로 그립니다.
-- 시연용 1년치 기록: 디버그 빌드에서 `adb shell am broadcast --user 10 -n app.eodiyeotji/.record.DemoSeedReceiver`
+- 시연용 1년치 기록: 디버그 빌드에서 `adb shell am broadcast --user 10 -n app.eodiyeotji/.record.DemoSeedReceiver` (테스트로 쌓인 하루 지우기: `.record.DeleteDayReceiver --es day YYYY-MM-DD`)
+- **APK 안에 들어가는 값:** 중계 서버 주소 · 앱 토큰(`RELAY_URL` · `RELAY_TOKEN`)과 Pleos `PLEOS_CLIENT_ID` · `PLEOS_CLIENT_SECRET`. Pleos 값은 SDK `registerApp()`이 기기에서 요구하는 **클라이언트 자격 증명**이라 앱에 들어갈 수밖에 없고, 서버 비밀값이 아니다. 카카오 · 구글 · Gemini 키는 중계 서버에만 있고 APK에는 없다 (11/13 APK 검사로 확인).
 
 ### 데이터 출처
 

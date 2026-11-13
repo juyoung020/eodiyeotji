@@ -18,6 +18,7 @@
 ## [Unreleased]
 
 ### Added
+- 1차 제출 release APK를 GitHub Release `submission-1`에 올리고, README에 APK 위치 · 측정한 성능 · APK에 들어가는 클라이언트 자격 증명을 적음. 디버그 빌드에 테스트로 쌓인 하루 기록 지우기 브로드캐스트 추가
 - Pleos 디자인 가이드 맞춤 1: Gleo AI 대화 상태 7단계(듣는 중 · 2초 뒤 "운전석에서 듣는 중…" · 생각 중 · 대답을 기다려요 · 말하는 중 · 대기 중)를 에이전트 화면 · 듣기 카드 · 제안 카드에 표시하고, 대화가 끝나면 응답 화면을 5초 유지 후 내린다(Standby). 제안 카드는 Gleo 패널 구조(말풍선 + 카드 + 그래/아니 칩, 바깥 누름 · 위로 밀기로 닫기)
 - Pleos 디자인 가이드 맞춤 2: 공통 누름 반응(95% 축소 + 배경, 영역 밖이면 취소) · 햅틱 · 두 번 누름 막기(`ui/common/Press.kt`), 버튼 안 로더(Loading) 상태, 그림자 3단계 2겹 토큰(`EodiElevation`, `eodiShadow`), 토스트 24dp · 792/712dp, 공식 로딩 Lottie(Linear/Tension), 목록 끝 튕기기(최대 2/5), 하루 카드 아이콘 버튼에 글자 라벨, 커뮤니티 보조 글자 22sp
 - Pleos 기획 가이드 마무리: Pleos TTS 앞 150ms 선행 묵음(앱에서 지연), PLEOS_CLIENT_ID/SECRET가 있으면 HYBRID + registerApp 서버 음성, 같이 가기는 집·회사 1km 안에서 위치를 보내지 않음, 기록 상태 시트에 개인정보 · 데이터 활용 원칙
