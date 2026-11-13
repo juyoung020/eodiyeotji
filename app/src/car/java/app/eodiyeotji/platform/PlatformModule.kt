@@ -3,7 +3,6 @@ package app.eodiyeotji.platform
 import android.content.Context
 import android.content.pm.ServiceInfo
 import app.eodiyeotji.pleos.PleosLocationSource
-import app.eodiyeotji.pleos.PleosNavi
 import app.eodiyeotji.pleos.PleosSpeech
 import app.eodiyeotji.pleos.PleosTts
 import app.eodiyeotji.record.VehicleDriveSignals
@@ -25,7 +24,8 @@ import javax.inject.Singleton
 abstract class PlatformModule {
     @Binds abstract fun location(impl: PleosLocationSource): LocationSource
     @Binds abstract fun driveSignals(impl: VehicleDriveSignals): DriveSignalSource
-    @Binds abstract fun navigator(impl: PleosNavi): Navigator
+    // 차가 아닌 기기(태블릿)에서는 그 기기의 지도 앱으로 넘긴다 (CarNavigator)
+    @Binds abstract fun navigator(impl: CarNavigator): Navigator
     @Binds abstract fun speechInput(impl: PleosSpeech): SpeechInput
     @Binds abstract fun speechOutput(impl: PleosTts): SpeechOutput
     @Binds abstract fun drivingState(impl: CarDrivingStatePort): DrivingStatePort
