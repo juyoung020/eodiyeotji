@@ -438,6 +438,22 @@ impl MemoryAgent {
         t.l.on_action_proposal(p);
     }
 
+    /// LLM이 답에서 카드와 다른 후보를 말했으면(카드 "대림창고" · 답 "블루보틀 성수 기록이 있어요") 카드 · 안내 제안을
+    /// 답이 말한 후보로 바꾼다. 답과 화면이 다르면 운전자가 무엇으로 안내되는지 알 수 없다.
+    fn follow_answer_focus(&self, s: &mut Session, t: &mut Turn, ctx: &AgentContext) {
+        let Some(focus) = s.focus.clone() else { return };
+        let Some(i) = answer_points_elsewhere(t.answer_text(), &focus, &s.candidates) else { return };
+        let hit = s.candidates[i].clone();
+        alog!("[agent] 답이 다른 후보를 말함 → 카드를 {}로", hit_place(&hit));
+        s.focus = Some(hit.clone());
+        let (p, course) = self.proposal_for(s, &hit, ctx);
+        t.recommend(&hit, course);
+        if let Some(p) = p {
+            *self.pending.lock().unwrap_or_else(|e| e.into_inner()) = Some(p.clone());
+            t.l.on_action_proposal(p);
+        }
+    }
+
     /// "거기 몇 명이서 갔어": 지금 이야기하는 기억 때 좌석 센서 인원. 카드에 인원을 붙여 다시 보이고, 안내 제안을 이어 묻는다.
     fn head_count_answer(&self, s: &mut Session, t: &mut Turn, focus: &MemoryHit, ctx: &AgentContext) {
         let f = &focus.episode.facts;
@@ -623,6 +639,7 @@ impl MemoryAgent {
                 }
                 t.say(if text.is_empty() { EMPTY_ANSWER } else { &text });
                 t.msgs.push(json!({"role": "assistant", "content": t.answer.clone()}));
+                self.follow_answer_focus(s, t, ctx);
                 return Ok(());
             }
             let calls: Vec<_> = r.tool_calls.iter().enumerate()
@@ -954,6 +971,33 @@ fn times(n: usize) -> String {
     }
 }
 
+/// 답 글이 [focus]가 아닌 후보 하나를 이름으로 말하나: 그 후보 번호. focus의 이름이 나오거나, 둘 이상이 나오거나, 아무것도 없으면 None.
+/// 이름은 들른 곳 이름(띄어쓰기 무시, 두 글자 이상)으로 맞춘다.
+pub(crate) fn answer_points_elsewhere(answer: &str, focus: &MemoryHit, cands: &[MemoryHit]) -> Option<usize> {
+    let a: String = answer.chars().filter(|c| !c.is_whitespace()).collect();
+    // 답에 나온 들른 곳 이름 (없으면 None)
+    let said = |h: &MemoryHit| {
+        h.episode.facts.stops.iter().find_map(|st| {
+            let n: String = st.name.chars().filter(|c| !c.is_whitespace()).collect();
+            (n.chars().count() >= 2 && a.contains(&n)).then_some(n)
+        })
+    };
+    if said(focus).is_some() {
+        return None;
+    }
+    // 같은 곳을 여러 번 간 기록은 한 곳으로 센다 (앞 후보 = 더 맞는 기록)
+    let mut first: Option<(usize, String)> = None;
+    for (i, h) in cands.iter().enumerate().filter(|(_, h)| h.episode.facts.id != focus.episode.facts.id) {
+        let Some(n) = said(h) else { continue };
+        match &first {
+            None => first = Some((i, n)),
+            Some((_, m)) if *m == n => {}
+            Some(_) => return None,
+        }
+    }
+    first.map(|(i, _)| i)
+}
+
 /// 후보를 부를 이름: 질문과 가장 맞는 들른 곳, 없으면 첫 곳, 없으면 제목.
 fn hit_place(h: &MemoryHit) -> String {
     h.best_stop
@@ -1010,6 +1054,25 @@ pub fn spoken_date(day: &str, today: i64) -> String {
 
 #[cfg(test)]
 mod tidy_tests {
+    #[test]
+    fn answer_naming_another_candidate_moves_the_card() {
+        use crate::memory::MemoryHit;
+        let eps = super::super::tests::episodes();
+        let hit = |id: i64| {
+            let e = eps.iter().find(|e| e.facts.id == id).unwrap().clone();
+            MemoryHit { day_title: e.title.clone(), episode: e, score: 1.0, best_stop: None, matched_tags: vec![], visit_days: vec![], visit_note: String::new(), people: None }
+        };
+        let cands = vec![hit(80), hit(31), hit(12), hit(31)];
+        // 카드는 두물머리(80)인데 답은 어니언 성수(31)를 말했다 → 31로
+        assert_eq!(super::answer_points_elsewhere("작년 10월에 다녀오신 어니언 성수 기록이 있어요. 안내할까요?", &cands[0], &cands), Some(1));
+        // (같은 곳 기록이 둘이어도 한 곳 — 앞 후보로)
+        // 카드와 같은 곳을 말하면 그대로
+        assert_eq!(super::answer_points_elsewhere("두물머리에 다녀오셨어요.", &cands[0], &cands), None);
+        // 둘 이상을 말하거나 아무 곳도 말하지 않으면 그대로
+        assert_eq!(super::answer_points_elsewhere("어니언 성수와 경포해변 중 어디요?", &cands[0], &cands), None);
+        assert_eq!(super::answer_points_elsewhere("기록이 있어요.", &cands[0], &cands), None);
+    }
+
     use super::tidy_answer;
 
     #[test]
