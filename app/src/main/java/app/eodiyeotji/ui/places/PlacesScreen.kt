@@ -295,6 +295,19 @@ private fun SettingsPane(s: PlacesUiState, vm: PlacesViewModel, compact: Boolean
         } else {
             items(s.hidden, key = { "h${it.id}" }) { r -> HiddenRow(r, compact, onRestore = { vm.restore(r) }) }
         }
+        // 기록 상태 · 개인정보 · "기록 모두 지우기"(동의 철회)로 가는 길. 머리의 상태 표시는 기록 중 · 경고일 때만 보여서
+        // 평소(시동 대기)에는 이 창을 열 곳이 없었다 (앱마켓 개인정보 심사: 철회 경로가 늘 있어야 한다)
+        full("privacy-h") { Box(Modifier.padding(top = 20.dp)) { SectionTitle(stringResource(R.string.status_privacy_title), Modifier.padding(start = 4.dp, bottom = 4.dp)) } }
+        full("privacy") {
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 104.dp).background(c.surface, RoundedCornerShape(EodiTheme.space.radiusM)).padding(horizontal = 24.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stringResource(R.string.places_privacy_hint), style = EodiTheme.type.body, color = c.textSecondary, modifier = Modifier.weight(1f))
+                Spacer(Modifier.width(16.dp))
+                app.eodiyeotji.record.RecordingStatusChip()
+            }
+        }
     }
 }
 
