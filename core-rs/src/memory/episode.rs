@@ -1061,9 +1061,9 @@ pub(crate) fn day_story(conn: &Connection, d: i64, tz_minutes: i32) -> Result<Op
     Ok(rule_story(&episodes_of_day(conn, d)?, tz_minutes))
 }
 
-/// 규칙으로 쓰는 하루 요약 (LLM 없이): 묶음마다 한 문장, 앞에서 [RULE_STORY_MAX]개까지.
-/// 출근 · 퇴근은 나선 시각과 가는 길에 들른 곳("07:53에 출근하며 스타벅스 왕십리역점에 들렀다."),
-/// 그 밖의 묶음은 이름 있는 곳에 다녀온 것만 ("14:10에 나서 이마트 성수점에 다녀왔다."). 쓸 문장이 없으면 None.
+/// 규칙으로 쓰는 하루 요약 (LLM 없이): 묶음마다 한 문장, 앞에서 [RULE_STORY_MAX]개까지. LLM 요약과 같은 해요체.
+/// 출근 · 퇴근은 나선 시각과 가는 길에 들른 곳("07:53에 출근하며 스타벅스 왕십리역점에 들렀어요."),
+/// 그 밖의 묶음은 이름 있는 곳에 다녀온 것만 ("14:10에 나서 이마트 성수점에 다녀왔어요."). 쓸 문장이 없으면 None.
 pub(crate) fn rule_story(episodes: &[Episode], tz_minutes: i32) -> Option<String> {
     let mut out: Vec<String> = Vec::new();
     for e in episodes {
@@ -1078,12 +1078,12 @@ pub(crate) fn rule_story(episodes: &[Episode], tz_minutes: i32) -> Option<String
         let at = crate::agent::dates::hhmm(f.start_ms, tz_minutes);
         let via = names.join(" · ");
         let sentence = match (f.kind, names.is_empty()) {
-            (EpisodeKind::CommuteToWork, true) => format!("{at}에 출근했다."),
-            (EpisodeKind::CommuteToWork, false) => format!("{at}에 출근하며 {via}에 들렀다."),
-            (EpisodeKind::CommuteHome, true) => format!("{at}에 퇴근했다."),
-            (EpisodeKind::CommuteHome, false) => format!("{at}에 퇴근하며 {via}에 들렀다."),
+            (EpisodeKind::CommuteToWork, true) => format!("{at}에 출근했어요."),
+            (EpisodeKind::CommuteToWork, false) => format!("{at}에 출근하며 {via}에 들렀어요."),
+            (EpisodeKind::CommuteHome, true) => format!("{at}에 퇴근했어요."),
+            (EpisodeKind::CommuteHome, false) => format!("{at}에 퇴근하며 {via}에 들렀어요."),
             (_, true) => continue,
-            (_, false) => format!("{at}에 나서 {via}에 다녀왔다."),
+            (_, false) => format!("{at}에 나서 {via}에 다녀왔어요."),
         };
         out.push(sentence);
         if out.len() == RULE_STORY_MAX {

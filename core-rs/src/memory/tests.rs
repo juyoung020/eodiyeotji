@@ -703,7 +703,7 @@ fn rule_story_writes_commute_and_errand_sentences() {
     ];
     assert_eq!(
         episode::rule_story(&day, 540).as_deref(),
-        Some("07:53에 출근하며 스타벅스 왕십리역점에 들렀다. 19:16에 퇴근했다. 21:00에 나서 이마트 성수점에 다녀왔다."),
+        Some("07:53에 출근하며 스타벅스 왕십리역점에 들렀어요. 19:16에 퇴근했어요. 21:00에 나서 이마트 성수점에 다녀왔어요."),
     );
     assert_eq!(episode::rule_story(&[ep(EpisodeKind::Errand, 0, vec![])], 540), None);
 }
