@@ -110,6 +110,8 @@ fun DayMap(
     myPhotos: List<MapPhotoSpot> = emptyList(),
     /** 지도 위에 얹은 판이 가리는 폭 (왼쪽 · 위 · 오른쪽 · 아래 px): 그만큼 비켜서 길을 맞춘다 */
     fitInsets: IntArray? = null,
+    /** 출처 글 아래 여백: 지도 아래에 카드 줄을 얹는 화면은 그 위로 올려 카드 · 버튼이 출처(라이선스 표시)를 가리지 않게 */
+    attributionBottom: androidx.compose.ui.unit.Dp = 12.dp,
 ) {
     val description = stringResource(R.string.map_content_description)
     val inPreview = LocalInspectionMode.current
@@ -129,7 +131,7 @@ fun DayMap(
         Box(modifier.background(EodiTheme.colors.surfaceHigh).semantics { contentDescription = description })
         return
     }
-    DayMapContent(data, selectedKey, onSelectKey, photoPins, myPhotos, fitInsets, options, modifier.semantics { contentDescription = description })
+    DayMapContent(data, selectedKey, onSelectKey, photoPins, myPhotos, fitInsets, options, modifier.semantics { contentDescription = description }, attributionBottom)
 }
 
 @Composable
@@ -142,6 +144,7 @@ private fun DayMapContent(
     fitInsets: IntArray?,
     baseOptions: MapLibreMapOptions,
     modifier: Modifier,
+    attributionBottom: androidx.compose.ui.unit.Dp,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current.density
@@ -299,7 +302,7 @@ private fun DayMapContent(
                 stringResource(
                     if (s is MapStyleSpec.Offline && s.offlineOnly == null) R.string.map_attribution else R.string.map_attribution_online,
                 ),
-                Modifier.align(Alignment.BottomEnd).padding(12.dp),
+                Modifier.align(Alignment.BottomEnd).padding(start = 12.dp, top = 12.dp, end = 12.dp, bottom = attributionBottom),
                 small = true,
             )
             null -> Unit

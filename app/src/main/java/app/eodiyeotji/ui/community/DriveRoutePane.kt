@@ -388,7 +388,7 @@ private fun DriveRouteDetailScreen(
                         if (!driving && d.flying) {
                             LaunchedEffect(Unit) { flightT.floatValue = 0f }
                             SightPopup(flightT, d.sights, Modifier.align(Alignment.TopCenter).padding(top = 96.dp))
-                            FlightProgressBar(flightT, d.sights, Modifier.align(Alignment.BottomCenter).padding(start = 18.dp, end = 18.dp, bottom = 52.dp))
+                            FlightProgressBar(flightT, d.sights, stringResource(R.string.drive_from_to, r.startName, r.endName), Modifier.align(Alignment.BottomCenter).padding(start = 18.dp, end = 18.dp, bottom = 52.dp))
                         }
                         BestTimeBadge(r.bestTime, r.theme, Modifier.align(Alignment.TopStart).padding(18.dp))
                         if (!driving && d.frames.size >= 2) {
@@ -494,14 +494,15 @@ private fun DriveRouteDetailScreen(
  * 진행 값은 매 화면 바뀌므로 막대는 그리기 단계에서만 읽고, 글은 풍경이 바뀔 때만 다시 그린다.
  */
 @Composable
-private fun FlightProgressBar(t: FloatState, sights: List<FlightSight>, modifier: Modifier = Modifier) {
+private fun FlightProgressBar(t: FloatState, sights: List<FlightSight>, fallback: String, modifier: Modifier = Modifier) {
     val now by remember(sights) { derivedStateOf { sights.firstOrNull { t.floatValue in it.from..it.to }?.name } }
     Column(
         modifier.fillMaxWidth().background(FlightScrim, RoundedCornerShape(16.dp)).padding(horizontal = 18.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(
-            now?.let { stringResource(R.string.drive_fly_now, it) } ?: " ",
+            // 풍경 구간 밖에서는 빈 검은 띠 대신 "시작 → 끝"을 보인다
+            now?.let { stringResource(R.string.drive_fly_now, it) } ?: fallback,
             style = EodiTheme.type.label,
             fontWeight = FontWeight.Bold,
             color = Color.White,

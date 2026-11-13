@@ -118,7 +118,7 @@ internal fun WideHome(
     }
     val info: @Composable (Modifier) -> Unit = { m -> if (summary != null) StageInfo(summary, today, loaded != null, share, m) }
     val stops: @Composable (Modifier) -> Unit = { m ->
-        if (loaded != null) StopCards(loaded.entries, state.selectedEntry, { key -> if (key != state.selectedEntry || !openStay(key)) onEntryClick(key) }, onAll = { sheet = !sheet }, modifier = m)
+        if (loaded != null) StopCards(loaded.entries, state.selectedEntry, { key -> if (key != state.selectedEntry || !openStay(key)) onEntryClick(key) }, onAll = { sheet = !sheet }, modifier = m, sheetOpen = sheet)
     }
     val map: @Composable (Modifier, IntArray) -> Unit = { m, pad ->
         DayMap(
@@ -129,6 +129,8 @@ internal fun WideHome(
             photoPins = remember(loaded?.entries, loaded?.myPhotos) { stayPhotoPins(loaded) },
             myPhotos = loaded?.mapPhotos.orEmpty(),
             fitInsets = pad,
+            // 아래 들른 곳 카드 · 전체 시간표 버튼이 출처 글을 가렸다 → 카드 줄 위로
+            attributionBottom = StopCardsHeight + Gap + 8.dp,
         )
     }
     val timeline: @Composable () -> Unit = {
@@ -350,7 +352,7 @@ private fun DateRail(days: List<DaySummary>, today: LocalDate, selected: String?
 
 /** 들른 곳 카드 줄 (번호 · 이름 · 도착 시각 · 머문 시간) + 오른쪽 끝에 붙박은 전체 시간표 버튼. 누르면 지도에서 그곳을 고르고, 고른 곳을 한 번 더 누르면 그곳 화면을 연다. */
 @Composable
-private fun StopCards(entries: List<DayEntry>, selectedKey: String?, onClick: (String) -> Unit, onAll: () -> Unit, modifier: Modifier = Modifier) {
+private fun StopCards(entries: List<DayEntry>, selectedKey: String?, onClick: (String) -> Unit, onAll: () -> Unit, modifier: Modifier = Modifier, sheetOpen: Boolean = false) {
     val c = EodiTheme.colors
     val ink = mapInk(c.isDark)
     val stays = remember(entries) { entries.filterIsInstance<DayEntry.Stay>() }
@@ -395,7 +397,8 @@ private fun StopCards(entries: List<DayEntry>, selectedKey: String?, onClick: (S
             shape = RoundedCornerShape(24.dp),
             modifier = Modifier.fillMaxHeight().eodiShadow(EodiTheme.elevation.level2, RoundedCornerShape(24.dp))) {
             Box(Modifier.padding(horizontal = 28.dp), contentAlignment = Alignment.Center) {
-                Text(stringResource(R.string.home_all_timeline), style = EodiTheme.type.label, fontWeight = FontWeight.Bold, maxLines = 1)
+                // 판이 열려 있으면 같은 자리에서 닫는다는 것을 글로 보인다 (전에는 열려 있어도 "전체 시간표" 그대로)
+                Text(stringResource(if (sheetOpen) R.string.home_all_timeline_close else R.string.home_all_timeline), style = EodiTheme.type.label, fontWeight = FontWeight.Bold, maxLines = 1)
             }
         }
     }
