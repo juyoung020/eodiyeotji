@@ -18,7 +18,7 @@
     <string name="agent_example_4">여기 근처 드라이브 추천코스</string>
 
     <string name="agent_my_question">내 질문</string>
-    <string name="agent_thinking">기억을 찾는 중…</string>
+    <string name="agent_thinking">찾는 중…</string>
     <string name="agent_failed">답을 받지 못했어요. 잠시 뒤 다시 물어봐 주세요.</string>
     <string name="agent_retry">다시 묻기</string>
 
