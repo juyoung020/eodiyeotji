@@ -68,6 +68,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -230,8 +231,8 @@ private fun Player(r: DayReplay, roadPhotos: List<MapPhotoSpot>, onClose: () -> 
             // 위: 시작 화면 · 사진 장면 (비행 중에는 비워 지도가 보인다, -1)
             Crossfade(targetState = if (step > 0 && !arrived) -1 else step, animationSpec = tween(FADE_MS), label = "replay-scene") { s ->
                 when {
-                    s == 0 -> IntroCard(r)
-                    s > 0 -> r.scenes.getOrNull(s - 1)?.let { SceneCard(r, it, paused) }
+                    s == 0 -> IntroCard(r, wide)
+                    s > 0 -> r.scenes.getOrNull(s - 1)?.let { SceneCard(r, it, paused, wide) }
                     else -> Box(Modifier.fillMaxSize())
                 }
             }
@@ -265,27 +266,35 @@ private fun Player(r: DayReplay, roadPhotos: List<MapPhotoSpot>, onClose: () -> 
                 visible = step > 0 && arrived,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 104.dp, end = 32.dp)
+                    .padding(top = if (wide) 104.dp else 116.dp, end = if (wide) 32.dp else 16.dp)
                     .width(mapW)
                     .height(mapW * 0.68f)
                     .graphicsLayer { alpha = insetAlpha.value }
                     .clip(RoundedCornerShape(24.dp)),
             )
-            Progress(n, step, Modifier.align(Alignment.TopCenter).padding(top = 28.dp, start = 140.dp, end = 320.dp))
-            RoundButton(AgentIcons.Close, stringResource(R.string.replay_close), onClose, Modifier.align(Alignment.TopStart).padding(28.dp))
+            // 좁은 창(폰 세로): 버튼을 작게 하고 진행 줄은 버튼 아래로 내린다 (넓은 창 값 그대로면 버튼끼리 겹친다)
+            val button = if (wide) 76.dp else 56.dp
+            val edge = if (wide) 28.dp else 16.dp
+            Progress(
+                n, step,
+                if (wide) Modifier.align(Alignment.TopCenter).padding(top = 28.dp, start = 140.dp, end = 320.dp)
+                else Modifier.align(Alignment.TopCenter).padding(top = 92.dp, start = 16.dp, end = 16.dp),
+            )
+            RoundButton(AgentIcons.Close, stringResource(R.string.replay_close), onClose, Modifier.align(Alignment.TopStart).padding(edge), button)
             // 이전 · 멈춤 · 다음: 오른쪽 위 한 줄 (사진 카드 · 자막과 겹치지 않는 자리, 반투명 바탕)
             Row(
-                Modifier.align(Alignment.TopEnd).padding(top = 20.dp, end = 32.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                Modifier.align(Alignment.TopEnd).padding(top = if (wide) 20.dp else 16.dp, end = if (wide) 32.dp else 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (wide) 12.dp else 8.dp),
             ) {
-                RoundButton(EodiIcons.Back, stringResource(R.string.replay_prev), { go(step - 1) }, Modifier.alpha(if (step > 0) 1f else 0.4f))
+                RoundButton(EodiIcons.Back, stringResource(R.string.replay_prev), { go(step - 1) }, Modifier.alpha(if (step > 0) 1f else 0.4f), button)
                 RoundButton(
                     if (paused) EodiIcons.Play else EodiIcons.Pause,
                     stringResource(if (paused) R.string.replay_resume else R.string.replay_pause),
                     { paused = !paused },
                     Modifier,
+                    button,
                 )
-                RoundButton(EodiIcons.Chevron, stringResource(R.string.replay_next), { go(step + 1) }, Modifier)
+                RoundButton(EodiIcons.Chevron, stringResource(R.string.replay_next), { go(step + 1) }, Modifier, button)
             }
             if (paused) {
                 Box(Modifier.align(Alignment.Center).size(140.dp).background(Color.Black.copy(alpha = 0.45f), CircleShape), contentAlignment = Alignment.Center) {
@@ -296,7 +305,6 @@ private fun Player(r: DayReplay, roadPhotos: List<MapPhotoSpot>, onClose: () -> 
     }
 }
 
-/** 시작 화면: 도장 · 날짜 · 하루 제목이 차례로 떠오른다. */
 /** 비행 중 길 위 사진: 금색 테두리 카드 + "09:35에 찍은 사진" (지도를 다 가리지 않게 한쪽에). */
 @Composable
 private fun RoadPhotoCard(spot: MapPhotoSpot, wide: Boolean) {
@@ -362,8 +370,9 @@ private fun roadPhotosByLeg(r: DayReplay, photos: List<MapPhotoSpot>): Map<Int, 
 private fun clock(ms: Long): String =
     java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault()).let { "%02d:%02d".format(it.hour, it.minute) }
 
+/** 시작 화면: 도장 · 날짜 · 하루 제목이 차례로 떠오른다. 좁은 창(폰 세로)에서는 글이 화면 폭을 다 쓴다. */
 @Composable
-private fun IntroCard(r: DayReplay) {
+private fun IntroCard(r: DayReplay, wide: Boolean) {
     val a1 = remember { Animatable(0f) }
     val a2 = remember { Animatable(0f) }
     val a3 = remember { Animatable(0f) }
@@ -375,7 +384,10 @@ private fun IntroCard(r: DayReplay) {
     Box(Modifier.fillMaxSize()) {
         // 사진 없이 지도가 비치게 두고, 글 쪽(왼쪽)만 짙은 밤색으로 가린다 (글 자리는 86% 이상 → 흰 글 대비 4.5:1 넘게)
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Night.copy(alpha = 0.94f), 0.6f to Night.copy(alpha = 0.86f), 1f to Night.copy(alpha = 0.35f))))
-        Column(Modifier.align(Alignment.CenterStart).fillMaxWidth(0.6f).padding(start = 120.dp, end = 24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        Column(
+            Modifier.align(Alignment.CenterStart).fillMaxWidth(if (wide) 0.6f else 1f).padding(start = if (wide) 120.dp else 28.dp, end = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
             if (r.stamp.isNotBlank()) MemoryStamp(r.stamp, large = true, modifier = Modifier.alpha(a1.value))
             Text(r.dateText, style = EodiTheme.type.title, color = Color.White.copy(alpha = 0.92f), modifier = Modifier.alpha(a2.value))
             Text(r.title, style = EodiTheme.type.hero, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.alpha(a3.value))
@@ -388,12 +400,12 @@ private fun IntroCard(r: DayReplay) {
 }
 
 /**
- * 들른 곳 장면: 지도는 덮지 않는다. 왼쪽 아래에 사진 카드(화면 폭 28%, 둥근 모서리 · 그림자, 천천히 다가가는 켄 번스),
+ * 들른 곳 장면: 지도는 덮지 않는다 (좁은 창에서는 사진 위 · 글 아래로 쌓는다). 왼쪽 아래에 사진 카드(화면 폭 28%, 둥근 모서리 · 그림자, 천천히 다가가는 켄 번스),
  * 그 옆에 시각 · 이름 · 머문 시간 · 하루 줄. 글 뒤에는 아래로 짙어지는 스크림(글 자리 78% 이상 → 흰 글 대비 4.5:1 넘게).
  * 집 · 회사 · 회사 건물처럼 사진이 맥락과 어긋나는 곳(Rust `show_photo` = false)은 사진 없이 글만.
  */
 @Composable
-private fun SceneCard(r: DayReplay, s: ReplayScene, paused: Boolean) {
+private fun SceneCard(r: DayReplay, s: ReplayScene, paused: Boolean, wide: Boolean) {
     val kb = remember(s) { Animatable(0f) }
     LaunchedEffect(s, paused) {
         if (!paused && s.showPhoto) kb.animateTo(1f, tween(((1f - kb.value) * KEN_BURNS_MS).toInt().coerceAtLeast(1), easing = LinearEasing))
@@ -401,44 +413,35 @@ private fun SceneCard(r: DayReplay, s: ReplayScene, paused: Boolean) {
     // 장면마다 움직이는 방향을 번갈아 (홀수: 오른쪽 위로, 짝수: 왼쪽 아래로)
     val dir = if (s.order % 2 == 1) 1f else -1f
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        // 카드 폭: 화면 폭 28% (낮은 창에서는 카드 높이가 화면 높이 40%를 넘지 않게)
-        val cardW = minOf(maxWidth * 0.28f, maxHeight * 0.4f * (4f / 3f))
-        Row(
-            Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .background(Brush.verticalGradient(0f to Color.Transparent, 0.2f to Color.Black.copy(alpha = 0.78f), 1f to Color.Black.copy(alpha = 0.9f)))
-                .padding(start = 40.dp, end = 120.dp, top = 96.dp, bottom = 48.dp),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            if (s.showPhoto) {
-                val shape = RoundedCornerShape(24.dp)
-                Box(
-                    Modifier
-                        .width(cardW)
-                        .height(cardW * 0.75f)
-                        .shadow(20.dp, shape)
-                        .clip(shape)
-                        .background(Color(0xFF1C222C)),
-                ) {
-                    PlaceThumbnail(
-                        s.stop.name, s.stop.address, s.stop.lat, s.stop.lon,
-                        modifier = Modifier.fillMaxSize().graphicsLayer {
-                            val k = kb.value
-                            scaleX = 1.04f + 0.10f * k
-                            scaleY = scaleX
-                            translationX = dir * size.width * 0.02f * k
-                            translationY = -dir * size.height * 0.015f * k
-                        },
-                        fallback = { Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFF2A3140), Night)))) },
-                        loading = { PhotoLoadingPlaceholder(Color(0xFF1C222C)) },
-                    )
-                }
-                Spacer(Modifier.width(36.dp))
-            } else {
-                Spacer(Modifier.width(80.dp))
+        // 카드 폭: 넓은 창은 화면 폭 28% (낮은 창에서는 카드 높이가 화면 높이 40%를 넘지 않게), 좁은 창(폰 세로)은 화면 폭 62%
+        val cardW = if (wide) minOf(maxWidth * 0.28f, maxHeight * 0.4f * (4f / 3f)) else maxWidth * 0.62f
+        val scrim = Brush.verticalGradient(0f to Color.Transparent, 0.2f to Color.Black.copy(alpha = 0.78f), 1f to Color.Black.copy(alpha = 0.9f))
+        val photo: @Composable () -> Unit = {
+            val shape = RoundedCornerShape(24.dp)
+            Box(
+                Modifier
+                    .width(cardW)
+                    .height(cardW * 0.75f)
+                    .shadow(20.dp, shape)
+                    .clip(shape)
+                    .background(Color(0xFF1C222C)),
+            ) {
+                PlaceThumbnail(
+                    s.stop.name, s.stop.address, s.stop.lat, s.stop.lon,
+                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                        val k = kb.value
+                        scaleX = 1.04f + 0.10f * k
+                        scaleY = scaleX
+                        translationX = dir * size.width * 0.02f * k
+                        translationY = -dir * size.height * 0.015f * k
+                    },
+                    fallback = { Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFF2A3140), Night)))) },
+                    loading = { PhotoLoadingPlaceholder(Color(0xFF1C222C)) },
+                )
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        }
+        val text: @Composable (Modifier) -> Unit = { m ->
+            Column(m, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (r.stamp.isNotBlank()) {
                         MemoryStamp(r.stamp)
@@ -453,6 +456,29 @@ private fun SceneCard(r: DayReplay, s: ReplayScene, paused: Boolean) {
                     style = EodiTheme.type.bodyStrong,
                     color = Color.White.copy(alpha = 0.92f),
                 )
+            }
+        }
+        if (wide) {
+            Row(
+                Modifier.align(Alignment.BottomStart).fillMaxWidth().background(scrim).padding(start = 40.dp, end = 120.dp, top = 96.dp, bottom = 48.dp),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                if (s.showPhoto) {
+                    photo()
+                    Spacer(Modifier.width(36.dp))
+                } else {
+                    Spacer(Modifier.width(80.dp))
+                }
+                text(Modifier.weight(1f))
+            }
+        } else {
+            // 좁은 창: 옆으로 나란히 두면 글 칸이 한 글자 폭으로 줄어든다 → 사진 위, 글 아래
+            Column(
+                Modifier.align(Alignment.BottomStart).fillMaxWidth().background(scrim).padding(start = 24.dp, end = 24.dp, top = 96.dp, bottom = 48.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+            ) {
+                if (s.showPhoto) photo()
+                text(Modifier.fillMaxWidth())
             }
         }
     }
@@ -523,12 +549,12 @@ private fun Progress(n: Int, step: Int, modifier: Modifier) {
 }
 
 @Composable
-private fun RoundButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit, modifier: Modifier) {
+private fun RoundButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit, modifier: Modifier, size: Dp = 76.dp) {
     Box(
-        modifier.size(76.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)).clickable(role = Role.Button, onClick = onClick),
+        modifier.size(size).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)).clickable(role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = description, tint = Color.White, modifier = Modifier.size(36.dp))
+        Icon(icon, contentDescription = description, tint = Color.White, modifier = Modifier.size(size * 0.47f))
     }
 }
 
