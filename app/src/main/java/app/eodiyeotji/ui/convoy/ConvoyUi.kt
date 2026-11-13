@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -167,7 +168,8 @@ fun ConvoyHost(driving: Boolean, vm: ConvoyViewModel = hiltViewModel()) {
                 .align(Alignment.Center)
                 .padding(if (LocalConfiguration.current.screenWidthDp < NARROW_DP) 16.dp else 32.dp)
                 .fillMaxWidth()
-                .fillMaxHeight()
+                // 만들기 · 참여 단계는 내용 높이만 (화면 전체 높이면 아래 3/4이 빈 흰 판이었다). 지도가 있는 같이 가는 중은 전체
+                .then(if (s.phase == ConvoyPhase.ACTIVE) Modifier.fillMaxHeight() else Modifier)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
         ) {
             when (s.phase) {
@@ -226,6 +228,13 @@ private fun StartPane(s: ConvoyUiState, repo: ConvoyRepository) {
                 singleLine = true,
                 textStyle = EodiTheme.type.titleSmall,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Go),
+                // 키보드의 "이동"으로도 참여 (전에는 눌러도 아무 일이 없었다)
+                keyboardActions = KeyboardActions(onGo = {
+                    if (!busy && code.length == 6) {
+                        joining = true
+                        repo.join(code, name.trim())
+                    }
+                }),
                 modifier = Modifier.weight(1f),
             )
             BigButton(stringResource(R.string.convoy_join), enabled = (busy && joining) || (!busy && code.length == 6), loading = busy && joining, modifier = Modifier.weight(0.7f)) {
