@@ -138,7 +138,8 @@ private fun SidePanel(onDismiss: () -> Unit, content: @Composable () -> Unit) {
             .safeDrawingPadding(),
         contentAlignment = Alignment.CenterEnd,
     ) {
-        val width: Dp = (maxWidth * 0.64f).coerceIn(560.dp, 1200.dp).coerceAtMost(maxWidth)
+        // 좁은 창(나눈 화면 · 세로)에서는 창 폭 전부: 560dp로 오른쪽에 붙이면 왼쪽에 뒤 목록이 한 줄 남아 어수선했다
+        val width: Dp = if (maxWidth < 900.dp) maxWidth else (maxWidth * 0.64f).coerceIn(560.dp, 1200.dp)
         AnimatedVisibility(
             visibleState = shown,
             enter = slideInHorizontally(tween(220)) { it / 3 } + fadeIn(tween(180)),
