@@ -73,7 +73,12 @@ const val ROADSIDE_PUBLIC_SOURCE = "공공데이터"
 
 /** 길 위 카드: 1순위 + 다른 선택 (주행 중엔 1·2번만, 정차 중엔 3개까지). */
 @Immutable
-data class RoadsideCard(val options: List<RoadsideOption>, val addsWaypoint: Boolean)
+data class RoadsideCard(
+    val options: List<RoadsideOption>,
+    val addsWaypoint: Boolean,
+    /** 정차 중 목록에서 고른 곳 (제안 버튼이 이곳을 가리킨다). 처음엔 1순위. */
+    val selected: Int = 0,
+)
 
 /**
  * 길 위의 필요("나 똥마려" · "졸려" · "배고파")를 스스로 처리하는 도구 에이전트.
@@ -103,6 +108,10 @@ class RoadsideAgent @Inject constructor(
     private val places = ConcurrentHashMap<String, Found>()
     private val proposals = ConcurrentHashMap<String, Proposal>()
     private val seq = AtomicLong()
+
+    /** 마지막 카드의 선택지 (카드 순서 그대로) · 그때 상황. 정차 중 목록에서 다른 곳을 누르면 이걸로 제안을 다시 만든다. */
+    @Volatile private var lastOptions: List<Found> = emptyList()
+    @Volatile private var lastDrive: DriveContext? = null
 
     /** 경로 캐시: 같은 목적지면 [ROUTE_TTL_MS] 동안 다시 받지 않는다. */
     @Volatile private var routeCache: Pair<String, CachedRoute>? = null
@@ -197,8 +206,10 @@ class RoadsideAgent @Inject constructor(
         val line = if (llmOk) answer!! else pick?.line ?: context.getString(R.string.roadside_none)
         filler.cancel()
         if (primary != null) {
-            val options = listOfNotNull(primary, second, if (isDriving) null else third).map { it.option() }
-            send(AgentEvent.Roadside(RoadsideCard(options, canAdd)))
+            val found = listOfNotNull(primary, second, if (isDriving) null else third)
+            lastOptions = found
+            lastDrive = drive
+            send(AgentEvent.Roadside(RoadsideCard(found.map { it.option() }, canAdd)))
         }
         send(AgentEvent.AnswerDelta(line))
         if (primary != null) {
@@ -212,6 +223,21 @@ class RoadsideAgent @Inject constructor(
         Log.i(TAG, "길 위 에이전트 \"$text\" ${SystemClock.elapsedRealtime() - t0}ms\n$trace")
         send(AgentEvent.Done)
     }.flowOn(Dispatchers.Default)
+
+    /**
+     * 정차 중 목록에서 [index]번 곳을 눌렀다: 그곳으로 제안("○○ 경유지로" / "○○ 안내")을 새로 만든다.
+     * 앞 제안은 버린다 (한 번에 하나만 실행된다). 없는 번호면 null.
+     */
+    fun proposeOption(index: Int): AgentEvent.ActionProposal? {
+        val f = lastOptions.getOrNull(index) ?: return null
+        val drive = lastDrive ?: return null
+        val canAdd = drive.destination != null
+        proposals.clear()
+        val id = ID_PREFIX + seq.incrementAndGet()
+        proposals[id] = Proposal(f, canAdd, drive)
+        val title = context.getString(if (canAdd) R.string.roadside_add_waypoint else R.string.roadside_navigate, f.hit.place.name)
+        return AgentEvent.ActionProposal(id, title, f.hit.place.address)
+    }
 
     /** 운전자가 "응" / 버튼: 경유지로 넣거나 그곳으로 안내. */
     suspend fun confirm(proposal: AgentEvent.ActionProposal): String {

@@ -186,7 +186,12 @@ fun AgentPanel(
         if (viewModel.needsMicPermission()) micPermission.launch(Manifest.permission.RECORD_AUDIO) else viewModel.voice()
     }
     // 답을 읽는 동안은 맨 위 자막(SpokenCaption)이 질문 줄을 가리지 않게 화면을 조금 내린다
-    val captionSpace by animateDpAsState(if (state.voice.speaking && !state.voice.listening) CaptionSpace else 0.dp, label = "caption")
+    // 좁은 창(1:1 분할 ~840dp)에선 자막이 두 줄로 접혀 더 높다 → 그만큼 더 내린다 (안 그러면 오른쪽 위 마이크가 자막 밑에 가린다)
+    val narrowWindow = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < CaptionWrapWidthDp
+    val captionSpace by animateDpAsState(
+        if (state.voice.speaking && !state.voice.listening) (if (narrowWindow) CaptionSpaceTwoLines else CaptionSpace) else 0.dp,
+        label = "caption",
+    )
     Box(modifier) {
         AgentPanelContent(
             topSpace = captionSpace,
@@ -207,12 +212,15 @@ fun AgentPanel(
             hasTurn = state.turn != null,
             onMic = voice,
             onCancelListening = viewModel::cancelVoice,
+            topSpace = captionSpace,
         )
     }
 }
 
 /** 답을 읽는 동안 맨 위 자막 자리만큼 내리는 높이. */
 private val CaptionSpace = 88.dp
+private val CaptionSpaceTwoLines = 136.dp
+private const val CaptionWrapWidthDp = 1200
 
 /** 상태만 받아 그리는 화면 (미리보기·디버그 화면용). [topSpace]: 위쪽 비울 높이 (읽는 말 자막 자리). */
 @Composable
@@ -279,6 +287,7 @@ private fun ParkedAgent(
     FollowLatest(list, history.size, turn)
     BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
         val wide = maxWidth >= WideBreakpoint
+        val roadsideNo = stringResource(R.string.roadside_no)
         Column(Modifier.fillMaxSize()) {
             QuestionBar(
                 question = turn?.takeIf { it.pickedRank == null }?.question,
@@ -314,7 +323,7 @@ private fun ParkedAgent(
                         modifier = Modifier.weight(0.56f).fillMaxHeight().verticalScroll(cards).padding(vertical = 24.dp),
                     ) {
                         if (turn.roadside != null) {
-                            RoadsideOptionsBlock(turn.roadside)
+                            RoadsideOptionsBlock(turn.roadside, turn.proposals.firstOrNull(), turn.action, onSelectStop, onConfirm, { onAsk(roadsideNo) })
                         } else if (turn.courses.isNotEmpty()) {
                             CourseRecommendationList(turn, onAsk)
                         } else {
@@ -411,9 +420,10 @@ private fun CurrentTurnColumn(
     onRetry: () -> Unit,
     compact: Boolean,
 ) {
+    val roadsideNo = stringResource(R.string.roadside_no)
     Column(verticalArrangement = Arrangement.spacedBy(28.dp)) {
         AnswerBlock(turn, onRetry)
-        turn.roadside?.let { RoadsideOptionsBlock(it) }
+        turn.roadside?.let { RoadsideOptionsBlock(it, turn.proposals.firstOrNull(), turn.action, onSelectStop, onConfirm, { onAsk(roadsideNo) }) }
         if (turn.courses.isNotEmpty()) {
             ActionBlock(turn, onConfirm, onAsk)
             CourseRecommendationList(turn, onAsk)
@@ -763,7 +773,8 @@ private fun ActionBlock(turn: AgentTurn, onConfirm: (AgentEvent.ActionProposal) 
     val otherDaysQuestion = stringResource(R.string.agent_followup_other_days)
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        turn.proposals.forEachIndexed { i, p ->
+        // 길 위 제안은 목록의 고른 줄 아래 "그래 / 아니" 칩으로 (RoadsideOptionsBlock)
+        if (turn.roadside == null) turn.proposals.forEachIndexed { i, p ->
             ProposalButton(p, primary = i == 0, running = (turn.action as? ActionState.Running)?.proposalId == p.id, onConfirm)
         }
         // 결과는 버튼 아래에 붙인다 (방금 누른 버튼이 밀려 움직이지 않게)
@@ -946,26 +957,29 @@ private fun DrivingAgent(
                     val proposal = turn.proposals.firstOrNull()
                     val running = turn.action is ActionState.Running
                     val failed = turn.phase == AnswerPhase.Failed
-                    Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.fillMaxWidth()) {
+                    // 좁은 창(1:1 분할)에선 큰 글씨 버튼 글이 잘린다 → 아이콘을 빼고 "예" 쪽을 더 넓게
+                    val narrow = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < CaptionWrapWidthDp
+                    Row(horizontalArrangement = Arrangement.spacedBy(if (narrow) 16.dp else 24.dp), modifier = Modifier.fillMaxWidth()) {
                         BigButton(
                             // 답을 못 받았으면 같은 자리 큰 버튼이 "다시 묻기" (한 번 누르면 된다).
                             // 안내는 어디로 가는지 버튼에 바로 ("안목항 바다횟집으로 안내" / "이 코스로 안내") — 주행 중엔 화면을 한 번 흘끗 본다
                             label = when {
                                 failed -> stringResource(R.string.agent_retry)
-                                // 길 위 제안은 "예 · ○○ 경유지로" (말로 "응"과 같다)
-                                proposal != null && turn.roadside != null -> stringResource(R.string.roadside_yes) + " · " + proposal.title
+                                // 길 위 제안은 "그래 · 경유지로" / "그래 · 안내" (말로 "응"과 같다). 이름은 위 카드에 크게 있다 → 좁은 창에서도 안 잘리게 짧게
+                                proposal != null && turn.roadside != null ->
+                                    stringResource(if (turn.roadside.addsWaypoint) R.string.roadside_yes_waypoint else R.string.roadside_yes_navigate)
                                 proposal != null -> proposal.title
                                 else -> stringResource(R.string.agent_navigate)
                             },
-                            icon = if (failed) null else EodiIcons.Navi,
+                            icon = if (failed || narrow) null else EodiIcons.Navi,
                             primary = true,
                             enabled = failed || (proposal != null && !running && turn.action !is ActionState.Done),
                             onClick = { if (failed) onRetry() else proposal?.let(onConfirm) },
-                            modifier = Modifier.weight(1.4f),
+                            modifier = Modifier.weight(if (narrow) 1.8f else 1.4f),
                         )
                         BigButton(
                             label = stringResource(if (turn.roadside != null && proposal != null) R.string.roadside_no else R.string.agent_cancel),
-                            icon = EodiIcons.Close,
+                            icon = if (narrow) null else EodiIcons.Close,
                             primary = false,
                             enabled = true,
                             onClick = onClear,

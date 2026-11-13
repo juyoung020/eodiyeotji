@@ -212,10 +212,10 @@ private fun Card(ui: ProactiveUi, speaking: Boolean, narrow: Boolean, onYes: () 
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(top = 4.dp)) {
                 if (s.ask && !finished) {
                     val running = ui.phase == ProactiveUi.Phase.Running
-                    Chip(stringResource(R.string.proactive_yes), primary = true, loading = running, onClick = onYes, modifier = Modifier.weight(1f))
-                    Chip(stringResource(R.string.proactive_no), primary = false, loading = false, enabled = !running, onClick = onNo, modifier = Modifier.weight(1f))
+                    GleoChip(stringResource(R.string.proactive_yes), primary = true, loading = running, onClick = onYes, modifier = Modifier.weight(1f))
+                    GleoChip(stringResource(R.string.proactive_no), primary = false, loading = false, enabled = !running, onClick = onNo, modifier = Modifier.weight(1f))
                 } else {
-                    Chip(stringResource(R.string.proactive_close), primary = false, loading = false, onClick = onClose, modifier = Modifier.weight(1f), close = true)
+                    GleoChip(stringResource(R.string.proactive_close), primary = false, loading = false, onClick = onClose, modifier = Modifier.weight(1f), close = true)
                 }
             }
         }
@@ -224,7 +224,7 @@ private fun Card(ui: ProactiveUi, speaking: Boolean, narrow: Boolean, onYes: () 
 
 /** Gleo Chips 버튼 (터치 96dp). [loading]이면 버튼 안 로더 + 누름 막기 (가이드 Basic button Loading). */
 @Composable
-private fun Chip(
+internal fun GleoChip(
     text: String,
     primary: Boolean,
     loading: Boolean,
@@ -251,7 +251,7 @@ private fun Chip(
             } else if (close) {
                 Icon(EodiIcons.Close, contentDescription = null, modifier = Modifier.size(32.dp).padding(end = 6.dp))
             }
-            Text(text, style = EodiTheme.type.drivingBody, fontWeight = FontWeight.Bold)
+            Text(text, style = EodiTheme.type.drivingBody, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

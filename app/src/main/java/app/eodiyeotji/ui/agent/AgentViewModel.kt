@@ -495,9 +495,19 @@ class AgentViewModel @Inject constructor(
         if (t.pickedRank == null) ask(t.question, replace = true)
     }
 
+    /** 추천 카드의 들른 곳을 골랐다. 길 위 카드(정차 중 목록)면 그 곳으로 "그래 / 아니" 제안을 바꾼다. */
     fun selectStop(index: Int) {
-        val id = turn.value?.id ?: return
-        updateTurn(id) { it.copy(selectedStop = index) }
+        val t = turn.value ?: return
+        if (t.roadside != null) return selectRoadside(t, index)
+        updateTurn(t.id) { it.copy(selectedStop = index) }
+    }
+
+    private fun selectRoadside(t: AgentTurn, index: Int) {
+        val card = t.roadside ?: return
+        if (t.action is ActionState.Running || index !in card.options.indices) return
+        if (index == card.selected && t.proposals.isNotEmpty() && t.action is ActionState.Idle) return
+        val p = roadside.proposeOption(index) ?: return
+        updateTurn(t.id) { it.copy(roadside = card.copy(selected = index), proposals = listOf(p), action = ActionState.Idle) }
     }
 
     /**

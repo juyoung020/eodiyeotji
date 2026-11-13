@@ -56,6 +56,8 @@ internal fun BoxScope.AgentVoiceLayer(
     hasTurn: Boolean,
     onMic: () -> Unit,
     onCancelListening: () -> Unit,
+    /** 읽는 말 자막이 떠 있는 동안 내려 준 만큼 (마이크가 자막 밑에 가리지 않게) */
+    topSpace: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
     // 주행 중 답 화면에는 마이크가 없다 → 오른쪽 위에 하나 둔다 (처음 화면은 가운데 큰 마이크가 있다)
     if (driving && hasTurn && !voice.listening) {
@@ -64,7 +66,7 @@ internal fun BoxScope.AgentVoiceLayer(
             shape = CircleShape,
             color = EodiTheme.colors.accent,
             contentColor = EodiTheme.colors.onAccent,
-            modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(top = 56.dp, end = 56.dp).size(96.dp).eodiShadow(EodiTheme.elevation.level2, CircleShape)) {
+            modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(top = 56.dp + topSpace, end = 56.dp).size(96.dp).eodiShadow(EodiTheme.elevation.level2, CircleShape)) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(AgentIcons.Mic, contentDescription = stringResource(R.string.agent_mic), modifier = Modifier.size(48.dp))
             }

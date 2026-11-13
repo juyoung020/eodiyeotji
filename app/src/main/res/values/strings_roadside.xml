@@ -12,5 +12,7 @@
     <string name="roadside_second">다른 선택</string>
     <string name="roadside_yes">그래</string>
     <string name="roadside_no">아니</string>
+    <string name="roadside_yes_waypoint">그래 · 경유지로</string>
+    <string name="roadside_yes_navigate">그래 · 안내</string>
     <string name="roadside_public_credit">출처: 공공데이터포털(한국도로공사 등)</string>
 </resources>
