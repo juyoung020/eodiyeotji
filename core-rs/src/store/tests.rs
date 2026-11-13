@@ -399,6 +399,7 @@ fn entries_merge_trips_and_stays_in_time_order() {
             stop_names: Vec::new(),
             title: None,
             tags: Vec::new(),
+            story: None,
         }
     );
 }

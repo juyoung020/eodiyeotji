@@ -1047,6 +1047,15 @@ pub(crate) fn day_title(conn: &Connection, d: i64) -> Result<(Option<String>, Ve
     })
 }
 
+/// 하루 요약 글 (`DaySummary.story`): LLM 제목이 있는 날([LLM_TITLE])의 한두 문장. 없으면 None.
+pub(crate) fn day_story(conn: &Connection, d: i64) -> Result<Option<String>, CoreError> {
+    Ok(conn
+        .prepare_cached("SELECT CASE WHEN needs_llm = 1 AND title IS NOT NULL THEN nullif(summary, '') END FROM day_memory WHERE day = ?1")?
+        .query_row([d], |r| r.get::<_, Option<String>>(0))
+        .optional()?
+        .flatten())
+}
+
 /// 하루의 검색 색인을 다시 쓴다 (에피소드마다 한 줄).
 pub(crate) fn reindex_day(conn: &Connection, d: i64) -> Result<(), CoreError> {
     let (title, summary, tags): (String, String, String) = conn

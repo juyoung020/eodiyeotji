@@ -520,6 +520,8 @@ private fun CompactDayDetail(
                             header = {
                                 item(key = "__day-head", contentType = "head") {
                                     Column(Modifier.padding(start = 4.dp, end = 4.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                        // AI가 쓴 하루 요약 (여행 · 나들이처럼 이야기가 있는 날만)
+                                        detail.summary.story?.let { Text(it, style = EodiTheme.type.body, color = c.textPrimary, modifier = Modifier.padding(horizontal = 4.dp)) }
                                         StatRow(detail.summary)
                                         if (detail.summary.tags.isNotEmpty()) TagRow(detail.summary.tags)
                                         // 차 화면과 같은 버튼 줄: 그날로 돌아가기(글자 버튼) · 코스 올리기 · 카드로 공유(카톡 등, ui/share).

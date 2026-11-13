@@ -116,6 +116,8 @@ pub struct DaySummary {
     pub title: Option<String>,
     /// 하루 태그 (예: "바다", "여행", "가족")
     pub tags: Vec<String>,
+    /// LLM이 쓴 하루 요약 한두 문장 (예: "경포해변을 걷고 초당순두부를 먹었다."). LLM 제목이 있는 날에만 있다 (출퇴근뿐인 날은 None).
+    pub story: Option<String>,
     /// "그날로 돌아가기"로 다시 볼 것이 있는 날: 이름 있는 머문 곳이 1곳 이상이거나 5km 이상 달렸다 ([`is_replayable`]).
     pub replayable: bool,
 }
@@ -293,6 +295,7 @@ impl EodiStore {
         let acc = self.collect_days(&conn, d, d, true)?.remove(&d).unwrap_or_default();
         let mut summary = acc.summary(d);
         (summary.title, summary.tags) = crate::memory::day_title(&conn, d)?;
+        summary.story = crate::memory::day_story(&conn, d)?;
         let entries = acc.entries();
         Ok(DayDetail { day: format_day(d), trips: acc.trips, stays: acc.stays, summary, entries })
     }
@@ -661,6 +664,7 @@ impl DayAcc {
             stop_names: self.stays.iter().filter_map(|s| Some(s.place.as_ref()?.name.clone())).take(3).collect(),
             title: None,
             tags: Vec::new(),
+            story: None,
         }
     }
 
@@ -738,7 +742,8 @@ impl EodiStore {
         let mut st = conn.prepare_cached(
             "SELECT s.day, s.trip_count, s.stay_count, s.distance_m, s.drive_millis, s.first_ms, s.last_ms, s.stop_names,
                     coalesce(u.title, CASE WHEN m.needs_llm = 1 THEN m.title END, m.rule_title),
-                    CASE WHEN m.title IS NULL OR m.needs_llm = 0 THEN '' ELSE m.tags END
+                    CASE WHEN m.title IS NULL OR m.needs_llm = 0 THEN '' ELSE m.tags END,
+                    CASE WHEN m.title IS NOT NULL AND m.needs_llm = 1 THEN nullif(m.summary, '') END
              FROM day_summary s LEFT JOIN day_memory m ON m.day = s.day LEFT JOIN day_user_title u ON u.day = s.day ORDER BY s.day DESC LIMIT ?1",
         )?;
         let rows = st.query_map([limit], |r| {
@@ -756,6 +761,7 @@ impl EodiStore {
                 stop_names,
                 title: r.get(8)?,
                 tags: split_names(&r.get::<_, Option<String>>(9)?.unwrap_or_default()),
+                story: r.get(10)?,
             })
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
