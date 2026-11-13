@@ -145,13 +145,16 @@ fun MemoryMapOverlay(viewModel: RecapViewModel) {
             Load.Failed -> Hint(stringResource(R.string.memory_map_failed))
             is Load.Ready -> if (m.value.bounds == null) Hint(stringResource(R.string.memory_map_empty)) else MemoryMapStage(m.value)
         }
+        val backLabel = stringResource(R.string.recap_back)
         Row(Modifier.safeDrawingPadding().padding(EodiTheme.space.page), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier
                     .size(76.dp)
                     .clip(CircleShape)
                     .background(Color(0x33FFFFFF))
-                    .clickable(role = Role.Button, onClickLabel = stringResource(R.string.recap_back), onClick = viewModel::closeMemoryMap),
+                    .clickable(role = Role.Button, onClickLabel = stringResource(R.string.recap_back), onClick = viewModel::closeMemoryMap)
+                    // 화면 읽기에 이름이 없는 버튼이었다 (아이콘은 설명 없음)
+                    .semantics { contentDescription = backLabel },
                 contentAlignment = Alignment.Center,
             ) { Icon(EodiIcons.Back, contentDescription = null, tint = Moon, modifier = Modifier.size(36.dp)) }
             Spacer(Modifier.width(20.dp))
