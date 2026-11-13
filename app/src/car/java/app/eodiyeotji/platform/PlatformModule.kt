@@ -5,7 +5,6 @@ import android.content.pm.ServiceInfo
 import app.eodiyeotji.pleos.PleosLocationSource
 import app.eodiyeotji.pleos.PleosSpeech
 import app.eodiyeotji.pleos.PleosTts
-import app.eodiyeotji.record.VehicleDriveSignals
 import app.eodiyeotji.ui.agent.CarDrivingStatePort
 import app.eodiyeotji.ui.agent.DrivingStatePort
 import dagger.Binds
@@ -22,8 +21,9 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class PlatformModule {
-    @Binds abstract fun location(impl: PleosLocationSource): LocationSource
-    @Binds abstract fun driveSignals(impl: VehicleDriveSignals): DriveSignalSource
+    // 위치 · 주행 신호: 차가 아닌 기기(태블릿)에서는 가짜 차 (TabletVehicle.kt)
+    @Binds abstract fun location(impl: CarLocationSource): LocationSource
+    @Binds abstract fun driveSignals(impl: CarDriveSignals): DriveSignalSource
     // 차가 아닌 기기(태블릿)에서는 그 기기의 지도 앱으로 넘긴다 (CarNavigator)
     @Binds abstract fun navigator(impl: CarNavigator): Navigator
     @Binds abstract fun speechInput(impl: PleosSpeech): SpeechInput
@@ -41,8 +41,10 @@ abstract class PlatformModule {
 class CarRecordingPlatform @Inject constructor(
     @ApplicationContext private val context: Context,
     private val location: PleosLocationSource,
+    private val vehicle: TabletVehicle,
 ) : RecordingPlatform {
-    override fun hasRecordingPermission(): Boolean = PleosLocationSource.hasPermission(context)
+    // 태블릿(가짜 차)은 넣어 둔 시연 주행을 쓰므로 물을 권한이 없다
+    override fun hasRecordingPermission(): Boolean = vehicle.isTablet || PleosLocationSource.hasPermission(context)
 
     override fun permissionSteps(): List<PermissionStep> =
         if (!hasRecordingPermission() && location.isSupported()) {

@@ -27,7 +27,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -53,7 +52,8 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.eodiyeotji.ui.agent.ManualDrivingStatePort
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.eodiyeotji.platform.TabletVehicle
 import app.eodiyeotji.ui.theme.BrandMark
 import app.eodiyeotji.ui.theme.EodiIcons
 import dagger.hilt.EntryPoint
@@ -64,6 +64,7 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
 /*
@@ -73,7 +74,8 @@ import kotlinx.coroutines.delay
  * (Pleos 디자인 가이드 Display Layout). 일반 태블릿에는 그 틀도, 기어 · 속도 같은 차 신호도 없다. 그래서 그 구성을 우리가 직접
  * 그리고(현대차 화면을 가져다 쓰지 않는다), 앱은 차에서와 같은 자리 · 같은 크기(dp)로 그 안에 띄운다.
  * - 기준 크기는 Pleos 에뮬레이터 화면(2560x1440, 밀도 1.0)이다. 틀 전체를 그 크기로 그린 뒤 태블릿 화면에 맞게 줄인다.
- * - 동작하는 것: 시계, 기어(P R N D — D · R이면 앱이 주행 중으로 바뀐다), 실내 온도 올리고 내리기.
+ * - 동작하는 것: 시계, 기어(P R N D — D · R이면 앱이 주행 중으로 바뀌고 시연 주행을 기록한다, platform/TabletVehicle.kt),
+ *   속도(시연 주행의 값), 실내 온도 올리고 내리기.
  * - 그림뿐인 것: 주행 가능 거리 · 음악 · 홈 · 내비 · 전화 · 앱 버튼 (눌러도 아무 일도 없다).
  */
 
@@ -94,7 +96,7 @@ private val Active = Color(0xFFF2A100)
 @EntryPoint
 @InstallIn(SingletonComponent::class)
 internal interface ShellEntryPoint {
-    fun manualDriving(): ManualDrivingStatePort
+    fun vehicle(): TabletVehicle
 }
 
 @Composable
@@ -123,13 +125,13 @@ fun FakeCarShell(content: @Composable () -> Unit) {
 @Composable
 private fun Shell(content: @Composable () -> Unit) {
     val context = LocalContext.current
-    val manual = remember { EntryPointAccessors.fromApplication(context.applicationContext, ShellEntryPoint::class.java).manualDriving() }
-    var gear by rememberSaveable { mutableStateOf("P") }
-    // 기어가 D · R이면 앱이 주행 중으로 본다 (차에서 운전자 주의 분산 제약이 걸리는 것과 같은 길, ManualDrivingStatePort)
-    LaunchedEffect(gear) { manual.setDriving(gear == "D" || gear == "R") }
+    // 기어 · 속도는 가짜 차(platform/TabletVehicle.kt)가 들고 있다: D · R이면 앱이 주행 중으로 보고 시연 주행을 기록한다
+    val vehicle = remember { EntryPointAccessors.fromApplication(context.applicationContext, ShellEntryPoint::class.java).vehicle() }
+    val gear by vehicle.gear.collectAsStateWithLifecycle()
+    val speed by vehicle.speedKmh.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.weight(1f)) {
-            DrivePanel(gear, onGear = { gear = it }, Modifier.width(PanelWidth).fillMaxHeight())
+            DrivePanel(gear, speed, onGear = vehicle::setGear, Modifier.width(PanelWidth).fillMaxHeight())
             Column(Modifier.weight(1f)) {
                 StatusBar(Modifier.fillMaxWidth().height(StatusHeight))
                 Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) { content() }
@@ -141,8 +143,8 @@ private fun Shell(content: @Composable () -> Unit) {
 
 /** 주행 정보 화면: 주행 가능 거리 · 속도 · 기어 · 차 그림 · 음악. */
 @Composable
-private fun DrivePanel(gear: String, onGear: (String) -> Unit, modifier: Modifier) {
-    val moving = gear == "D" || gear == "R"
+private fun DrivePanel(gear: String, speedKmh: Float, onGear: (String) -> Unit, modifier: Modifier) {
+    val moving = TabletVehicle.isMoving(gear)
     Column(modifier.background(PanelBg)) {
         Row(Modifier.fillMaxWidth().padding(start = 28.dp, end = 24.dp, top = 26.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(width = 64.dp, height = 30.dp).background(PanelInk, RoundedCornerShape(6.dp)))
@@ -150,7 +152,7 @@ private fun DrivePanel(gear: String, onGear: (String) -> Unit, modifier: Modifie
             Text("500", color = PanelInk, fontSize = 34.sp, fontWeight = FontWeight.SemiBold)
             Text(" km", color = PanelInk, fontSize = 24.sp)
             Spacer(Modifier.weight(1f))
-            Text(if (moving) "30" else "0", color = if (moving) PanelInk else PanelMuted, fontSize = 34.sp, fontWeight = FontWeight.SemiBold)
+            Text(speedKmh.roundToInt().toString(), color = if (moving) PanelInk else PanelMuted, fontSize = 34.sp, fontWeight = FontWeight.SemiBold)
             Text(" km/h", color = PanelMuted, fontSize = 24.sp)
             Spacer(Modifier.weight(1f))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
