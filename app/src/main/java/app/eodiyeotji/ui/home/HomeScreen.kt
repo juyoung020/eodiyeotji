@@ -113,13 +113,9 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                 if (typed.isNotEmpty()) agentViewModel.ask(typed)
                 agentOpen = true
             }
-            val entry: @Composable () -> Unit = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RecordingStatusChip()
-                    Spacer(Modifier.width(12.dp))
-                    AgentEntryButton(onClick = { openAgent(recordsSearchVm) }, mic = false)
-                }
-            }
+            // 내 기록 머리: 검색 칸이 묻기까지 맡는다 (찾은 결과 아래 "AI에게 물어보기"). 물어보기 버튼을 따로 두면 같은 일을 하는 칸이 둘이 된다.
+            // 기록 상태는 알릴 게 있을 때만 (기록 중 · 설정이 꺼져 있을 때)
+            val entry: @Composable () -> Unit = { RecordingStatusChip(quietWhenWaiting = true) }
             val compactEntry: @Composable () -> Unit = {
                 AgentEntryButton(onClick = { openAgent(communitySearchVm) }, mic = false, modifier = Modifier.widthIn(max = 300.dp))
             }

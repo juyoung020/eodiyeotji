@@ -180,6 +180,8 @@ fun RecordingStatusChip(
     modifier: Modifier = Modifier,
     /** false면 누를 수 없는 표시만, 글자는 크게 (주행 중 화면: 한눈에 보이고 자세한 상태 창은 열지 않는다) */
     interactive: Boolean = true,
+    /** true면 평소(시동을 기다리는 중)에는 아무것도 그리지 않는다: 기록 중이거나 설정이 꺼져 있을 때만 보인다 */
+    quietWhenWaiting: Boolean = false,
     viewModel: RecordingStatusViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -189,6 +191,7 @@ fun RecordingStatusChip(
         onPauseOrDispose { }
     }
     val headline = state.headline
+    if (quietWhenWaiting && headline == StatusHeadline.WAITING) return
     val label = stringResource(headline.short())
     val c = EodiTheme.colors
     val warn = headline.isWarning()
