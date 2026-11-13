@@ -565,6 +565,16 @@ internal class DayMapController(
         }
     }
 
+    private var fitInsets = IntArray(4)
+
+    /** 지도 위 판이 가리는 폭이 바뀌면 그날 길을 다시 맞춘다. */
+    fun setFitInsets(insets: IntArray?) {
+        val next = insets ?: IntArray(4)
+        if (next.contentEquals(fitInsets)) return
+        fitInsets = next
+        data?.let(::fitCamera)
+    }
+
     /**
      * 화면 맞춤 여백: 위는 핀 위 카드 높이만큼, 옆은 카드 반 너비만큼 더 띄운다 (지도 폭의 일부까지만).
      * 순서: 왼쪽, 위, 오른쪽, 아래 (px).
@@ -575,7 +585,8 @@ internal class DayMapController(
         val top = min((FIT_PADDING_DP + CALLOUT_TOP_EXTRA_DP) * density, mapView.height * MAX_TOP_PAD_FRACTION).coerceAtLeast(base)
         // 아래: 핀 아래 매다는 내 사진 카드(있을 때)가 잘리지 않게
         val bottom = base
-        return intArrayOf(side.toInt(), top.toInt(), side.toInt(), bottom.toInt())
+        val e = fitInsets
+        return intArrayOf(side.toInt() + e[0], top.toInt() + e[1], side.toInt() + e[2], bottom.toInt() + e[3])
     }
 
     /** 그날 경로·핀 전체가 보이게 맞춘다. 범위가 한 점이면 너무 확대되지 않게 [MAX_FIT_ZOOM]에서 멈춘다. */

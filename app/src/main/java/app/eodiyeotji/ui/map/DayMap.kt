@@ -108,6 +108,8 @@ fun DayMap(
     photoPins: List<MapPhotoPin> = emptyList(),
     /** 그날 내 사진: 찍은 곳에 작은 사진 카드로 꽂고, 누르면 크게 본다 */
     myPhotos: List<MapPhotoSpot> = emptyList(),
+    /** 지도 위에 얹은 판이 가리는 폭 (왼쪽 · 위 · 오른쪽 · 아래 px): 그만큼 비켜서 길을 맞춘다 */
+    fitInsets: IntArray? = null,
 ) {
     val description = stringResource(R.string.map_content_description)
     val inPreview = LocalInspectionMode.current
@@ -126,7 +128,7 @@ fun DayMap(
         Box(modifier.background(EodiTheme.colors.surfaceHigh).semantics { contentDescription = description })
         return
     }
-    DayMapContent(data, selectedKey, onSelectKey, photoPins, myPhotos, options, modifier.semantics { contentDescription = description })
+    DayMapContent(data, selectedKey, onSelectKey, photoPins, myPhotos, fitInsets, options, modifier.semantics { contentDescription = description })
 }
 
 @Composable
@@ -136,6 +138,7 @@ private fun DayMapContent(
     onSelectKey: (String?) -> Unit,
     photoPins: List<MapPhotoPin>,
     myPhotos: List<MapPhotoSpot>,
+    fitInsets: IntArray?,
     baseOptions: MapLibreMapOptions,
     modifier: Modifier,
 ) {
@@ -205,6 +208,7 @@ private fun DayMapContent(
         }
     }
     LaunchedEffect(controller, palette) { controller.setPalette(palette) }
+    LaunchedEffect(controller, fitInsets?.toList()) { controller.setFitInsets(fitInsets) }
     LaunchedEffect(controller, data) { controller.setData(data) }
     LaunchedEffect(controller, selectedKey) { controller.setSelection(selectedKey) }
     // 머문 곳 카드·주행 글·깃발: 지도 데이터에서 Rust가 만든 글을 꺼내(백그라운드) 그림으로 그려 얹는다.

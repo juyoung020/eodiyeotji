@@ -143,9 +143,6 @@ import java.time.LocalDate
 /** 이 폭 이상이면 목록과 상세를 나란히 둔다 (Pleos 넓은 창 1682dp, 나눈 창 약 841dp). */
 private val WideBreakpoint = 1200.dp
 
-/** 넓은 창에서 날짜 목록이 차지하는 비율 (나머지는 상세 카드). */
-private const val ListWeight = 0.4f
-
 /** 상세 카드에서 지도가 차지하는 높이 비율 (머리 아래 남은 높이 기준, 나머지는 항목 목록). */
 private const val MapWeight = 0.46f
 
@@ -279,38 +276,19 @@ fun TimelineScreen(
                     is DaysState.Failed -> ErrorState(days.message, onRetry, Modifier.fillMaxSize(), title = stringResource(R.string.timeline_failed_title), retryLabel = stringResource(R.string.timeline_retry))
                     is DaysState.Loaded -> when {
                         days.days.isEmpty() -> EmptyPane(Modifier.fillMaxSize())
-                        wide -> Row(Modifier.fillMaxSize().then(bodyPadding)) {
-                            // 검색 결과처럼 목록 밖에서 날을 고르면, 그날이 안 보일 때 목록을 그날까지 굴린다 (0번 줄은 머리말)
-                            val selected = state.selectedDay
-                            LaunchedEffect(selected) {
-                                val i = days.days.indexOfFirst { it.day == selected }
-                                if (selected != null && i >= 0 && listState.layoutInfo.visibleItemsInfo.none { it.key == selected }) {
-                                    listState.animateScrollToItem(i + if (listTop != null) 2 else 1)
-                                }
-                            }
-                            DayList(
-                                days = days.days,
-                                today = days.today,
-                                highlightedDay = state.detail.shownSummary?.day,
-                                showChevron = false,
-                                onSelect = onSelectDay,
-                                listState = listState,
-                                footer = status,
-                                top = listTop,
-                                modifier = Modifier.weight(ListWeight).fillMaxHeight(),
-                            )
-                            Spacer(Modifier.width(space.l))
-                            DayDetailCard(
-                                detail = state.detail,
-                                today = days.today,
-                                selectedEntry = state.selectedEntry,
-                                onEntryClick = onEntryClick,
-                                onMapSelect = onMapSelect,
-                                onShare = onShare,
-                                onBack = null,
-                                modifier = Modifier.weight(1f - ListWeight).fillMaxHeight(),
-                            )
-                        }
+                        // 넓은 창(차): 지도가 바탕인 구성 (TimelineLayouts.kt). 검색 결과처럼 밖에서 날을 골라도 날짜 줄이 그날까지 굴러간다
+                        wide -> WideHome(
+                            days = days.days,
+                            today = days.today,
+                            state = state,
+                            railState = listState,
+                            onSelectDay = onSelectDay,
+                            onEntryClick = onEntryClick,
+                            onMapSelect = onMapSelect,
+                            onShare = onShare,
+                            listTop = listTop,
+                            modifier = Modifier.fillMaxSize().then(bodyPadding),
+                        )
                         else -> AnimatedContent(
                             targetState = state.selectedDay != null,
                             transitionSpec = {
@@ -789,7 +767,7 @@ private fun DayRow(
 
 /** 날짜 타일: 큰 일(日) 숫자 + 요일. 오늘은 파랑으로 채운다. */
 @Composable
-private fun DateTile(day: String, isToday: Boolean, selected: Boolean) {
+internal fun DateTile(day: String, isToday: Boolean, selected: Boolean) {
     val c = EodiTheme.colors
     val bg = when {
         isToday -> c.accent
@@ -940,7 +918,7 @@ private fun DetailHeader(summary: DaySummary?, today: LocalDate, onBack: (() -> 
  * [loaded]가 false(불러오는 중)면 올리기는 흐리게만 두고 이유는 보이지 않는다.
  */
 @Composable
-private fun DayActions(summary: DaySummary, loaded: Boolean, onShare: (() -> Unit)?) {
+internal fun DayActions(summary: DaySummary, loaded: Boolean, onShare: (() -> Unit)?) {
     val c = EodiTheme.colors
     var reason by remember(summary.day) { mutableStateOf<Int?>(null) }
     LaunchedEffect(reason) {
@@ -1104,7 +1082,7 @@ private fun StatDivider() {
  * 스크롤 위치는 날([day])마다 새로 잡는다 — 다른 날로 바꾸면 그날의 첫 출발부터 보인다.
  */
 @Composable
-private fun EntryList(
+internal fun EntryList(
     day: String,
     entries: List<DayEntry>,
     selectedKey: String?,
