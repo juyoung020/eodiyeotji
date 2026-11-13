@@ -89,8 +89,9 @@ import org.maplibre.android.style.layers.LineLayer
 
 /** 밤하늘 바탕 (스타일 background와 같은 색 → 불러오는 동안 깜빡이지 않게). */
 private val NightSky = Color(0xFF0D1A34)
-private val Gold = Color(0xFFFFD58A)
-private val Moon = Color(0xFFF3EEDF)
+// 강조는 파랑 하나 (예전 금빛 길 · 글자를 밤하늘에 맞는 밝은 파랑으로)
+private val Gold = Color(0xFF8FB8FF)
+private val Moon = Color(0xFFEEF2FA)
 
 /** 전체 그리기 시간을 달 수로 나눈다 (한 달 0.5~1.1초, 그동안 혜성 꼬리가 그 달의 길을 따라 그려진다). */
 private const val DRAW_TOTAL_MS = 9_000L
@@ -195,7 +196,7 @@ private fun MemoryMapStage(data: MemoryMap) {
     Box(Modifier.fillMaxSize().onSizeChanged { viewSize = it }) {
         if (opts != null) {
             // 처음부터 한국 전체를 본다 → 스타일이 뜨는 동안 첫 장면 타일을 같이 받는다 (서울 타일을 헛받지 않는다)
-            val mapView = rememberMapViewWithLifecycle(context, opts, NightSky.toArgb(), initialCamera = KoreaCamera, label = "memory")
+            val mapView = rememberMapViewWithLifecycle(context, opts, NightSky.toArgb(), initialCamera = KoreaCamera, label = "memory", overlay = true)
             LaunchedEffect(mapView) {
                 mapViewRef = mapView
                 mapView.getMapAsync { m ->
@@ -474,13 +475,13 @@ private fun cometGradient(head: Float, core: Boolean): Expression {
         val x = i.toFloat() / COMET_STOPS
         val behind = head - x
         val c = when {
-            behind < 0f -> Expression.rgba(255f, 214f, 140f, 0f)
+            behind < 0f -> Expression.rgba(170f, 200f, 255f, 0f)
             behind < COMET_TAIL -> {
                 val k = 1f - behind / COMET_TAIL // 머리 1 → 꼬리 끝 0
-                Expression.rgba(255f, 196f + 59f * k, 110f + 140f * k * k, trail + (1f - trail) * k * k)
+                Expression.rgba(77f + 178f * k * k, 141f + 114f * k, 255f, trail + (1f - trail) * k * k)
             }
-            core -> Expression.rgba(255f, 222f, 160f, trail)
-            else -> Expression.rgba(255f, 180f, 70f, trail)
+            core -> Expression.rgba(207f, 224f, 255f, trail)
+            else -> Expression.rgba(77f, 141f, 255f, trail)
         }
         Expression.stop(x, c)
     }

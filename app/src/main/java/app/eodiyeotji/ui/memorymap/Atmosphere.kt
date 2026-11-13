@@ -143,5 +143,5 @@ private fun skyPalette(phase: SkyPhase): SkyPalette = when (phase) {
     SkyPhase.DAY -> SkyPalette(Color(0xE07FB6E8), Color(0xB0A9D2F2), Color(0x80E8F3FA), Color(0x55FFFFFF), Color(0x33203040), Color.White, 0.22f)
     SkyPhase.GOLDEN -> SkyPalette(Color(0xF05A3A6E), Color(0xC0D9735C), Color(0xB0FFB070), Color(0x99FFC77A), Color(0x8C2A1410), Color(0xFFFFF0D8), 0.38f)
     SkyPhase.BLUE -> SkyPalette(Color(0xF20E1A3D), Color(0xC02C3F7A), Color(0x99B3758F), Color(0x70FF9E7A), Color(0x80080C1C), Color(0xFFE8EEFF), 0.45f)
-    SkyPhase.NIGHT -> SkyPalette(Color(0xFF040812), Color(0xE0091430), Color(0xA0162650), Color(0x66FFB25A), Color(0x99030610), Color(0xFFF3EEDF), 0.55f)
+    SkyPhase.NIGHT -> SkyPalette(Color(0xFF040812), Color(0xE0091430), Color(0xA0162650), Color(0x664D8DFF), Color(0x99030610), Color(0xFFEEF2FA), 0.55f) // 밤 지평선 빛은 파랑 (예전 주황 띠)
 }

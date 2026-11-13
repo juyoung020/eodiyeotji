@@ -268,7 +268,7 @@ private fun rememberReplayMap(sky: SkyPhase, label: String, bounds: MapBoundsLat
         if (!inPreview) value = MapLibreNative.prepare(context.applicationContext)
     }
     val opts = options ?: return null
-    val mapView = rememberMapViewWithLifecycle(context, opts, ReplaySunsetLand.toArgb(), initialCamera = remember { bounds?.let(::roughCamera) }, label = label)
+    val mapView = rememberMapViewWithLifecycle(context, opts, ReplaySunsetLand.toArgb(), initialCamera = remember { bounds?.let(::roughCamera) }, label = label, overlay = true)
     val controller = remember(mapView) { ReplayMapController(mapView) }
     LaunchedEffect(controller, sky) { controller.setStyle(replayStyle(context.applicationContext, sky)) }
     // 지금 곳 · 차 빛이 숨 쉬듯 커졌다 작아진다 (12fps, 레이어 2개 값만 바꾼다)
