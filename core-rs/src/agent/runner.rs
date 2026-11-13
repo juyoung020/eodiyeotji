@@ -440,7 +440,8 @@ impl MemoryAgent {
         }
         let Some(focus) = s.focus.clone() else { return };
         let Some(p) = self.memory_proposal(s, t, &focus, ctx) else { return };
-        if !answer.contains("까요?") {
+        // 이미 묻거나 청한 답("안내가 필요하시면 말씀해 주세요")에는 덧붙이지 않는다 (묻는 말이 두 번 이어졌다)
+        if !asks_already(&answer) {
             t.say(if matches!(p.action, super::NavAction::Course { .. }) { " 그 코스로 안내할까요?" } else { " 그곳으로 안내할까요?" });
         }
         *self.pending.lock().unwrap_or_else(|e| e.into_inner()) = Some(p.clone());
@@ -455,7 +456,14 @@ impl MemoryAgent {
             return;
         }
         let Some(focus) = s.focus.clone() else { return };
-        let Some(named) = answer_names(t.answer_text(), &focus, &s.candidates) else { return };
+        // 같은 곳을 여러 날 다녀온 때는 이름으로는 못 가른다 → 답이 말한 날짜로 ("9월 27일 … 들르셨어요"인데 카드는 12월 2일이었다)
+        let named = match answer_names(t.answer_text(), &focus, &s.candidates) {
+            Some(v) if !v.is_empty() => v,
+            _ => match answer_date_points(t.answer_text(), &focus, &s.candidates) {
+                Some(i) => vec![i],
+                None => return,
+            },
+        };
         // 이번 질문에서 기억 카드를 보였을 때만 (지난 질문의 후보를 다시 꺼내지 않는다)
         if named.is_empty() || !t.memory_shown {
             return;
@@ -471,7 +479,7 @@ impl MemoryAgent {
         let list = s.candidates.clone();
         t.candidates(&list, i);
         if let Some(p) = p {
-            if !t.answer_text().contains("까요?") {
+            if !asks_already(t.answer_text()) {
                 t.say(if matches!(p.action, super::NavAction::Course { .. }) { " 그 코스로 안내할까요?" } else { " 그곳으로 안내할까요?" });
             }
             *self.pending.lock().unwrap_or_else(|e| e.into_inner()) = Some(p.clone());
@@ -1047,6 +1055,27 @@ pub(crate) fn answer_names(answer: &str, focus: &MemoryHit, cands: &[MemoryHit])
     Some(out)
 }
 
+/// 답 글이 "M월 D일"로 말한 날이 [focus]가 아닌 후보 한 개의 날과만 맞으면 그 후보 번호 (focus의 날이 나오면 None).
+pub(crate) fn answer_date_points(answer: &str, focus: &MemoryHit, cands: &[MemoryHit]) -> Option<usize> {
+    let md = |day: &str| parse_ymd(day, false).map(|d| {
+        let (_, m, dd) = dates::civil_from_days(d);
+        format!("{m}월{dd}일")
+    });
+    let a: String = answer.chars().filter(|c| !c.is_whitespace()).collect();
+    let says = |h: &MemoryHit| md(&h.episode.facts.day).is_some_and(|x| a.contains(&x));
+    if says(focus) {
+        return None;
+    }
+    let mut found = cands.iter().enumerate().filter(|(_, h)| h.episode.facts.id != focus.episode.facts.id && says(h)).map(|(i, _)| i);
+    let first = found.next()?;
+    found.next().is_none().then_some(first)
+}
+
+/// 답이 이미 안내를 묻거나 청하는가.
+fn asks_already(answer: &str) -> bool {
+    ["까요?", "말씀해 주세요", "말씀해주세요"].iter().any(|w| answer.contains(w))
+}
+
 /// 후보를 부를 이름: 질문과 가장 맞는 들른 곳, 없으면 첫 곳, 없으면 제목.
 fn hit_place(h: &MemoryHit) -> String {
     h.best_stop
@@ -1149,6 +1178,11 @@ mod tidy_tests {
         // 둘 이상을 말하거나 아무 곳도 말하지 않으면 그대로
         assert_eq!(super::answer_points_elsewhere("어니언 성수와 경포해변 중 어디요?", &cands[0], &cands), None);
         assert_eq!(super::answer_points_elsewhere("기록이 있어요.", &cands[0], &cands), None);
+        // 같은 곳 다른 날: 답이 말한 날짜로 (카드 80 = 2026-02-14, 후보 12 = 2025-08-14)
+        assert_eq!(super::answer_date_points("가장 최근에는 8월 14일에 들르셨어요.", &cands[0], &cands), Some(2));
+        assert_eq!(super::answer_date_points("2월 14일에 들르셨어요.", &cands[0], &cands), None);
+        assert!(super::asks_already("안내가 필요하시면 말씀해 주세요."));
+        assert!(!super::asks_already("들르셨어요."));
         // "다른 날도 보여줘"는 다음 후보 (새 검색어가 아니다)
         assert_eq!(super::candidate_pick("다른 날도 보여줘", &cands, 0), Some(Some(1)));
         assert_eq!(super::candidate_pick("다른 날 바다 간 데", &cands, 0), None);
