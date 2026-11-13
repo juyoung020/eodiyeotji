@@ -77,7 +77,8 @@ fun ConvoyEntryChip(modifier: Modifier = Modifier, vm: ConvoyViewModel = hiltVie
     val s by vm.repo.state.collectAsStateWithLifecycle()
     val c = EodiTheme.colors
     val active = s.phase == ConvoyPhase.ACTIVE
-    val text = if (active) stringResource(R.string.convoy_sharing_count, s.members.size + 1) else stringResource(R.string.convoy_title)
+    // 위치가 끊긴 차는 "공유 중" 대수에서 뺀다 (가짜 차를 멈춘 뒤에도 "3대"로 남았다)
+    val text = if (active) stringResource(R.string.convoy_sharing_count, s.members.count { !it.stale } + 1) else stringResource(R.string.convoy_title)
     Row(
         modifier
             .heightIn(min = 64.dp)
@@ -125,7 +126,7 @@ fun ConvoyDrivingCard(modifier: Modifier = Modifier, vm: ConvoyViewModel = hiltV
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    stringResource(R.string.convoy_sharing_count, s.members.size + 1),
+                    stringResource(R.string.convoy_sharing_count, s.members.count { !it.stale } + 1),
                     style = EodiTheme.type.label,
                     color = c.accent,
                 )
