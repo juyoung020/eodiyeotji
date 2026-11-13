@@ -204,7 +204,7 @@ pub fn member_view(m: &ConvoyMemberIn, color: u32, me: Option<&ConvoyMe>, dest: 
         (format!("{name} · 도착"), format!("{name} 차 · 먼저 도착했어요"))
     } else if stale {
         let min = ((now_ms - m.ts_ms) / 60_000).max(1);
-        (format!("{name} · 신호 끊김"), format!("{name} 차 · 위치 끊김 ({min}분 전)"))
+        (format!("{name} · 위치 끊김"), format!("{name} 차 · 위치 끊김 ({min}분 전)"))
     } else {
         let mut card = format!("{name} 차");
         if !rel.is_empty() {
@@ -516,6 +516,7 @@ mod tests {
         let s = member_view(&member("a", "민수", 3.0, now - 3 * 60_000), 0, Some(&me(5.0)), Some(&dest()), now);
         assert!(s.stale);
         assert_eq!(s.card, "민수 차 · 위치 끊김 (3분 전)");
+        assert_eq!(s.label, "민수 · 위치 끊김");
         let a = member_view(&member("b", "지현", 0.05, now), 0, Some(&me(5.0)), Some(&dest()), now);
         assert!(a.arrived && a.label.ends_with("도착"));
     }

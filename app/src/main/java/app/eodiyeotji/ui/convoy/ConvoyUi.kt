@@ -254,11 +254,11 @@ private fun ActivePane(s: ConvoyUiState, repo: ConvoyRepository) {
             ConvoyMap(
                 s.geojson,
                 s.bounds,
-                Modifier.fillMaxWidth().fillMaxHeight(0.38f)
+                Modifier.fillMaxWidth().fillMaxHeight(0.32f)
                     .background(c.surfaceHigh, RoundedCornerShape(topStart = r, topEnd = r))
                     .semantics { contentDescription = mapDesc },
             )
-            ActiveInfo(s, repo, Modifier.weight(1f).fillMaxWidth().padding(24.dp))
+            ActiveInfo(s, repo, Modifier.weight(1f).fillMaxWidth().padding(24.dp), compact = true)
         }
     } else {
         Row(Modifier.fillMaxSize()) {
@@ -275,7 +275,7 @@ private fun ActivePane(s: ConvoyUiState, repo: ConvoyRepository) {
 }
 
 @Composable
-private fun ActiveInfo(s: ConvoyUiState, repo: ConvoyRepository, modifier: Modifier) {
+private fun ActiveInfo(s: ConvoyUiState, repo: ConvoyRepository, modifier: Modifier, compact: Boolean = false) {
     val c = EodiTheme.colors
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -286,10 +286,19 @@ private fun ActiveInfo(s: ConvoyUiState, repo: ConvoyRepository, modifier: Modif
                 Box(Modifier.size(14.dp).background(c.accent, CircleShape))
                 Spacer(Modifier.width(10.dp))
                 Text(stringResource(R.string.convoy_sharing), style = EodiTheme.type.label, color = c.accent, modifier = Modifier.weight(1f))
+                // 좁은 창: 참여 코드를 머리 줄에 (큰 코드 글자가 차 목록 자리를 먹어 두 번째 차부터 잘렸다)
+                if (compact) {
+                    Text(stringResource(R.string.convoy_code), style = EodiTheme.type.meta, color = c.textTertiary)
+                    Spacer(Modifier.width(8.dp))
+                    Text(s.code, style = EodiTheme.type.titleSmall, fontWeight = FontWeight.Bold, color = c.textPrimary, maxLines = 1)
+                    Spacer(Modifier.width(16.dp))
+                }
                 Pill(stringResource(R.string.convoy_close), onClick = repo::closeSheet)
             }
-            Text(stringResource(R.string.convoy_code), style = EodiTheme.type.eyebrow, color = c.textTertiary)
-            Text(s.code, style = EodiTheme.type.display, color = c.textPrimary, maxLines = 1)
+            if (!compact) {
+                Text(stringResource(R.string.convoy_code), style = EodiTheme.type.eyebrow, color = c.textTertiary)
+                Text(s.code, style = EodiTheme.type.display, color = c.textPrimary, maxLines = 1)
+            }
             Text(
                 s.dest?.let { stringResource(R.string.convoy_dest, it.name) } ?: stringResource(R.string.convoy_dest_none),
                 style = EodiTheme.type.body,
@@ -310,7 +319,8 @@ private fun ActiveInfo(s: ConvoyUiState, repo: ConvoyRepository, modifier: Modif
                         Puck(m, 52)
                         Spacer(Modifier.width(16.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(m.card, style = EodiTheme.type.bodyStrong, color = if (m.low) c.error else c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            // 끊긴 차는 흐리게 (잔량 부족이어도 지금 값이 아니므로 빨강 대신 흐림 — 주행 카드와 같은 규칙)
+                            Text(m.card, style = EodiTheme.type.bodyStrong, color = when { m.stale -> c.textSecondary; m.low -> c.error; else -> c.textPrimary }, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             // 정차 중에는 모든 차의 잔량을 보인다 (주행 중 · 지도에는 부족할 때만)
                             if (m.energy.isNotEmpty()) Text(m.energy, style = EodiTheme.type.meta, color = if (m.low) c.error else c.textTertiary)
                         }
