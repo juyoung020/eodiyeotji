@@ -64,6 +64,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.getValue
+import app.eodiyeotji.ui.rememberToday
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -282,7 +283,7 @@ private fun ParkedAgent(
     onClose: (() -> Unit)?,
     onVoiceRequest: () -> Unit,
 ) {
-    val today = remember { LocalDate.now() }
+    val today by rememberToday()
     val list = rememberLazyListState()
     FollowLatest(list, history.size, turn)
     BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -364,7 +365,7 @@ private fun CompactParkedAgent(
     onRetry: () -> Unit,
     onVoiceRequest: () -> Unit,
 ) {
-    val today = remember { LocalDate.now() }
+    val today by rememberToday()
     val list = rememberLazyListState()
     FollowLatest(list, history.size, turn)
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {

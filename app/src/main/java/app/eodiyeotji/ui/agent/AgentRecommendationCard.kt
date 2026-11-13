@@ -65,6 +65,8 @@ import app.eodiyeotji.ui.share.ShareButtonStyle
 import app.eodiyeotji.ui.share.ShareImageButton
 import app.eodiyeotji.ui.share.ShareTarget
 import java.time.LocalDate
+import androidx.compose.runtime.getValue
+import app.eodiyeotji.ui.rememberToday
 
 private val CardShape = RoundedCornerShape(32.dp)
 
@@ -464,7 +466,7 @@ internal fun PastMemoryRow(rec: RecommendationUi, today: LocalDate, modifier: Mo
 internal fun DrivingMemoryCard(rec: RecommendationUi, modifier: Modifier = Modifier) {
     val c = EodiTheme.colors
     val facts = rec.hit.episode.facts
-    val today = remember { LocalDate.now() }
+    val today by rememberToday()
     // 답이 가리킨 곳(질문과 가장 맞는 들른 곳)이 사진 · 큰 글씨, 그날 제목은 아래 작게 — 답 문장과 카드가 같은 곳을 보이게
     val spot = rec.hit.bestStop?.takeIf { it.name.isNotBlank() } ?: rec.stops.firstOrNull()
     val day = rec.hit.episode.title ?: rec.hit.dayTitle ?: facts.ruleLabel
