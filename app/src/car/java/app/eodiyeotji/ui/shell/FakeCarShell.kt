@@ -1,5 +1,14 @@
 package app.eodiyeotji.ui.shell
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
+import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import android.content.pm.PackageManager
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -77,6 +86,8 @@ import kotlinx.coroutines.delay
  * - 동작하는 것: 시계, 기어(P R N D — D · R이면 앱이 주행 중으로 바뀌고 시연 주행을 기록한다, platform/TabletVehicle.kt),
  *   속도(시연 주행의 값), 실내 온도 올리고 내리기.
  * - 그림뿐인 것: 주행 가능 거리 · 음악 · 홈 · 내비 · 전화 · 앱 버튼 (눌러도 아무 일도 없다).
+ * - 꾸밈 그림(선택): 기기의 `files/shell/panel.png`(주행 정보 화면의 차 그림 · 음악 줄)와 `bar.png`(하단 바)가 있으면
+ *   직접 그린 것 대신 그 그림을 쓴다. 에뮬레이터 화면에서 오려 넣는 것이라 저장소에는 두지 않는다 (scripts/demo-shell/push_shell.py).
  */
 
 private const val FRAME_W = 2560
@@ -129,24 +140,39 @@ private fun Shell(content: @Composable () -> Unit) {
     val vehicle = remember { EntryPointAccessors.fromApplication(context.applicationContext, ShellEntryPoint::class.java).vehicle() }
     val gear by vehicle.gear.collectAsStateWithLifecycle()
     val speed by vehicle.speedKmh.collectAsStateWithLifecycle()
+    // 꾸밈 그림 (있을 때만, 읽기는 IO 스레드에서)
+    val art by produceState(ShellArt(null, null)) {
+        value = withContext(Dispatchers.IO) {
+            val dir = File(context.filesDir, "shell")
+            fun load(name: String): ImageBitmap? = File(dir, name).takeIf { it.isFile }?.let { f -> runCatching { BitmapFactory.decodeFile(f.path)?.asImageBitmap() }.getOrNull() }
+            ShellArt(load("panel.png"), load("bar.png"))
+        }
+    }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.weight(1f)) {
-            DrivePanel(gear, speed, onGear = vehicle::setGear, Modifier.width(PanelWidth).fillMaxHeight())
+            DrivePanel(gear, speed, onGear = vehicle::setGear, art.panel, Modifier.width(PanelWidth).fillMaxHeight())
             Column(Modifier.weight(1f)) {
                 StatusBar(Modifier.fillMaxWidth().height(StatusHeight))
                 Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) { content() }
             }
         }
-        BottomBar(Modifier.fillMaxWidth().height(BarHeight))
+        BottomBar(art.bar, Modifier.fillMaxWidth().height(BarHeight))
     }
 }
 
-/** 주행 정보 화면: 주행 가능 거리 · 속도 · 기어 · 차 그림 · 음악. */
+/** 꾸밈 그림: 주행 정보 화면의 윗줄 아래 전부([panel]) · 하단 바([bar]). 없으면 null. */
+@Immutable
+private class ShellArt(val panel: ImageBitmap?, val bar: ImageBitmap?)
+
+/** 주행 정보 화면: 주행 가능 거리 · 속도 · 기어(윗줄, 늘 직접 그린다) + 차 그림 · 음악 ([art]가 있으면 그 그림). */
 @Composable
-private fun DrivePanel(gear: String, speedKmh: Float, onGear: (String) -> Unit, modifier: Modifier) {
+private fun DrivePanel(gear: String, speedKmh: Float, onGear: (String) -> Unit, art: ImageBitmap?, modifier: Modifier) {
     val moving = TabletVehicle.isMoving(gear)
     Column(modifier.background(PanelBg)) {
-        Row(Modifier.fillMaxWidth().padding(start = 28.dp, end = 24.dp, top = 26.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.fillMaxWidth().height(StatusHeight).background(if (art != null) Color.White else PanelBg).padding(start = 28.dp, end = 24.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Box(Modifier.size(width = 64.dp, height = 30.dp).background(PanelInk, RoundedCornerShape(6.dp)))
             Spacer(Modifier.width(14.dp))
             Text("500", color = PanelInk, fontSize = 34.sp, fontWeight = FontWeight.SemiBold)
@@ -167,36 +193,40 @@ private fun DrivePanel(gear: String, speedKmh: Float, onGear: (String) -> Unit, 
                 }
             }
         }
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CarSketch(Modifier.size(width = 560.dp, height = 300.dp))
-                Spacer(Modifier.height(36.dp))
-                Text(
-                    when (gear) {
-                        "D" -> "주행 중"
-                        "R" -> "후진 중"
-                        "N" -> "중립"
-                        else -> "주차 중"
-                    },
-                    color = PanelInk, fontSize = 30.sp, fontWeight = FontWeight.SemiBold,
-                )
-                Text("기어를 눌러 주행 · 정차를 바꿔 보세요", color = PanelMuted, fontSize = 22.sp, modifier = Modifier.padding(top = 8.dp))
+        if (art != null) {
+            Image(art, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.weight(1f).fillMaxWidth())
+        } else {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CarSketch(Modifier.size(width = 560.dp, height = 300.dp))
+                    Spacer(Modifier.height(36.dp))
+                    Text(
+                        when (gear) {
+                            "D" -> "주행 중"
+                            "R" -> "후진 중"
+                            "N" -> "중립"
+                            else -> "주차 중"
+                        },
+                        color = PanelInk, fontSize = 30.sp, fontWeight = FontWeight.SemiBold,
+                    )
+                    Text("기어를 눌러 주행 · 정차를 바꿔 보세요", color = PanelMuted, fontSize = 22.sp, modifier = Modifier.padding(top = 8.dp))
+                }
             }
-        }
-        Row(
-            Modifier.fillMaxWidth().height(180.dp).background(Color.White).padding(horizontal = 24.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.size(100.dp).background(PanelBg, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-                Text("♪", color = PanelInk, fontSize = 48.sp)
+            Row(
+                Modifier.fillMaxWidth().height(180.dp).background(Color.White).padding(horizontal = 24.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(100.dp).background(PanelBg, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+                    Text("♪", color = PanelInk, fontSize = 48.sp)
+                }
+                Spacer(Modifier.width(24.dp))
+                Text("재생 중인 항목 없음", color = PanelInk, fontSize = 28.sp, modifier = Modifier.weight(1f))
+                PanelIcon(EodiIcons.Back)
+                Spacer(Modifier.width(36.dp))
+                PanelIcon(EodiIcons.Play)
+                Spacer(Modifier.width(36.dp))
+                PanelIcon(EodiIcons.Chevron)
             }
-            Spacer(Modifier.width(24.dp))
-            Text("재생 중인 항목 없음", color = PanelInk, fontSize = 28.sp, modifier = Modifier.weight(1f))
-            PanelIcon(EodiIcons.Back)
-            Spacer(Modifier.width(36.dp))
-            PanelIcon(EodiIcons.Play)
-            Spacer(Modifier.width(36.dp))
-            PanelIcon(EodiIcons.Chevron)
         }
     }
 }
@@ -252,7 +282,11 @@ private fun clockText(): String = LocalTime.now().format(DateTimeFormatter.ofPat
 
 /** 하단 바: 온도(올리고 내릴 수 있다) · 홈 · 내비 · 전화 · 앱 · 지금 떠 있는 우리 앱. */
 @Composable
-private fun BottomBar(modifier: Modifier) {
+private fun BottomBar(art: ImageBitmap?, modifier: Modifier) {
+    if (art != null) {
+        Image(art, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = modifier)
+        return
+    }
     Row(modifier.background(BarBg).padding(horizontal = 36.dp), verticalAlignment = Alignment.CenterVertically) {
         Temperature()
         Spacer(Modifier.weight(1f))
