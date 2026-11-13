@@ -206,7 +206,8 @@ private fun PlaceCardView(card: PlaceCard, offers: List<PartnerOffer>, onHeart: 
         shape = RoundedCornerShape(EodiTheme.space.radiusL),
     ) {
         Column(Modifier.padding(20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // 머리 줄 높이를 쿠폰 배지가 있는 카드와 같게 지킨다: 두 칸 격자에서 옆 카드와 높이가 달라 줄이 들쭉날쭉하던 것
+            Row(Modifier.heightIn(min = HeaderMinHeight), verticalAlignment = Alignment.CenterVertically) {
                 StopPhotoBox(label?.name.orEmpty(), label?.address.orEmpty(), card.lat, card.lon, null, Modifier.size(120.dp), radius = EodiTheme.space.radiusM, iconSize = 40.dp)
                 Spacer(Modifier.width(20.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -239,6 +240,9 @@ private fun PlaceCardView(card: PlaceCard, offers: List<PartnerOffer>, onHeart: 
         }
     }
 }
+
+/** 장소 카드 머리 줄 최소 높이 = 사진 120dp + 쿠폰 배지 한 줄이 들어간 글 칸 높이. */
+private val HeaderMinHeight = 172.dp
 
 /** 보조 동작 (흰 바탕 · 파란 외곽선 · 파란 글자, 76dp). */
 @Composable

@@ -27,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -47,6 +48,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import app.eodiyeotji.R
 import app.eodiyeotji.record.RecordingStatusChip
 import app.eodiyeotji.ui.agent.AgentPanel
@@ -130,6 +133,21 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
             val courses: CourseViewModel = hiltViewModel()
             val reviews: ReviewViewModel = hiltViewModel()
             val board: BoardViewModel = hiltViewModel()
+            // 모아보기에서 연 요약 · 결산 · 기억 지도 · 출장 창은 내 기록 화면 위에 뜬다.
+            // 그동안 레일은 "모아보기"를 고른 채로 두고, 창을 닫으면 모아보기로 돌아간다 (전에는 레일이 "내 기록"으로 바뀌고 닫으면 내 기록에 남았다).
+            val recapVm: app.eodiyeotji.ui.recap.RecapViewModel = hiltViewModel()
+            val bizVm: app.eodiyeotji.ui.biz.BizViewModel = hiltViewModel()
+            val overlayFlow = remember(recapVm, bizVm) {
+                combine(recapVm.state, bizVm.state) { r, b -> r.open || r.memoryMapOpen || b.open }.distinctUntilChanged()
+            }
+            val overlayOpen by overlayFlow.collectAsStateWithLifecycle(false)
+            var fromCollections by rememberSaveable { mutableStateOf(false) }
+            androidx.compose.runtime.LaunchedEffect(overlayOpen) {
+                if (!overlayOpen && fromCollections) {
+                    fromCollections = false
+                    tab = HomeTab.COLLECTIONS
+                }
+            }
             val actions = SearchActions(
                 openDay = { day, entryKey ->
                     tab = HomeTab.TIMELINE
@@ -175,7 +193,11 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                 hint = stringResource(communityTab.searchHint()),
             )
             Row(Modifier.fillMaxSize().background(EodiTheme.colors.background)) {
-                NavRail(tab, driving = agentState.isDriving, onSelect = { tab = it })
+                NavRail(
+                    if (fromCollections && overlayOpen) HomeTab.COLLECTIONS else tab,
+                    driving = agentState.isDriving,
+                    onSelect = { fromCollections = false; tab = it },
+                )
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     // 탭을 바꾸면 새 화면이 살짝 떠오르며 들어온다 (한 번만 · 그리기 단계만 바뀜, 지도 두 장을 겹쳐 그리지 않는다)
                     Box(Modifier.weight(1f).fillMaxWidth().enterRise(tab)) {
@@ -204,7 +226,7 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                                     tab = HomeTab.TIMELINE
                                     recordsSearchVm.openKind(EpisodeKind.TRIP)
                                 },
-                                onOpenRecords = { tab = HomeTab.TIMELINE },
+                                onOpenRecords = { fromCollections = true; tab = HomeTab.TIMELINE },
                             )
                         }
                     }
