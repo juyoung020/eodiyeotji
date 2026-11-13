@@ -58,7 +58,7 @@
     <string name="course_empty">아직 올라온 코스가 없어요</string>
     <string name="course_empty_near">근처 %1$dkm 안에는 아직 코스가 없어요</string>
     <string name="course_navigate">이 코스로 안내</string>
-    <string name="course_navigate_next">다음 구간 바로 안내 (%1$d/%2$d)</string>
+    <string name="course_navigate_next">다음 구간 안내 (%1$d/%2$d)</string>
     <string name="course_navigate_again">마지막 구간 다시 안내</string>
     <string name="course_navi_auto">%1$d/%2$d 구간 안내 중 · 도착하면 다음 구간으로 자동으로 넘어가요</string>
     <string name="course_navi_legs_hint">%1$d구간 코스 · 도착하면 다음 구간을 자동으로 이어서 안내해요</string>
