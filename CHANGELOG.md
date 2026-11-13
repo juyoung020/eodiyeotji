@@ -17,6 +17,8 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-13
+
 ### Added
 - 1차 제출 release APK를 GitHub Release `submission-1`에 올리고, README에 APK 위치 · 측정한 성능 · APK에 들어가는 클라이언트 자격 증명을 적음. 디버그 빌드에 테스트로 쌓인 하루 기록 지우기 브로드캐스트 추가
 - Pleos 디자인 가이드 맞춤 1: Gleo AI 대화 상태 7단계(듣는 중 · 2초 뒤 "운전석에서 듣는 중…" · 생각 중 · 대답을 기다려요 · 말하는 중 · 대기 중)를 에이전트 화면 · 듣기 카드 · 제안 카드에 표시하고, 대화가 끝나면 응답 화면을 5초 유지 후 내린다(Standby). 제안 카드는 Gleo 패널 구조(말풍선 + 카드 + 그래/아니 칩, 바깥 누름 · 위로 밀기로 닫기)
@@ -192,7 +194,8 @@
 - 앱 아키텍처 설계 (Rust 코어 + Kotlin UI)와 Rust 코어 시작 (경로 단순화 · 머문 곳 감지 · 코스 구간)
 - 백로그 · 기획서 초안 v0, 프로젝트 규칙 (`CLAUDE.md`)
 
-[Unreleased]: https://github.com/juyoung020/eodiyeotji/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/juyoung020/eodiyeotji/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/juyoung020/eodiyeotji/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/juyoung020/eodiyeotji/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/juyoung020/eodiyeotji/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/juyoung020/eodiyeotji/compare/v0.3.0...v0.4.0
