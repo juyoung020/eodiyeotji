@@ -184,10 +184,21 @@ fn find(call: &ToolCall, a: &Value, c: &mut Ctx) -> Result<Outcome, Bad> {
     }
     c.cache.remember(&hits);
     let mut data = json!({"count": hits.len(), "hits": hits.iter().map(|h| hit_json(h, today)).collect::<Vec<_>>()});
+    let mut last_before: Option<MemoryHit> = None;
     if hits.is_empty() {
         data["hint"] = json!("결과 없음. 다른 동의어로 한 번 더 찾거나, 못 찾았다고 답하세요.");
+        // "어제 어디 갔지"처럼 좁은 기간이 비면 그 전 마지막 기록 날을 알려 준다 → "어제는 기록이 없어요. 마지막은 11월 10일 …"
+        if let (true, Some(f)) = (narrow, from) {
+            let before = MemoryQuery { terms: vec![], from_ms: None, to_ms: Some(dates::day_start_ms(f, tz) - 1), kinds: vec![], limit: MAX_HITS as u32 };
+            last_before = c.backend.search_memories(before).ok().and_then(|v| v.into_iter().max_by_key(|h| h.episode.facts.start_ms));
+            if let Some(h) = &last_before {
+                data["last_before"] = hit_json(h, today);
+                data["hint"] = json!("그 기간엔 기록 없음. 없다고 말하고, last_before(그 전 마지막 기록)의 say와 들른 곳을 한 문장으로 알려 주세요.");
+            }
+        }
     }
-    let focus = hits.first().map(|h| (h.clone(), c.cache.courses.get(&h.episode.facts.id).map(|x| x.0.clone())));
+    // 그 전 마지막 기록은 카드로도 보인다 (말로만 "11월 10일 …"이면 무엇인지 화면에 없었다)
+    let focus = hits.first().or(last_before.as_ref()).map(|h| (h.clone(), c.cache.courses.get(&h.episode.facts.id).map(|x| x.0.clone())));
     Ok(Outcome { call: call.clone(), ok: true, content: ok_json(data), focus, hits, proposal: None, courses_changed: false })
 }
 
@@ -199,8 +210,9 @@ fn day(call: &ToolCall, a: &Value, c: &mut Ctx) -> Result<Outcome, Bad> {
         e.episode = ep.clone();
     }
     let tz = c.ctx.tz_offset_minutes;
+    let today = local_days(c.ctx.now_ms, tz);
     let mut data = json!({
-        "day": fmt_day(d), "weekday": WEEKDAYS[dates::weekday(d)],
+        "day": fmt_day(d), "say": super::runner::spoken_date(&fmt_day(d), today), "weekday": WEEKDAYS[dates::weekday(d)],
         "episodes": list.iter().take(MAX_DAY_EPISODES).map(|e| episode_detail(e, tz)).collect::<Vec<_>>(),
     });
     if list.is_empty() {

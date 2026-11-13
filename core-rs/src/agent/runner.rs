@@ -440,7 +440,11 @@ impl MemoryAgent {
 
     /// LLM이 답에서 카드와 다른 후보를 말했으면(카드 "대림창고" · 답 "블루보틀 성수 기록이 있어요") 카드 · 안내 제안을
     /// 답이 말한 후보로 바꾼다. 답과 화면이 다르면 운전자가 무엇으로 안내되는지 알 수 없다.
+    /// 이번 질문에서 기억 카드를 보였을 때만 (코스 추천 중이거나 지난 질문의 후보로는 바꾸지 않는다).
     fn follow_answer_focus(&self, s: &mut Session, t: &mut Turn, ctx: &AgentContext) {
+        if !t.memory_shown || t.course_shown {
+            return;
+        }
         let Some(focus) = s.focus.clone() else { return };
         let Some(i) = answer_points_elsewhere(t.answer_text(), &focus, &s.candidates) else { return };
         let hit = s.candidates[i].clone();
@@ -448,7 +452,13 @@ impl MemoryAgent {
         s.focus = Some(hit.clone());
         let (p, course) = self.proposal_for(s, &hit, ctx);
         t.recommend(&hit, course);
+        // 후보 칸의 고른 표시도 같은 후보로
+        let list = s.candidates.clone();
+        t.candidates(&list, i);
         if let Some(p) = p {
+            if !t.answer_text().contains("까요?") {
+                t.say(if matches!(p.action, super::NavAction::Course { .. }) { " 그 코스로 안내할까요?" } else { " 그곳으로 안내할까요?" });
+            }
             *self.pending.lock().unwrap_or_else(|e| e.into_inner()) = Some(p.clone());
             t.l.on_action_proposal(p);
         }
@@ -972,14 +982,15 @@ fn times(n: usize) -> String {
 }
 
 /// 답 글이 [focus]가 아닌 후보 하나를 이름으로 말하나: 그 후보 번호. focus의 이름이 나오거나, 둘 이상이 나오거나, 아무것도 없으면 None.
-/// 이름은 들른 곳 이름(띄어쓰기 무시, 두 글자 이상)으로 맞춘다.
+/// 이름은 들른 곳 이름(띄어쓰기 무시, 세 글자 이상)으로 맞춘다.
 pub(crate) fn answer_points_elsewhere(answer: &str, focus: &MemoryHit, cands: &[MemoryHit]) -> Option<usize> {
     let a: String = answer.chars().filter(|c| !c.is_whitespace()).collect();
     // 답에 나온 들른 곳 이름 (없으면 None)
     let said = |h: &MemoryHit| {
         h.episode.facts.stops.iter().find_map(|st| {
+            // 세 글자 이상만: "카페" · "회사" · "마트" 같은 두 글자 이름은 다른 말 속에도 흔해 잘못 옮겨 갔다
             let n: String = st.name.chars().filter(|c| !c.is_whitespace()).collect();
-            (n.chars().count() >= 2 && a.contains(&n)).then_some(n)
+            (n.chars().count() >= 3 && a.contains(&n)).then_some(n)
         })
     };
     if said(focus).is_some() {

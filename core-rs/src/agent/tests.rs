@@ -951,3 +951,19 @@ fn qwen_only_fields_are_not_sent_to_cloud_llm() {
     let local = LlmClient::new(LlmConfig { base_url: "http://10.0.2.2:8181/v1".into(), model: "gemini-x".into(), api_key: String::new(), connect_timeout_ms: 2_000, read_timeout_ms: 30_000 });
     assert_eq!(local.body(&[], &p)["cache_prompt"], json!(true));
 }
+
+/// "어제 어디 갔지"처럼 좁은 기간이 비면 그 전 마지막 기록을 함께 준다 (LLM이 "기록이 없어요"로만 끝내지 않게).
+#[test]
+fn empty_narrow_find_offers_the_last_record_before() {
+    let backend = FakeBackend::new();
+    let cx = ctx(false);
+    let (mut cache, mut courses, mut seq) = (tools::ToolCache::default(), courses::CourseState::default(), 0u64);
+    let mut c = tools::Ctx { backend: backend.as_ref(), ctx: &cx, cache: &mut cache, courses: &mut courses, proposal_seq: &mut seq };
+    let call = llm::ToolCall { id: "c1".into(), name: "find".into(), arguments: r#"{"q":[],"from":"2026-11-05","to":"2026-11-05"}"#.into() };
+    let o = tools::run(&call, &mut c);
+    let v: Value = serde_json::from_str(&o.content).unwrap();
+    let data = v.get("data").unwrap_or(&v);
+    assert_eq!(data["count"], 0, "{v}");
+    assert_eq!(data["last_before"]["day"], "2026-11-01", "{v}");
+    assert_eq!(data["last_before"]["say"], "11월 1일");
+}
