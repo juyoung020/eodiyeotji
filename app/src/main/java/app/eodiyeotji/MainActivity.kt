@@ -2,6 +2,7 @@ package app.eodiyeotji
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import app.eodiyeotji.ui.theme.EodiTheme
@@ -12,6 +13,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // 맨 위 화면에서 뒤로(CCP Back 하드키 포함): 앱을 끝내지 않고 숨긴다 (Pleos CCP 가이드 필수: finish 대신 moveTaskToBack(true)).
+        // 화면 안 창 · 시트의 BackHandler는 나중에 등록돼 먼저 받으므로, 이것은 더 닫을 것이 없을 때만 불린다
+        onBackPressedDispatcher.addCallback(this) { moveTaskToBack(true) }
         setContent {
             EodiTheme {
                 // 화면 뼈대는 판마다 다르다: 차 = 왼쪽 레일 + 넓은 화면(src/car/…/AppRoot.kt), 폰 = 아래 탭 + 세로 화면(src/phone/…/AppRoot.kt)

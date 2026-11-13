@@ -45,10 +45,27 @@ class CarRecordingPlatform @Inject constructor(
     override fun hasRecordingPermission(): Boolean = PleosLocationSource.hasPermission(context)
 
     override fun permissionSteps(): List<PermissionStep> =
-        if (!hasRecordingPermission() && location.isSupported()) listOf(PermissionStep(listOf(PleosLocationSource.PERMISSION))) else emptyList()
+        if (!hasRecordingPermission() && location.isSupported()) {
+            listOf(PermissionStep(listOf(PleosLocationSource.PERMISSION), rationale = LOCATION_NOTICE))
+        } else {
+            emptyList()
+        }
 
     override val foregroundServiceType: Int = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
 
     override fun permissionsFor(issue: RecordingIssue): List<String> =
         if (issue == RecordingIssue.LOCATION_OFF) listOf(PleosLocationSource.PERMISSION) else emptyList()
+
+    private companion object {
+        /**
+         * 위치 권한을 묻기 전 알림 (Pleos 앱마켓 심사 "사용자 개인정보 및 보안": 수집 항목 · 목적 · 보유 기간 · 거부할 권리를 알리고,
+         * "계속"을 누른 경우에만 묻는다. 바깥을 눌러 닫으면 동의로 보지 않고 건너뛴다 — RecordingPermissionGate).
+         */
+        const val LOCATION_NOTICE =
+            "어디였지는 차의 위치와 시각을 모아 다녀온 길과 머문 곳을 자동으로 기록해요.\n" +
+                "· 모으는 것: 차량 위치 · 시각 (주행 중에만)\n" +
+                "· 쓰는 곳: 하루 기록 · 말로 찾기 · 회상 안내\n" +
+                "· 보관: 이 차 안에만, 직접 지울 때까지 (날짜 · 장소별로 언제든 지울 수 있어요)\n" +
+                "거절해도 돼요. 그러면 자동 기록만 꺼지고 나머지는 그대로 쓸 수 있어요."
+    }
 }
