@@ -582,7 +582,10 @@ private fun TimelineHeader(wide: Boolean, action: (@Composable () -> Unit)?, hei
         modifier = Modifier.fillMaxWidth().height(height).padding(horizontal = space.page),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
+        // 좁은 창(나눈 화면)에서 검색 칸이 있으면 앱 이름을 뺀다: 레일 맨 위 앱 아이콘이 이미 있고,
+        // 이름 · 같이 가기 · 오프라인 표시 사이에서 검색 칸이 글자 서너 개 폭으로 줄었다
+        val showName = wide || search == null
+        if (showName) Text(
             stringResource(R.string.app_name),
             style = EodiTheme.type.titleSmall,
             fontWeight = FontWeight.ExtraBold,
@@ -593,7 +596,7 @@ private fun TimelineHeader(wide: Boolean, action: (@Composable () -> Unit)?, hei
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
             if (search != null) {
                 // 검색 칸이 소개 글 자리를 쓴다 (앱 이름 옆 ~ 물어보기 버튼 앞)
-                Spacer(Modifier.width(24.dp))
+                if (showName) Spacer(Modifier.width(24.dp))
                 search.bar(Modifier.weight(1f))
             } else if (wide) {
                 Spacer(Modifier.width(20.dp))
