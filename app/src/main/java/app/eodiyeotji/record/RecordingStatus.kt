@@ -265,6 +265,37 @@ fun RecordingStatusChip(
     }
 }
 
+/**
+ * 줄 전체를 누르면 기록 상태 시트(개인정보 · 기록 모두 지우기)가 열리는 한 줄 (내 장소 › 집 · 회사 · 숨긴 기록).
+ * 칩만 누를 수 있으면 글자처럼 보여 누를 수 있는지 몰랐다 → 줄 전체 + 오른쪽 ›.
+ */
+@Composable
+fun RecordingPrivacyRow(hint: String, modifier: Modifier = Modifier, viewModel: RecordingStatusViewModel = hiltViewModel()) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    var open by rememberSaveable { mutableStateOf(false) }
+    val c = EodiTheme.colors
+    Row(
+        modifier
+            .heightIn(min = 104.dp)
+            .clip(RoundedCornerShape(EodiTheme.space.radiusM))
+            .background(c.surface)
+            .clickable(role = Role.Button) { open = true }
+            .padding(horizontal = 24.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(hint, style = EodiTheme.type.body, color = c.textSecondary, modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(16.dp))
+        StatusDot(state.headline, 14.dp, pulse = false)
+        Spacer(Modifier.width(10.dp))
+        Text(stringResource(state.headline.short()), style = EodiTheme.type.caption, fontWeight = FontWeight.SemiBold, color = c.textSecondary, maxLines = 1)
+        Spacer(Modifier.width(12.dp))
+        Text("›", style = EodiTheme.type.title, color = c.textTertiary)
+    }
+    if (open) {
+        RecordingStatusSheet(state, viewModel, onClose = { open = false })
+    }
+}
+
 /** 상태 점: 기록 중 = 파랑(길 색)이 숨 쉼, 대기 = 초록(지금), 경고 = 코랄. */
 @Composable
 private fun StatusDot(headline: StatusHeadline, size: androidx.compose.ui.unit.Dp = 14.dp, pulse: Boolean = true) {
