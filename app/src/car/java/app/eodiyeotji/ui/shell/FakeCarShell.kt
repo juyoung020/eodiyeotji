@@ -98,7 +98,7 @@ import kotlinx.coroutines.delay
  * - 이 화면이 떠 있는 동안에는 화면이 꺼지지 않는다 (앱을 벗어나면 기기 설정대로). 대신 서 있는 채로 [SAVER_AFTER_MS] 동안 손대지 않으면
  *   화면 보호기(검은 화면 + 자리를 옮겨 다니는 시계)가 덮는다 — 같은 그림이 오래 켜져 화면에 자국이 남지 않게. 누르면 돌아온다.
  * - 그림뿐인 것: 주행 가능 거리 · 음악 · 홈 · 내비 · 전화 · 앱 버튼 (눌러도 아무 일도 없다).
- * - 꾸밈 그림(선택): 기기의 `files/shell/panel.png`(주행 정보 화면의 차 그림 · 음악 줄)와 `bar.png`(하단 바)가 있으면
+ * - 꾸밈 그림(선택): 기기의 `files/shell/panel.png`(주행 정보 화면의 차 그림 · 음악 줄) · `bar.png`(하단 바) · `status.png`(위 상태 줄)가 있으면
  *   직접 그린 것 대신 그 그림을 쓴다. 에뮬레이터 화면에서 오려 넣는 것이라 저장소에는 두지 않는다 (scripts/demo-shell/push_shell.py).
  */
 
@@ -174,14 +174,14 @@ private fun Shell(content: @Composable () -> Unit) {
         value = withContext(Dispatchers.IO) {
             val dir = File(context.filesDir, "shell")
             fun load(name: String): ImageBitmap? = File(dir, name).takeIf { it.isFile }?.let { f -> runCatching { BitmapFactory.decodeFile(f.path)?.asImageBitmap() }.getOrNull() }
-            ShellArt(load("panel.png"), load("bar.png"))
+            ShellArt(load("panel.png"), load("bar.png"), load("status.png"))
         }
     }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.weight(1f)) {
             DrivePanel(gear, speed, onGear = vehicle::setGear, art.panel, Modifier.width(PanelWidth).fillMaxHeight())
             Column(Modifier.weight(1f)) {
-                StatusBar(Modifier.fillMaxWidth().height(StatusHeight))
+                StatusBar(art.status, Modifier.fillMaxWidth().height(StatusHeight))
                 Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) { content() }
             }
         }
@@ -189,9 +189,9 @@ private fun Shell(content: @Composable () -> Unit) {
     }
 }
 
-/** 꾸밈 그림: 주행 정보 화면의 윗줄 아래 전부([panel]) · 하단 바([bar]). 없으면 null. */
+/** 꾸밈 그림: 주행 정보 화면의 윗줄 아래 전부([panel]) · 하단 바([bar]) · 위 상태 줄([status]). 없으면 null. */
 @Immutable
-private class ShellArt(val panel: ImageBitmap?, val bar: ImageBitmap?)
+private class ShellArt(val panel: ImageBitmap?, val bar: ImageBitmap?, val status: ImageBitmap? = null)
 
 /** 주행 정보 화면: 주행 가능 거리 · 속도 · 기어(윗줄, 늘 직접 그린다) + 차 그림 · 음악 ([art]가 있으면 그 그림). */
 @Composable
@@ -346,12 +346,29 @@ private val SAVER_SPOTS = listOf(Alignment.Center, Alignment.TopStart, Alignment
 
 /** 위 상태 줄: 시연용 화면이라는 표시 · 사용자 · 시계 (시계는 실제 시각). */
 @Composable
-private fun StatusBar(modifier: Modifier) {
-    val clock by produceState(initialValue = clockText()) {
+private fun StatusBar(art: ImageBitmap?, modifier: Modifier) {
+    // 지금 시각 (5초마다 다시 읽는다)
+    val now by produceState(initialValue = LocalTime.now()) {
         while (true) {
             delay(5_000)
-            value = clockText()
+            value = LocalTime.now()
         }
+    }
+    if (art != null) {
+        // 꾸밈 그림 위에 시계 자리만 덮고 실제 시각을 쓴다 (그림에 찍힌 시각은 멈춰 있으므로)
+        Box(modifier) {
+            Image(art, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
+            Box(
+                Modifier.align(Alignment.CenterEnd).padding(end = 6.dp).width(164.dp).height(70.dp).background(Color(0xFFF7F7F7)),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Text(
+                    now.format(ART_CLOCK),
+                    color = Color.Black, fontSize = 30.sp, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 18.dp),
+                )
+            }
+        }
+        return
     }
     Row(modifier.background(Color.White).padding(horizontal = 28.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("시연용 인포 화면", color = PanelMuted, fontSize = 24.sp)
@@ -360,11 +377,16 @@ private fun StatusBar(modifier: Modifier) {
             Text("운", color = Color(0xFF8A3FC4), fontSize = 24.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.width(36.dp))
-        Text(clock, color = PanelInk, fontSize = 30.sp, fontWeight = FontWeight.Medium)
+        Text(now.format(CLOCK), color = PanelInk, fontSize = 30.sp, fontWeight = FontWeight.Medium)
     }
 }
 
-private fun clockText(): String = LocalTime.now().format(DateTimeFormatter.ofPattern("a h:mm", Locale.KOREAN))
+private val CLOCK = DateTimeFormatter.ofPattern("a h:mm", Locale.KOREAN)
+
+/** 꾸밈 그림(에뮬레이터 상태 줄)의 시계와 같은 모양: "05:32 오후" */
+private val ART_CLOCK = DateTimeFormatter.ofPattern("hh:mm a", Locale.KOREAN)
+
+private fun clockText(): String = LocalTime.now().format(CLOCK)
 
 /** 하단 바: 온도(올리고 내릴 수 있다) · 홈 · 내비 · 전화 · 앱 · 지금 떠 있는 우리 앱. */
 @Composable
