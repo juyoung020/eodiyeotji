@@ -74,6 +74,7 @@ import app.eodiyeotji.ui.community.BoardViewModel
 import app.eodiyeotji.ui.community.CommunityIcons
 import app.eodiyeotji.ui.community.CommunityRoute
 import app.eodiyeotji.ui.community.CommunityTab
+import app.eodiyeotji.core.EpisodeKind
 import app.eodiyeotji.core.SearchScope
 import app.eodiyeotji.ui.review.ReviewViewModel
 import app.eodiyeotji.ui.search.SearchActions
@@ -295,10 +296,11 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
                     } else TimelineRoute(
                         compact = true,
                         search = recordsSearch,
+                        onOpenTrips = { recordsSearchVm.openKind(EpisodeKind.TRIP) },
                         headerAction = {
-                            // 기록 상태(기록 중 · 대기 중 · 권한/알림/배터리 경고, 누르면 설명 시트) + 내 장소 + 설정
+                            // 기록 상태(기록 중 · 권한/알림/배터리 경고, 누르면 설명 시트. 대기 중에는 숨긴다) + 내 장소 + 설정
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                RecordingStatusChip(Modifier.weight(1f, fill = false))
+                                RecordingStatusChip(Modifier.weight(1f, fill = false), quietWhenWaiting = true)
                                 Spacer(Modifier.width(12.dp))
                                 RoundIconButton(CommunityIcons.Heart, stringResource(R.string.nav_places), { placesOpen = true }, containerColor = EodiTheme.colors.surface, contentColor = EodiTheme.colors.textSecondary, iconSize = 36.dp)
                                 Spacer(Modifier.width(12.dp))
