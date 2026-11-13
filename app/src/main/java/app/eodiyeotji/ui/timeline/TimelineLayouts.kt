@@ -33,6 +33,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -66,6 +67,7 @@ import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.theme.EodiTheme
 import app.eodiyeotji.ui.theme.mapInk
 import java.time.LocalDate
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 private val RailWidth = 116.dp
@@ -254,11 +256,16 @@ private fun DateRail(days: List<DaySummary>, today: LocalDate, selected: String?
                 modifier = Modifier.padding(bottom = 10.dp),
             )
         }
-        // 지난 날을 보고 있으면(검색 · 여행 모음에서 들어왔을 때 등) 맨 위에 가장 최근 날로 돌아가는 버튼
+        // 지난 날을 보고 있거나(검색 · 여행 모음에서 들어왔을 때 등) 날짜 줄을 아래로 굴려 두었으면, 맨 위에 가장 최근 날로 돌아가는 버튼
         val latest = days.firstOrNull()?.day
-        if (latest != null && selected != null && selected != latest) {
+        val scrolled by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
+        val scope = rememberCoroutineScope()
+        if (latest != null && selected != null && (selected != latest || scrolled)) {
             Surface(
-                onClick = { onSelect(latest) },
+                onClick = {
+                    onSelect(latest)
+                    scope.launch { listState.animateScrollToItem(0) }
+                },
                 color = c.ink,
                 contentColor = c.onInk,
                 shape = RoundedCornerShape(24.dp),
