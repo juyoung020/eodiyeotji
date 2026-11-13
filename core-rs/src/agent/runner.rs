@@ -907,8 +907,7 @@ struct Asked<'a> {
     range: Option<DayRange>,
 }
 
-/// 날짜만 물었을 때 "멀리 다녀온 이동"으로 볼 운전 거리(m). 출장 · 여행 행선지는 도착점만 남고 머문 시간이 0일 때가 있다.
-const NOTABLE_DRIVE_M: f64 = 30_000.0;
+use crate::memory::search::NOTABLE_DRIVE_M;
 
 /// 날짜만 물었을 때 답할 기억 순서: 출퇴근이 아닌 것 먼저, 그다음 멀리 다녀온 것(여행 · [NOTABLE_DRIVE_M] 이상 운전),
 /// 그다음 들른 곳에 오래 머문 것 (같으면 원래 순서).

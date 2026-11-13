@@ -45,6 +45,7 @@ use rusqlite::Connection;
 
 use super::episode::{episode_from_row, kind_code, EP_COLS};
 use super::{EpisodeKind, MemoryHit, MemoryQuery, StopFact};
+use crate::geo::{haversine_m, Point};
 use crate::store::{split_names, CoreError};
 
 const CANDIDATES: u32 = 300;
@@ -52,6 +53,10 @@ const CANDIDATES: u32 = 300;
 const DAY_TITLE: &str = "CASE WHEN d.needs_llm = 1 THEN d.title END, d.rule_title";
 const DAY_TAGS: &str = "CASE WHEN d.title IS NULL OR d.needs_llm = 0 THEN '' ELSE d.tags END";
 const YEAR_MS: f64 = 365.0 * 86_400_000.0;
+/// "멀리 다녀온 이동"으로 볼 거리(m). 출장 · 여행 행선지는 도착점만 남고 머문 시간이 0일 때가 있다.
+pub(crate) const NOTABLE_DRIVE_M: f64 = 30_000.0;
+/// 이보다 짧게 머문 곳은 멀리 간 목적지에 대표 자리를 내준다 ([`best_stop`]).
+const SHORT_STOP_MS: i64 = 60 * 60_000;
 
 /// 기본 동의어 묶음. 낱말이 묶음의 한 말과 같으면 묶음 전체로 넓힌다.
 pub(crate) const SYNONYMS: &[&[&str]] = &[
@@ -192,9 +197,35 @@ pub(crate) fn squash(s: &str) -> String {
 }
 
 /// 낱말과 가장 맞는 들른 곳과 그 맞춤 점수 (이름 3·분류 2·주소 1, 낱말마다 더함).
-/// 아무 곳도 안 맞으면 가장 오래 머문 곳 (점수 0). 들른 곳이 없으면 None.
+/// 아무 곳도 안 맞으면 가장 오래 머문 곳 (점수 0). 단 그곳이 [SHORT_STOP_MS] 미만 잠깐 들른 곳(카페 등)으로
+/// 첫 들른 곳 근처이고 첫 곳에서
+/// [NOTABLE_DRIVE_M] 넘게 떨어진 곳이 있으면 가장 먼 곳 (출장 · 여행 목적지는 운전 도착이라 머문 시간이 0일 수 있다).
+/// 들른 곳이 없으면 None.
 pub(crate) fn best_stop(stops: &[StopFact], terms: &[String]) -> Option<(usize, u32)> {
     let terms: Vec<String> = terms.iter().map(|t| squash(t)).filter(|t| !t.is_empty()).collect();
+    let best = best_by_terms_then_dwell(stops, &terms)?;
+    if best.1 > 0 {
+        return Some(best);
+    }
+    let from_first = |s: &StopFact| {
+        let p = |s: &StopFact| Point { lat: s.lat, lon: s.lon };
+        haversine_m(p(&stops[0]), p(s))
+    };
+    let b = &stops[best.0];
+    if b.leave_ms - b.arrive_ms >= SHORT_STOP_MS || from_first(b) >= NOTABLE_DRIVE_M {
+        return Some(best);
+    }
+    stops
+        .iter()
+        .enumerate()
+        .map(|(i, s)| (i, from_first(s)))
+        .filter(|&(_, d)| d >= NOTABLE_DRIVE_M)
+        .max_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(i, _)| (i, 0))
+        .or(Some(best))
+}
+
+fn best_by_terms_then_dwell(stops: &[StopFact], terms: &[String]) -> Option<(usize, u32)> {
     stops
         .iter()
         .enumerate()
@@ -374,5 +405,27 @@ mod tests {
         assert_eq!(best_stop(&stops, &s(&["카페"])), Some((2, 3)));
         assert_eq!(best_stop(&stops, &s(&["없는말"])), Some((1, 0)), "안 맞으면 가장 오래 머문 곳");
         assert_eq!(best_stop(&[], &s(&["해변"])), None);
+    }
+
+    #[test]
+    fn date_only_best_stop_prefers_far_destination_over_short_cafe() {
+        let at = |name: &str, lat: f64, lon: f64, mins: i64| StopFact {
+            name: name.into(),
+            category: String::new(),
+            address: String::new(),
+            arrive_ms: 0,
+            leave_ms: mins * 60_000,
+            lat,
+            lon,
+            first_visit: false,
+        };
+        // 회사(서울) → 스타벅스 40분 → 대전컨벤션센터 (운전 도착, 머문 시간 0)
+        let trip = vec![at("스타벅스 역삼점", 37.500, 127.036, 40), at("대전컨벤션센터", 36.375, 127.392, 0)];
+        assert_eq!(best_stop(&trip, &[]), Some((1, 0)), "날짜만 물으면 멀리 간 목적지");
+        // 멀리 가서 오래 놀고 집 근처 휴게소에 잠깐 들른 날은 그대로 오래 머문 곳
+        let back = vec![at("경포해변", 37.805, 128.908, 120), at("덕평휴게소", 37.24, 127.38, 15)];
+        assert_eq!(best_stop(&back, &[]), Some((0, 0)));
+        // 낱말이 맞으면 낱말이 먼저
+        assert_eq!(best_stop(&trip, &s(&["스타벅스"])), Some((0, 3)));
     }
 }
