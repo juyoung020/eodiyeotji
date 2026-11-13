@@ -440,7 +440,7 @@ impl Tracker {
         for v in members {
             grow(v.lat, v.lon);
             feats.push(json!({"type":"Feature","geometry":{"type":"Point","coordinates":[v.lon,v.lat]},
-                "properties":{"kind":"car","id":v.id,"color":v.color,"initial":v.initial,"label":v.label,"stale":v.stale,"low":v.low}}));
+                "properties":{"kind":"car","id":v.id,"color":v.color,"initial":v.initial,"label":v.label,"stale":v.stale,"low":v.low && !v.stale}}));
         }
         (json!({"type":"FeatureCollection","features":feats}).to_string(), b)
     }
@@ -589,6 +589,19 @@ mod tests {
         let fv = member_view(&f, 1, None, None, now);
         assert!(fv.low && fv.card.starts_with("지현 차 연료 부족"));
         assert!(!is_low(-1.0, None, 5_000.0));
+    }
+
+    #[test]
+    fn stale_low_car_has_no_red_ring_on_the_map() {
+        // 끊긴 차는 잔량이 지금 값이 아니므로 지도에서도 빨간 테두리를 빼고 흐리게만
+        let mut t = Tracker::default();
+        let mut m = member("a", "민수", 20.0, 0);
+        m.range_km = 30.0;
+        let v = t.update(10 * 60_000, Some(me(5.0)), Some(dest()), &[m]);
+        let g: serde_json::Value = serde_json::from_str(&v.geojson).unwrap();
+        let car = g["features"].as_array().unwrap().iter().find(|f| f["properties"]["kind"] == "car").unwrap();
+        assert_eq!(car["properties"]["stale"], true);
+        assert_eq!(car["properties"]["low"], false);
     }
 
     #[test]

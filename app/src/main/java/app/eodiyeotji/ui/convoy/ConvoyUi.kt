@@ -331,7 +331,7 @@ private fun ActiveInfo(s: ConvoyUiState, repo: ConvoyRepository, modifier: Modif
                             // 끊긴 차는 흐리게 (잔량 부족이어도 지금 값이 아니므로 빨강 대신 흐림 — 주행 카드와 같은 규칙)
                             Text(m.card, style = EodiTheme.type.bodyStrong, color = when { m.stale -> c.textSecondary; m.low -> c.error; else -> c.textPrimary }, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             // 정차 중에는 모든 차의 잔량을 보인다 (주행 중 · 지도에는 부족할 때만)
-                            if (m.energy.isNotEmpty()) Text(m.energy, style = EodiTheme.type.meta, color = if (m.low) c.error else c.textTertiary)
+                            if (m.energy.isNotEmpty()) Text(m.energy, style = EodiTheme.type.meta, color = if (m.low && !m.stale) c.error else c.textTertiary)
                         }
                     }
                 }
