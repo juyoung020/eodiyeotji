@@ -200,7 +200,17 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                 NavRail(
                     if (fromCollections && overlayOpen) HomeTab.COLLECTIONS else tab,
                     driving = driving,
-                    onSelect = { fromCollections = false; tab = it },
+                    onSelect = {
+                        // 모아보기에서 연 요약 · 결산 · 기억 지도 · 출장 창이 떠 있으면 다른 탭을 고를 때 닫는다
+                        // (전에는 레일은 "내 기록"인데 화면에는 요약 창이 그대로 남았다)
+                        if (overlayOpen) {
+                            recapVm.closeRecap()
+                            recapVm.closeMemoryMap()
+                            bizVm.close()
+                        }
+                        fromCollections = false
+                        tab = it
+                    },
                 )
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     // 탭을 바꾸면 새 화면이 살짝 떠오르며 들어온다 (한 번만 · 그리기 단계만 바뀜, 지도 두 장을 겹쳐 그리지 않는다)
