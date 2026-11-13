@@ -57,8 +57,8 @@ private object TilePalette {
     val violetDark = TileColors(Color(0xFF6236C9), Color(0xFF431A86))
     val teal = TileColors(Color(0xFF14A098), Color(0xFF0F766E))
     val tealDark = TileColors(Color(0xFF0F807A), Color(0xFF0B524D))
-    val coral = TileColors(Color(0xFFF26B3A), Color(0xFFC2410C))
-    val coralDark = TileColors(Color(0xFFD9542A), Color(0xFF9A3412))
+    val slate = TileColors(Color(0xFF4F5B6B), Color(0xFF2F3742))
+    val slateDark = TileColors(Color(0xFF3F4955), Color(0xFF232930))
 }
 
 /** 모아보기 타일 하나. */
@@ -100,7 +100,7 @@ fun CollectionsRoute(driving: Boolean, onOpenTrips: () -> Unit, onOpenRecords: (
                 onOpenRecords(); recap.openRecap(RecapMode.YEAR)
             },
             CollectionTile("trips", EodiIcons.Pin, tripsTitle, if (dark) p.tealDark else p.teal, onOpenTrips),
-            CollectionTile("biz", CommunityIcons.Clock, bizTitle, if (dark) p.coralDark else p.coral) {
+            CollectionTile("biz", CommunityIcons.Clock, bizTitle, if (dark) p.slateDark else p.slate) {
                 onOpenRecords(); biz.open()
             },
         )

@@ -219,18 +219,27 @@ private fun StageInfo(summary: DaySummary, today: LocalDate, loaded: Boolean, on
     val c = EodiTheme.colors
     val title = summary.title?.takeIf { it.isNotBlank() }
     Column(modifier) {
-        if (title != null) {
-            val relative = relativeDayName(summary.day, today)
-            Text(
-                listOfNotNull(relative, dayTitle(summary.day, today)).joinToString(" · "),
-                style = EodiTheme.type.label, color = c.textTertiary, maxLines = 1,
-            )
+        // 더보기(…)는 제목 줄 오른쪽 위: 버튼 넷이 640dp 판 한 줄에 다 들어가지 않아 "더보기"만 둘째 줄로 꺾이던 것을 막는다
+        Row(verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f)) {
+                if (title != null) {
+                    val relative = relativeDayName(summary.day, today)
+                    Text(
+                        listOfNotNull(relative, dayTitle(summary.day, today)).joinToString(" · "),
+                        style = EodiTheme.type.label, color = c.textTertiary, maxLines = 1,
+                    )
+                }
+                Text(
+                    title ?: dayTitle(summary.day, today),
+                    style = EodiTheme.type.hero, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { heading() },
+                )
+            }
+            LocalTimelineEdits.current?.let { edits ->
+                Spacer(Modifier.width(12.dp))
+                MoreButton(stringResource(R.string.edit_more_day), { edits.onDay(summary) })
+            }
         }
-        Text(
-            title ?: dayTitle(summary.day, today),
-            style = EodiTheme.type.hero, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.semantics { heading() },
-        )
         Spacer(Modifier.height(6.dp))
         Text(daySummaryLine(summary), style = EodiTheme.type.body, color = c.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
         // AI가 쓴 하루 요약 (여행 · 나들이처럼 이야기가 있는 날만)
@@ -239,7 +248,7 @@ private fun StageInfo(summary: DaySummary, today: LocalDate, loaded: Boolean, on
             Text(it, style = EodiTheme.type.body, color = c.textPrimary, maxLines = 3, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.height(20.dp))
-        DayActions(summary, loaded, onShare)
+        DayActions(summary, loaded, onShare, moreInline = false)
     }
 }
 

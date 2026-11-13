@@ -906,7 +906,7 @@ private fun DetailHeader(summary: DaySummary?, today: LocalDate, onBack: (() -> 
  * [loaded]가 false(불러오는 중)면 올리기는 흐리게만 두고 이유는 보이지 않는다.
  */
 @Composable
-internal fun DayActions(summary: DaySummary, loaded: Boolean, onShare: (() -> Unit)?) {
+internal fun DayActions(summary: DaySummary, loaded: Boolean, onShare: (() -> Unit)?, moreInline: Boolean = true) {
     val c = EodiTheme.colors
     var reason by remember(summary.day) { mutableStateOf<Int?>(null) }
     LaunchedEffect(reason) {
@@ -934,8 +934,11 @@ internal fun DayActions(summary: DaySummary, loaded: Boolean, onShare: (() -> Un
         )
         // 카드로 공유 (차: 연결된 휴대폰으로 → 카톡)
         ShareImageButton(ShareTarget.Day(summary.day), style = ShareButtonStyle.ICON)
-        LocalTimelineEdits.current?.let { edits ->
-            MoreButton(stringResource(R.string.edit_more_day), { edits.onDay(summary) }, label = stringResource(R.string.action_more))
+        // [moreInline]이 false면 더보기는 부르는 쪽이 제목 줄 오른쪽에 둔다 (좁은 지도 위 판에서 버튼 줄이 두 줄로 꺾이지 않게)
+        if (moreInline) {
+            LocalTimelineEdits.current?.let { edits ->
+                MoreButton(stringResource(R.string.edit_more_day), { edits.onDay(summary) }, label = stringResource(R.string.action_more))
+            }
         }
     }
     reason?.let {
