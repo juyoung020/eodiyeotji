@@ -46,7 +46,9 @@ class PlacePhotoRepository @Inject constructor(
      * 같은 곳을 여러 화면(지도 카드·목록 사진)이 동시에 물으면 구글에는 한 번만 묻는다.
      */
     suspend fun photos(name: String, address: String, lat: Double, lon: Double): List<PlacePhoto> {
-        local[name]?.let { return listOf(it) }
+        // 기기 사진 목록은 처음 한 번 파일을 읽는다 → 그때만 IO 스레드로 (화면의 produceState는 메인에서 부른다)
+        val loc = if (localReady) local else withContext(Dispatchers.IO) { local.also { localReady = true } }
+        loc[name]?.let { return listOf(it) }
         if (!ApiAccess.googleAvailable || name.isBlank()) return emptyList()
         val id = String.format(Locale.ROOT, "%s@%.4f,%.4f", name, lat, lon)
         val job = inflight.getOrPut(id) {
@@ -64,6 +66,7 @@ class PlacePhotoRepository @Inject constructor(
      * 시연 기록의 들른 곳을 API 키 없이 자유 이용 사진으로 보여 주려고 둔다. 있으면 구글에 묻지 않는다. 앱을 켜고 처음 물을 때 한 번 읽는다.
      * `index.tsv` 한 줄: 장소 이름 · 파일 · 가로 · 세로 · 저작자와 라이선스 (사진 곁에 올린 사람 자리에 보인다).
      */
+    @Volatile private var localReady = false
     private val local: Map<String, PlacePhoto> by lazy {
         val dir = File(context.filesDir, LOCAL_DIR)
         runCatching {

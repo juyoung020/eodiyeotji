@@ -96,9 +96,11 @@ class ConvoyRepository @Inject constructor(
     private val backend: ConvoyBackend =
         BuildConfig.RELAY_URL.trimEnd('/').takeIf { it.isNotEmpty() }?.let { RelayConvoyBackend(it, BuildConfig.RELAY_TOKEN) }
             ?: LocalConvoyBackend()
-    private val prefs = context.getSharedPreferences("convoy", Context.MODE_PRIVATE)
+    private val prefs by lazy { context.getSharedPreferences("convoy", Context.MODE_PRIVATE) }
 
-    private val _state = MutableStateFlow(ConvoyUiState(local = backend.local, name = prefs.getString(KEY_NAME, null).orEmpty()))
+    // 저장해 둔 내 이름은 백그라운드에서 읽는다: 첫 화면을 그리는 중(Hilt가 메인 스레드에서 만든다)에 설정 파일을 읽어
+    // StrictMode 디스크 읽기 위반이 났다 (디버그 측정 수백 ms)
+    private val _state = MutableStateFlow(ConvoyUiState(local = backend.local))
     val state: StateFlow<ConvoyUiState> = _state.asStateFlow()
 
     private var session: ConvoySession? = null
@@ -114,6 +116,10 @@ class ConvoyRepository @Inject constructor(
     @Volatile private var debugEnergy: MyEnergy? = null
 
     init {
+        scope.launch {
+            val saved = prefs.getString(KEY_NAME, null).orEmpty()
+            if (saved.isNotEmpty()) _state.update { if (it.name.isEmpty()) it.copy(name = saved) else it }
+        }
         if (BuildConfig.DEBUG) registerDebugFake()
     }
 
