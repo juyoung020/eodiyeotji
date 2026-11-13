@@ -66,8 +66,11 @@ import org.maplibre.geojson.Feature
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 
-private val NavBlue = Color(0xFF0B5CFF)
-private val NavDark = Color(0xFF0E1726)
+// 폰 판 색(PhoneTheme)과 맞춘다: 안내 판은 짙은 회색, 갈 길은 파랑, 내 위치는 초록
+private val NavInk = Color(0xFF0F172A)
+private val NavDark = Color(0xFF0B1220)
+private const val RouteBlue = "#2563EB"
+private const val HereGreen = "#16A34A"
 
 /**
  * 앱 안 길 안내 화면 (폰): 위 = 다음 안내(화살표 · 남은 거리 · 길 이름), 가운데 = 내 위치를 따라가는 기울어진 지도와 경로,
@@ -98,7 +101,7 @@ fun PhoneNavScreen(nav: NavUi, onEnd: () -> Unit, onNext: () -> Unit) {
 @Composable
 private fun Banner(icon: ImageVector?, text: String, sub: String, meters: Double?, busy: Boolean = false, turn: NavTurn? = null) {
     Row(
-        Modifier.fillMaxWidth().shadow(12.dp, RoundedCornerShape(24.dp)).background(NavBlue, RoundedCornerShape(24.dp)).padding(20.dp),
+        Modifier.fillMaxWidth().shadow(12.dp, RoundedCornerShape(24.dp)).background(NavInk, RoundedCornerShape(24.dp)).padding(20.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(72.dp).background(Color.White.copy(alpha = 0.16f), RoundedCornerShape(18.dp)), contentAlignment = Alignment.Center) {
@@ -156,7 +159,7 @@ private fun NavMap(nav: NavUi, modifier: Modifier) {
     val mapView = rememberMapViewWithLifecycle(
         context,
         remember { MapLibreMapOptions.createFromAttributes(context) },
-        android.graphics.Color.rgb(14, 23, 38),
+        android.graphics.Color.rgb(11, 18, 32),
         tiltAndRotate = true,
         label = "nav",
     )
@@ -188,20 +191,20 @@ private fun NavMap(nav: NavUi, modifier: Modifier) {
                     PropertyFactory.lineCap(Property.LINE_CAP_ROUND), PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
                 ))
                 s.addLayer(LineLayer("nav-route", SRC_ROUTE).withProperties(
-                    PropertyFactory.lineColor("#0B5CFF"), PropertyFactory.lineWidth(9f),
+                    PropertyFactory.lineColor(RouteBlue), PropertyFactory.lineWidth(9f),
                     PropertyFactory.lineCap(Property.LINE_CAP_ROUND), PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
                 ))
                 // 들를 곳: 지금 목적지는 파랑, 다음 곳들은 회색
                 s.addLayer(CircleLayer("nav-stops", SRC_STOPS).withProperties(
                     PropertyFactory.circleRadius(11f),
-                    PropertyFactory.circleColor(org.maplibre.android.style.expressions.Expression.switchCase(org.maplibre.android.style.expressions.Expression.get("now"), org.maplibre.android.style.expressions.Expression.color(android.graphics.Color.rgb(11, 92, 255)), org.maplibre.android.style.expressions.Expression.color(android.graphics.Color.rgb(154, 163, 178)))),
+                    PropertyFactory.circleColor(org.maplibre.android.style.expressions.Expression.switchCase(org.maplibre.android.style.expressions.Expression.get("now"), org.maplibre.android.style.expressions.Expression.color(android.graphics.Color.rgb(37, 99, 235)), org.maplibre.android.style.expressions.Expression.color(android.graphics.Color.rgb(154, 163, 178)))),
                     PropertyFactory.circleStrokeColor("#FFFFFF"), PropertyFactory.circleStrokeWidth(4f),
                 ))
                 s.addLayer(CircleLayer("nav-me-halo", SRC_ME).withProperties(
-                    PropertyFactory.circleRadius(22f), PropertyFactory.circleColor("#0B5CFF"), PropertyFactory.circleOpacity(0.18f),
+                    PropertyFactory.circleRadius(22f), PropertyFactory.circleColor(HereGreen), PropertyFactory.circleOpacity(0.18f),
                 ))
                 s.addLayer(CircleLayer("nav-me", SRC_ME).withProperties(
-                    PropertyFactory.circleRadius(10f), PropertyFactory.circleColor("#0B5CFF"),
+                    PropertyFactory.circleRadius(10f), PropertyFactory.circleColor(HereGreen),
                     PropertyFactory.circleStrokeColor("#FFFFFF"), PropertyFactory.circleStrokeWidth(4f),
                 ))
                 style = s

@@ -107,8 +107,10 @@ internal interface WalkEntryPoint {
     fun location(): LocationSource
 }
 
-private val WalkGreen = Color(0xFF0F9D6B)
-private val CarBlue = Color(0xFF0B5CFF)
+// 폰 판 색(PhoneTheme)과 맞춘다: 걸어갈 곳은 초록, 내 차는 파랑, 내 위치는 초록 점
+private val WalkGreen = Color(0xFF16A34A)
+private val CarBlue = Color(0xFF2563EB)
+private const val HereGreen = "#16A34A"
 
 /**
  * 기록 화면 맨 위 "내 차" 카드: 어디에 언제 세웠는지 + [가게까지 걷기] [내 차 찾기] + "찾았어요".
@@ -369,15 +371,15 @@ private fun WalkMap(me: LocationFix?, target: WalkTarget, accent: Color, modifie
                 s.addLayer(SymbolLayer("walk-target-label", SRC_TARGET).withProperties(
                     PropertyFactory.textField(org.maplibre.android.style.expressions.Expression.get("label")),
                     PropertyFactory.textFont(arrayOf("NotoSans-Medium")),
-                    PropertyFactory.textSize(15f), PropertyFactory.textColor("#0E1726"),
+                    PropertyFactory.textSize(15f), PropertyFactory.textColor("#0F172A"),
                     PropertyFactory.textHaloColor("#FFFFFF"), PropertyFactory.textHaloWidth(2f),
                     PropertyFactory.textOffset(arrayOf(0f, 2.2f)), PropertyFactory.textAllowOverlap(true),
                 ))
                 s.addLayer(CircleLayer("walk-me-halo", SRC_ME).withProperties(
-                    PropertyFactory.circleRadius(22f), PropertyFactory.circleColor("#0B5CFF"), PropertyFactory.circleOpacity(0.18f),
+                    PropertyFactory.circleRadius(22f), PropertyFactory.circleColor(HereGreen), PropertyFactory.circleOpacity(0.18f),
                 ))
                 s.addLayer(CircleLayer("walk-me", SRC_ME).withProperties(
-                    PropertyFactory.circleRadius(10f), PropertyFactory.circleColor("#0B5CFF"),
+                    PropertyFactory.circleRadius(10f), PropertyFactory.circleColor(HereGreen),
                     PropertyFactory.circleStrokeColor("#FFFFFF"), PropertyFactory.circleStrokeWidth(4f),
                 ))
                 style = s

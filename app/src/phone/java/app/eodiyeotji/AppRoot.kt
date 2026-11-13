@@ -10,8 +10,8 @@ fun AppRoot() {
 }
 
 /**
- * 앱 화면 위를 덮는 화면(그날로 돌아가기)까지 포함한 전체 크기 비율. 폰 판은 [PhoneScale] 비율로 그린다
- * (이게 없으면 덮는 화면만 차 크기로 그려져 폰에서 두 배로 커 보인다).
+ * 앱 화면 위를 덮는 화면(그날로 돌아가기)까지 포함한 전체 크기 비율과 색. 폰 판은 [PhoneScale] 비율로 그리고
+ * (이게 없으면 덮는 화면만 차 크기로 그려져 폰에서 두 배로 커 보인다), 폰 판 색([PhoneTheme])을 입힌다.
  */
 @Composable
-fun AppScale(content: @Composable () -> Unit) = app.eodiyeotji.phone.ui.PhoneScale(content)
+fun AppScale(content: @Composable () -> Unit) = app.eodiyeotji.phone.ui.PhoneTheme { app.eodiyeotji.phone.ui.PhoneScale(content) }

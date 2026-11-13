@@ -29,7 +29,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -87,7 +86,7 @@ import app.eodiyeotji.ui.community.LocalOverlayPresenter
 import app.eodiyeotji.ui.home.CourseGuideBanner
 import app.eodiyeotji.ui.home.CourseGuideViewModel
 import app.eodiyeotji.ui.theme.EodiTheme
-import app.eodiyeotji.ui.theme.SparkleBadge
+import app.eodiyeotji.ui.theme.EodiIcons
 import app.eodiyeotji.ui.timeline.TimelineRoute
 import app.eodiyeotji.ui.places.PlacesRoute
 import app.eodiyeotji.ui.place.PlaceDetailHost
@@ -439,40 +438,23 @@ private fun BarItem(icon: ImageVector, label: String, selected: Boolean, modifie
     }
 }
 
-/** 가운데 물어보기: 막대 위로 살짝 떠 있는 AI 동그라미(파랑 + 금색 반짝임, 운전 중에는 마이크). 이름 줄은 양옆 탭 이름과 같은 높이. */
+/** 가운데 물어보기: 막대 안의 진한 알약 (아이콘 + 이름, 운전 중에는 마이크). 양옆 탭과 같은 줄에 납작하게 둔다. */
 @Composable
 private fun AskItem(label: String, selected: Boolean, driving: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = EodiTheme.colors
-    Box(modifier, contentAlignment = Alignment.TopCenter) {
-        Column(
-            Modifier
-                .offset(y = (-28).dp)
-                .clip(RoundedCornerShape(EodiTheme.space.radiusM))
-                .selectable(selected = selected, role = Role.Tab, onClick = onClick)
-                .padding(horizontal = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Surface(
+            shape = CircleShape,
+            color = if (selected) c.accent else c.ink,
+            contentColor = if (selected) c.onAccent else c.onInk,
+            modifier = Modifier.heightIn(min = EodiTheme.space.touch).clip(CircleShape).selectable(selected = selected, role = Role.Tab, onClick = onClick),
         ) {
-            if (driving) {
+            Row(Modifier.padding(horizontal = 28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
                 // 운전 중: 말로 묻기가 먼저 → 마이크
-                Surface(shape = CircleShape, color = c.accent, contentColor = c.onAccent, shadowElevation = 6.dp, modifier = Modifier.size(104.dp)) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(AgentIcons.Mic, contentDescription = null, modifier = Modifier.size(50.dp))
-                    }
-                }
-            } else {
-                // AI 동그라미 (먹색 + 금색 반짝임, 디자인 무늬 SparkleBadge) — 기억 에이전트 입구
-                Surface(shape = CircleShape, color = c.accent, shadowElevation = 6.dp, modifier = Modifier.size(104.dp)) {
-                    SparkleBadge(size = 104.dp)
-                }
+                Icon(if (driving) AgentIcons.Mic else EodiIcons.Sparkle, contentDescription = null, modifier = Modifier.size(30.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(label, style = EodiTheme.type.label, fontWeight = FontWeight.Bold, maxLines = 1)
             }
-            Spacer(Modifier.height(6.dp))
-            Text(
-                label,
-                style = EodiTheme.type.caption,
-                fontWeight = FontWeight.Bold,
-                color = if (selected) c.accent else c.textPrimary,
-                maxLines = 1,
-            )
         }
     }
 }
