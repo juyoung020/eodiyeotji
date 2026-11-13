@@ -84,12 +84,6 @@ cd eodiyeotji
 |---|---|---|
 | 고속도로 휴게소 · 졸음쉼터 (위치 · 방향 · 화장실 · 주유 · 전기차 충전 · 음식점 · 매점 등) | 공공데이터포털 [전국휴게소정보표준데이터](https://www.data.go.kr/data/15025446/standard.do) · [전국졸음쉼터표준데이터](https://www.data.go.kr/data/15028203/standard.do), 제공 한국도로공사 (2026-11-13 내려받음, [`data/public/`](data/public/README.md)) | 길 위 도구 에이전트의 기기 안 목록 (`core-rs/src/roadside_places.json`). 카드에 "출처: 공공데이터포털(한국도로공사 등)" 표시 |
 
-### 데이터 출처
-
-| 데이터 | 출처 · 이용허락 | 쓰는 곳 |
-|---|---|---|
-| 고속도로 휴게소 · 졸음쉼터 (위치 · 방향 · 화장실 · 주유 · 전기차 충전 · 음식점 · 매점 등) | 공공데이터포털 [전국휴게소정보표준데이터](https://www.data.go.kr/data/15025446/standard.do) · [전국졸음쉼터표준데이터](https://www.data.go.kr/data/15028203/standard.do), 제공 한국도로공사 (2026-11-13 내려받음, [`data/public/`](data/public/README.md)) | 길 위 도구 에이전트의 기기 안 목록 (`core-rs/src/roadside_places.json`). 카드에 "출처: 공공데이터포털(한국도로공사 등)" 표시 |
-
 <br>
 
 ## 🧭 무엇을 하나
