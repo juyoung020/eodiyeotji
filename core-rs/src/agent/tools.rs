@@ -183,7 +183,7 @@ fn find(call: &ToolCall, a: &Value, c: &mut Ctx) -> Result<Outcome, Bad> {
         hits = c.backend.search_memories(MemoryQuery { terms: vec![], ..q }).map_err(|e| Bad(format!("검색 오류: {e}.")))?.into_iter().take(MAX_HITS).collect();
     }
     c.cache.remember(&hits);
-    let mut data = json!({"count": hits.len(), "hits": hits.iter().map(|h| hit_json(h, tz)).collect::<Vec<_>>()});
+    let mut data = json!({"count": hits.len(), "hits": hits.iter().map(|h| hit_json(h, today)).collect::<Vec<_>>()});
     if hits.is_empty() {
         data["hint"] = json!("결과 없음. 다른 동의어로 한 번 더 찾거나, 못 찾았다고 답하세요.");
     }
@@ -357,11 +357,13 @@ pub fn kind_name(k: EpisodeKind) -> &'static str {
     }
 }
 
-pub fn hit_json(h: &MemoryHit, _tz: i32) -> Value {
+/// 기억 한 개 (LLM에 넘기는 모양). [today]는 기기 날(로컬 일 수): "say"에 말로 할 날짜를 미리 넣는다 —
+/// 작은 모델이 "2026-10-24"를 보고 올해 일을 "작년 10월 24일"이라고 말했다 (시스템 예시 "작년 8월 14일"을 따라 함).
+pub fn hit_json(h: &MemoryHit, today: i64) -> Value {
     let f = &h.episode.facts;
     let wd = parse_ymd(&f.day, false).map(|d| WEEKDAYS[dates::weekday(d)]).unwrap_or("");
     json!({
-        "id": f.id, "day": f.day, "wd": wd, "kind": kind_name(f.kind),
+        "id": f.id, "day": f.day, "say": super::runner::spoken_date(&f.day, today), "wd": wd, "kind": kind_name(f.kind),
         "title": h.episode.title.clone().unwrap_or(f.rule_label.clone()),
         "day_title": h.day_title.clone().unwrap_or_default(),
         "region": f.region,

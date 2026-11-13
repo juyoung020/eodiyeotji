@@ -813,11 +813,11 @@ fn context_block(ctx: &AgentContext, range: Option<DayRange>, s: &Session, fast_
         b.push_str(&format!("해석된 기간: {}~{}\n", fmt_day(r.from), fmt_day(r.to)));
     }
     if !fast_hits.is_empty() {
-        let hits: Vec<Value> = fast_hits.iter().take(5).map(|h| tools::hit_json(h, ctx.tz_offset_minutes)).collect();
+        let hits: Vec<Value> = fast_hits.iter().take(5).map(|h| tools::hit_json(h, today)).collect();
         b.push_str(&format!("기기 검색 결과(데이터, 질문에 맞으면 find 없이 이것으로 답한다): {}\n", Value::Array(hits)));
     } else if let Some(f) = &s.focus {
-        b.push_str(&format!("앞서 찾은 기억(데이터): {}\n", tools::hit_json(f, ctx.tz_offset_minutes)));
-        let others: Vec<Value> = s.candidates.iter().filter(|c| c.episode.facts.id != f.episode.facts.id).take(3).map(|h| tools::hit_json(h, ctx.tz_offset_minutes)).collect();
+        b.push_str(&format!("앞서 찾은 기억(데이터): {}\n", tools::hit_json(f, today)));
+        let others: Vec<Value> = s.candidates.iter().filter(|c| c.episode.facts.id != f.episode.facts.id).take(3).map(|h| tools::hit_json(h, today)).collect();
         if !others.is_empty() {
             b.push_str(&format!("다른 후보(데이터): {}\n", Value::Array(others)));
         }
@@ -1054,6 +1054,18 @@ pub fn spoken_date(day: &str, today: i64) -> String {
 
 #[cfg(test)]
 mod tidy_tests {
+    #[test]
+    fn hit_data_carries_the_spoken_date() {
+        use crate::memory::MemoryHit;
+        let eps = super::super::tests::episodes();
+        let e = eps.iter().find(|e| e.facts.id == 31).unwrap().clone(); // 2026-10-29
+        let h = MemoryHit { day_title: None, episode: e, score: 1.0, best_stop: None, matched_tags: vec![], visit_days: vec![], visit_note: String::new(), people: None };
+        let today = super::parse_ymd("2026-11-14", false).unwrap();
+        // 올해 일은 "작년"이 붙지 않는다 (LLM이 day만 보고 "작년 10월 29일"이라 말했다)
+        assert_eq!(super::tools::hit_json(&h, today)["say"], "10월 29일");
+        let last_year = super::parse_ymd("2027-01-02", false).unwrap();
+        assert_eq!(super::tools::hit_json(&h, last_year)["say"], "작년 10월 29일");
+    }
     #[test]
     fn answer_naming_another_candidate_moves_the_card() {
         use crate::memory::MemoryHit;
