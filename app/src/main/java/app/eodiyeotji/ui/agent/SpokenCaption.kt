@@ -2,8 +2,8 @@ package app.eodiyeotji.ui.agent
 
 import app.eodiyeotji.ui.theme.EodiIcons
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -64,8 +64,9 @@ fun BoxScope.SpokenCaption(bottomInset: androidx.compose.ui.unit.Dp? = null, vie
     text?.let { shown = it }
     AnimatedVisibility(
         visible = text != null,
-        enter = fadeIn(),
-        exit = fadeOut(),
+        // 투명도 애니메이션 없이 (반투명하게 겹쳐 보이지 않게)
+        enter = if (bottomInset != null) slideInVertically { it } else slideInVertically { -it },
+        exit = if (bottomInset != null) slideOutVertically { it } else slideOutVertically { -it },
         modifier = if (bottomInset != null) {
             Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = bottomInset, start = 24.dp, end = 24.dp)
         } else {
@@ -74,9 +75,10 @@ fun BoxScope.SpokenCaption(bottomInset: androidx.compose.ui.unit.Dp? = null, vie
     ) {
         Surface(
             shape = RoundedCornerShape(28.dp),
-            color = Color(0xEB1B1F27),
+            // 불투명 (아래 화면 글자와 섞이지 않게)
+            color = Color(0xFF1B1F27),
             contentColor = Color.White,
-            shadowElevation = 8.dp,
+            shadowElevation = 12.dp,
             modifier = Modifier.widthIn(max = 1180.dp),
         ) {
             Row(Modifier.padding(start = 26.dp, end = 12.dp, top = 14.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {

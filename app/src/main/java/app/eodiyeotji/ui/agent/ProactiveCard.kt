@@ -1,9 +1,10 @@
 package app.eodiyeotji.ui.agent
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -66,27 +67,47 @@ fun BoxScope.ProactiveCard(viewModel: ProactiveViewModel = hiltViewModel()) {
     val ui by viewModel.state.collectAsStateWithLifecycle()
     var shown by remember { mutableStateOf<ProactiveUi?>(null) }
     ui?.let { shown = it }
-    AnimatedVisibility(
-        visible = ui != null,
-        enter = fadeIn() + slideInVertically { it / 3 },
-        exit = fadeOut(),
-        modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(start = 24.dp, end = 24.dp, bottom = 32.dp),
-    ) {
-        shown?.let { Card(it, viewModel::yes, viewModel::no, viewModel::close) }
+    // 좁은 창(3분할 세로 창 등)에서는 창 폭 − 여백, 넓은 창에서는 가운데 최대 1100dp.
+    // 위쪽 자막([SpokenCaption]) 자리는 비워 두고, 창 밖으로 나가지 않게 높이를 창 안으로 묶는다.
+    BoxWithConstraints(Modifier.matchParentSize().safeDrawingPadding()) {
+        val narrow = maxWidth < NARROW_DP
+        val margin = if (narrow) 16.dp else 24.dp
+        // 반투명하게 겹쳐 보이지 않게 투명도 애니메이션 없이 밀어 올리기만 한다
+        AnimatedVisibility(
+            visible = ui != null,
+            enter = slideInVertically { it },
+            exit = slideOutVertically { it },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(start = margin, end = margin, bottom = margin)
+                .heightIn(max = (maxHeight - CAPTION_RESERVE_DP - margin).coerceAtLeast(160.dp)),
+        ) {
+            shown?.let { Card(it, narrow, viewModel::yes, viewModel::no, viewModel::close) }
+        }
     }
 }
 
+private val NARROW_DP = 1000.dp
+/** 위쪽 자막 한 줄 + 여백 높이 (자막과 겹치지 않게 비워 둔다). */
+private val CAPTION_RESERVE_DP = 120.dp
+
 @Composable
-private fun Card(ui: ProactiveUi, onYes: () -> Unit, onNo: () -> Unit, onClose: () -> Unit) {
+private fun Card(ui: ProactiveUi, narrow: Boolean, onYes: () -> Unit, onNo: () -> Unit, onClose: () -> Unit) {
     val s = ui.suggestion
     val c = EodiTheme.colors
     Surface(
-        shape = RoundedCornerShape(36.dp),
-        color = c.surfaceHigh,
-        shadowElevation = 16.dp,
+        shape = RoundedCornerShape(if (narrow) 28.dp else 36.dp),
+        // 불투명 바탕 + 테두리 + 그림자: 아래 목록 글자와 섞여 보이지 않게
+        color = c.surface,
+        border = BorderStroke(2.dp, c.outline),
+        tonalElevation = 6.dp,
+        shadowElevation = 24.dp,
         modifier = Modifier.widthIn(max = 1100.dp).fillMaxWidth(),
     ) {
-        Column(Modifier.padding(horizontal = 40.dp, vertical = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(
+            Modifier.padding(horizontal = if (narrow) 24.dp else 40.dp, vertical = if (narrow) 22.dp else 32.dp),
+            verticalArrangement = Arrangement.spacedBy(if (narrow) 10.dp else 14.dp),
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Surface(shape = CircleShape, color = c.accent, contentColor = c.onAccent) {
                     Text(
@@ -100,7 +121,7 @@ private fun Card(ui: ProactiveUi, onYes: () -> Unit, onNo: () -> Unit, onClose: 
             }
             Text(
                 s.line,
-                style = EodiTheme.type.drivingBody,
+                style = if (narrow) EodiTheme.type.title else EodiTheme.type.drivingBody,
                 color = c.textPrimary,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
@@ -139,7 +160,7 @@ private fun BigButton(text: String, primary: Boolean, enabled: Boolean, onClick:
         onClick = onClick,
         enabled = enabled,
         shape = RoundedCornerShape(24.dp),
-        color = if (primary) c.accent else c.surface,
+        color = if (primary) c.accent else c.surfaceHigh,
         contentColor = if (primary) c.onAccent else c.textPrimary,
         modifier = modifier.heightIn(min = 96.dp),
     ) {
