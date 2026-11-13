@@ -412,7 +412,7 @@ private fun FollowLatest(list: LazyListState, pastCount: Int, turn: AgentTurn?) 
     }
 }
 
-/** 지금 차례 한 줄 (좁은 창·폰): 답 → 카드 → 행동 (코스면 답 바로 아래 1번 안내, 그 아래 순위 카드). */
+/** 지금 차례 한 줄 (좁은 창·폰): 답 → 행동 → 후보 · 카드 (코스면 답 바로 아래 1번 안내, 그 아래 순위 카드). */
 @Composable
 private fun CurrentTurnColumn(
     turn: AgentTurn,
@@ -432,9 +432,10 @@ private fun CurrentTurnColumn(
             ActionBlock(turn, onConfirm, onAsk)
             CourseRecommendationList(turn, onAsk)
         } else {
+            // 안내 버튼은 답("안내할까요?") 바로 아래: 후보 칸 · 카드 뒤에 두면 좁은 창에서 화면 밖으로 밀려 물음만 보였다
+            ActionBlock(turn, onConfirm, onAsk)
             if (turn.candidates.size > 1) CandidateStrip(turn.candidates, turn.candidateFocus, today, onSelectCandidate, compact = compact)
             RecommendationsBlock(turn, today, onSelectStop, onAsk, onlyFirst = true)
-            ActionBlock(turn, onConfirm, onAsk)
         }
         OtherDays(turn, today, onAsk)
     }
