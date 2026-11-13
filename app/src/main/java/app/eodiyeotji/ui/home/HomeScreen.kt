@@ -48,7 +48,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.eodiyeotji.R
 import app.eodiyeotji.record.RecordingStatusChip
-import app.eodiyeotji.ui.agent.AgentEntryButton
 import app.eodiyeotji.ui.agent.AgentPanel
 import app.eodiyeotji.ui.agent.AgentViewModel
 import app.eodiyeotji.ui.community.CommunityIcons
@@ -107,18 +106,9 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
             // 내 기록 머리 오른쪽: 작은 기록 상태(기록 중 · 시동 걸면 자동 기록 · 권한 꺼짐, 누르면 설명) + 물어보기(바로 대화로)
             val recordsSearchVm: SearchViewModel = hiltViewModel(key = "search-records")
             val communitySearchVm: SearchViewModel = hiltViewModel(key = "search-community")
-            // 검색 칸에 글을 쓴 채 물어보기를 누르면 그 글을 바로 묻는다 (빈 입력창으로 열리지 않게)
-            val openAgent = { search: SearchViewModel ->
-                val typed = search.state.value.query.trim()
-                if (typed.isNotEmpty()) agentViewModel.ask(typed)
-                agentOpen = true
-            }
-            // 내 기록 머리: 검색 칸이 묻기까지 맡는다 (찾은 결과 아래 "AI에게 물어보기"). 물어보기 버튼을 따로 두면 같은 일을 하는 칸이 둘이 된다.
+            // 내 기록 · 커뮤니티 머리: 검색 칸이 묻기까지 맡는다 (찾은 결과 아래 "AI에게 물어보기"). 물어보기 버튼을 따로 두면 같은 일을 하는 칸이 둘이 된다.
             // 기록 상태는 알릴 게 있을 때만 (기록 중 · 설정이 꺼져 있을 때)
             val entry: @Composable () -> Unit = { RecordingStatusChip(quietWhenWaiting = true) }
-            val compactEntry: @Composable () -> Unit = {
-                AgentEntryButton(onClick = { openAgent(communitySearchVm) }, mic = false, modifier = Modifier.widthIn(max = 300.dp))
-            }
             var communityTab by rememberSaveable { mutableStateOf(CommunityTab.COURSES) }
             val timeline: TimelineViewModel = hiltViewModel()
             val courses: CourseViewModel = hiltViewModel()
@@ -172,7 +162,6 @@ fun HomeRoute(agentViewModel: AgentViewModel = hiltViewModel(), guideViewModel: 
                         when (tab) {
                             HomeTab.TIMELINE -> TimelineRoute(headerAction = entry, search = recordsSearch)
                             HomeTab.COMMUNITY -> CommunityRoute(
-                                headerAction = compactEntry,
                                 search = communitySearch,
                                 selectedTab = communityTab,
                                 onTabChange = { communityTab = it },
