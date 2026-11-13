@@ -320,6 +320,10 @@ fn recent_searches_keep_newest_twenty() {
     st.remember_search("ㅁ".into(), 5).unwrap();
     st.remember_search("ㄱㅅ ".into(), 6).unwrap();
     assert_eq!(st.search_suggestions().unwrap().recent, s(&["바다", "카페"]));
+    // 거르기 전에 저장된 옛 낱자 검색도 보이지 않는다
+    st.lock().unwrap().execute("INSERT INTO search_recent (text, used_ms) VALUES ('ㅎㅎ', 7)", []).unwrap();
+    assert_eq!(st.search_suggestions().unwrap().recent, s(&["바다", "카페"]));
+    st.forget_search("ㅎㅎ".into()).unwrap();
     st.forget_search("카페".into()).unwrap();
     assert_eq!(st.search_suggestions().unwrap().recent, s(&["바다"]));
     for i in 0..30 {

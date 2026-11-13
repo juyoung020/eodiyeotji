@@ -475,9 +475,11 @@ impl EodiStore {
     pub fn search_suggestions(&self) -> Result<SearchSuggestions, CoreError> {
         let conn = self.read()?;
         let recent: Vec<String> = {
+            // 낱자 거르기 전에 저장된 옛 낱자 검색("ㅁ")도 보이지 않게 읽을 때 한 번 더 거른다
             let mut st = conn.prepare_cached("SELECT text FROM search_recent ORDER BY used_ms DESC LIMIT ?1")?;
-            let rows = st.query_map([RECENT_SHOW], |r| r.get(0))?;
-            rows.collect::<Result<_, _>>()?
+            let rows = st.query_map([RECENT_KEEP], |r| r.get::<_, String>(0))?;
+            let all: Vec<String> = rows.collect::<Result<_, _>>()?;
+            all.into_iter().filter(|t| worth_remembering(t)).take(RECENT_SHOW as usize).collect()
         };
         let mut chips: Vec<SearchChip> =
             BASE_CHIPS.iter().map(|(t, k)| SearchChip { label: t.to_string(), text: t.to_string(), kind: *k }).collect();
@@ -493,7 +495,7 @@ impl EodiStore {
     pub fn remember_search(&self, text: String, now_ms: i64) -> Result<(), CoreError> {
         let t: String = text.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(RECENT_MAX_CHARS).collect();
         // 빈 말, 그리고 낱자만 있는 말("ㅁ", "ㄱㅅ" — 한글 조합 중에 눌린 검색)은 남기지 않는다: 최근 검색어 줄에 뜻 없는 칸이 생겼다
-        if t.is_empty() || !t.chars().any(|c| c.is_alphanumeric() && !is_hangul_jamo(c)) {
+        if !worth_remembering(&t) {
             return Ok(());
         }
         let conn = self.lock_side()?;
@@ -941,6 +943,11 @@ fn frequent_places(conn: &Connection, n: usize) -> Result<Vec<String>, CoreError
         }
     }
     Ok(out)
+}
+
+/// 최근 검색어로 남길 만한 말인가: 비어 있지 않고, 낱자가 아닌 글자(완성 한글 · 영문 · 숫자)가 하나라도 있다.
+fn worth_remembering(t: &str) -> bool {
+    t.chars().any(|c| c.is_alphanumeric() && !is_hangul_jamo(c))
 }
 
 /// 한글 낱자(자모)인가: 첫가끝 · 호환 자모 · 확장 A/B.
