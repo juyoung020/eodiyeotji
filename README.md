@@ -41,7 +41,7 @@
 |---|---|
 | **앱 이름** | 어디였지 (팀 Car-pe Diem) · 패키지 `app.eodiyeotji` |
 | **한 줄 소개** | 차가 알아서 기록한 길을, 말 한마디로 다시 찾고 그대로 안내받는 드라이브 기억 앱 |
-| **APK** | [`Car-pe-Diem_eodiyeotji_release.apk`](https://github.com/juyoung020/eodiyeotji/releases/download/submission-1/Car-pe-Diem_eodiyeotji_release.apk) (61MB, [Releases `submission-1`](https://github.com/juyoung020/eodiyeotji/releases/tag/submission-1) · 안내 [`apk/`](apk/)) |
+| **APK** | [`Car-pe-Diem_eodiyeotji_release.apk`](https://github.com/juyoung020/eodiyeotji/releases/download/submission-2/Car-pe-Diem_eodiyeotji_release.apk) (62MB, [Releases `submission-2`](https://github.com/juyoung020/eodiyeotji/releases/tag/submission-2) · 안내 [`apk/`](apk/)) |
 | **테스트 환경** | Pleos Connect 에뮬레이터 v2.1.0 (Android API 34, x86_64, 2560 × 1440) |
 | **필요한 설정** | **없습니다.** 설치만 하면 AI · 장소 검색 · 같이 가기까지 동작합니다 (클라우드 중계 서버 사용) |
 | **시연 영상** | [`video/`](video/) (최신 v14) |
