@@ -12,7 +12,7 @@
                     (scripts\demo\loopback-rec.py, pip install --user soundcard 필요. PC의 다른 소리도 들어간다)
     -SkipBuild      이미 만든 APK를 그대로 쓴다
     -SkipInstall    설치 · 데이터 지우기를 건너뛴다 (장면만 다시 찍기. 이미 시연 기록이 있으면 첫 장면은 어색하다)
-    -Scenes         찍을 장면만 (기본 전부): firstrun, startrec, search, replay, course, review, convoy, biz, extras, phone, recall
+    -Scenes         찍을 장면만 (기본 전부): firstrun, startrec, search, replay, course, review, convoy, biz, extras, phone, recall, voice
                     (recall은 강릉 경로를 재생해 오늘 기록을 남기므로 늘 맨 마지막에 찍는다 — docs/97 4장)
     -EditOnly       녹화 없이 -Out 폴더의 장면 파일로 편집만 다시
     -Out            결과 폴더 (기본 build\demo\<날짜-시각>, git에 안 올라감)
@@ -29,7 +29,7 @@ param(
     [switch]$SkipBuild,
     [switch]$SkipInstall,
     [switch]$EditOnly,
-    [string[]]$Scenes = @('firstrun', 'startrec', 'search', 'replay', 'course', 'review', 'convoy', 'biz', 'extras', 'phone', 'recall'),
+    [string[]]$Scenes = @('firstrun', 'startrec', 'search', 'replay', 'course', 'review', 'convoy', 'biz', 'extras', 'phone', 'recall', 'voice'),
     [string]$Out,
     [string]$Car = 'emulator-5554',
     [string]$Phone = 'emulator-5556'
@@ -376,6 +376,28 @@ if (-not $EditOnly) {
             Vc @('-Speed', '0', '-Gear', 'Park')
         }
     }
+
+    # 말로 묻기 (사양 v4 장면 4 · 6): 마이크 → 질문 → AI 답 · 읽어 주기 → "'응'이라고 하면 안내를 시작해요".
+    # 에뮬레이터엔 마이크가 없어 디버그판의 음성 입력 브로드캐스트로 "알아들은 말"을 넣는다 (그 뒤는 실제 음성과 같은 길).
+    # 디버그판으로 덮어 깔아야 해서(같은 키라 기록 유지) 맨 끝에 찍는다.
+    if ($Scenes -contains 'voice') {
+        Invoke-Adb $Car install -r -g $apk.CarDebug | Out-Host
+        Open-CarApp
+        Tap-Text $Car '^내 기록$' 2 -Optional
+        Begin-Scene 'voice' $Car
+        Start-Sleep 2
+        Mark 'mic'; Tap $Car 2313 142            # 검색칸 오른쪽 마이크 (말로 찾기)
+        Start-Sleep 2.5
+        Mark 'say'; $null = Invoke-Adb $Car shell am broadcast --user 10 -a app.eodiyeotji.DEBUG_VOICE -p $CarPkg --es text "'작년에 비 오던 날 넷이서 간 바다 어디였지'"
+        $null = Wait-Ui $Car '이 코스로 안내' 30
+        Mark 'answer'
+        Start-Sleep 9                             # 답을 다 읽고 "'응'이라고 하면 안내를 시작해요" (화면 글자로는 잡히지 않는다)
+        Mark 'confirm'; Start-Sleep 2
+        Mark 'yes'; $null = Invoke-Adb $Car shell am broadcast --user 10 -a app.eodiyeotji.DEBUG_VOICE -p $CarPkg --es text "'응'"
+        Start-Sleep 8
+        End-Scene
+        Stop-Navi
+    }
     Vc @('-Speed', '0', '-Gear', 'Park')
     Open-CarApp
 }
@@ -462,6 +484,7 @@ Add-Part 'firstrun' 0.6 (M 'firstrun' 'end' 12) 1 '처음 켜면: 시동만 걸�
 Add-Part 'startrec' 0.6 (M 'startrec' 'end' 12) 1 '시동(기어 P→D)만 걸면 기록 시작 · 버튼 없음'
 Add-Part 'search' 0.6 ((M 'search' 'ask' 12) + 0.5) 2 '상황으로 묻기 "작년에 비 오던 날 넷이서 간 바다 어디였지" (타자 2배속)'
 Add-Part 'search' ((M 'search' 'ask' 12) + 0.5) (M 'search' 'end' 30) 1 'AI가 기록에서 찾아 답하고, 그날 코스로 바로 안내'
+Add-Part 'voice' ((M 'voice' 'mic' 2) - 0.5) ((M 'voice' 'yes' 20) + 7) 1 '말로 묻기: 마이크 → 질문 → 답을 읽어 주고 "응"이면 안내'
 Add-Part 'replay' 0.6 (M 'replay' 'end' 18) 1 '그날로 돌아가기: 1년 전 오늘 달린 길을 3D로 다시'
 Add-Part 'course' 0.6 (M 'course' 'end' 10) 1 '이 코스로 안내: 들른 곳 5곳을 내비 경유지 2개씩 구간으로 나눠'
 Add-Part 'review' 0.6 (M 'review' 'end' 30) 1 '커뮤니티: 내 주행 기록에서만 코스 올리기 · 집·회사 근처 자동 가림 · 후기 코스로 바로 안내'
