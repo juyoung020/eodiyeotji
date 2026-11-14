@@ -334,20 +334,22 @@ private fun WalkMap(me: LocationFix?, target: WalkTarget, accent: Color, modifie
     val mapView = rememberMapViewWithLifecycle(
         context,
         remember { MapLibreMapOptions.createFromAttributes(context) },
-        android.graphics.Color.rgb(233, 236, 241),
+        if (EodiTheme.colors.isDark) android.graphics.Color.rgb(21, 24, 27) else android.graphics.Color.rgb(233, 236, 241),
         tiltAndRotate = false,
         label = "walk",
     )
+    // 어두운 화면에서는 밤 지도: 밝은 지도가 어두운 앱 한가운데서 눈부시고, 상태 막대 글자(흰색)도 안 보였다
+    val night = EodiTheme.colors.isDark
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
     var style by remember { mutableStateOf<Style?>(null) }
     val accentHex = remember(accent) { String.format("#%06X", 0xFFFFFF and android.graphics.Color.argb(255, (accent.red * 255).toInt(), (accent.green * 255).toInt(), (accent.blue * 255).toInt())) }
     LaunchedEffect(mapView) {
-        // 이 지도 위에 그리는 선 · 표시 색이 밝은 지도 기준이라 낮 지도만 쓴다
-        val spec = MapStyleSource.resolve(context.applicationContext, night = false)
+        // 선 · 표시 색(초록 · 파랑 · 흰 동그라미)은 낮 · 밤 지도 둘 다에서 보인다. 목표 이름 글자만 지도에 맞춘다
+        val spec = MapStyleSource.resolve(context.applicationContext, night = night)
         val json = when (spec) {
             is MapStyleSpec.Offline -> spec.json
             is MapStyleSpec.Online -> spec.json
-            MapStyleSpec.Fallback -> MapStyleSource.fallbackJson(android.graphics.Color.rgb(230, 233, 238))
+            MapStyleSpec.Fallback -> MapStyleSource.fallbackJson(if (night) android.graphics.Color.rgb(27, 30, 34) else android.graphics.Color.rgb(230, 233, 238))
         }
         mapView.getMapAsync { m ->
             map = m
@@ -379,8 +381,8 @@ private fun WalkMap(me: LocationFix?, target: WalkTarget, accent: Color, modifie
                 s.addLayer(SymbolLayer("walk-target-label", SRC_TARGET).withProperties(
                     PropertyFactory.textField(org.maplibre.android.style.expressions.Expression.get("label")),
                     PropertyFactory.textFont(arrayOf("NotoSans-Medium")),
-                    PropertyFactory.textSize(15f), PropertyFactory.textColor("#0F172A"),
-                    PropertyFactory.textHaloColor("#FFFFFF"), PropertyFactory.textHaloWidth(2f),
+                    PropertyFactory.textSize(15f), PropertyFactory.textColor(if (night) "#F1F5F9" else "#0F172A"),
+                    PropertyFactory.textHaloColor(if (night) "#15181B" else "#FFFFFF"), PropertyFactory.textHaloWidth(2f),
                     PropertyFactory.textOffset(arrayOf(0f, 2.2f)), PropertyFactory.textAllowOverlap(true),
                 ))
                 s.addLayer(CircleLayer("walk-me-halo", SRC_ME).withProperties(
