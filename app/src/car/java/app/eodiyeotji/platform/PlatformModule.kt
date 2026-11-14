@@ -3,8 +3,6 @@ package app.eodiyeotji.platform
 import android.content.Context
 import android.content.pm.ServiceInfo
 import app.eodiyeotji.pleos.PleosLocationSource
-import app.eodiyeotji.pleos.PleosSpeech
-import app.eodiyeotji.pleos.PleosTts
 import app.eodiyeotji.ui.agent.CarDrivingStatePort
 import app.eodiyeotji.ui.agent.DrivingStatePort
 import dagger.Binds
@@ -26,8 +24,9 @@ abstract class PlatformModule {
     @Binds abstract fun driveSignals(impl: CarDriveSignals): DriveSignalSource
     // 차가 아닌 기기(태블릿)에서는 그 기기의 지도 앱으로 넘긴다 (CarNavigator)
     @Binds abstract fun navigator(impl: CarNavigator): Navigator
-    @Binds abstract fun speechInput(impl: PleosSpeech): SpeechInput
-    @Binds abstract fun speechOutput(impl: PleosTts): SpeechOutput
+    // 말로 묻기 · 읽어 주기: 차가 아닌 기기(태블릿)에는 Pleos 음성이 없어 Android 표준 음성으로 (TabletSpeech.kt)
+    @Binds abstract fun speechInput(impl: CarSpeechInput): SpeechInput
+    @Binds abstract fun speechOutput(impl: CarSpeechOutput): SpeechOutput
     @Binds abstract fun drivingState(impl: CarDrivingStatePort): DrivingStatePort
     @Binds abstract fun recording(impl: CarRecordingPlatform): RecordingPlatform
     @Binds abstract fun cabin(impl: app.eodiyeotji.pleos.PleosCabin): CabinSource

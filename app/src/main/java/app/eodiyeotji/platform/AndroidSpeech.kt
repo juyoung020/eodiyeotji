@@ -1,4 +1,4 @@
-package app.eodiyeotji.phone
+package app.eodiyeotji.platform
 
 import android.Manifest
 import android.content.BroadcastReceiver
@@ -20,10 +20,6 @@ import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import androidx.core.content.ContextCompat
 import app.eodiyeotji.BuildConfig
-import app.eodiyeotji.platform.ListenState
-import app.eodiyeotji.platform.SpeechInput
-import app.eodiyeotji.platform.SpeechOutput
-import app.eodiyeotji.platform.SpeechResult
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Locale
 import javax.inject.Inject
@@ -36,14 +32,15 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * 폰 말로 묻기 — Android 표준 [SpeechRecognizer] (한국어). 계산 없음: 알아들은 글을 넘기기만 한다.
+ * 말로 묻기 — Android 표준 [SpeechRecognizer] (한국어). 계산 없음: 알아들은 글을 넘기기만 한다.
+ * 폰 판이 쓰고, 차 판도 차가 아닌 기기(태블릿 시연)에서는 Pleos 음성 인식 대신 이것을 쓴다.
  * 인식기는 메인 스레드에서만 다룬다. 상태는 StateFlow/SharedFlow로만 내보낸다.
  *
  * 디버그 빌드: 마이크가 없는 에뮬레이터에서 `adb shell am broadcast -a app.eodiyeotji.DEBUG_VOICE -p app.eodiyeotji.phone
  * --es text "작년 여름 바다 어디였지"`로 "알아들은 말"을 넣는다.
  */
 @Singleton
-class PhoneSpeechInput @Inject constructor(@ApplicationContext private val context: Context) : SpeechInput {
+class AndroidSpeechInput @Inject constructor(@ApplicationContext private val context: Context) : SpeechInput {
 
     private val main = Handler(Looper.getMainLooper())
     private val _state = MutableStateFlow(ListenState())
@@ -175,18 +172,18 @@ class PhoneSpeechInput @Inject constructor(@ApplicationContext private val conte
     private companion object {
         const val TAG = "EodiSpeech"
         const val MSG_FAILED = "말씀을 알아듣지 못했어요. 다시 말씀해 주세요."
-        const val MSG_UNAVAILABLE = "이 폰에서는 음성 인식을 쓸 수 없어요."
+        const val MSG_UNAVAILABLE = "이 기기에서는 음성 인식을 쓸 수 없어요."
         const val MSG_NO_PERMISSION = "마이크 권한이 있어야 말로 물을 수 있어요."
     }
 }
 
 /**
- * 폰 답 읽어 주기 — Android 표준 [TextToSpeech] (한국어).
+ * 답 읽어 주기 — Android 표준 [TextToSpeech] (한국어). 폰 판과, 차가 아닌 기기에 깐 차 판이 쓴다.
  * 지도 앱 길 안내 음성과 겹치지 않게: 비서 음성으로 잠깐 오디오 포커스를 받아 읽고(음악은 줄어든다), 내비가 말하는 중이면
  * 끝날 때까지 기다리며(최대 [MAX_WAIT_MS]), 읽는 중 포커스를 잃으면 멈춘다.
  */
 @Singleton
-class PhoneSpeechOutput @Inject constructor(@ApplicationContext private val context: Context) : SpeechOutput {
+class AndroidSpeechOutput @Inject constructor(@ApplicationContext private val context: Context) : SpeechOutput {
 
     private val main = Handler(Looper.getMainLooper())
     private val audio = context.getSystemService(AudioManager::class.java)

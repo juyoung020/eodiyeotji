@@ -10,8 +10,6 @@ import androidx.core.content.ContextCompat
 import app.eodiyeotji.phone.PhoneDriveSignals
 import app.eodiyeotji.phone.PhoneLocationSource
 import app.eodiyeotji.phone.PhoneNavigator
-import app.eodiyeotji.phone.PhoneSpeechInput
-import app.eodiyeotji.phone.PhoneSpeechOutput
 import app.eodiyeotji.ui.agent.DrivingStatePort
 import app.eodiyeotji.ui.agent.ManualDrivingStatePort
 import dagger.Binds
@@ -42,8 +40,8 @@ abstract class PlatformModule {
     @Binds abstract fun location(impl: PhoneLocationSource): LocationSource
     @Binds abstract fun driveSignals(impl: PhoneDriveSignals): DriveSignalSource
     @Binds abstract fun navigator(impl: PhoneNavigator): Navigator
-    @Binds abstract fun speechInput(impl: PhoneSpeechInput): SpeechInput
-    @Binds abstract fun speechOutput(impl: PhoneSpeechOutput): SpeechOutput
+    @Binds abstract fun speechInput(impl: AndroidSpeechInput): SpeechInput
+    @Binds abstract fun speechOutput(impl: AndroidSpeechOutput): SpeechOutput
     @Binds abstract fun drivingState(impl: PhoneDrivingStatePort): DrivingStatePort
     @Binds abstract fun recording(impl: PhoneRecordingPlatform): RecordingPlatform
     @Binds abstract fun cabin(impl: PhoneCabin): CabinSource
