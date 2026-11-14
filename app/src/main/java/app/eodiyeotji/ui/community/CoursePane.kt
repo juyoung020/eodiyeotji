@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.community
 
+import androidx.compose.ui.platform.LocalConfiguration
 import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.ui.common.agoText
 import app.eodiyeotji.ui.offers.CourseCouponBadge
@@ -247,17 +248,23 @@ internal fun CourseDetailScreen(
                         }
                     }
                     val total = d.legs.size
+                    val label = when {
+                        progress == null -> stringResource(R.string.course_navigate)
+                        progress.hasNextLeg -> stringResource(R.string.course_navigate_next, progress.leg + 1, progress.total)
+                        else -> stringResource(R.string.course_navigate_again)
+                    }
+                    // 폰(좁은 화면)은 하트 · 공유 · 신고 옆에 안내 버튼 자리가 없어 글이 "…"로만 보였다 → 안내 버튼을 아래 줄에 가득 채운다
+                    val narrow = LocalConfiguration.current.screenWidthDp < 600
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         HeartButton(p.hearts, p.heartedByMe, onHeart)
                         // 이 코스를 사진 카드로 공유 (폰 판만 보인다, ui/share)
                         ShareImageButton(ShareTarget.Course(p.id), style = ShareButtonStyle.ICON)
                         if (!p.mine) ReportButton(app.eodiyeotji.core.ReportTarget.COURSE, p.id, onHidden)
-                        val label = when {
-                            progress == null -> stringResource(R.string.course_navigate)
-                            progress.hasNextLeg -> stringResource(R.string.course_navigate_next, progress.leg + 1, progress.total)
-                            else -> stringResource(R.string.course_navigate_again)
-                        }
-                        PrimaryPill(label, EodiIcons.Navi, onNavigate, Modifier.weight(1f), enabled = total > 0)
+                        if (!narrow) PrimaryPill(label, EodiIcons.Navi, onNavigate, Modifier.weight(1f), enabled = total > 0)
+                    }
+                    if (narrow) {
+                        Spacer(Modifier.height(12.dp))
+                        PrimaryPill(label, EodiIcons.Navi, onNavigate, Modifier.fillMaxWidth(), enabled = total > 0)
                     }
                     val hint = when {
                         d.naviFailed -> stringResource(R.string.course_navi_failed)

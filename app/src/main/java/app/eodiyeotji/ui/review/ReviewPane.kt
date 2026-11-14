@@ -54,6 +54,7 @@ import app.eodiyeotji.ui.community.CenterMessage
 import app.eodiyeotji.ui.community.CourseViewModel
 import app.eodiyeotji.ui.community.CourseDetailScreen
 import app.eodiyeotji.ui.community.CompactToolbar
+import app.eodiyeotji.ui.community.PhoneToolbar
 import app.eodiyeotji.ui.community.ShareCourseSheet
 import app.eodiyeotji.ui.community.ShareEpisodePicker
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -94,6 +95,7 @@ fun ReviewPane(viewModel: ReviewViewModel = hiltViewModel(), courses: CourseView
         Column(Modifier.fillMaxSize()) {
             BoxWithConstraints(Modifier.fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = 8.dp, bottom = 16.dp)) {
                 val compact = maxWidth < CompactToolbar
+                val phone = maxWidth < PhoneToolbar
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     // 좁은 창: 왼쪽 선택들은 옆으로 밀어 볼 수 있고, 버튼은 항상 다 보인다
                     Row(
@@ -104,7 +106,14 @@ fun ReviewPane(viewModel: ReviewViewModel = hiltViewModel(), courses: CourseView
                         SortChoice(course.sort, courses::setSort)
                         TogglePill(stringResource(R.string.community_near_me, 30), course.nearOn, courses::toggleNear)
                     }
-                    PrimaryPill(
+                    // 폰 세로에서는 "코스 올리기" 알약이 정렬 줄을 밀어 "내 근처"가 가려졌다 → 드라이브 코스 탭과 같은 파란 동그라미 버튼
+                    if (phone) RoundIconButton(
+                        CommunityIcons.Upload,
+                        stringResource(R.string.review_share_trip_short),
+                        { picking = true },
+                        containerColor = EodiTheme.colors.accent,
+                        contentColor = EodiTheme.colors.onAccent,
+                    ) else PrimaryPill(
                         stringResource(if (compact) R.string.review_share_trip_short else R.string.review_share_trip),
                         CommunityIcons.Upload,
                         { picking = true },

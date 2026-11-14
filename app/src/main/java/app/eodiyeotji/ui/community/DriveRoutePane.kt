@@ -158,7 +158,7 @@ fun DriveRoutePane(viewModel: DriveRouteViewModel = hiltViewModel()) {
 }
 
 /** 이보다 좁으면 폰 세로 화면 (차 화면 · 나눈 창은 이보다 넓다). */
-private val PhoneToolbar = 720.dp
+internal val PhoneToolbar = 720.dp
 
 @Composable
 private fun DriveToolbar(sort: DriveRouteSort, onSort: (DriveRouteSort) -> Unit, onShare: () -> Unit) {
