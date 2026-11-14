@@ -16,6 +16,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.viewinterop.AndroidView
 import app.eodiyeotji.core.MapBoundsLatLon
+import app.eodiyeotji.core.rust.ConvoyMemberView
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Typeface
+import org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap
+import org.maplibre.android.style.layers.PropertyFactory.iconAnchor
+import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
+import org.maplibre.android.style.layers.PropertyFactory.iconImage
+import org.maplibre.android.style.layers.PropertyFactory.iconOffset
+import org.maplibre.android.style.layers.PropertyFactory.iconOpacity
 import app.eodiyeotji.ui.map.MapLibreNative
 import app.eodiyeotji.ui.map.MapStyleSource
 import app.eodiyeotji.ui.map.MapStyleSpec
@@ -63,7 +75,7 @@ import org.maplibre.android.style.sources.GeoJsonSource
  * 차 색은 [ConvoyColors] 번호, 나는 앱 강조색(파랑). 범위가 바뀌면 카메라를 맞춘다 (처음 한 번 + 차가 범위를 벗어날 때).
  */
 @Composable
-fun ConvoyMap(geojson: String, bounds: MapBoundsLatLon?, modifier: Modifier = Modifier) {
+fun ConvoyMap(geojson: String, bounds: MapBoundsLatLon?, members: List<ConvoyMemberView>, modifier: Modifier = Modifier) {
     val context = LocalContext.current.applicationContext
     val night = EodiTheme.colors.isDark
     val options by produceState<MapLibreMapOptions?>(initialValue = null) {
@@ -91,7 +103,16 @@ fun ConvoyMap(geojson: String, bounds: MapBoundsLatLon?, modifier: Modifier = Mo
             null -> Unit
         }
     }
-    LaunchedEffect(geojson, bounds) { controller.setData(geojson, bounds) }
+    val density = androidx.compose.ui.platform.LocalDensity.current.density
+    val surface = EodiTheme.colors.surface.toArgb()
+    // 차 표시(핀 + 이름표)는 비트맵으로 미리 그려 둔다 (기본 스레드 밖에서)
+    LaunchedEffect(geojson, bounds, members, night) {
+        val icons = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            members.associate { m -> "car-${m.id}" to carMarker(m, density, ink, surface, warn) }
+        }
+        controller.setIcons(icons)
+        controller.setData(geojson, bounds)
+    }
     AndroidView(factory = { mapView }, modifier = modifier)
 }
 
@@ -109,6 +130,13 @@ private class ConvoyMapController(private val view: MapView, private val meColor
     private var data: String = EMPTY
     private var bounds: MapBoundsLatLon? = null
     private var fitted: MapBoundsLatLon? = null
+    private var icons: Map<String, CarMarker> = emptyMap()
+    private var style: Style? = null
+
+    fun setIcons(next: Map<String, CarMarker>) {
+        icons = next
+        style?.let { s -> next.forEach { (id, b) -> s.addImage(id, b.bitmap) } }
+    }
 
     init {
         view.getMapAsync { m ->
@@ -124,6 +152,7 @@ private class ConvoyMapController(private val view: MapView, private val meColor
         if (json == styleJson) return
         styleJson = json
         source = null
+        style = null
         m.setStyle(Style.Builder().fromJson(json)) { s -> onStyle(s) }
     }
 
@@ -142,6 +171,8 @@ private class ConvoyMapController(private val view: MapView, private val meColor
     }
 
     private fun onStyle(s: Style) {
+        style = s
+        icons.forEach { (id, b) -> s.addImage(id, b.bitmap) }
         val src = GeoJsonSource(SRC, data)
         s.addSource(src)
         source = src
@@ -159,26 +190,21 @@ private class ConvoyMapController(private val view: MapView, private val meColor
         )
         s.addLayer(
             CircleLayer("convoy-me", SRC).withFilter(eq(kind, literal("me"))).withProperties(
-                circleRadius(14f), circleColor(meColor), circleStrokeColor(0xFFFFFFFF.toInt()), circleStrokeWidth(4f),
+                circleRadius(16f), circleColor(meColor), circleStrokeColor(0xFFFFFFFF.toInt()), circleStrokeWidth(5f),
+            ),
+        )
+        // 차: 미리 그린 핀(색 원 + 흰 테두리 + 첫 글자, 부족이면 빨간 테두리 + 느낌표) + 아래 이름표 칩. 핀 가운데가 차 위치
+        s.addLayer(
+            SymbolLayer("convoy-car", SRC).withFilter(eq(kind, literal("car"))).withProperties(
+                iconImage(Expression.concat(literal("car-"), get("id"))),
+                iconAnchor(Property.ICON_ANCHOR_TOP),
+                iconOffset(arrayOf(0f, -CarMarker.PIN_CENTER_DP)),
+                iconAllowOverlap(true), iconIgnorePlacement(true),
+                iconOpacity(Expression.switchCase(eq(get("stale"), literal(true)), literal(0.55f), literal(1f))),
             ),
         )
         s.addLayer(
-            CircleLayer("convoy-car", SRC).withFilter(eq(kind, literal("car"))).withProperties(
-                circleRadius(22f), circleColor(colorExpr()),
-                // 잔량 부족이면 테두리를 빨갛고 굵게 (이름표에도 "배터리 부족"이 붙는다, Rust)
-                circleStrokeColor(Expression.switchCase(eq(get("low"), literal(true)), Expression.color(warn), Expression.color(halo))),
-                circleStrokeWidth(Expression.switchCase(eq(get("low"), literal(true)), literal(7f), literal(4f))),
-                circleOpacity(Expression.switchCase(eq(get("stale"), literal(true)), literal(0.45f), literal(1f))),
-            ),
-        )
-        s.addLayer(
-            SymbolLayer("convoy-initial", SRC).withFilter(eq(kind, literal("car"))).withProperties(
-                textField(get("initial")), textSize(22f), textColor(0xFFFFFFFF.toInt()), textFont(arrayOf(FONT)),
-                textAllowOverlap(true), textIgnorePlacement(true),
-            ),
-        )
-        s.addLayer(
-            SymbolLayer("convoy-label", SRC).withFilter(Expression.any(eq(kind, literal("car")), eq(kind, literal("dest")))).withProperties(
+            SymbolLayer("convoy-label", SRC).withFilter(eq(kind, literal("dest"))).withProperties(
                 textField(get("label")), textSize(20f), textColor(ink), textHaloColor(halo), textHaloWidth(2.5f),
                 textFont(arrayOf(FONT)), textAnchor(Property.TEXT_ANCHOR_TOP), textOffset(arrayOf(0f, 1.4f)),
                 textAllowOverlap(true),
@@ -207,4 +233,59 @@ private class ConvoyMapController(private val view: MapView, private val meColor
         private const val FONT = "NotoSans-Medium"
         private const val EMPTY = """{"type":"FeatureCollection","features":[]}"""
     }
+}
+
+/** 지도 차 표시 한 장 (핀 + 이름표). */
+internal class CarMarker(val bitmap: Bitmap) {
+    companion object {
+        /** 그림 위 끝에서 핀 가운데까지 (dp) */
+        const val PIN_CENTER_DP = 36f
+    }
+}
+
+/** 차 핀: 그림자 · 흰 테두리 · 색 원 · 첫 글자, 부족이면 빨간 테두리 + 느낌표 배지. 아래에 바탕 있는 이름표 칩. */
+internal fun carMarker(m: ConvoyMemberView, d: Float, ink: Int, surface: Int, warn: Int): CarMarker {
+    val low = m.low && !m.stale
+    val color = ConvoyColors.of(m.color.toInt())
+    val r = 28f * d
+    val ring = (if (low) 5f else 4f) * d
+    val cy = CarMarker.PIN_CENTER_DP * d
+    val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 19f * d; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD); this.color = if (low) warn else ink }
+    val label = m.label
+    val tw = text.measureText(label)
+    val chipH = 34f * d
+    val chipW = tw + 28f * d
+    val w = maxOf(chipW, 2 * (r + ring) + 24f * d) + 12f * d
+    val chipTop = cy + r + ring + 8f * d
+    val h = chipTop + chipH + 8f * d
+    val bmp = Bitmap.createBitmap(w.toInt(), h.toInt(), Bitmap.Config.ARGB_8888)
+    val cv = Canvas(bmp)
+    val cx = w / 2f
+    val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    // 테두리 + 그림자
+    p.color = if (low) warn else 0xFFFFFFFF.toInt()
+    p.setShadowLayer(4f * d, 0f, 1.5f * d, 0x40000000)
+    cv.drawCircle(cx, cy, r + ring, p)
+    p.clearShadowLayer()
+    p.color = color
+    cv.drawCircle(cx, cy, r, p)
+    // 첫 글자
+    val ini = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 26f * d; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD); this.color = 0xFFFFFFFF.toInt(); textAlign = Paint.Align.CENTER }
+    cv.drawText(m.initial, cx, cy - (ini.descent() + ini.ascent()) / 2f, ini)
+    if (low) {
+        val bx = cx + r * 0.78f
+        val by = cy - r * 0.78f
+        p.color = 0xFFFFFFFF.toInt(); cv.drawCircle(bx, by, 12f * d, p)
+        p.color = warn; cv.drawCircle(bx, by, 10f * d, p)
+        val ex = Paint(ini).apply { textSize = 15f * d }
+        cv.drawText("!", bx, by - (ex.descent() + ex.ascent()) / 2f, ex)
+    }
+    // 이름표 칩
+    p.color = surface
+    p.setShadowLayer(3f * d, 0f, 1f * d, 0x33000000)
+    val chip = RectF(cx - chipW / 2f, chipTop, cx + chipW / 2f, chipTop + chipH)
+    cv.drawRoundRect(chip, chipH / 2f, chipH / 2f, p)
+    text.textAlign = Paint.Align.CENTER
+    cv.drawText(label, cx, chip.centerY() - (text.descent() + text.ascent()) / 2f, text)
+    return CarMarker(bmp)
 }

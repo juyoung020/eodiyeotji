@@ -104,6 +104,43 @@ pub struct ConvoyMemberView {
     pub label: String,
     /// 큰 카드 한 줄 ("민수 차 · 2.1km 뒤 · 도착 5분 차이")
     pub card: String,
+    /// 나와의 위치 한 마디 ("5.2km 앞" · "바로 근처" · "도착", 모르면 빈 문자열)
+    pub rel: String,
+    /// 마지막 소식이 몇 분 전인지 (끊긴 차만 의미 있음)
+    pub stale_min: i64,
+    /// 잔량 막대 (화면 게이지)
+    pub gauge: ConvoyEnergy,
+}
+
+/// 잔량 막대 하나: 채울 비율 · 짧은 글.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ConvoyEnergy {
+    /// 전기차면 true (배터리), 아니면 연료
+    pub ev: bool,
+    /// 막대 채움 0.0~1.0 (모르면 음수)
+    pub frac: f64,
+    /// "30km" · "12%" (모르면 빈 문자열)
+    pub text: String,
+}
+
+/// 잔량 막대: %가 있으면 %로, 없으면 남은 거리를 만충 거리(전기차 400km · 연료 600km)에 견준다.
+pub fn energy_gauge(ev: bool, pct: f64, range_km: f64) -> ConvoyEnergy {
+    let full = if ev { 400.0 } else { 600.0 };
+    let frac = if pct >= 0.0 {
+        (pct / 100.0).clamp(0.0, 1.0)
+    } else if range_km >= 0.0 {
+        (range_km / full).clamp(0.0, 1.0)
+    } else {
+        -1.0
+    };
+    let text = if range_km >= 0.0 {
+        format!("{}km", range_km.round() as i64)
+    } else if pct >= 0.0 {
+        format!("{}%", pct.round() as i64)
+    } else {
+        String::new()
+    };
+    ConvoyEnergy { ev, frac, text }
 }
 
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
@@ -235,6 +272,9 @@ pub fn member_view(m: &ConvoyMemberIn, color: u32, me: Option<&ConvoyMe>, dest: 
         energy,
         label,
         card,
+        rel: if arrived { "도착".into() } else { rel },
+        stale_min: ((now_ms - m.ts_ms) / 60_000).max(1),
+        gauge: energy_gauge(m.ev, m.energy_pct, m.range_km),
     }
 }
 
@@ -567,6 +607,17 @@ mod tests {
         // 남쪽으로 왔다 → 북쪽(7km)의 차는 뒤
         let v = t.update(1_000, Some(m2), None, &[member("a", "민수", 7.0, 1_000)]);
         assert!(v.members[0].gap_m < 0.0);
+    }
+
+    #[test]
+    fn energy_gauge_fills_by_percent_then_range() {
+        let g = energy_gauge(true, 30.0, 120.0);
+        assert!((g.frac - 0.3).abs() < 1e-9 && g.text == "120km" && g.ev);
+        let r = energy_gauge(false, -1.0, 300.0);
+        assert!((r.frac - 0.5).abs() < 1e-9 && r.text == "300km");
+        let u = energy_gauge(true, -1.0, -1.0);
+        assert!(u.frac < 0.0 && u.text.is_empty());
+        assert_eq!(energy_gauge(true, 150.0, -1.0).frac, 1.0);
     }
 
     #[test]

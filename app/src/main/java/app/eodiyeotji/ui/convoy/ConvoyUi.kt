@@ -38,6 +38,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.addPathNodes
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.material3.Icon
+import app.eodiyeotji.core.rust.ConvoyEnergy
+import app.eodiyeotji.ui.share.ShareIcon
+import app.eodiyeotji.ui.theme.EodiIcons
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.rememberScrollState
@@ -95,57 +105,79 @@ fun ConvoyEntryChip(modifier: Modifier = Modifier, vm: ConvoyViewModel = hiltVie
     }
 }
 
-/** 주행 중 큰 카드 1장: "민수 차 · 2.1km 뒤 · 도착 5분 차이" + 위치 공유 중. 같이 가는 중이 아니면 아무것도 그리지 않는다. */
+/**
+ * 주행 중 큰 카드 1장: 같이 가는 차 모두를 한 줄에 (아바타 · 간격 · 작은 잔량 막대). 부족한 차는 빨강.
+ * 누가 부족하면 오른쪽에 큰 버튼 하나 ("같이 충전소 들르기"). 같이 가는 중이 아니면 아무것도 그리지 않는다.
+ */
 @Composable
 fun ConvoyDrivingCard(modifier: Modifier = Modifier, vm: ConvoyViewModel = hiltViewModel()) {
     val s by vm.repo.state.collectAsStateWithLifecycle()
     if (s.phase != ConvoyPhase.ACTIVE) return
     val c = EodiTheme.colors
-    val f = s.focus
     val narrow = LocalConfiguration.current.screenWidthDp < NARROW_DP
     val scope = rememberCoroutineScope()
     val showStop = s.low != null && s.waypoint == null
+    val live = s.members.count { !it.stale } + 1
     Surface(color = c.surface, shape = RoundedCornerShape(EodiTheme.space.radiusL), modifier = modifier) {
-      Column(Modifier.padding(horizontal = 32.dp, vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (f != null) {
-                Puck(f, 72)
-                Spacer(Modifier.width(24.dp))
-            }
-            Column(Modifier.weight(1f)) {
+        Column(Modifier.padding(horizontal = 28.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LiveDot()
+                Spacer(Modifier.width(10.dp))
                 Text(
-                    f?.card ?: stringResource(R.string.convoy_waiting),
-                    style = EodiTheme.type.drivingBody,
-                    // 잔량 부족 · 끊김은 한눈에 (빨강 = 부족, 흐림 = 소식 끊김)
-                    color = when {
-                        f?.low == true && !f.stale -> c.error
-                        f?.stale == true -> c.textSecondary
-                        else -> c.textPrimary
-                    },
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    stringResource(R.string.convoy_sharing_count, s.members.count { !it.stale } + 1),
+                    stringResource(R.string.convoy_title) + " · " + stringResource(R.string.convoy_together_count, live),
                     style = EodiTheme.type.label,
                     color = c.accent,
                 )
             }
-            // 누가 잔량이 부족하면 한 번 누르기로 모두 같이 들를 곳을 정한다 (주행 중에도 큰 버튼 하나만)
-            if (showStop && !narrow) {
-                Spacer(Modifier.width(24.dp))
-                BigButton(stringResource(R.string.convoy_stop_together), primary = true, modifier = Modifier.width(320.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                if (s.members.isEmpty()) {
+                    Text(stringResource(R.string.convoy_waiting), style = EodiTheme.type.bodyStrong, color = c.textSecondary, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                } else {
+                    s.members.take(if (narrow) 2 else 4).forEach { m -> DriveMember(m, Modifier.weight(1f)) }
+                }
+                if (showStop && !narrow) {
+                    BigButton(stringResource(R.string.convoy_stop_together), primary = true, modifier = Modifier.width(300.dp)) {
+                        scope.launch { vm.repo.stopTogether() }
+                    }
+                }
+            }
+            // 좁은 창(세로 · 나눈 화면)에서는 버튼을 아래 한 줄로
+            if (showStop && narrow) {
+                BigButton(stringResource(R.string.convoy_stop_together), primary = true, modifier = Modifier.fillMaxWidth()) {
                     scope.launch { vm.repo.stopTogether() }
                 }
             }
         }
-        // 좁은 창(세로 · 나눈 화면)에서는 버튼을 글 아래 한 줄로 (옆에 두면 글이 잘렸다)
-        if (showStop && narrow) {
-            BigButton(stringResource(R.string.convoy_stop_together), primary = true, modifier = Modifier.fillMaxWidth()) {
-                scope.launch { vm.repo.stopTogether() }
-            }
+    }
+}
+
+/** 주행 카드의 차 한 대: 아바타 + 간격(큰 글) + 작은 잔량 막대. 부족 = 옅은 빨강 판, 끊김 = 흐림. */
+@Composable
+private fun DriveMember(m: ConvoyMemberView, modifier: Modifier) {
+    val c = EodiTheme.colors
+    val low = m.low && !m.stale
+    Row(
+        modifier
+            .background(if (low) c.error.copy(alpha = 0.10f) else c.background, RoundedCornerShape(24.dp))
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Avatar(m.initial, memberColor(m), 64, dim = m.stale, warn = low)
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                when {
+                    m.stale -> stringResource(R.string.convoy_stale_min, m.staleMin.toInt())
+                    m.rel.isNotEmpty() -> m.rel
+                    else -> m.name
+                },
+                style = EodiTheme.type.drivingBody,
+                color = when { m.stale -> c.textTertiary; low -> c.error; else -> c.textPrimary },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            EnergyBar(m.gauge, low = low, dim = m.stale, color = memberColor(m), compact = true)
         }
-      }
     }
 }
 
@@ -255,7 +287,7 @@ private fun StartPane(s: ConvoyUiState, repo: ConvoyRepository) {
 private fun ActivePane(s: ConvoyUiState, repo: ConvoyRepository) {
     val c = EodiTheme.colors
     val mapDesc = stringResource(R.string.convoy_map_description)
-    // 넓은 창: [지도 | 정보]. 좁은 창(세로 · 나눈 화면): 위 지도 · 아래 정보 (옆으로 두면 정보 칸이 잘렸다)
+    // 넓은 창: [지도 | 정보]. 좁은 창(세로 · 나눈 화면): 위 지도 · 아래 정보
     val narrow = LocalConfiguration.current.screenWidthDp < NARROW_DP
     val r = EodiTheme.space.radiusL
     if (narrow) {
@@ -263,118 +295,261 @@ private fun ActivePane(s: ConvoyUiState, repo: ConvoyRepository) {
             ConvoyMap(
                 s.geojson,
                 s.bounds,
+                s.members,
                 Modifier.fillMaxWidth().fillMaxHeight(0.32f)
                     .background(c.surfaceHigh, RoundedCornerShape(topStart = r, topEnd = r))
                     .semantics { contentDescription = mapDesc },
             )
-            ActiveInfo(s, repo, Modifier.weight(1f).fillMaxWidth().padding(24.dp), compact = true)
+            ActiveInfo(s, repo, Modifier.weight(1f).fillMaxWidth().padding(20.dp))
         }
     } else {
         Row(Modifier.fillMaxSize()) {
             ConvoyMap(
                 s.geojson,
                 s.bounds,
-                Modifier.weight(1.4f).fillMaxHeight()
+                s.members,
+                Modifier.weight(1.35f).fillMaxHeight()
                     .background(c.surfaceHigh, RoundedCornerShape(topStart = r, bottomStart = r))
                     .semantics { contentDescription = mapDesc },
             )
-            ActiveInfo(s, repo, Modifier.weight(1f).fillMaxHeight().padding(32.dp))
+            ActiveInfo(s, repo, Modifier.weight(1f).fillMaxHeight().padding(28.dp))
         }
     }
 }
 
 @Composable
-private fun ActiveInfo(s: ConvoyUiState, repo: ConvoyRepository, modifier: Modifier, compact: Boolean = false) {
+private fun ActiveInfo(s: ConvoyUiState, repo: ConvoyRepository, modifier: Modifier) {
     val c = EodiTheme.colors
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var navi by remember { mutableStateOf<Boolean?>(null) }
-    run {
-        Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(14.dp).background(c.accent, CircleShape))
-                Spacer(Modifier.width(10.dp))
-                Text(stringResource(R.string.convoy_sharing), style = EodiTheme.type.label, color = c.accent, modifier = Modifier.weight(1f))
-                // 좁은 창: 참여 코드를 머리 줄에 (큰 코드 글자가 차 목록 자리를 먹어 두 번째 차부터 잘렸다)
-                if (compact) {
-                    Text(stringResource(R.string.convoy_code), style = EodiTheme.type.meta, color = c.textTertiary)
+    val shareText = stringResource(R.string.convoy_share_text, s.code, s.dest?.name ?: "-")
+    val chooser = stringResource(R.string.convoy_share)
+    val share: () -> Unit = {
+        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, shareText)
+        runCatching { context.startActivity(Intent.createChooser(send, chooser).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+    val navigate: () -> Unit = { scope.launch { navi = repo.navigate() } }
+    val stop: () -> Unit = { scope.launch { navi = repo.stopTogether() } }
+    val lowCase = s.low != null && s.waypoint == null
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        // 머리: 제목 + 살아 있는 점 "N대 함께" · 코드 칩 · 닫기
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.convoy_title), style = EodiTheme.type.title, color = c.textPrimary, maxLines = 1)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    LiveDot()
                     Spacer(Modifier.width(8.dp))
-                    Text(s.code, style = EodiTheme.type.titleSmall, fontWeight = FontWeight.Bold, color = c.textPrimary, maxLines = 1)
-                    Spacer(Modifier.width(16.dp))
-                }
-                Pill(stringResource(R.string.convoy_close), onClick = repo::closeSheet)
-            }
-            if (!compact) {
-                Text(stringResource(R.string.convoy_code), style = EodiTheme.type.eyebrow, color = c.textTertiary)
-                Text(s.code, style = EodiTheme.type.display, color = c.textPrimary, maxLines = 1)
-            }
-            Text(
-                s.dest?.let { stringResource(R.string.convoy_dest, it.name) } ?: stringResource(R.string.convoy_dest_none),
-                style = EodiTheme.type.body,
-                color = c.textSecondary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            s.waypoint?.let { Text(stringResource(R.string.convoy_waypoint, it.name), style = EodiTheme.type.body, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-            s.stopNotice?.let { Text(stringResource(it), style = EodiTheme.type.caption, color = c.textSecondary) }
-            if (s.offline) Text(stringResource(R.string.convoy_offline), style = EodiTheme.type.meta, color = c.error)
-            if (s.local) Text(stringResource(R.string.convoy_local), style = EodiTheme.type.caption, color = c.textTertiary)
-            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (s.members.isEmpty()) {
-                    item(key = "empty") { Text(stringResource(R.string.convoy_waiting), style = EodiTheme.type.body, color = c.textSecondary) }
-                }
-                items(s.members, key = { it.id }) { m ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Puck(m, 52)
-                        Spacer(Modifier.width(16.dp))
-                        Column(Modifier.weight(1f)) {
-                            // 끊긴 차는 흐리게 (잔량 부족이어도 지금 값이 아니므로 빨강 대신 흐림 — 주행 카드와 같은 규칙)
-                            Text(m.card, style = EodiTheme.type.bodyStrong, color = when { m.stale -> c.textSecondary; m.low -> c.error; else -> c.textPrimary }, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            // 정차 중에는 모든 차의 잔량을 보인다 (주행 중 · 지도에는 부족할 때만)
-                            if (m.energy.isNotEmpty()) Text(m.energy, style = EodiTheme.type.meta, color = if (m.low && !m.stale) c.error else c.textTertiary)
-                        }
-                    }
+                    Text(stringResource(R.string.convoy_together_count, s.members.count { !it.stale } + 1), style = EodiTheme.type.label, color = c.accent, maxLines = 1)
                 }
             }
-            navi?.let {
-                Text(
-                    stringResource(if (it) R.string.convoy_navi_ok else R.string.convoy_navi_fail),
-                    style = EodiTheme.type.caption,
-                    color = if (it) c.textSecondary else c.error,
-                )
-            }
-            if (s.low != null && s.waypoint == null) {
-                BigButton(stringResource(R.string.convoy_stop_together), modifier = Modifier.fillMaxWidth()) {
-                    scope.launch { navi = repo.stopTogether() }
+            CodeChip(s.code, onClick = share)
+            Spacer(Modifier.width(12.dp))
+            RoundIcon(EodiIcons.Close, stringResource(R.string.convoy_close), onClick = repo::closeSheet)
+        }
+        // 잠깐 보일 안내 (한 줄씩)
+        if (s.offline) Note(stringResource(R.string.convoy_offline), c.error)
+        s.stopNotice?.let { Note(stringResource(it), c.textSecondary) }
+        navi?.let { Note(stringResource(if (it) R.string.convoy_navi_ok else R.string.convoy_navi_fail), if (it) c.textSecondary else c.error) }
+        if (s.local) Note(stringResource(R.string.convoy_local), c.textTertiary)
+        // 차 카드: 나 먼저, 그다음 같이 가는 차들. 남는 높이를 채우고 넘치면 스크롤
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item(key = "me") { MeCard(s.myEnergy) }
+            if (s.members.isEmpty()) {
+                item(key = "empty") {
+                    Text(stringResource(R.string.convoy_waiting), style = EodiTheme.type.body, color = c.textSecondary, modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp))
                 }
             }
-            BigButton(stringResource(R.string.convoy_navigate), primary = true, enabled = s.dest != null, modifier = Modifier.fillMaxWidth()) {
-                scope.launch { navi = repo.navigate() }
+            items(s.members, key = { it.id }) { m -> MemberCard(m) }
+        }
+        DestRow(s, onPick = repo::closeSheet)
+        // 주 버튼 하나 (상황에 맞게) + 아래 옅은 알약 버튼 줄
+        if (lowCase) {
+            BigButton(stringResource(R.string.convoy_stop_together), primary = true, modifier = Modifier.fillMaxWidth(), onClick = stop)
+        } else {
+            BigButton(stringResource(R.string.convoy_navigate), primary = true, enabled = s.dest != null, modifier = Modifier.fillMaxWidth(), onClick = navigate)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (lowCase) TonalButton(stringResource(R.string.convoy_navigate_short), enabled = s.dest != null, modifier = Modifier.weight(1f), onClick = navigate)
+            TonalButton(chooser, icon = ShareIcon, modifier = Modifier.weight(1f), onClick = share)
+            TonalButton(stringResource(R.string.convoy_leave), modifier = Modifier.weight(1f), onClick = repo::leave)
+        }
+    }
+}
+
+@Composable
+private fun Note(text: String, color: Color) {
+    Text(text, style = EodiTheme.type.caption, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
+}
+
+/** 목적지 한 줄: 없으면 짧은 안내 + "목적지 정하기", 있으면 이름 (+ 함께 들를 곳). */
+@Composable
+private fun DestRow(s: ConvoyUiState, onPick: () -> Unit) {
+    val c = EodiTheme.colors
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 76.dp).background(c.background, RoundedCornerShape(24.dp)).padding(start = 20.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(EodiIcons.Pin, null, tint = if (s.dest != null) c.accent else c.textTertiary, modifier = Modifier.size(28.dp))
+        Spacer(Modifier.width(12.dp))
+        val d = s.dest
+        if (d == null) {
+            Text(stringResource(R.string.convoy_dest_empty), style = EodiTheme.type.body, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Box(
+                Modifier.heightIn(min = 76.dp).clip(RoundedCornerShape(38.dp)).clickable(onClick = onPick).padding(horizontal = 18.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(stringResource(R.string.convoy_dest_pick), style = EodiTheme.type.label, fontWeight = FontWeight.Bold, color = c.accent, maxLines = 1)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                val shareText = stringResource(R.string.convoy_share_text, s.code, s.dest?.name ?: "-")
-                val chooser = stringResource(R.string.convoy_share)
-                BigButton(chooser, modifier = Modifier.weight(1f)) {
-                    val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, shareText)
-                    runCatching { context.startActivity(Intent.createChooser(send, chooser).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                }
-                BigButton(stringResource(R.string.convoy_leave), modifier = Modifier.weight(1f), onClick = repo::leave)
+        } else {
+            Column(Modifier.weight(1f).padding(vertical = 12.dp)) {
+                Text(d.name, style = EodiTheme.type.bodyStrong, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                s.waypoint?.let { Text(stringResource(R.string.convoy_waypoint, it.name), style = EodiTheme.type.meta, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
         }
     }
 }
 
-/** 다른 차 점: 색 원 + 이름 첫 글자 (지도와 같은 색). 끊긴 차는 흐리게. */
+/** 내 차 카드 (맨 위, 앱 파랑). */
 @Composable
-private fun Puck(m: ConvoyMemberView, sizeDp: Int) {
+private fun MeCard(e: ConvoyEnergy?) {
+    val c = EodiTheme.colors
+    CardShell(low = false) {
+        Avatar(stringResource(R.string.convoy_me), c.accent, 68)
+        Spacer(Modifier.width(18.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(stringResource(R.string.convoy_my_car), style = EodiTheme.type.bodyStrong, color = c.textPrimary, maxLines = 1)
+            EnergyBar(e, low = false, dim = false, color = c.accent)
+        }
+    }
+}
+
+/** 같이 가는 차 카드: 아바타 · 이름 · 앞뒤 간격 · 잔량 막대. 부족 = 빨강 + "부족", 끊김 = 흐림 + "N분 전". */
+@Composable
+private fun MemberCard(m: ConvoyMemberView) {
+    val c = EodiTheme.colors
+    val low = m.low && !m.stale
+    CardShell(low = low) {
+        Avatar(m.initial, memberColor(m), 68, dim = m.stale, warn = low)
+        Spacer(Modifier.width(18.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(m.name, style = EodiTheme.type.bodyStrong, color = if (m.stale) c.textTertiary else c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Spacer(Modifier.width(8.dp))
+                when {
+                    m.stale -> Text(stringResource(R.string.convoy_stale_min, m.staleMin.toInt()), style = EodiTheme.type.meta, color = c.textTertiary, maxLines = 1)
+                    m.rel.isNotEmpty() -> Text(m.rel, style = EodiTheme.type.time, color = if (low) c.error else c.textPrimary, maxLines = 1)
+                }
+            }
+            EnergyBar(m.gauge, low = low, dim = m.stale, color = memberColor(m))
+        }
+    }
+}
+
+@Composable
+private fun CardShell(low: Boolean, content: @Composable RowScope.() -> Unit) {
+    val c = EodiTheme.colors
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 136.dp)
+            .background(if (low) c.error.copy(alpha = 0.08f) else c.background, RoundedCornerShape(24.dp))
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content,
+    )
+}
+
+/** 잔량 막대: 번개/주유기 아이콘 · 가로 막대 · "30km". 부족이면 빨강 막대 + "부족" 알약. */
+@Composable
+private fun EnergyBar(g: ConvoyEnergy?, low: Boolean, dim: Boolean, color: Color, compact: Boolean = false) {
+    val c = EodiTheme.colors
+    val frac = g?.frac ?: -1.0
+    val known = frac >= 0.0
+    val ev = g?.ev ?: true
+    val tint = when { dim || !known -> c.textTertiary; low -> c.error; else -> color }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(if (ev) BoltIcon else FuelIcon, stringResource(if (ev) R.string.convoy_battery else R.string.convoy_fuel), tint = tint, modifier = Modifier.size(if (compact) 24.dp else 26.dp))
+        Spacer(Modifier.width(8.dp))
+        Box(Modifier.weight(1f).height(if (compact) 10.dp else 12.dp).clip(CircleShape).background(c.outline)) {
+            if (known) {
+                Box(Modifier.fillMaxHeight().fillMaxWidth(frac.toFloat().coerceIn(0.04f, 1f)).clip(CircleShape).background(tint.copy(alpha = if (dim) 0.5f else 1f)))
+            }
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            g?.text?.takeIf { it.isNotEmpty() } ?: stringResource(R.string.convoy_energy_unknown),
+            style = EodiTheme.type.meta,
+            fontWeight = FontWeight.SemiBold,
+            color = when { dim -> c.textTertiary; low -> c.error; else -> c.textSecondary },
+            maxLines = 1,
+        )
+        if (low && !compact) {
+            Spacer(Modifier.width(8.dp))
+            Text(
+                stringResource(R.string.convoy_low),
+                style = EodiTheme.type.caption,
+                fontWeight = FontWeight.Bold,
+                color = c.onAccent,
+                modifier = Modifier.background(c.error, RoundedCornerShape(12.dp)).padding(horizontal = 10.dp, vertical = 3.dp),
+            )
+        }
+    }
+}
+
+/** 차 아바타: 색 원 + 흰 테두리 + 첫 글자. 부족이면 빨간 테두리, 끊기면 흐림. */
+@Composable
+private fun Avatar(initial: String, color: Color, sizeDp: Int, dim: Boolean = false, warn: Boolean = false) {
+    val c = EodiTheme.colors
     Box(
         Modifier
             .size(sizeDp.dp)
-            .background(Color(ConvoyColors.of(m.color.toInt())).copy(alpha = if (m.stale) 0.45f else 1f), CircleShape),
+            .background(if (warn) c.error else c.surface, CircleShape)
+            .padding(if (warn) 4.dp else 3.dp)
+            .background(color.copy(alpha = if (dim) 0.4f else 1f), CircleShape),
         contentAlignment = Alignment.Center,
     ) {
-        Text(m.initial, style = if (sizeDp >= 64) EodiTheme.type.drivingBody else EodiTheme.type.bodyStrong, color = Color.White, fontWeight = FontWeight.Bold)
+        Text(initial, style = if (sizeDp >= 64) EodiTheme.type.titleSmall else EodiTheme.type.bodyStrong, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1)
     }
+}
+
+private fun memberColor(m: ConvoyMemberView) = Color(ConvoyColors.of(m.color.toInt()))
+
+/** 살아 있음 점 (파랑 점 + 옅은 테두리). */
+@Composable
+private fun LiveDot() {
+    val c = EodiTheme.colors
+    Box(Modifier.size(18.dp).background(c.accentSoft, CircleShape), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(10.dp).background(c.accent, CircleShape))
+    }
+}
+
+/** 참여 코드 칩: "코드 112645" + 공유 아이콘. 누르면 코드 보내기. */
+@Composable
+private fun CodeChip(code: String, onClick: () -> Unit) {
+    val c = EodiTheme.colors
+    Row(
+        Modifier
+            .heightIn(min = 76.dp)
+            .clip(RoundedCornerShape(38.dp))
+            .background(c.accentSoft)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 22.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(stringResource(R.string.convoy_code_chip, code), style = EodiTheme.type.label, fontWeight = FontWeight.Bold, color = c.accent, maxLines = 1)
+        Spacer(Modifier.width(10.dp))
+        Icon(ShareIcon, stringResource(R.string.convoy_share), tint = c.accent, modifier = Modifier.size(26.dp))
+    }
+}
+
+@Composable
+private fun RoundIcon(icon: ImageVector, desc: String, onClick: () -> Unit) {
+    val c = EodiTheme.colors
+    Box(
+        Modifier.size(76.dp).clip(CircleShape).background(c.surfaceHigh).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, desc, tint = c.textPrimary, modifier = Modifier.size(30.dp)) }
 }
 
 @Composable
@@ -399,10 +574,32 @@ private fun BigButton(text: String, modifier: Modifier = Modifier, primary: Bool
                 text,
                 style = EodiTheme.type.label,
                 fontWeight = FontWeight.Bold,
-                color = if (enabled) Color.Unspecified else c.textTertiary,
+                color = if (enabled) Color.Unspecified else c.textSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+    }
+}
+
+/** 옅은 알약 버튼 (보조 동작). */
+@Composable
+private fun TonalButton(text: String, modifier: Modifier = Modifier, icon: ImageVector? = null, enabled: Boolean = true, onClick: () -> Unit) {
+    val c = EodiTheme.colors
+    PressSurface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(38.dp),
+        color = c.surfaceHigh,
+        contentColor = if (enabled) c.textPrimary else c.textTertiary,
+        modifier = modifier.heightIn(min = 76.dp),
+    ) {
+        Row(Modifier.padding(horizontal = 14.dp).height(76.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Icon(icon, null, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(text, style = EodiTheme.type.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -420,4 +617,22 @@ private fun Pill(text: String, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(horizontal = 24.dp, vertical = 18.dp),
     )
+}
+
+private val BoltIcon: ImageVector by lazy {
+    ImageVector.Builder("Bolt", 24.dp, 24.dp, 24f, 24f).addPath(
+        addPathNodes("M13.5 2L4.5 13.5H11L10 22L19.5 10H13L13.5 2Z"),
+        fill = SolidColor(Color.Black),
+    ).build()
+}
+
+private val FuelIcon: ImageVector by lazy {
+    ImageVector.Builder("Fuel", 24.dp, 24.dp, 24f, 24f).addPath(
+        addPathNodes(
+            "M4 21V5C4 3.9 4.9 3 6 3H13C14.1 3 15 3.9 15 5V21H4ZM7 6V10.5H12V6H7Z" +
+                "M16 7.5L17.4 6.1L20.4 9.1C20.8 9.5 21 10 21 10.5V18C21 19.1 20.1 20 19 20C17.9 20 17 19.1 17 18V14.5H16V12.5H17C18.1 12.5 19 13.4 19 14.5V18H19V10.9L16 7.5Z",
+        ),
+        fill = SolidColor(Color.Black),
+        pathFillType = PathFillType.EvenOdd,
+    ).build()
 }

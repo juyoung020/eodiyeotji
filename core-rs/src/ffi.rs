@@ -546,3 +546,9 @@ impl EodiStore {
         self.roadside_motion_at(now_ms)
     }
 }
+
+/// 같이 가기: 내 차 잔량 막대 (`convoy::energy_gauge`). 다른 차 막대는 [ConvoyTracker::update] 결과에 들어 있다.
+#[uniffi::export]
+pub fn convoy_energy(ev: bool, pct: f64, range_km: f64) -> crate::convoy::ConvoyEnergy {
+    crate::convoy::energy_gauge(ev, pct, range_km)
+}

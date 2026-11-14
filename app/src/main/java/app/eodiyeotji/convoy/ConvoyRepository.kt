@@ -73,6 +73,8 @@ data class ConvoyUiState(
     val error: Int? = null,
     val sheetOpen: Boolean = false,
     val name: String = "",
+    /** 내 차 잔량 막대 (Rust `convoy_energy`) */
+    val myEnergy: app.eodiyeotji.core.rust.ConvoyEnergy? = null,
 )
 
 /**
@@ -274,6 +276,8 @@ class ConvoyRepository @Inject constructor(
             dest?.let { ConvoyDest(it.name, it.lat, it.lon) },
             others,
         )
+        val e = debugEnergy ?: myEnergy
+        val myGauge = app.eodiyeotji.core.rust.convoyEnergy(e.ev, e.pct, e.rangeKm)
         _state.update {
             it.copy(
                 dest = dest,
@@ -284,6 +288,7 @@ class ConvoyRepository @Inject constructor(
                 geojson = view.geojson,
                 bounds = view.bounds?.let { b -> MapBoundsLatLon(b.minLat, b.minLon, b.maxLat, b.maxLon) },
                 offline = group == null,
+                myEnergy = myGauge,
             )
         }
         // 알림은 Rust가 정한 것만 (도착 · 3km 넘게 뒤처짐, 60초 간격 · 횟수 제한). 내비 음성과는 SpeechOutput이 오디오 포커스로 비킨다.
