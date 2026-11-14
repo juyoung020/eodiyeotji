@@ -12,7 +12,8 @@
                     (scripts\demo\loopback-rec.py, pip install --user soundcard 필요. PC의 다른 소리도 들어간다)
     -SkipBuild      이미 만든 APK를 그대로 쓴다
     -SkipInstall    설치 · 데이터 지우기를 건너뛴다 (장면만 다시 찍기. 이미 시연 기록이 있으면 첫 장면은 어색하다)
-    -Scenes         찍을 장면만 (기본 전부): firstrun, search, replay, course, convoy, biz, phone
+    -Scenes         찍을 장면만 (기본 전부): firstrun, startrec, search, replay, course, review, convoy, biz, extras, phone, recall
+                    (recall은 강릉 경로를 재생해 오늘 기록을 남기므로 늘 맨 마지막에 찍는다 — docs/97 4장)
     -EditOnly       녹화 없이 -Out 폴더의 장면 파일로 편집만 다시
     -Out            결과 폴더 (기본 build\demo\<날짜-시각>, git에 안 올라감)
     -Car / -Phone   에뮬레이터 (기본 emulator-5554 = Pleos 차, emulator-5556 = 폰)
@@ -28,7 +29,7 @@ param(
     [switch]$SkipBuild,
     [switch]$SkipInstall,
     [switch]$EditOnly,
-    [string[]]$Scenes = @('firstrun', 'search', 'replay', 'course', 'convoy', 'biz', 'phone'),
+    [string[]]$Scenes = @('firstrun', 'startrec', 'search', 'replay', 'course', 'review', 'convoy', 'biz', 'extras', 'phone', 'recall'),
     [string]$Out,
     [string]$Car = 'emulator-5554',
     [string]$Phone = 'emulator-5556'
@@ -160,6 +161,19 @@ if (-not $EditOnly) {
         End-Scene
     }
 
+    # 시동(기어 P→D) → 앱 머리 "기록 중" → 다시 P: 버튼 없이 기록이 시작되는 순간 (사양 장면 5)
+    if ($Scenes -contains 'startrec') {
+        Open-CarApp
+        Tap-Text $Car '^내 기록$' 2 -Optional
+        Begin-Scene 'startrec' $Car
+        Start-Sleep 2.5
+        Mark 'drive'; Vc @('-Gear', 'Drive', '-Speed', '20')
+        Start-Sleep 5
+        Mark 'park'; Vc @('-Speed', '0', '-Gear', 'Park')
+        Start-Sleep 4
+        End-Scene
+    }
+
     if ($Scenes -contains 'search') {
         Open-CarApp
         Tap-Text $Car '^지우기$' 2 -Optional
@@ -167,7 +181,8 @@ if (-not $EditOnly) {
         Start-Sleep 1
         Tap-Text $Car '장소.*물어보세요'
         Start-Sleep 1.2
-        Mark 'type'; Type-CarHangul $Car 'ㅂㅏㄷㅏ ㅇㅓㄷㅣㅇㅕ⇧ㅅㅈㅣ'
+        # "작년에 비 오던 날 넷이서 간 바다 어디였지" — 비는 와이퍼 기록, 넷은 좌석 센서 기록으로 거른다 (agent/runner.rs)
+        Mark 'type'; Type-CarHangul $Car 'ㅈㅏㄱㄴㅕㄴㅇㅔ ㅂㅣ ㅇㅗㄷㅓㄴ ㄴㅏㄹ ㄴㅔㅅㅇㅣㅅㅓ ㄱㅏㄴ ㅂㅏㄷㅏ ㅇㅓㄷㅣㅇㅕ⇧ㅅㅈㅣ'
         Start-Sleep 2.5
         Mark 'ask'; Tap-Text $Car 'AI에게 물어보기'
         $null = Wait-Ui $Car '이 코스로 안내' 30
@@ -201,6 +216,39 @@ if (-not $EditOnly) {
         Tap-Text $Car '안내 종료' 3 -Region '1900,1100,2560,1300' -Optional
         Start-Sleep 4   # 안내 종료는 내비를 잠깐 앞으로 띄운다
         Open-CarApp
+    }
+
+    # 커뮤니티: 코스 올리기(내 주행 기록에서만 · 집·회사 근처 자동 가림 — 올리지 않고 닫는다) → 여행 리뷰 강릉~양양 후기 → 이 코스로 안내 (사양 장면 10)
+    if ($Scenes -contains 'review') {
+        Open-CarApp
+        Tap-Text $Car '^커뮤니티$'
+        Start-Sleep 1.5
+        Tap-Text $Car '^여행 리뷰$'
+        Start-Sleep 2
+        Begin-Scene 'review' $Car
+        Start-Sleep 1.5
+        Mark 'upload'; Tap-Text $Car '코스 올리기'
+        Start-Sleep 2.5
+        Tap $Car 1750 410            # "어떤 기록을 올릴까요?" 첫 기록
+        Start-Sleep 4                # "집·회사 근처는 자동으로 가려요"
+        Tap $Car 2283 363            # 닫기 (올리지 않는다)
+        Start-Sleep 1.5
+        Mark 'feed'
+        Start-Sleep 2
+        Tap-Text $Car '강릉에서 양양까지'
+        Start-Sleep 4
+        Mark 'guide'; Tap-Text $Car '^이 코스로 안내$'
+        Start-Sleep 5
+        Show-Navi
+        Start-Sleep 4
+        End-Scene
+        # 정리: 코스 안내 끄기 · 목록으로
+        Open-CarApp
+        Tap-Text $Car '안내 종료' 3 -Region '1900,1100,2560,1300' -Optional
+        Start-Sleep 4
+        Open-CarApp
+        Tap-Text $Car '여행 리뷰로' 2 -Optional
+        Tap-Text $Car '^내 기록$' 2 -Optional
     }
 
     if ($Scenes -contains 'convoy') {
@@ -269,6 +317,26 @@ if (-not $EditOnly) {
         Tap-Text $Car '^내 기록$' 2 -Optional
     }
 
+    # 그 밖에도: 첫 화면 "늘 가던 날" 카드 → 이번 달 요약 → 기억 지도 (사양 장면 14b, 폰은 phone 장면에서)
+    if ($Scenes -contains 'extras') {
+        Open-CarApp
+        Tap-Text $Car '^내 기록$' 2 -Optional
+        Begin-Scene 'extras' $Car
+        Start-Sleep 3.5
+        Mark 'month'; Tap-Text $Car '^모아보기$'
+        Start-Sleep 1.2
+        Tap-Text $Car '^이번 달 요약$'
+        Start-Sleep 3.5
+        $null = Invoke-Adb $Car shell input keyevent BACK
+        Start-Sleep 1.2
+        Mark 'map'; Tap-Text $Car '^기억 지도$'
+        Start-Sleep 7
+        End-Scene
+        $null = Invoke-Adb $Car shell input keyevent BACK
+        Start-Sleep 1
+        Tap-Text $Car '^내 기록$' 2 -Optional
+    }
+
     if ($Scenes -contains 'phone') {
         $null = Invoke-Adb $Phone shell am start -n "$PhonePkg/app.eodiyeotji.MainActivity"
         Start-Sleep 2
@@ -284,6 +352,29 @@ if (-not $EditOnly) {
         Swipe $Phone 540 1800 540 800 600
         Start-Sleep 3
         End-Scene
+    }
+
+    # 지나가면 회상: 강릉 경로 5구간(경포해변 → 초당)을 D로 1.5배속 재생 → 초당 300m 안에서 배너 + 음성 (사양 장면 9b)
+    # 오늘 기록을 남기고 회상 제한(하루 3번 · 15분 · 같은 곳 7일)을 쓰므로 늘 맨 마지막에 찍는다.
+    if ($Scenes -contains 'recall') {
+        Open-CarApp
+        Tap-Text $Car '^내 기록$' 2 -Optional
+        $env:ANDROID_SERIAL = $Car
+        $replay = Start-Process powershell -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$Repo\scripts\replay.ps1`"", '-Scenario', 'gangneung-trip', '-StartSegment', '5', '-Speed', '1.5', '-LeadInSec', '3' -PassThru -WindowStyle Hidden
+        try {
+            Begin-Scene 'recall' $Car
+            Mark 'drive'
+            $r = Find-Ui $Car '근처에 있어요' 170
+            if ($r) {
+                Mark 'recall'
+                Start-Sleep 7        # 음성 "1년 전 가을에 들렀던 ○○가 근처에 있어요"
+            } else { Write-Host '  회상 배너가 뜨지 않았습니다 (사양 4장 9b 대체안)' -ForegroundColor Yellow }
+            End-Scene
+        } finally {
+            Get-CimInstance Win32_Process -Filter "ParentProcessId=$($replay.Id)" -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+            Stop-Process -Id $replay.Id -Force -ErrorAction SilentlyContinue
+            Vc @('-Speed', '0', '-Gear', 'Park')
+        }
     }
     Vc @('-Speed', '0', '-Gear', 'Park')
     Open-CarApp
@@ -368,10 +459,12 @@ function M([string]$Scene, [string]$Key, [double]$Default) {
 
 Add-Card '어디였지' '차가 대신 기억합니다 · 기록 → 기억 → 함께'
 Add-Part 'firstrun' 0.6 (M 'firstrun' 'end' 12) 1 '처음 켜면: 시동만 걸어도 자동 기록 · 시연용 1년치 기록 넣기'
-Add-Part 'search' 0.6 ((M 'search' 'ask' 12) + 0.5) 1 '글로 묻기 "바다 어디였지" → 기기 안 검색은 치는 즉시'
+Add-Part 'startrec' 0.6 (M 'startrec' 'end' 12) 1 '시동(기어 P→D)만 걸면 기록 시작 · 버튼 없음'
+Add-Part 'search' 0.6 ((M 'search' 'ask' 12) + 0.5) 2 '상황으로 묻기 "작년에 비 오던 날 넷이서 간 바다 어디였지" (타자 2배속)'
 Add-Part 'search' ((M 'search' 'ask' 12) + 0.5) (M 'search' 'end' 30) 1 'AI가 기록에서 찾아 답하고, 그날 코스로 바로 안내'
 Add-Part 'replay' 0.6 (M 'replay' 'end' 18) 1 '그날로 돌아가기: 1년 전 오늘 달린 길을 3D로 다시'
 Add-Part 'course' 0.6 (M 'course' 'end' 10) 1 '이 코스로 안내: 들른 곳 5곳을 내비 경유지 2개씩 구간으로 나눠'
+Add-Part 'review' 0.6 (M 'review' 'end' 30) 1 '커뮤니티: 내 주행 기록에서만 코스 올리기 · 집·회사 근처 자동 가림 · 후기 코스로 바로 안내'
 $cDrive = M 'convoy' 'drive' 30
 $cWait = M 'convoy' 'wait' ($cDrive + 60)
 Add-Part 'convoy' 0.6 ($cDrive + 4) 1 '같이 가기: 6자리 코드로 모임 · 함께 가는 차 2대 · 민수 차 배터리 부족'
@@ -381,7 +474,10 @@ if ($cWait - 2 -gt $cDrive + 4) {
 }
 Add-Part 'convoy' ($cWait - 2) (M 'convoy' 'end' ($cWait + 14)) 1 '지현 차가 3km 넘게 뒤처지면 → 앞 휴게소에서 기다릴지 묻고, 누르면 경유지로'
 Add-Part 'biz' 0.6 (M 'biz' 'end' 12) 1 '출장 관리: 거래처 · 평일 주행을 출장으로 묶고 경비까지 어림'
+Add-Part 'extras' 0.6 (M 'extras' 'end' 16) 1 '늘 가던 날 미리 알림 · 이번 달 요약 · 기억 지도'
 Add-Part 'phone' 0.6 (M 'phone' 'end' 20) 1 '폰 앱: 같은 기록과 커뮤니티를 폰에서도'
+$rc = M 'recall' 'recall' 0
+if ($rc -gt 0) { Add-Part 'recall' ([Math]::Max(0.6, $rc - 6)) (M 'recall' 'end' ($rc + 7)) 1 '주행 중 예전에 들른 곳 근처를 지나면 음성 + 한 줄로 회상' }
 Add-Card '달린 길은 잊혀도, 차는 기억합니다' '어디였지 · Pleos Connect' 3
 
 $listFile = Join-Path $PartDir 'list.txt'

@@ -1,3 +1,6 @@
+# 상위 폴더(예: 사용자 홈)에 빈 Cargo.toml이 있어도 작업 공간을 위로 찾지 않게 한다 (11/15 리허설 빌드가 이것 때문에 실패)
+[workspace]
+
 [package]
 name = "eodi-core"
 version = "0.6.0"
