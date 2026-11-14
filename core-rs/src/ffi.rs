@@ -395,9 +395,19 @@ impl ConvoyTracker {
         self.inner.lock().unwrap_or_else(|e| e.into_inner()).update(now_ms, me, dest, &others)
     }
 
-    /// 휴게소 대기 제안을 거둔다 ("기다리기"를 눌렀거나 "괜찮아요", `convoy::Tracker::dismiss_wait`).
-    pub fn dismiss_wait(&self) {
-        self.inner.lock().unwrap_or_else(|e| e.into_inner()).dismiss_wait()
+    /// "○○휴게소에서 기다리기"를 눌렀다 (`convoy::Tracker::accept_wait`): 그곳을 지나거나 모두 다시 모일 때까지 다른 차로 또 묻지 않는다.
+    pub fn accept_wait(&self) {
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).accept_wait()
+    }
+
+    /// "괜찮아요" (`convoy::Tracker::decline_wait`): 10분 동안 어느 차로도 묻지 않는다.
+    pub fn decline_wait(&self, now_ms: i64) {
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).decline_wait(now_ms)
+    }
+
+    /// 모임의 함께 들를 곳 ([update] 전에 매번, `convoy::Tracker::set_group_waypoint`). 휴게소면 대열의 기다릴 곳으로 붙잡는다.
+    pub fn set_group_waypoint(&self, wp: Option<crate::convoy::ConvoyDest>) {
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).set_group_waypoint(wp.as_ref())
     }
 }
 

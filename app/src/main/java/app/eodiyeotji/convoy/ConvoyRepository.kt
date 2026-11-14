@@ -226,7 +226,8 @@ class ConvoyRepository @Inject constructor(
     suspend fun waitAtRestArea(): Boolean {
         val s = session ?: return false
         val w = _state.value.wait ?: return false
-        withContext(Dispatchers.Default) { tracker?.dismissWait() }
+        // 그곳을 지나거나 모두 다시 모일 때까지 다른 차로 또 묻지 않는다 (Rust convoy::Tracker::accept_wait)
+        withContext(Dispatchers.Default) { tracker?.acceptWait() }
         val place = ConvoyPlace(w.placeName, w.place.lat, w.place.lon)
         myWaypoint = place.name
         _state.update { it.copy(wait = null, waypoint = place, waypointNote = null, stopNotice = R.string.convoy_wait_added) }
@@ -246,10 +247,11 @@ class ConvoyRepository @Inject constructor(
         }.getOrDefault(false)
     }
 
-    /** 휴게소 대기 제안 "괜찮아요" (같은 차가 다시 따라왔다 떨어지기 전에는 다시 묻지 않는다). */
+    /** 휴게소 대기 제안 "괜찮아요" (10분 동안 어느 차로도 다시 묻지 않는다, Rust convoy::Tracker::decline_wait). */
     fun dismissWait() {
         _state.update { it.copy(wait = null) }
-        scope.launch { tracker?.dismissWait() }
+        val now = System.currentTimeMillis()
+        scope.launch { tracker?.declineWait(now) }
     }
 
     /** 내가 올린 함께 들를 곳 이름 (내 화면에는 "선두가 … 기다려요"를 보이지 않는다) */
@@ -395,6 +397,8 @@ class ConvoyRepository @Inject constructor(
         val others = g?.members.orEmpty().filter { it.id != s.memberId }.map {
             ConvoyMemberIn(it.id, it.name, it.lat, it.lon, it.heading, it.speedMps, it.etaS, it.tsMs, it.ev, it.energyPct, it.rangeKm)
         }
+        // 모임에 기다릴 휴게소가 올라와 있으면(누가 "기다리기"를 눌렀다) 다른 차로 또 묻지 않게
+        t.setGroupWaypoint(g?.waypoint?.let { ConvoyDest(it.name, it.lat, it.lon) })
         val view = t.update(
             System.currentTimeMillis(),
             fix?.let { ConvoyMe(it.lat, it.lon, -1.0, 0.0, -1) },

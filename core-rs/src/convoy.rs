@@ -14,6 +14,8 @@
 //!   목적지와 반대쪽으로 달리면, 내 길 앞 [WAIT_MIN_AHEAD_M]~[WAIT_MAX_AHEAD_M] 안에서 덜 돌아가는 휴게소 · 졸음쉼터(기기에 넣어 둔 공공데이터,
 //!   `roadside::bundled` · `roadside::rank`)를 골라 "민수 차와 4.2km 멀어졌어요. 2km 앞 기흥휴게소에서 잠깐 기다릴까요?"를 만든다.
 //!   떨어진 한 번에 한 번만 (다시 [BEHIND_CLEAR_M] 안으로 오면 다음에 또). 목적지가 [WAIT_DEST_NEAR_M] 안이면 목적지에서 만나면 되므로 하지 않는다.
+//!   대열에 기다릴 곳이 이미 정해졌으면(내가 "기다리기"를 눌렀거나 다른 차가 올린 휴게소) 그곳을 지나거나, 모두 다시 모이거나,
+//!   모임에서 지워질 때까지 다른 차로 다시 묻지 않는다. "괜찮아요"를 누르면 [WAIT_DECLINE_COOLDOWN_MS](10분) 동안 어느 차로도 묻지 않는다.
 //! - 화면 지도: 차 · 나 · 목적지 점과 차마다 최근 지나온 길(단순화)을 GeoJSON 하나로 (Kotlin은 MapLibre에 그대로 넘긴다).
 
 use std::collections::{HashMap, HashSet};
@@ -57,6 +59,10 @@ const WAIT_OFF_MIN_DIST_M: f64 = 1_000.0;
 const WAIT_SHELTER_PENALTY_M: f64 = 3_000.0;
 /// 고른 곳이 이보다 가까워지면(거의 다 옴) 제안을 거둔다
 const WAIT_PASSED_M: f64 = 200.0;
+/// "괜찮아요" 뒤 이 시간 동안은 어느 차로도 다시 묻지 않는다
+pub const WAIT_DECLINE_COOLDOWN_MS: i64 = 10 * 60_000;
+/// 정해진 기다릴 곳을 이만큼 넘게 지나면(목적지 쪽으로) 다 쓴 것으로 본다 (그 안에서 서서 기다리는 동안은 묻지 않는다)
+const WAIT_HELD_PASSED_M: f64 = 1_000.0;
 const TRAIL_MAX: usize = 400;
 const TRAIL_MIN_STEP_M: f64 = 15.0;
 const TRAIL_SIMPLIFY_M: f64 = 8.0;
@@ -560,6 +566,23 @@ pub struct Tracker {
     wait_unsaid: bool,
     /// 이번에 떨어진 동안 이미 제안한 차 (다시 가까워지면 지운다)
     wait_offered: HashSet<String>,
+    /// 대열이 기다리기로 한 곳 (내가 "기다리기"를 눌렀거나 모임의 함께 들를 곳이 휴게소). 있는 동안은 새로 묻지 않는다
+    held: Option<HeldWait>,
+    /// 다 쓴 기다릴 곳 (모임에 남아 있어도 다시 붙잡지 않는다)
+    released: Option<Point>,
+    /// "괜찮아요" 뒤 이 시각까지 묻지 않는다
+    decline_until_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct HeldWait {
+    at: Point,
+    /// 모임에서 받은 곳 (모임에서 지워지면 함께 푼다). 내가 고른 곳은 서버에 올라가기 전에도 붙잡는다
+    from_group: bool,
+}
+
+fn same_place(a: Point, b: Point) -> bool {
+    haversine_m(a, b) < 50.0
 }
 
 const ME_KEY: &str = "\u{0}me";
@@ -609,7 +632,7 @@ impl Tracker {
         let members: Vec<ConvoyMemberView> =
             others.iter().map(|m| member_view(m, self.colors[&m.id], me.as_ref(), dest.as_ref(), now_ms)).collect();
 
-        let wait_new = self.update_wait(me.as_ref(), heading_known, dest.as_ref(), &others, &members);
+        let wait_new = self.update_wait(now_ms, me.as_ref(), heading_known, dest.as_ref(), &others, &members);
 
         // 알림 후보 (도착이 먼저)
         let mut events: Vec<String> = Vec::new();
@@ -674,16 +697,70 @@ impl Tracker {
         ConvoyView { members, focus, low, geojson, bounds, speak, me_arrived, wait: self.wait.clone() }
     }
 
-    /// 휴게소 대기 제안을 거둔다 ("기다리기"를 눌렀거나 "괜찮아요"). 같은 차가 다시 가까워졌다 떨어지기 전에는 다시 묻지 않는다.
-    pub fn dismiss_wait(&mut self) {
+    /// 지금 보이는 휴게소 대기 제안을 지운다 (다른 차 제안 · 쿨다운은 그대로).
+    fn clear_wait(&mut self) {
         self.wait = None;
         self.wait_unsaid = false;
     }
 
+    /// "○○휴게소에서 기다리기"를 눌렀다: 제안을 거두고 그곳을 대열의 기다릴 곳으로 붙잡는다
+    /// → 그곳을 지나거나 모두 다시 모일 때까지 다른 차로 또 묻지 않는다.
+    pub fn accept_wait(&mut self) {
+        if let Some(w) = self.wait.take() {
+            self.held = Some(HeldWait { at: Point { lat: w.place.lat, lon: w.place.lon }, from_group: false });
+        }
+        self.wait_unsaid = false;
+    }
+
+    /// "괜찮아요": 제안을 거두고 [WAIT_DECLINE_COOLDOWN_MS] 동안 어느 차로도 묻지 않는다
+    /// (같은 차는 다시 가까워졌다 떨어지기 전에는 그 뒤에도 묻지 않는다).
+    pub fn decline_wait(&mut self, now_ms: i64) {
+        self.clear_wait();
+        self.decline_until_ms = Some(now_ms + WAIT_DECLINE_COOLDOWN_MS);
+    }
+
+    /// 모임의 함께 들를 곳 (매번 [update] 전에). 휴게소 · 졸음쉼터면 대열의 기다릴 곳으로 붙잡는다 — 다른 차가 "기다리기"를 눌러 올린 곳.
+    /// 충전소 · 주유소는 상관없다. 모임에서 지워지면(None · 다른 곳) 모임에서 받은 기다릴 곳도 푼다.
+    pub fn set_group_waypoint(&mut self, wp: Option<&ConvoyDest>) {
+        let rest = wp.filter(|d| waypoint_wait_note(&d.name).is_some()).map(|d| Point { lat: d.lat, lon: d.lon });
+        if let Some(h) = self.held {
+            if h.from_group && rest.is_none_or(|p| !same_place(p, h.at)) {
+                self.held = None;
+            }
+        }
+        if let Some(p) = rest {
+            let done = self.released.is_some_and(|r| same_place(r, p));
+            let holding = self.held.is_some_and(|h| same_place(h.at, p));
+            if !done && !holding && self.held.is_none() {
+                self.held = Some(HeldWait { at: p, from_group: true });
+                self.clear_wait();
+            }
+        }
+    }
+
+    /// 붙잡은 기다릴 곳을 다 썼나: 목적지 쪽으로 [WAIT_HELD_PASSED_M] 넘게 지났다 (목적지가 없으면 진행 방향 뒤로 그만큼 넘게)
+    fn held_passed(at: Point, here: Point, heading: Option<f64>, dest: Option<Point>) -> bool {
+        let d = haversine_m(here, at);
+        if d <= WAIT_HELD_PASSED_M {
+            return false;
+        }
+        if let Some(dp) = dest {
+            return haversine_m(at, dp) > haversine_m(here, dp) + WAIT_HELD_PASSED_M;
+        }
+        match heading.filter(|h| h.is_finite() && *h >= 0.0) {
+            Some(h) => {
+                let diff = (bearing_deg(here, at) - h).rem_euclid(360.0);
+                diff.min(360.0 - diff) > 90.0
+            }
+            None => false,
+        }
+    }
+
     /// 휴게소 대기 제안 갱신. 새로 제안한 차의 id를 돌려준다.
-    fn update_wait(&mut self, me: Option<&ConvoyMe>, heading: Option<f64>, dest: Option<&ConvoyDest>, others: &[&ConvoyMemberIn], views: &[ConvoyMemberView]) -> Option<String> {
+    #[allow(clippy::too_many_arguments)]
+    fn update_wait(&mut self, now_ms: i64, me: Option<&ConvoyMe>, heading: Option<f64>, dest: Option<&ConvoyDest>, others: &[&ConvoyMemberIn], views: &[ConvoyMemberView]) -> Option<String> {
         let Some(me) = me else {
-            self.dismiss_wait();
+            self.clear_wait();
             return None;
         };
         let here = Point { lat: me.lat, lon: me.lon };
@@ -692,6 +769,16 @@ impl Tracker {
             others.iter().zip(views).filter(|(m, v)| separated(m, v, me, dest)).map(|(m, v)| (*m, v)).collect();
         // 다시 가까워진 차는 다음에 또 제안할 수 있다
         self.wait_offered.retain(|id| apart.iter().any(|(m, _)| &m.id == id));
+        // 대열이 기다리기로 한 곳: 지났거나 모두 다시 모였으면 다 썼다. 아니면 새로 묻지 않는다
+        if let Some(h) = self.held {
+            if apart.is_empty() || Self::held_passed(h.at, here, heading, dest_p) {
+                self.held = None;
+                self.released = Some(h.at);
+            } else {
+                self.clear_wait();
+                return None;
+            }
+        }
         // 지금 제안: 그 차가 따라왔거나, 그곳을 거의 지났으면 거둔다. 아니면 거리 · 문구만 새로
         if let Some(w) = self.wait.as_mut() {
             let still = apart.iter().find(|(m, _)| m.id == w.member_id);
@@ -703,8 +790,12 @@ impl Tracker {
                     w.apart_m = haversine_m(here, Point { lat: m.lat, lon: m.lon });
                     wait_texts(w);
                 }
-                _ => self.dismiss_wait(),
+                _ => self.clear_wait(),
             }
+            return None;
+        }
+        // "괜찮아요" 뒤 잠깐은 어느 차로도 묻지 않는다
+        if self.decline_until_ms.is_some_and(|t| now_ms < t) {
             return None;
         }
         // 새 제안: 가장 멀리 떨어진 차부터, 이번에 아직 묻지 않은 차
@@ -1105,10 +1196,12 @@ mod tests {
         let v = t.update(now + 5_000, Some(my), Some(d.clone()), &[behind(37.34, now + 5_000)]);
         assert!(v.wait.is_some() && v.speak.is_none(), "{:?} {:?}", v.wait, v.speak);
         // 거두면 같은 이격 동안은 다시 묻지 않는다
-        t.dismiss_wait();
+        t.decline_wait(now + 6_000);
         assert!(t.update(now + 10_000, Some(my), Some(d.clone()), &[behind(37.345, now + 10_000)]).wait.is_none());
-        // 따라왔다가(1km 뒤) 다시 떨어지면 또 묻는다
+        // 따라왔다가(1km 뒤) 다시 떨어지면 또 묻는다 ("괜찮아요" 10분이 지난 뒤)
         assert!(t.update(now + 20_000, Some(my), Some(d.clone()), &[behind(37.309, now + 20_000)]).wait.is_none());
+        assert!(t.update(now + 200_000, Some(my), Some(d.clone()), &[behind(37.35, now + 200_000)]).wait.is_none(), "쿨다운 중");
+        let now = now + WAIT_DECLINE_COOLDOWN_MS;
         let v = t.update(now + 200_000, Some(my), Some(d.clone()), &[behind(37.35, now + 200_000)]);
         assert!(v.wait.is_some() && v.speak.is_some_and(|s| s.contains("기다릴까요")));
         // 따라오면 제안이 저절로 사라진다
@@ -1118,6 +1211,81 @@ mod tests {
         let near = ConvoyMe { lat: 36.86, lon: 127.11, heading: -1.0, speed_mps: 25.0, eta_s: -1 };
         let v = t.update(now, Some(near), Some(d), &[behind(36.92, now)]);
         assert!(v.wait.is_none() && v.speak.is_some_and(|s| s.contains("뒤처졌어요")));
+    }
+
+    #[test]
+    fn accepted_wait_blocks_other_members_until_passed_or_rejoined() {
+        // 지현 · 민수 둘 다 4km 넘게 뒤. 지현으로 묻고 "기다리기"를 누르면 민수로 다시 묻지 않는다
+        let d = ConvoyDest { name: "천안".into(), lat: 36.8151, lon: 127.1139 };
+        let at = |lat: f64| ConvoyMe { lat, lon: 127.10, heading: -1.0, speed_mps: 25.0, eta_s: -1 };
+        let car = |id: &str, name: &str, lat: f64, ts: i64| ConvoyMemberIn {
+            id: id.into(), name: name.into(), lat, lon: 127.104, heading: 180.0, speed_mps: 20.0, eta_s: -1, ts_ms: ts, ev: true, energy_pct: 80.0, range_km: 300.0,
+        };
+        let both = |a: f64, b: f64, ts: i64| vec![car("j", "지현", a, ts), car("m", "민수", b, ts)];
+        let mut t = Tracker::default();
+        let now = 1_000_000;
+        let v = t.update(now, Some(at(37.30)), Some(d.clone()), &both(37.345, 37.34, now));
+        let w = v.wait.expect("첫 제안");
+        assert_eq!(w.member_name, "지현");
+        t.accept_wait();
+        let place = w.place.clone();
+        // 기다릴 곳으로 가는 동안 · 그곳에 서 있는 동안은 민수로 묻지 않는다
+        for (i, lat) in [37.30, 37.28, 37.25, place.lat + 0.004, place.lat].into_iter().enumerate() {
+            let ts = now + 10_000 * (i as i64 + 1);
+            let v = t.update(ts, Some(at(lat)), Some(d.clone()), &both(lat + 0.05, lat + 0.045, ts));
+            assert!(v.wait.is_none(), "{lat}: {:?}", v.wait);
+            assert!(v.speak.as_deref().is_none_or(|s| !s.contains("기다릴까요")), "{:?}", v.speak);
+        }
+        // 그곳을 지나 1km 넘게 가면 다 썼다 → 아직 떨어진 민수로 다시 물을 수 있다
+        let past = place.lat - 0.02;
+        let ts = now + 100_000;
+        let v = t.update(ts, Some(at(past)), Some(d.clone()), &both(past + 0.05, past + 0.045, ts));
+        let w2 = v.wait.expect("지난 뒤에는 다시");
+        assert_eq!(w2.member_name, "민수");
+
+        // 모두 다시 모이면 붙잡은 곳을 푼다 (다음 이격 때 다시 묻는다)
+        let mut t = Tracker::default();
+        t.update(now, Some(at(37.30)), Some(d.clone()), &both(37.345, 37.34, now)).wait.expect("제안");
+        t.accept_wait();
+        assert!(t.update(now + 5_000, Some(at(37.30)), Some(d.clone()), &both(37.301, 37.302, now + 5_000)).wait.is_none());
+        assert!(t.update(now + 10_000, Some(at(37.30)), Some(d.clone()), &both(37.345, 37.34, now + 10_000)).wait.is_some());
+
+        // 다른 차가 올린 휴게소(모임의 함께 들를 곳)가 있으면 묻지 않고, 모임에서 지워지면 다시 묻는다
+        // (앞 휴게소 — 다른 차가 같은 곳을 골라 올렸다)
+        let wp = ConvoyDest { name: place.name.clone(), lat: w.place.lat, lon: w.place.lon };
+        let mut t = Tracker::default();
+        t.set_group_waypoint(Some(&wp));
+        assert!(t.update(now, Some(at(37.30)), Some(d.clone()), &both(37.345, 37.34, now)).wait.is_none());
+        // 충전소는 기다릴 곳이 아니다
+        t.set_group_waypoint(Some(&ConvoyDest { name: "스타필드 충전소".into(), lat: 37.2, lon: 127.1 }));
+        assert!(t.update(now + 5_000, Some(at(37.30)), Some(d.clone()), &both(37.345, 37.34, now + 5_000)).wait.is_some());
+        // 내가 고른 곳은 모임에 아직 올라가지 않아도(예전 값 · 없음) 붙잡는다
+        let mut t = Tracker::default();
+        t.update(now, Some(at(37.30)), Some(d.clone()), &both(37.345, 37.34, now)).wait.expect("제안");
+        t.accept_wait();
+        t.set_group_waypoint(None);
+        assert!(t.update(now + 5_000, Some(at(37.30)), Some(d.clone()), &both(37.345, 37.34, now + 5_000)).wait.is_none());
+    }
+
+    #[test]
+    fn declined_wait_cools_down_for_every_member() {
+        let d = ConvoyDest { name: "천안".into(), lat: 36.8151, lon: 127.1139 };
+        let me = ConvoyMe { lat: 37.30, lon: 127.10, heading: -1.0, speed_mps: 25.0, eta_s: -1 };
+        let car = |id: &str, name: &str, lat: f64, ts: i64| ConvoyMemberIn {
+            id: id.into(), name: name.into(), lat, lon: 127.104, heading: 180.0, speed_mps: 20.0, eta_s: -1, ts_ms: ts, ev: true, energy_pct: 80.0, range_km: 300.0,
+        };
+        let both = |ts: i64| vec![car("j", "지현", 37.345, ts), car("m", "민수", 37.34, ts)];
+        let mut t = Tracker::default();
+        let now = 1_000_000;
+        assert_eq!(t.update(now, Some(me), Some(d.clone()), &both(now)).wait.expect("제안").member_name, "지현");
+        t.decline_wait(now + 1_000);
+        // 10분 동안은 민수로도 묻지 않는다
+        for dt in [5_000, 60_000, WAIT_DECLINE_COOLDOWN_MS] {
+            assert!(t.update(now + dt, Some(me), Some(d.clone()), &both(now + dt)).wait.is_none(), "{dt}");
+        }
+        // 지나면 아직 묻지 않은 민수로 (지현은 다시 모였다 떨어지기 전에는 묻지 않는다)
+        let ts = now + 1_000 + WAIT_DECLINE_COOLDOWN_MS;
+        assert_eq!(t.update(ts, Some(me), Some(d), &both(ts)).wait.expect("쿨다운 뒤").member_name, "민수");
     }
 
     #[test]
