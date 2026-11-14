@@ -27,8 +27,12 @@ val googlePlacesApiKey: String = Properties().let { props ->
 val pleosTtsProps: Properties = Properties().also { props ->
     rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { props.load(it) }
 }
-val pleosClientId: String = (pleosTtsProps.getProperty("PLEOS_CLIENT_ID") ?: System.getenv("PLEOS_CLIENT_ID") ?: "").trim().filter { it.isLetterOrDigit() || it == '-' || it == '_' || it == '.' }
-val pleosClientSecret: String = (pleosTtsProps.getProperty("PLEOS_CLIENT_SECRET") ?: System.getenv("PLEOS_CLIENT_SECRET") ?: "").trim().filter { it.isLetterOrDigit() || it == '-' || it == '_' || it == '.' }
+// 서버 고음질은 사용량 한도가 있어 평소(연습 · 리허설)에는 끄고 기기 안 엔진(ON_DEVICE, 무제한)으로 읽는다.
+// 최종 시연 영상을 찍을 때만 켠다: ./gradlew installCarRelease -PPREMIUM_TTS=true (또는 환경 변수 PREMIUM_TTS=true)
+val premiumTts: Boolean =
+    (project.findProperty("PREMIUM_TTS")?.toString() ?: System.getenv("PREMIUM_TTS") ?: "false").trim().lowercase() == "true"
+val pleosClientId: String = if (!premiumTts) "" else (pleosTtsProps.getProperty("PLEOS_CLIENT_ID") ?: System.getenv("PLEOS_CLIENT_ID") ?: "").trim().filter { it.isLetterOrDigit() || it == '-' || it == '_' || it == '.' }
+val pleosClientSecret: String = if (!premiumTts) "" else (pleosTtsProps.getProperty("PLEOS_CLIENT_SECRET") ?: System.getenv("PLEOS_CLIENT_SECRET") ?: "").trim().filter { it.isLetterOrDigit() || it == '-' || it == '_' || it == '.' }
 
 // 기억 에이전트·길 위 에이전트·하루 라벨링 LLM (agent/). OpenAI 호환 Chat Completions. 기본은 중계 서버 → Google Gemini (키는 중계에만).
 // 개발 PC의 llama.cpp(Qwen)를 쓰려면 LLM_BASE_URL=http://10.0.2.2:8181/v1, LLM_MODEL=qwen3.5-9b (scripts/llm, 선택).
