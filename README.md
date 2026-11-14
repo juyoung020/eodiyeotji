@@ -15,7 +15,7 @@
 
 <br>
 
-<img src="docs/images/cover-features.gif" width="820" alt="Pleos 에뮬레이터 실제 화면으로 보는 기능 7가지: 자동 기록, 말로 찾기, 그날로 돌아가기(3D), 그 코스로 안내, 커뮤니티 코스, 같이 가기, 휴게소 제안">
+<img src="docs/images/cover-demo.gif" width="820" alt="Pleos 에뮬레이터 실제 화면: 자동 기록 → 말로 찾기(바다 어디였지?) → 그날로 돌아가기 3D → 그 코스로 안내 → 커뮤니티 코스 → 같이 가기 · 휴게소 제안">
 
 <sub>Pleos Connect 에뮬레이터 실제 화면 · 홍보 영상 <a href="video/v14_91s_1080p.mp4">v14 (91초)</a></sub>
 
