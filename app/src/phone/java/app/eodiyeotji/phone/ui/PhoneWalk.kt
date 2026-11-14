@@ -57,6 +57,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import app.eodiyeotji.core.LocationFix
+import app.eodiyeotji.core.rust.GeoPoint
+import app.eodiyeotji.core.rust.NavSession
+import app.eodiyeotji.core.rust.navDirectionsUrl
+import app.eodiyeotji.place.ApiAccess
+import app.eodiyeotji.place.PlatformHttp
 import app.eodiyeotji.core.rust.ParkedCar
 import app.eodiyeotji.core.rust.WalkGuide
 import app.eodiyeotji.core.rust.walkGuide
@@ -327,7 +332,12 @@ private fun WalkBanner(guide: WalkGuide?, target: WalkTarget, accent: Color) {
     }
 }
 
-/** 북쪽이 위인 지도: 나(파란 점) · 목표(핀) · 둘을 잇는 점선. 둘 다 보이게 맞춘다. */
+/**
+ * 북쪽이 위인 지도: 나(파란 점) · 목표(핀) · 둘을 잇는 점선. 둘 다 보이게 맞춘다.
+ * 점선은 길을 따라간다: 카카오모빌리티 길찾기(차 길, 앱의 길 안내와 같은 곳)로 받은 길 모양을 쓴다. 걷는 길 전용 길찾기는 없어
+ * 일방통행 같은 곳은 돌아가는 모양일 수 있다 → 어디로 가야 하는지 보는 용도고, 위쪽 방향 · 거리 안내는 그대로 직선 기준이다.
+ * 길을 못 받으면(통신 · 너무 가까움) 예전처럼 직선으로 잇는다.
+ */
 @Composable
 private fun WalkMap(me: LocationFix?, target: WalkTarget, accent: Color, modifier: Modifier) {
     val context = LocalContext.current
@@ -407,13 +417,26 @@ private fun WalkMap(me: LocationFix?, target: WalkTarget, accent: Color, modifie
         if (me == null) map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(target.lat, target.lon), 17.0))
     }
     var framed by remember { mutableStateOf(false) }
-    LaunchedEffect(style, me, target) {
+    // 길 모양: 내 위치를 처음 알았을 때 한 번 받는다 (목표가 바뀌면 다시). 걸어가면서는 지나온 앞부분을 잘라 낸다
+    var road by remember(target) { mutableStateOf<List<GeoPoint>>(emptyList()) }
+    val located = me != null
+    LaunchedEffect(target, located) {
+        val f = me ?: return@LaunchedEffect
+        road = withContext(Dispatchers.IO) {
+            runCatching {
+                val url = ApiAccess.kakaoNavi(navDirectionsUrl(GeoPoint(f.lat, f.lon), listOf(GeoPoint(target.lat, target.lon))))
+                NavSession(PlatformHttp.get(url, ApiAccess.kakaoHeaders)).route().points
+            }.getOrDefault(emptyList())
+        }
+    }
+    LaunchedEffect(style, me, target, road) {
         val s = style ?: return@LaunchedEffect
         val f = me ?: return@LaunchedEffect
         (s.getSource(SRC_ME) as? GeoJsonSource)?.setGeoJson(Point.fromLngLat(f.lon, f.lat))
-        (s.getSource(SRC_LINE) as? GeoJsonSource)?.setGeoJson(
-            Feature.fromGeometry(LineString.fromLngLats(listOf(Point.fromLngLat(f.lon, f.lat), Point.fromLngLat(target.lon, target.lat)))),
-        )
+        // 나 → (나와 가장 가까운 길 점부터) 길 → 목표
+        val from = road.indices.minByOrNull { i -> (road[i].lat - f.lat).let { it * it } + (road[i].lon - f.lon).let { it * it } } ?: 0
+        val line = listOf(Point.fromLngLat(f.lon, f.lat)) + road.drop(from).map { Point.fromLngLat(it.lon, it.lat) } + Point.fromLngLat(target.lon, target.lat)
+        (s.getSource(SRC_LINE) as? GeoJsonSource)?.setGeoJson(Feature.fromGeometry(LineString.fromLngLats(line)))
         val bounds = LatLngBounds.Builder().include(LatLng(f.lat, f.lon)).include(LatLng(target.lat, target.lon)).build()
         val update = CameraUpdateFactory.newLatLngBounds(bounds, 200, 440, 200, 360)
         if (framed) map?.animateCamera(update, 600) else map?.moveCamera(update)
