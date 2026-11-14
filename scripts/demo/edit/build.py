@@ -39,7 +39,7 @@ def dur(p):
 def overlay_png(name, sub=None, chips=(), tag=None, ai=None, big=None):
     im = Image.new("RGBA", (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
     if chips:
-        x = 40; y = 36; f = font(30, 700)
+        x = 40; y = 150; f = font(30, 700)
         for c in chips:
             tw = d.textlength(c, font=f)
             d.rounded_rectangle([x, y, x + tw + 36, y + 54], 27, fill=(10, 20, 40, 215))
@@ -50,16 +50,17 @@ def overlay_png(name, sub=None, chips=(), tag=None, ai=None, big=None):
         d.rounded_rectangle([W - tw - 70, 30, W - 34, 74], 22, fill=(0, 0, 0, 150))
         d.text((W - tw - 52, 37), tag, font=f, fill=(235, 240, 250))
     if ai:
-        f = font(22, 600); tw = d.textlength(ai, font=f)
-        d.rounded_rectangle([34, H - 74, 70 + tw, H - 34], 20, fill=(0, 0, 0, 140))
-        d.text((52, H - 69), ai, font=f, fill=(225, 230, 240))
+        f = font(28, 600); tw = d.textlength(ai, font=f)
+        d.rounded_rectangle([34, H - 84, 70 + tw, H - 34], 22, fill=(0, 0, 0, 190))
+        d.text((52, H - 78), ai, font=f, fill=(235, 240, 250))
     if sub:
         f = font(46, 700); tw = d.textlength(sub, font=f)
-        x0 = (W - tw) / 2; y0 = H - 190 if ai else H - 160
+        x0 = (W - tw) / 2; y0 = H - 250 if ai else H - 230
         d.rounded_rectangle([x0 - 30, y0 - 14, x0 + tw + 30, y0 + 72], 20, fill=(0, 0, 0, 170))
         d.text((x0, y0), sub, font=f, fill=(255, 255, 255))
     if big:
         f = font(84, 800); tw = d.textlength(big, font=f)
+        d.rounded_rectangle([(W - tw) / 2 - 50, 390, (W + tw) / 2 + 50, 540], 30, fill=(0, 0, 0, 175))
         d.text(((W - tw) / 2 + 3, 423), big, font=f, fill=(0, 0, 0, 160))
         d.text(((W - tw) / 2, 420), big, font=f, fill=(255, 255, 255))
     p = os.path.join(WORK, name + ".png"); im.save(p); return p
@@ -134,7 +135,7 @@ def seg_ai(name, clip, a, l, screen=None, sub=None):
         sc, t = screen
         # 앱 영역 가운데 가로 띠(센터 디스플레이 비율 2.43)를 잘라 화면 자리에 맞춘다
         fc = (f"[0:v]scale={W}:{H},fps={FPS},setpts=PTS-STARTPTS[bg];"
-              f"[1:v]crop=1704:700:856:340,scale={w}:{h},eq=brightness=-0.03:contrast=0.92,gblur=sigma=0.5,setpts=PTS-STARTPTS[sc];"
+              f"[1:v]crop=1704:700:856:300,scale={w}:{h},eq=brightness=-0.08:contrast=0.85:saturation=0.85,gblur=sigma=1.0,perspective=x0=W*0.02:y0=0:x1=W*0.98:y1=0:x2=0:y2=H:x3=W:y3=H:sense=destination,setpts=PTS-STARTPTS[sc];"
               f"[bg][sc]overlay={x}:{y}[b2];[b2][2:v]overlay[v];anullsrc=r=48000:cl=stereo,atrim=0:{l}[a]")
         ins = ["-ss", str(a), "-t", str(l), "-i", os.path.join(AI, clip), "-ss", str(t), "-t", str(l), "-i", os.path.join(SC, sc + ".mp4"), "-loop", "1", "-i", ov]
     else:
@@ -148,7 +149,7 @@ def seg_ai(name, clip, a, l, screen=None, sub=None):
 def seg_still(name, png, l, ov=None, scroll=False):
     o = os.path.join(WORK, name + ".mp4")
     if scroll:
-        fc = f"[0:v]crop={W}:{H}:0:'min(t*900,{H * 2})',fps={FPS}[b];[b][1:v]overlay[v]"
+        fc = f"[0:v]crop={W}:{H}:0:'min(t*400,{H * 2})',fps={FPS}[b];[b][1:v]overlay[v]"
     else:
         fc = f"[0:v]fps={FPS},format=yuv420p,fade=in:st=0:d=0.4[b];[b][1:v]overlay[v]"
     ov = ov or overlay_png(name + "_o")
@@ -161,38 +162,37 @@ def seg_still(name, png, l, ov=None, scroll=False):
 
 # ---------- 장면표 v5 ----------
 S = []      # (조각 목록, 내레이션 파일 or None, 이 장면 길이)
-def add(parts, vo):
-    S.append((parts, vo, sum(dur(p) for p in parts)))
+def add(parts, vo, off=0.25):
+    S.append((parts, vo, sum(dur(p) for p in parts), off))
 
 add(seg_ai("s01", "vid_A.mp4", 0, 4, ("startrec", 1.0), sub="작년 이맘때 그 바다… 어디였지?"), "n01")
-add(seg_still("s02a", card_png("c02", [("차가 대신 기억합니다", 72, (255, 255, 255))]), 1.4) +
-    seg_app("s02b", "voice", [(10.5, 1.8, 1)], sub=None, audio=False), "n02")
-add(seg_app("s03a", "startrec", [(1.0, 5.5, 1)], chips=("Car API 기어 P→D", "FusedLocation")) +
-    seg_app("s03b", "firstrun", [(6.5, 3.5, 1)], chips=("AI 하루 요약", "Vehicle SDK 좌석 · 와이퍼"),
+add(seg_still("s02a", card_png("c02", [("차가 대신 기억합니다", 72, (255, 255, 255))]), 3.2), "n02")
+add(seg_app("s03a", "startrec", [(4.0, 4.5, 1)], chips=("Car API 기어 P→D", "FusedLocation")) +
+    seg_app("s03b", "firstrun", [(7.5, 4.5, 1)], chips=("AI 하루 요약", "Vehicle SDK 좌석 · 와이퍼"),
             extra_tag=TAG + " · 시연 기록 데이터"), "n03")
-add(seg_app("s04a", "voice", [(1.5, 5.0, 1)], chips=("STT 음성 인식",), audio=False) +
-    seg_app("s04b", "voice", [(9.8, 4.0, 1)], chips=("좌석 센서 4명 · 와이퍼 = 비", "AI · TTS")), "n04")
+add(seg_app("s04a", "voice", [(2.0, 3.5, 1)], chips=("STT 음성 인식",), audio=False) +
+    seg_app("s04b", "voice", [(9.8, 6.0, 1)], chips=("좌석 센서 4명 · 와이퍼 = 비", "AI · TTS"), appvol=8.0), "n04")
 add(seg_ai("s04g", "vid_G.mp4", 0.5, 2.0, ("voice", 10.5)), None)
 add(seg_app("s05", "replay", [(8.0, 12.0, 2)], chips=("Vehicle SDK 무드등 · 실차에서 그날 하늘빛으로",), audio=False), "n05")
-add(seg_app("s06", "oneline", [(2.0, 3.0, 1), (9.9, 2.5, 1), (21.9, 2.5, 1)], chips=("AI 코스 편집", "NaviHelper · 경유지 2개씩 이어서")), "n06")
+add(seg_app("s06a", "oneline", [(5.0, 3.0, 1)], chips=("STT · AI 코스 편집",), audio=False) +
+    seg_app("s06b", "oneline", [(10.5, 2.5, 1), (21.0, 3.5, 1)], chips=("NaviHelper · 경유지 2개씩 이어서",), appvol=8.0), "n06")
 add(seg_ai("s07a", "vid_H2.mp4", 0, 4, ("recall", 5.0)), "n07a")
-add(seg_app("s07b", "recall", [(23.5, 8.0, 1)], chips=("TTS · 내비 음성과 겹치지 않게", "주행 중: 카드 한 장 + 음성")), "n07b")
-add(seg_app("s07c", "roadside", [(4.0, 6.0, 1)], chips=("공공데이터 휴게소 · 졸음쉼터", "주행 중: 큰 카드 + 음성")), "n07c")
+add(seg_app("s07b", "recall", [(15.0, 6.0, 1)], chips=("TTS · 내비 음성과 겹치지 않게", "주행 중: 카드 한 장 + 음성"), appvol=8.0), "n07b", off=0.1)
+add(seg_app("s07c", "roadside", [(4.0, 6.0, 1)], chips=("공공데이터 휴게소 · 졸음쉼터", "주행 중: 큰 카드 + 음성"), appvol=8.0), "n07c")
 blog = blog_png()
 add(seg_still("s08a", blog, 2.0, overlay_png("s08ao", big="코스 찾다가, 광고만."), scroll=True) +
-    seg_app("s08b", "review", [(12.6, 11.0, 1)], sub="여기선 직접 달린 길만.", chips=("✓ 차가 확인한 주행 기록", "집·회사 근처 자동 가림"), audio=False), "n08")
-add(seg_app("s09", "convoy", [(16.5, 3.0, 1), (21.0, 6.0, 1), (86.0, 6.0, 1)], chips=("같이 가기 · 위치 · 배터리", "주행 중: 큰 카드 + 음성만")), "n09")
+    seg_app("s08b", "review", [(14.5, 7.5, 1)], sub="여기선 직접 달린 길만.", chips=("✓ 차가 확인한 주행 기록", "집·회사 근처 자동 가림"), audio=False), "n08")
+add(seg_app("s09", "convoy", [(16.5, 2.0, 1), (23.0, 3.0, 1), (86.0, 5.5, 1)], chips=("같이 가기 · 위치 · 배터리", "주행 중: 알림 + 음성"), appvol=8.0), "n09")
 add(seg_app("s10", "biz", [(10.0, 7.0, 1)], chips=("개인: 플러스 구독 · 법인: 차량 대당 구독",), audio=False), "n10")
-add(seg_app("s11", "extras", [(0.5, 3.0, 1)], chips=("늘 가던 날",), audio=False), "n11")
 add(seg_still("s12", card_png("c12", [("Vehicle · NaviHelper · FusedLocation · STT · TTS", 46, (140, 190, 255)),
                                       ("첫 화면 0.4초 · 기기 안 검색 1ms 안쪽 · 터널에서도 기록 · 검색", 38, (230, 236, 248)),
-                                      ("Rust 엔진 · 에뮬레이터 release 측정", 28, (150, 160, 180))]), 8.0), "n12")
+                                      ("Rust 엔진 · 에뮬레이터 release · 시연 데이터 기준 측정", 28, (150, 160, 180))]), 4.0), "n12")
 add(seg_ai("s13a", "vid_F.mp4", 0, 5) +
     seg_still("s13b", card_png("c13", [("어디였지", 92, (255, 255, 255)), ("자동 기록 · 말로 찾기 · 직접 달린 코스", 40, (140, 190, 255)),
-                                       ("가족 나들이부터 법인 차량까지  |  폰 앱 · 이번 달 요약 · 기억 지도도", 28, (160, 170, 190))]), 5.0), "n13")
+                                       ("가족 나들이부터 법인 차량까지  |  폰 앱 · 늘 가던 날 · 이번 달 요약 · 기억 지도도", 28, (160, 170, 190))]), 3.5), "n13")
 
 # ---------- 이어 붙이기 ----------
-allparts = [p for s in S for p in s[0]]
+allparts = [p for s_ in S for p in s_[0]]
 lst = os.path.join(WORK, "list.txt")
 open(lst, "w", encoding="utf-8").write("".join(f"file '{p.replace(os.sep, '/')}'\n" for p in allparts))
 body = os.path.join(WORK, "body.mp4")
@@ -202,12 +202,12 @@ total = dur(body)
 # 내레이션 배치
 t = 0.0; ins = []; delays = []
 report = []
-for i, (parts, vo, l) in enumerate(S):
+for i, (parts, vo, l, off) in enumerate(S):
     if vo:
         f = os.path.join(VO, f"t_{vo}.wav")
         if os.path.exists(f):
-            ins += ["-i", f]; delays.append(int((t + 0.25) * 1000))
-            report.append(f"{vo}: start {t + 0.25:.1f}s len {dur(f):.1f}s / scene {l:.1f}s")
+            ins += ["-i", f]; delays.append(int((t + off) * 1000))
+            report.append(f"{vo}: start {t + off:.1f}s len {dur(f):.1f}s / scene {l:.1f}s")
         else:
             report.append(f"{vo}: MISSING")
     t += l
