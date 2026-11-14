@@ -67,6 +67,7 @@ PHOTOS = [
     ("초당할머니순두부", "Chodang_Sundubu_04_(33422779322).jpg", "Republic of Korea (Korea.net)", "CC BY-SA 2.0"),
     ("안목해변 카페거리", "Anmok_beach.jpg", "Altostratus", "CC BY-SA 4.0"),
     ("블루보틀 성수", "A_person_holds_a_cup_of_cappuccino_featuring_intricate_latte_art,_sitting_at_a_café_table.jpg", "Shixart1985", "CC BY 2.0"),
+    ("금호동 할머니순두부", "Korean_stew-Sundubu_jjigae-09.jpg", "egg (Hong, Yun Seon)", "CC BY 2.0"),
 ]
 CACHE = os.path.expanduser("~/Documents/어디였지_시연사진/장소")
 WIDTH = 1280

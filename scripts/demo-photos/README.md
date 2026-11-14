@@ -88,3 +88,4 @@ python scripts/demo-photos/push_place_photos.py --remove   # 지우기
 | 초당할머니순두부 | [Chodang Sundubu 04 (33422779322).jpg](https://commons.wikimedia.org/wiki/File:Chodang_Sundubu_04_%2833422779322%29.jpg) | Republic of Korea (Korea.net) | CC BY-SA 2.0 |
 | 안목해변 카페거리 | [Anmok beach.jpg](https://commons.wikimedia.org/wiki/File:Anmok_beach.jpg) | Altostratus | CC BY-SA 4.0 |
 | 블루보틀 성수 | [A person holds a cup of cappuccino featuring intricate latte art, sitting at a café table.jpg](https://commons.wikimedia.org/wiki/File:A_person_holds_a_cup_of_cappuccino_featuring_intricate_latte_art%2C_sitting_at_a_caf%C3%A9_table.jpg) | Shixart1985 | CC BY 2.0 |
+| 금호동 할머니순두부 | [Korean stew-Sundubu jjigae-09.jpg](https://commons.wikimedia.org/wiki/File:Korean_stew-Sundubu_jjigae-09.jpg) | egg (Hong, Yun Seon) | CC BY 2.0 |
