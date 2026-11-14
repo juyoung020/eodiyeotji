@@ -177,7 +177,8 @@ internal fun CourseDetailScreen(
                             // 게시글 본문처럼: 글쓴이 머리 → 표지(첫 곳 큰 사진 위 제목) → 들른 곳 사진 줄 → 글쓴이 소개 → 조용한 정보 칩 → 태그
                             Surface(color = colors.surface, shape = RoundedCornerShape(EodiTheme.space.radiusL), modifier = Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(24.dp)) {
-                                    PostHeader(p.author, stringResource(R.string.community_byline, p.region, agoText(p.createdMs)), p.mine)
+                                    // 블로그와 다른 점: 글쓴이가 실제로 달린 주행 기록으로 올린 코스 → 머리 오른쪽에 "직접 달린 기록" 배지
+                                    PostHeader(p.author, stringResource(R.string.community_byline, p.region, agoText(p.createdMs)), p.mine, trailing = { FromRecordChip() })
                                     Spacer(Modifier.height(18.dp))
                                     val cover = p.stops.firstOrNull()
                                     if (cover != null) {

@@ -27,4 +27,5 @@
     <!-- 폰 세로 화면 알림 카드만 쓴다 (지도 앱은 도착을 알려 주지 않는다) -->
     <string name="guide_manual_hint">도착하면 \'다음 구간\'을 눌러 이어 가요</string>
     <string name="guide_reopen">다시 열기</string>
+    <string name="convoy_drive_stop">다 같이 들를 곳 · %1$s</string>
 </resources>

@@ -130,7 +130,20 @@ fun ConvoyDrivingCard(modifier: Modifier = Modifier, vm: ConvoyViewModel = hiltV
                     stringResource(R.string.convoy_title) + " · " + stringResource(R.string.convoy_together_count, live),
                     style = EodiTheme.type.label,
                     color = c.accent,
+                    modifier = Modifier.weight(1f),
                 )
+                // 모두가 들를 휴게소 · 충전소를 한눈에 (같이 가기 핵심: 어디서 쉬는지 공유)
+                s.waypoint?.let { wp ->
+                    Text(
+                        stringResource(R.string.convoy_drive_stop, wp.name),
+                        style = EodiTheme.type.label,
+                        fontWeight = FontWeight.Bold,
+                        color = c.onAccent,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.background(c.accent, RoundedCornerShape(16.dp)).padding(horizontal = 14.dp, vertical = 6.dp),
+                    )
+                }
             }
             if (wait != null) {
                 WaitRow(wait.card, wait.action, narrow, onWait = { scope.launch { vm.repo.waitAtRestArea() } }, onDismiss = vm.repo::dismissWait)

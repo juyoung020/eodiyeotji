@@ -160,7 +160,10 @@ pub fn energy_gauge(ev: bool, pct: f64, range_km: f64) -> ConvoyEnergy {
     } else {
         -1.0
     };
-    let text = if range_km >= 0.0 {
+    // 남은 거리와 %를 둘 다 알면 같이 보여 준다 ("120km · 30%"): 일행 배터리를 한눈에
+    let text = if range_km >= 0.0 && pct >= 0.0 {
+        format!("{}km · {}%", range_km.round() as i64, pct.round().clamp(0.0, 100.0) as i64)
+    } else if range_km >= 0.0 {
         format!("{}km", range_km.round() as i64)
     } else if pct >= 0.0 {
         format!("{}%", pct.round() as i64)
@@ -988,7 +991,7 @@ mod tests {
     #[test]
     fn energy_gauge_fills_by_percent_then_range() {
         let g = energy_gauge(true, 30.0, 120.0);
-        assert!((g.frac - 0.3).abs() < 1e-9 && g.text == "120km" && g.ev);
+        assert!((g.frac - 0.3).abs() < 1e-9 && g.text == "120km · 30%" && g.ev);
         let r = energy_gauge(false, -1.0, 300.0);
         assert!((r.frac - 0.5).abs() < 1e-9 && r.text == "300km");
         let u = energy_gauge(true, -1.0, -1.0);

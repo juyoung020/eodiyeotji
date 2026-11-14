@@ -208,7 +208,7 @@ internal fun TripReviewCard(t: DriveCourse, onOpen: () -> Unit, onHeart: (() -> 
                 FromRecordChip()
                 CourseCouponBadge(t.offers)
                 Spacer(Modifier.weight(1f))
-                if (onHeart != null) HeartButton(p.hearts, p.heartedByMe, onHeart, compact = true) else HeartCount(p.hearts, p.heartedByMe, Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                if (onHeart != null) HeartButton(p.hearts, p.heartedByMe, onHeart) else HeartCount(p.hearts, p.heartedByMe, Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
             }
         }
     }

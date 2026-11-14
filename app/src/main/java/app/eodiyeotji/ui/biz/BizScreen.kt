@@ -316,14 +316,14 @@ private fun TripRow(t: BizTrip, selected: Boolean, onClick: () -> Unit) {
                 val where = t.stops.firstOrNull()?.name?.ifBlank { null } ?: t.region
                 Text(
                     stringResource(R.string.biz_row_meta, where, durationText(t.driveMin * 60_000), t.distanceKm),
-                    style = EodiTheme.type.meta,
+                    style = EodiTheme.type.body,
                     color = c.textSecondary,
                     maxLines = lines,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
             Spacer(Modifier.width(16.dp))
-            Text(wonPlain(t.costWon), style = EodiTheme.type.titleSmall, fontWeight = FontWeight.Bold, color = c.info, maxLines = 1)
+            Text(wonPlain(t.costWon), style = EodiTheme.type.title, fontWeight = FontWeight.Bold, color = c.info, maxLines = 1)
             Spacer(Modifier.width(8.dp))
             Icon(EodiIcons.Chevron, stringResource(R.string.biz_open_detail), tint = c.textTertiary, modifier = Modifier.size(28.dp))
         }
@@ -396,12 +396,12 @@ private fun ExpenseRow(x: BizExpense) {
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
             Text(x.title, style = EodiTheme.type.bodyStrong, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("${hm(x.tMs)} · ${x.detail}", style = EodiTheme.type.meta, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("${hm(x.tMs)} · ${x.detail}", style = EodiTheme.type.body, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.width(12.dp))
         EstTag(x.estimated)
         Spacer(Modifier.width(12.dp))
-        Text(wonPlain(x.won), style = EodiTheme.type.bodyStrong, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.widthIn(min = 120.dp))
+        Text(wonPlain(x.won), style = EodiTheme.type.titleSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.widthIn(min = 120.dp))
     }
 }
 
