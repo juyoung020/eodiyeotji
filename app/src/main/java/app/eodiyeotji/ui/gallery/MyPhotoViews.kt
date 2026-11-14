@@ -1,5 +1,7 @@
 package app.eodiyeotji.ui.gallery
 
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.ui.platform.LocalConfiguration
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -111,9 +113,12 @@ fun MyPhotoViewer(sources: List<String>, start: Int, title: String?, onDismiss: 
     val c = EodiTheme.colors
     val pager = rememberPagerState(initialPage = start.coerceIn(0, (sources.size - 1).coerceAtLeast(0))) { sources.size }
     val px = with(LocalDensity.current) { 900.dp.roundToPx() }
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxSize().background(Color.Black).clickable(onClick = onDismiss)) {
-            HorizontalPager(pager, Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 72.dp), key = { sources[it] }) { i ->
+    // 화면 끝까지 덮는다: 시스템 막대 자리를 비워 두면 아래 내비게이션 막대 뒤로 밑 화면 글자가 비쳐 보였다.
+    // 폰(좁은 화면)은 옆 여백을 줄여 사진을 화면 폭 가까이 크게 보인다.
+    val side = if (LocalConfiguration.current.screenWidthDp < 600) 8.dp else 48.dp
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Box(Modifier.fillMaxSize().background(Color.Black).clickable(onClick = onDismiss).systemBarsPadding()) {
+            HorizontalPager(pager, Modifier.fillMaxSize().padding(horizontal = side, vertical = 72.dp), key = { sources[it] }) { i ->
                 MyPhotoImage(sources[i], Modifier.fillMaxSize(), sizePx = px, crop = false)
             }
             Text(
