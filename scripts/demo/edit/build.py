@@ -6,7 +6,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = r"C:\Users\user one\Desktop\eodiyeotji"
 SC = os.path.join(REPO, r"build\demo\final-1115\scenes")
 AI = os.path.join(REPO, r"build\demo\ai")
-VO = os.path.join(REPO, r"build\demo\edito")   # make-vo.sh가 만든 t_*.wav
+VO = os.path.join(REPO, "build", "demo", "edit", "vo")   # make-vo.sh가 만든 t_*.wav
 MUSIC = r"C:\Users\user one\Desktop\shortform_raw\bgm\1_acoustic_guitar_sunrise_travel.mp3"
 ICON = os.path.join(REPO, r"app\src\main\res\mipmap-xxxhdpi\ic_launcher_foreground.png")
 FONT = r"C:\Windows\Fonts\NotoSansKR-VF.ttf"
