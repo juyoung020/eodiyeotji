@@ -458,6 +458,7 @@ private fun CompactDayDetail(
     val summary = detail.shownSummary
     val loaded = detail as? DetailState.Loaded
     val shareEpisode = loaded?.shareEpisode
+    val narrow = LocalConfiguration.current.screenWidthDp < 600
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier
@@ -485,14 +486,15 @@ private fun CompactDayDetail(
                         title ?: dayTitle(summary.day, today),
                         style = EodiTheme.type.title,
                         color = c.textPrimary,
-                        maxLines = 1,
+                        // 폰(좁은 화면)은 "가을 마포 나들이 한…"으로 잘렸다 → 두 줄까지, 더보기는 아이콘만
+                        maxLines = if (narrow) 2 else 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.semantics { heading() },
                     )
                 }
                 LocalTimelineEdits.current?.let { edits ->
                     Spacer(Modifier.width(12.dp))
-                    MoreButton(stringResource(R.string.edit_more_day), { edits.onDay(summary) }, label = stringResource(R.string.action_more))
+                    MoreButton(stringResource(R.string.edit_more_day), { edits.onDay(summary) }, label = if (narrow) null else stringResource(R.string.action_more))
                 }
             }
         }

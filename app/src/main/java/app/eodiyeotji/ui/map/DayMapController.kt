@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.map
 
+import android.graphics.PointF
 import android.graphics.RectF
 import android.util.Log
 import androidx.compose.runtime.Immutable
@@ -635,8 +636,13 @@ internal class DayMapController(
     private fun revealEntry(key: String) {
         val m = map ?: return
         val b = data?.entryBounds?.get(key) ?: return
-        val visible = m.projection.visibleRegion.latLngBounds
-        if (visible.contains(LatLng(b.minLat, b.minLon)) && visible.contains(LatLng(b.maxLat, b.maxLon))) return
+        // 보이는 범위는 다른 것(폰의 아래 목록 판 등, [fitInsets])에 가린 부분을 뺀 곳이다.
+        // 지도 전체로 보면 판 밑에 깔린 구간도 "보인다"가 되어, 줄을 골라도 지도가 그 구간으로 가지 않았다.
+        val e = fitInsets
+        val nw = m.projection.fromScreenLocation(PointF(e[0].toFloat(), e[1].toFloat()))
+        val se = m.projection.fromScreenLocation(PointF((mapView.width - e[2]).toFloat(), (mapView.height - e[3]).toFloat()))
+        val shown = { lat: Double, lon: Double -> lat in se.latitude..nw.latitude && lon in nw.longitude..se.longitude }
+        if (shown(b.minLat, b.minLon) && shown(b.maxLat, b.maxLon)) return
         val target = if (b.minLat == b.maxLat && b.minLon == b.maxLon) {
             CameraUpdateFactory.newLatLngZoom(LatLng(b.minLat, b.minLon), MAX_FIT_ZOOM.coerceAtMost(m.cameraPosition.zoom.coerceAtLeast(REVEAL_MIN_ZOOM)))
         } else {

@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.places
 
+import androidx.compose.ui.platform.LocalConfiguration
 import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.ui.community.SectionTitle
 import app.eodiyeotji.ui.community.StopPhotoBox
@@ -210,11 +211,13 @@ private fun PlaceCardView(card: PlaceCard, offers: List<PartnerOffer>, onHeart: 
             Row(Modifier.heightIn(min = HeaderMinHeight), verticalAlignment = Alignment.CenterVertically) {
                 StopPhotoBox(label?.name.orEmpty(), label?.address.orEmpty(), card.lat, card.lon, null, Modifier.size(120.dp), radius = EodiTheme.space.radiusM, iconSize = 40.dp)
                 Spacer(Modifier.width(20.dp))
+                // 폰(좁은 화면)은 글 칸이 좁아 "310번 다녀옴 · 마지막 1…"처럼 잘렸다 → 두 줄까지
+                val lines = if (LocalConfiguration.current.screenWidthDp < 600) 2 else 1
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(label?.name ?: stringResource(R.string.edit_unknown_place), style = type.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(label?.name ?: stringResource(R.string.edit_unknown_place), style = type.title, maxLines = lines, overflow = TextOverflow.Ellipsis)
                     val sub = listOfNotNull(label?.category, label?.address).filter { it.isNotBlank() }.joinToString(" · ")
-                    if (sub.isNotEmpty()) Text(sub, style = type.meta, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    visitLine(card)?.let { Text(it, style = type.meta, color = c.textTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    if (sub.isNotEmpty()) Text(sub, style = type.meta, color = c.textSecondary, maxLines = lines, overflow = TextOverflow.Ellipsis)
+                    visitLine(card)?.let { Text(it, style = type.meta, color = c.textTertiary, maxLines = lines, overflow = TextOverflow.Ellipsis) }
                     PlaceCouponBadge(offers)
                 }
                 Spacer(Modifier.width(12.dp))
