@@ -349,9 +349,11 @@ private fun DetailPane(t: BizTrip, onClose: () -> Unit, onReplay: () -> Unit, on
             }
             val km = stringResource(if (t.gpsDistance) R.string.biz_km_gps else R.string.biz_km_odo, t.distanceKm)
             val energy = t.energyPct?.let { stringResource(if (t.ev) R.string.biz_battery else R.string.biz_fuel, it.toInt()) }
+            // 탑승 인원은 좌석 센서로 센 숫자뿐이다 (누구인지 · 누가 운전했는지는 모른다). 모르면 뺀다.
+            val people = t.people?.takeIf { it > 0u }?.let { stringResource(R.string.biz_people, it.toInt()) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    listOfNotNull(km, stringResource(R.string.biz_drive, durationText(t.driveMin * 60_000)), energy).joinToString("  ·  "),
+                    listOfNotNull(km, stringResource(R.string.biz_drive, durationText(t.driveMin * 60_000)), energy, people).joinToString("  ·  "),
                     style = EodiTheme.type.meta,
                     color = c.textSecondary,
                     modifier = Modifier.weight(1f),

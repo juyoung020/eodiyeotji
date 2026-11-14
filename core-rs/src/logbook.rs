@@ -5,6 +5,8 @@
 //!   둘 다 있으면 주행거리도 계기판 차이로, 없으면 GPS로 잰 거리를 쓰고 비고에 "GPS 거리"라고 적는다.
 //! - 출퇴근: 기억 모듈의 에피소드 종류(출근길 · 퇴근길)로 정한다. 그 밖의 주행이 일반 업무용인지 개인 용도인지는
 //!   앱이 알 수 없으므로 칸을 비워 두고 사용자가 고른다.
+//! - 탑승 인원: 그 주행 동안 좌석 센서로 센 가장 많은 인원 (`cabin.rs`, 운전한 사람 포함). 누가 탔는지 · 누가 운전했는지는
+//!   센서가 모르므로 적지 않는다. 기록이 없으면 칸을 비운다.
 //! - CSV는 엑셀에서 한글이 깨지지 않게 UTF-8 BOM을 붙인다 ([`logbook_csv`]).
 
 use crate::memory::EpisodeKind;
@@ -33,6 +35,8 @@ pub struct LogbookRow {
     pub gps_distance: bool,
     /// 출근길 · 퇴근길
     pub commute: bool,
+    /// 탑승 인원 (좌석 센서, 운전한 사람 포함 · 모르면 None). 누구인지는 모른다
+    pub people: Option<u32>,
 }
 
 /// 한 달 운행기록부.
@@ -89,6 +93,7 @@ impl EodiStore {
                     distance_km,
                     gps_distance,
                     commute,
+                    people: self.people_between(t.start_ms, t.end_ms)?.filter(|&n| n > 0),
                 });
             }
         }
@@ -101,7 +106,7 @@ impl EodiStore {
 /// 운행기록부를 CSV 글로 (UTF-8 BOM, 줄바꿈 CRLF). 시각은 `tz_offset_minutes` 현지 시각.
 pub fn logbook_csv(book: &Logbook, tz_offset_minutes: i32) -> String {
     let mut out = String::from("\u{feff}");
-    out.push_str("사용일자,요일,출발 시각,도착 시각,출발지,도착지,주행 전 계기판(km),주행 후 계기판(km),주행거리(km),출·퇴근용(km),일반 업무용(km),비고\r\n");
+    out.push_str("사용일자,요일,출발 시각,도착 시각,출발지,도착지,주행 전 계기판(km),주행 후 계기판(km),주행거리(km),출·퇴근용(km),일반 업무용(km),탑승 인원,비고\r\n");
     let hm = |ms: i64| {
         let m = (ms / 60_000 + tz_offset_minutes as i64).rem_euclid(24 * 60);
         format!("{:02}:{:02}", m / 60, m % 60)
@@ -121,13 +126,19 @@ pub fn logbook_csv(book: &Logbook, tz_offset_minutes: i32) -> String {
             d.clone(),
             if r.commute { d } else { String::new() },
             String::new(),
+            people_cell(r.people),
             if r.gps_distance { "계기판 기록 없음 · GPS 거리".into() } else { String::new() },
         ];
         out.push_str(&cells.iter().map(|c| csv_cell(c)).collect::<Vec<_>>().join(","));
         out.push_str("\r\n");
     }
-    out.push_str(&format!(",,,,,합계,,,{:.1},{:.1},,\r\n", book.total_km, book.commute_km));
+    out.push_str(&format!(",,,,,합계,,,{:.1},{:.1},,,\r\n", book.total_km, book.commute_km));
     out
+}
+
+/// 탑승 인원 칸: "N명", 모르면 빈칸.
+pub(crate) fn people_cell(n: Option<u32>) -> String {
+    n.filter(|&n| n > 0).map(|n| format!("{n}명")).unwrap_or_default()
 }
 
 pub(crate) fn csv_cell(s: &str) -> String {
@@ -187,6 +198,8 @@ mod tests {
         s.mark_drive_event(DriveEvent::Start, t2).unwrap();
         s.ingest(drive(t2, 120, 37.6, 127.0, 2e-4)).unwrap();
         s.mark_drive_event(DriveEvent::End, t2 + 119 * 10_000).unwrap();
+        // 첫 주행만 좌석 센서로 3명 (다음 날은 기록 없음 → 빈칸)
+        s.set_drive_people(t + 60_000, 3).unwrap();
 
         let book = s.logbook("2026-11".into()).unwrap();
         assert_eq!(book.rows.len(), 2);
@@ -196,6 +209,7 @@ mod tests {
         assert!(!a.gps_distance && (a.distance_km - 3.1).abs() < 1e-9);
         let b = &book.rows[1];
         assert!(b.gps_distance && b.odo_before_km.is_none() && b.distance_km > 2.0);
+        assert_eq!((a.people, b.people), (Some(3), None));
         assert!(s.logbook("2026-10".into()).unwrap().rows.is_empty());
         assert!(s.logbook("2026-1".into()).is_err());
 
@@ -204,8 +218,12 @@ mod tests {
         let lines: Vec<&str> = csv.trim_end().split("\r\n").collect();
         assert_eq!(lines.len(), 4); // 머리 + 2줄 + 합계
         assert!(lines[1].starts_with("2026-11-07,토,10:00,10:19,"));
+        assert!(lines[0].contains(",탑승 인원,비고"));
         assert!(lines[1].contains(",18240.0,18243.1,3.1,"));
-        assert!(lines[2].ends_with("계기판 기록 없음 · GPS 거리"));
+        assert!(lines[1].ends_with(",3명,"), "{}", lines[1]);
+        assert!(lines[2].ends_with(",,계기판 기록 없음 · GPS 거리"), "{}", lines[2]);
+        // 머리 · 줄 · 합계 칸 수가 같다
+        assert!(lines.iter().all(|l| l.matches(',').count() == 12), "{lines:?}");
         drop(s);
         let _ = std::fs::remove_file(&path);
     }
@@ -213,6 +231,7 @@ mod tests {
     #[test]
     fn csv_quotes_commas_and_month_rolls_over() {
         assert_eq!(csv_cell("a,b"), "\"a,b\"");
+        assert_eq!((people_cell(Some(2)), people_cell(None), people_cell(Some(0))), ("2명".into(), String::new(), String::new()));
         assert_eq!(csv_cell("say \"hi\""), "\"say \"\"hi\"\"\"");
         let dec = parse_month("2026-12").unwrap();
         assert_eq!(crate::store::format_day(next_month(dec)), "2027-01-01");

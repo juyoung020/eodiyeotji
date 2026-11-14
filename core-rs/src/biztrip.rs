@@ -16,6 +16,7 @@
 //! - 경비 어림: 쓴 에너지 × 단가 (전기차: 배터리 [EV_BATTERY_KWH]kWh × [EV_WON_PER_KWH]원,
 //!   연료: 탱크 [FUEL_TANK_L]L × [FUEL_WON_PER_L]원). 에너지 기록이 없으면 거리 × km당 단가([WON_PER_KM_EV] · [WON_PER_KM_FUEL]).
 //!   **시연용 어림값**이다 — 실제 정산 단가는 회사 규정으로 바꾼다.
+//! - 탑승 인원: 그 사이 좌석 센서로 센 가장 많은 인원 (`cabin.rs`, 운전한 사람 포함). 누구인지 · 누가 운전했는지는 모른다.
 //! - CSV([biz_report_csv]): 엑셀에서 한글이 깨지지 않게 UTF-8 BOM, 회사 정산 양식에 붙여 넣기 쉬운 칸.
 //!
 //! # 저장 (DB 구조 버전 16)
@@ -125,6 +126,8 @@ pub struct BizTrip {
     pub marked: bool,
     /// 거래처에 들른 주행인가 (`bizclient.rs`)
     pub client: bool,
+    /// 탑승 인원 (좌석 센서, 운전한 사람 포함 · 모르면 None). 누구인지는 모른다
+    pub people: Option<u32>,
 }
 
 /// 한 달 출장.
@@ -209,6 +212,7 @@ impl EodiStore {
                 }
                 let keep = |s: &crate::memory::StopFact| away(s) || is_client(s);
                 let mut t = trip(&e, &day, wd, keep, &odo, &energy, mark == Some(true), self.tz_offset_minutes);
+                t.people = self.people_between(f.start_ms, f.end_ms)?.filter(|&n| n > 0);
                 if visits_client {
                     t.client = true;
                     // 거래처 이름이 있으면 제목에 쓴다 ("한빛전자 방문")
@@ -327,6 +331,7 @@ fn trip(
         expenses,
         marked,
         client: false,
+        people: None,
     }
 }
 
@@ -435,7 +440,7 @@ pub fn biz_expenses(
 /// 출장 정산서 CSV (UTF-8 BOM, 줄바꿈 CRLF). 시각은 `tz_offset_minutes` 현지 시각.
 pub fn biz_report_csv(m: &BizMonth, tz_offset_minutes: i32) -> String {
     let mut out = String::from("\u{feff}");
-    out.push_str("출장일,요일,출발 시각,도착 시각,행선지,들른 곳,주행거리(km),운전 시간(분),쓴 에너지(%),경비 어림(원),비고\r\n");
+    out.push_str("출장일,요일,출발 시각,도착 시각,행선지,들른 곳,주행거리(km),운전 시간(분),쓴 에너지(%),경비 어림(원),탑승 인원,비고\r\n");
     let hm = |ms: i64| {
         let m = (ms / 60_000 + tz_offset_minutes as i64).rem_euclid(24 * 60);
         format!("{:02}:{:02}", m / 60, m % 60)
@@ -462,12 +467,13 @@ pub fn biz_report_csv(m: &BizMonth, tz_offset_minutes: i32) -> String {
             t.drive_min.to_string(),
             t.energy_pct.map(|p| format!("{p:.0}")).unwrap_or_default(),
             t.cost_won.to_string(),
+            crate::logbook::people_cell(t.people),
             note.join(" · "),
         ];
         out.push_str(&cells.iter().map(|c| crate::logbook::csv_cell(c)).collect::<Vec<_>>().join(","));
         out.push_str("\r\n");
     }
-    out.push_str(&format!(",,,,합계 {}건,,{:.1},,,{},\r\n", m.trips.len(), m.total_km, m.total_won));
+    out.push_str(&format!(",,,,합계 {}건,,{:.1},,,{},,\r\n", m.trips.len(), m.total_km, m.total_won));
     out
 }
 
@@ -540,6 +546,7 @@ mod tests {
         s.set_drive_energy(t, 80.0, true).unwrap();
         s.set_drive_energy(arrive, 72.0, true).unwrap();
         s.set_drive_energy(end, 64.0, true).unwrap();
+        s.set_drive_people(t + 60_000, 2).unwrap();
         // 같은 날 저녁 회사 근처 5km 볼일은 출장이 아니다 → 위 한 건만
 
         let m = s.biz_trips("2026-11".into()).unwrap();
@@ -568,7 +575,9 @@ mod tests {
         let lines: Vec<&str> = csv.trim_end().split("\r\n").collect();
         assert_eq!(lines.len(), 3);
         assert!(lines[1].starts_with("2026-11-05,목,10:00,"), "{}", lines[1]);
-        assert!(lines[1].contains(",98.4,") && lines[1].contains(",16,18100,"), "{}", lines[1]);
+        assert!(lines[1].contains(",98.4,") && lines[1].contains(",16,18100,2명,"), "{}", lines[1]);
+        assert_eq!(b.people, Some(2));
+        assert!(lines[0].contains(",탑승 인원,비고") && lines.iter().all(|l| l.matches(',').count() == 11), "{lines:?}");
         assert!(lines[2].contains("합계 1건"));
         assert!(s.biz_trips("2026-1".into()).is_err());
         drop(s);

@@ -40,6 +40,7 @@
     <string name="biz_km_odo">계기판 %1$.1fkm</string>
     <string name="biz_km_gps">GPS %1$.1fkm</string>
     <string name="biz_drive">운전 %1$s</string>
+    <string name="biz_people">탑승 %1$d명</string>
     <string name="biz_battery">배터리 %1$d%%</string>
     <string name="biz_fuel">연료 %1$d%%</string>
     <string name="biz_not_biz">출장 아님</string>
