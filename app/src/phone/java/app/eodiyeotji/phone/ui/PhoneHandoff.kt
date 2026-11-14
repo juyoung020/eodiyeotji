@@ -1,6 +1,7 @@
 package app.eodiyeotji.phone.ui
 
 import app.eodiyeotji.ui.common.eodiShadow
+import android.os.SystemClock
 import android.Manifest
 import android.app.Activity
 import android.app.NotificationChannel
@@ -36,7 +37,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.core.util.Consumer
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,6 +73,7 @@ import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -97,7 +98,7 @@ fun PhoneHandoffHost() {
     val context = LocalContext.current
     val deps = handoffDeps()
     val repo = deps.handoff()
-    val link by repo.link.collectAsState()
+    val link by repo.link.collectAsStateWithLifecycle()
     var inbox by remember { mutableStateOf<List<RShareCard>>(emptyList()) }
     val scope = rememberCoroutineScope()
 
@@ -119,7 +120,10 @@ fun PhoneHandoffHost() {
     }
     LaunchedEffect(link) {
         if (link == null) return@LaunchedEffect
+        // 끊기면 다시 듣는다. 통신이 안 될 때 5초마다 계속 두드리지 않게 기다림을 두 배씩 늘린다 (오래 이어졌으면 처음으로)
+        var wait = RETRY_MS
         while (true) {
+            val began = SystemClock.elapsedRealtime()
             repo.listen(
                 onCard = { card ->
                     notify(context, card)
@@ -131,7 +135,8 @@ fun PhoneHandoffHost() {
                 },
                 onMoving = { t -> deps.parking().onMoving(t) },
             )
-            delay(RETRY_MS)
+            wait = if (SystemClock.elapsedRealtime() - began > RETRY_RESET_MS) RETRY_MS else (wait * 2).coerceAtMost(RETRY_MAX_MS)
+            delay(wait)
         }
     }
     inbox.firstOrNull()?.let { card ->
@@ -218,7 +223,7 @@ private fun InboxSheet(raw: RShareCard, photosRepo: PlacePhotoRepository, onClos
 fun CarLinkSection() {
     val context = LocalContext.current
     val repo = handoffDeps().handoff()
-    val link by repo.link.collectAsState()
+    val link by repo.link.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var code by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -327,3 +332,7 @@ private fun notifyParked(context: Context, car: app.eodiyeotji.core.rust.ParkedC
 private const val PARK_NOTIFICATION_ID = 7301
 private const val CHANNEL = "handoff"
 private const val RETRY_MS = 5_000L
+private const val RETRY_MAX_MS = 300_000L
+
+/** 이만큼 넘게 이어져 있었으면 다시 연결할 때 기다림을 처음으로 돌린다 */
+private const val RETRY_RESET_MS = 30_000L

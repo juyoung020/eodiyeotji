@@ -95,6 +95,8 @@ import app.eodiyeotji.ui.place.PlaceDetailHost
 import app.eodiyeotji.ui.agent.SpokenCaption
 import app.eodiyeotji.ui.agent.ProactiveCard
 import app.eodiyeotji.ui.timeline.TimelineViewModel
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 /** 아래 탭. 가운데 [ASK](기억 에이전트)는 한 번에 닿게 크게 둔다. */
 enum class PhoneTab { RECORDS, ASK, COMMUNITY }
@@ -166,7 +168,6 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
     val moving by shell.moving.collectAsStateWithLifecycle()
     val passenger by shell.passenger.collectAsStateWithLifecycle()
     val permissions by shell.permissions.collectAsStateWithLifecycle()
-    val nav by shell.nav.collectAsStateWithLifecycle()
     val parked by shell.parked.collectAsStateWithLifecycle()
     val parkedMemo by shell.parkedMemo.collectAsStateWithLifecycle()
     var walk by remember { mutableStateOf<WalkTarget?>(null) }
@@ -199,7 +200,8 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
     val reviewVm: ReviewViewModel = hiltViewModel()
     val recordsSearchVm: SearchViewModel = hiltViewModel(key = "search-records")
     val communitySearchVm: SearchViewModel = hiltViewModel(key = "search-community")
-    val actions = SearchActions(
+    // 한 번만 만든다: 매번 새로 만들면 검색 칸 둘이 홈이 다시 그려질 때마다 같이 다시 그려진다 (탭은 상태로 읽으므로 기억해도 된다)
+    val actions = remember(timeline, courseVm, reviewVm, boardVm, agent) { SearchActions(
         openDay = { day, entryKey ->
             select(PhoneTab.RECORDS)
             timeline.openDay(day, entryKey)
@@ -224,7 +226,7 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
             select(PhoneTab.ASK)
             agent.ask(text)
         },
-    )
+    ) }
     // 운전 중(동승자 아님)이면 결과 맨 위에 말로 찾기를 권한다 (막지는 않는다)
     val driverMoving = moving && !passenger
     val recordsSearch = rememberSearchSlot(
@@ -245,15 +247,19 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
     )
 
     // 상세 화면이나 검색 결과가 열려 있는지 (아래 탭을 감춰 화면을 다 쓴다). 같은 ViewModel 인스턴스를 각 화면과 같이 본다.
+    // 열렸는지 여부만 골라 읽는다: 목록이 바뀌거나 불러오는 중일 때마다 홈 전체를 다시 그리지 않게.
     val detailOpen = when (tab) {
         PhoneTab.RECORDS -> {
-            val s by timeline.state.collectAsStateWithLifecycle()
-            s.selectedDay != null || recordsSearch.active || placesOpen
+            val dayOpen by remember(timeline) { timeline.state.map { it.selectedDay != null }.distinctUntilChanged() }
+                .collectAsStateWithLifecycle(timeline.state.value.selectedDay != null)
+            dayOpen || recordsSearch.active || placesOpen
         }
         PhoneTab.COMMUNITY -> {
-            val cs by courseVm.state.collectAsStateWithLifecycle()
-            val bs by boardVm.state.collectAsStateWithLifecycle()
-            cs.detail != null || bs.thread != null || communitySearch.active
+            val courseOpen by remember(courseVm) { courseVm.state.map { it.detail != null }.distinctUntilChanged() }
+                .collectAsStateWithLifecycle(courseVm.state.value.detail != null)
+            val threadOpen by remember(boardVm) { boardVm.state.map { it.thread != null }.distinctUntilChanged() }
+                .collectAsStateWithLifecycle(boardVm.state.value.thread != null)
+            courseOpen || threadOpen || communitySearch.active
         }
         PhoneTab.ASK -> false
     }
@@ -379,9 +385,16 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
         )
     }
     // 앱 안 길 안내: 모든 화면 위에 꽉 차게
-    nav?.let { PhoneNavScreen(it, onEnd = shell::endNav, onNext = shell::nextStop) }
+    NavOverlay(shell)
     // 걸어서 찾아가기: 가게까지 · 내 차로
     walk?.let { PhoneWalkScreen(it, onClose = { walk = null }, onFoundCar = shell::dismissParked) }
+}
+
+/** 앱 안 길 안내 화면. 안내 상태는 위치가 올 때마다(1초) 바뀌므로 여기서만 읽어, 그 아래 깔린 홈 화면까지 다시 그리지 않게 한다. */
+@Composable
+private fun NavOverlay(shell: PhoneShellViewModel) {
+    val nav by shell.nav.collectAsStateWithLifecycle()
+    nav?.let { PhoneNavScreen(it, onEnd = shell::endNav, onNext = shell::nextStop) }
 }
 
 /**

@@ -69,6 +69,8 @@ import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 
 // 차 판과 같은 색(ui/theme/Color.kt · 지도 MapInk): 안내 판은 짙은 회색, 갈 길은 파랑, 내 위치는 초록
+/** 도착 시각 글 모양 (1초마다 다시 만들지 않게 한 번만) */
+private val EtaFormat = DateTimeFormatter.ofPattern("a h:mm")
 private val NavInk = Color(0xFF111827)
 private val NavDark = Color(0xFF111214)
 private const val RouteBlue = "#0064FF"
@@ -136,7 +138,7 @@ private fun BottomBar(nav: NavUi, onEnd: () -> Unit, onNext: () -> Unit, modifie
                 Text(nav.next, style = EodiTheme.type.title, color = c.textPrimary, maxLines = 1)
                 Text("머무는 동안 기다릴게요", style = EodiTheme.type.meta, color = c.textSecondary)
             } else if (p != null && !p.arrived) {
-                val eta = LocalTime.now().plusSeconds(p.remainingS.toLong()).format(DateTimeFormatter.ofPattern("a h:mm"))
+                val eta = LocalTime.now().plusSeconds(p.remainingS.toLong()).format(EtaFormat)
                 Text("$eta 도착", style = EodiTheme.type.title, color = c.textPrimary)
                 Text("${minutes(p.remainingS)} · ${distance(p.remainingM)}", style = EodiTheme.type.meta, color = c.textSecondary)
             } else {

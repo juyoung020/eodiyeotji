@@ -78,6 +78,7 @@ import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -235,18 +236,23 @@ fun PhoneWalkScreen(target: WalkTarget, onClose: () -> Unit, onFoundCar: () -> U
     val sensorHeading = rememberCompassHeading()
     LaunchedEffect(location) {
         var prev: LocationFix? = null
-        location.updates().flowOn(Dispatchers.Default).catch { }.collect { f ->
+        // 방향 계산(Rust)은 화면 스레드 밖에서 하고, 화면 스레드에서는 값만 넣는다
+        location.updates().map { f ->
             // 센서가 없을 때: 5m 넘게 걸었으면 걸어온 방향을 보는 방향으로
             val p = prev
+            var walked: Double? = null
             if (p == null) {
                 prev = f
             } else {
                 val g = walkGuide(p.lat, p.lon, -1.0, f.lat, f.lon)
                 if (g.distanceM > 5.0) {
-                    moveHeading = g.bearingDeg
+                    walked = g.bearingDeg
                     prev = f
                 }
             }
+            f to walked
+        }.flowOn(Dispatchers.Default).catch { }.collect { (f, walked) ->
+            if (walked != null) moveHeading = walked
             me = f
         }
     }

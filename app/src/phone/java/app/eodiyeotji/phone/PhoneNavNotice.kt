@@ -21,6 +21,16 @@ internal class PhoneNavNotice(private val context: Context) {
     private val nm = context.getSystemService(NotificationManager::class.java)
     private var lastKey: String? = null
 
+    // 알림 채널 · 앱 여는 동작은 한 번만 만든다 (글이 바뀔 때마다 다시 만들지 않는다)
+    private val open: PendingIntent by lazy {
+        nm?.createNotificationChannel(NotificationChannel(CHANNEL, "길 안내", NotificationManager.IMPORTANCE_LOW))
+        PendingIntent.getActivity(
+            context, 2,
+            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+    }
+
     fun show(ui: NavUi?) {
         if (ui == null) {
             if (lastKey != null) nm?.cancel(ID)
@@ -32,12 +42,6 @@ internal class PhoneNavNotice(private val context: Context) {
         val key = "$title|$body"
         if (key == lastKey) return
         lastKey = key
-        nm?.createNotificationChannel(NotificationChannel(CHANNEL, "길 안내", NotificationManager.IMPORTANCE_LOW))
-        val open = PendingIntent.getActivity(
-            context, 2,
-            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
         val n = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
