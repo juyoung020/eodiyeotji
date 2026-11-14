@@ -35,6 +35,10 @@ use crate::geo::{haversine_m, Point};
 use crate::places::{self, PlaceLabel, PlaceSource};
 use crate::store::{days_from_civil, format_day, mark_dirty, CoreError, EodiStore, KIND_END, KIND_START};
 
+/// 장소 사이 실제 길 모양 (공개 길찾기에서 미리 받아 둔 표, `scripts/demo-roads/fetch_roads.py`가 만든다)
+#[path = "demo_roads.rs"]
+mod roads;
+
 const MIN: i64 = 60_000;
 /// 시연 전기차가 1km에 쓰는 배터리 (%p): 77kWh · 약 6km/kWh
 const SOC_PER_KM: f64 = 0.22;
@@ -440,6 +444,108 @@ impl Rng {
     }
 }
 
+fn jitter(rng: &mut Rng, p: Point, m: f64) -> Point {
+    let (a, b) = (rng.unit() - 0.5, rng.unit() - 0.5);
+    Point { lat: p.lat + a * 2.0 * m / 111_000.0, lon: p.lon + b * 2.0 * m / 88_000.0 }
+}
+
+/// 길(`path`)을 따라 `dt`초마다 한 점씩 찍는다 (속도는 `v` 둘레로 출렁인다, 점마다 GPS 흔들림 2m).
+/// `out`이 None이면 점을 남기지 않고 난수만 똑같이 쓴다. 반환: (도착 시각, 길 길이 m).
+fn sample(rng: &mut Rng, path: &[Point], t0: i64, v: f64, dt: i64, phase: f64, mut out: Option<&mut Vec<(i64, f64, f64)>>) -> (i64, f64) {
+    let mut cum = Vec::with_capacity(path.len());
+    let mut acc = 0.0;
+    cum.push(0.0);
+    for w in path.windows(2) {
+        acc += haversine_m(w[0], w[1]);
+        cum.push(acc);
+    }
+    let total = acc;
+    let (mut s, mut k, mut seg) = (0.0f64, 0i64, 0usize);
+    let mut t;
+    loop {
+        while seg + 1 < cum.len() - 1 && cum[seg + 1] < s {
+            seg += 1;
+        }
+        let span = (cum[seg + 1] - cum[seg]).max(1e-9);
+        let f = ((s - cum[seg]) / span).clamp(0.0, 1.0);
+        let (p, q) = (path[seg], path[seg + 1]);
+        let at = Point { lat: p.lat + (q.lat - p.lat) * f, lon: p.lon + (q.lon - p.lon) * f };
+        let at = jitter(rng, at, 2.0);
+        t = t0 + k * dt * 1000;
+        if let Some(out) = out.as_deref_mut() {
+            out.push((t, at.lat, at.lon));
+        }
+        if s >= total {
+            break;
+        }
+        let speed = v * (1.0 + 0.25 * ((k * dt) as f64 / 50.0 + phase).sin());
+        s = (s + speed * dt as f64).min(total);
+        k += 1;
+    }
+    (t, total)
+}
+
+/// 달리는 속도(m/s)와 점 간격(초): 먼 길(30km 넘게)은 고속도로처럼, 가까운 길은 시내처럼. `u`는 0~1 난수.
+fn pace(length_m: f64, u: f64) -> (f64, i64) {
+    if length_m > 30_000.0 {
+        (23.0 + 4.0 * u, 4)
+    } else {
+        (7.5 + 2.5 * u, 1)
+    }
+}
+
+/// `from` → `to` 장소 사이 실제 길 모양 (표에 있을 때만, 반대 방향은 뒤집어 쓴다).
+fn road_between(from: usize, to: usize) -> Option<Vec<Point>> {
+    let hit = roads::ROADS.iter().find(|r| (r.0, r.1) == (from, to) || (r.0, r.1) == (to, from))?;
+    let mut pts = decode_polyline(hit.2);
+    if hit.0 != from {
+        pts.reverse();
+    }
+    (pts.len() >= 2).then_some(pts)
+}
+
+/// 테스트용: 크리스마스에 달리는 길 (집 → 금호동 순두부집).
+#[cfg(test)]
+pub(crate) fn christmas_road() -> Vec<Point> {
+    road_between(HOME, SUNDUBU).expect("길 모양 표에 있다")
+}
+
+/// 구글 폴리라인(소수 5자리) 글 → 점들.
+fn decode_polyline(text: &str) -> Vec<Point> {
+    let mut out = Vec::new();
+    let (mut lat, mut lon) = (0i64, 0i64);
+    let mut bytes = text.bytes();
+    loop {
+        let mut pair = [0i64; 2];
+        for v in &mut pair {
+            let (mut shift, mut acc) = (0u32, 0i64);
+            loop {
+                let Some(c) = bytes.next() else { return out };
+                let b = c as i64 - 63;
+                acc |= (b & 0x1f) << shift;
+                shift += 5;
+                if b < 0x20 {
+                    break;
+                }
+            }
+            *v = if acc & 1 == 1 { !(acc >> 1) } else { acc >> 1 };
+        }
+        lat += pair[0];
+        lon += pair[1];
+        out.push(Point { lat: lat as f64 / 1e5, lon: lon as f64 / 1e5 });
+    }
+}
+
+/// 주행을 실제 길 모양으로 그리는 날: 시연에서 지도를 크게 보여 주는 날만 (1년 전 강릉 여행 · 크리스마스 · 최근 [ROAD_RECENT_DAYS]일).
+/// 나머지 날은 장소 사이를 부드럽게 이은 선 그대로다 (길 모양 표가 없는 구간도).
+fn road_day(p: &Plan, d: i64) -> bool {
+    d == p.gangneung || Some(d) == p.christmas || d > p.last - ROAD_RECENT_DAYS
+}
+
+const ROAD_RECENT_DAYS: i64 = 7;
+/// 길 모양으로 달릴 때 GPS 흔들림에 쓰는 난수 씨앗 (주 난수는 건드리지 않는다)
+const ROAD_SEED: u64 = 0x0ad5_2026;
+
 fn poi(i: usize) -> Point {
     Point { lat: POIS[i].3, lon: POIS[i].4 }
 }
@@ -520,6 +626,8 @@ struct Gen<'a> {
     rain_now: bool,
     /// (읽은 시각, 계기 코드, 값) — 주행마다 출발 · 도착 주행거리계, 비 오는 날은 와이퍼
     readings: Vec<(i64, i64, f64)>,
+    /// 지금 만드는 하루의 주행을 실제 길 모양으로 그리는가 ([road_day]: 시연에서 보여 주는 날만)
+    roads: bool,
 }
 
 impl Gen<'_> {
@@ -528,8 +636,7 @@ impl Gen<'_> {
     }
 
     fn jitter(&mut self, p: Point, m: f64) -> Point {
-        let (a, b) = (self.rng.unit() - 0.5, self.rng.unit() - 0.5);
-        Point { lat: p.lat + a * 2.0 * m / 111_000.0, lon: p.lon + b * 2.0 * m / 88_000.0 }
+        jitter(&mut self.rng, p, m)
     }
 
     fn label(&mut self, d: i64, title: &str, summary: &str, tags: &[&str]) {
@@ -540,7 +647,9 @@ impl Gen<'_> {
     }
 
     /// t0에 a에서 출발해 via를 지나 b까지 달린다 (도로처럼 휘게, 시작·끝 신호 포함). 반환: 도착 시각.
-    fn drive(&mut self, t0: i64, a: Point, via: Via, b: Point) -> i64 {
+    /// `road`(실제 길 모양)가 있으면 그 길을 따라 달린다. 이때도 휘는 선으로 한 번 달린 것처럼 난수를 똑같이 써서
+    /// (점은 버린다) 길 모양을 쓰는 날이 생겨도 다른 날의 기록은 이전 판과 같다.
+    fn drive(&mut self, t0: i64, a: Point, via: Via, b: Point, road: Option<&[Point]>) -> i64 {
         let mut ctrl = vec![a];
         ctrl.extend(via.iter().map(|&(lat, lon)| Point { lat, lon }));
         ctrl.push(b);
@@ -561,36 +670,24 @@ impl Gen<'_> {
                 dense.push(Point { lat: u * p.lat + v * c.lat + w2 * q.lat, lon: u * p.lon + v * c.lon + w2 * q.lon });
             }
         }
-        let mut cum = Vec::with_capacity(dense.len());
-        let mut acc = 0.0;
-        cum.push(0.0);
-        for w in dense.windows(2) {
-            acc += haversine_m(w[0], w[1]);
-            cum.push(acc);
-        }
-        let total = acc;
-        let (v, dt) = if highway { (23.0 + 4.0 * self.rng.unit(), 4i64) } else { (7.5 + 2.5 * self.rng.unit(), 1i64) };
+        let u = self.rng.unit();
+        // 휘는 선 기준으로는 지나는 점들을 이은 길이로 고속도로 여부를 본다 (예전 판과 같게)
+        let (v, dt) = pace(if highway { f64::MAX } else { 0.0 }, u);
         let phase = self.rng.unit() * 6.0;
-        let (mut s, mut k, mut seg) = (0.0f64, 0i64, 0usize);
-        let mut t;
-        loop {
-            while seg + 1 < cum.len() - 1 && cum[seg + 1] < s {
-                seg += 1;
+        let (t, total) = match road {
+            None => sample(&mut self.rng, &dense, t0, v, dt, phase, Some(&mut self.fixes)),
+            Some(road) => {
+                sample(&mut self.rng, &dense, t0, v, dt, phase, None);
+                let mut path = Vec::with_capacity(road.len() + 2);
+                path.push(a);
+                path.extend_from_slice(road);
+                path.push(b);
+                let length: f64 = path.windows(2).map(|w| haversine_m(w[0], w[1])).sum();
+                let (v, dt) = pace(length, u);
+                let mut local = Rng(ROAD_SEED ^ t0 as u64);
+                sample(&mut local, &path, t0, v, dt, phase, Some(&mut self.fixes))
             }
-            let span = (cum[seg + 1] - cum[seg]).max(1e-9);
-            let f = ((s - cum[seg]) / span).clamp(0.0, 1.0);
-            let (p, q) = (dense[seg], dense[seg + 1]);
-            let at = Point { lat: p.lat + (q.lat - p.lat) * f, lon: p.lon + (q.lon - p.lon) * f };
-            let at = self.jitter(at, 2.0);
-            t = t0 + k * dt * 1000;
-            self.fixes.push((t, at.lat, at.lon));
-            if s >= total {
-                break;
-            }
-            let speed = v * (1.0 + 0.25 * ((k * dt) as f64 / 50.0 + phase).sin());
-            s = (s + speed * dt as f64).min(total);
-            k += 1;
-        }
+        };
         self.events.push((t0, KIND_START));
         self.events.push((t, KIND_END));
         self.people.push((t0 + 20_000, self.people_now));
@@ -616,7 +713,8 @@ impl Gen<'_> {
         for (k, &(to, via, dwell)) in legs.iter().enumerate() {
             let a = self.jitter(poi(here), 15.0);
             let b = self.jitter(poi(to), 15.0);
-            arrive = self.drive(t, a, via, b);
+            let road = if self.roads { road_between(here, to) } else { None };
+            arrive = self.drive(t, a, via, b, road.as_deref());
             here = to;
             if k + 1 < legs.len() {
                 t = arrive + (dwell + self.rng.below(8)) * MIN;
@@ -818,6 +916,7 @@ pub(crate) fn top_up(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError>
         odo: 18_240.0,
         rain_now: false,
         readings: Vec::new(),
+        roads: false,
     };
     let mut shifts: Vec<(i64, f64, f64)> = Vec::new();
     // 1) 평일 출장: 시연 출퇴근이 있는 날, 회사에 있던 10:00~16:30에 기록이 없을 때만
@@ -929,6 +1028,91 @@ pub(crate) fn top_up(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError>
             g.christmas(x);
         }
     }
+    // 5) 지도를 크게 보여 주는 날([road_day]: 1년 전 강릉 · 크리스마스 · 최근 며칠)의 주행을 실제 길 모양으로 바꾼다.
+    //    같은 기록을 메모리에서 처음부터 다시 만들어 (난수가 같아 같은 하루가 나온다) 그날 것만 바꿔 넣는다.
+    //    시연 기록인 날만 (시연 집 근처 점이 있다) — 실제 기록이 있는 날은 건드리지 않는다.
+    if done.unwrap_or(0) < 5 {
+        let mut r = Gen {
+            store,
+            rng: Rng(0x5eed_2025),
+            fixes: Vec::with_capacity(600_000),
+            events: Vec::new(),
+            labels: BTreeMap::new(),
+            trips: 0,
+            outing_uses: vec![0; OUTINGS.len()],
+            people_now: 1,
+            people: Vec::new(),
+            soc: 82.0,
+            energy: Vec::new(),
+            odo: 18_240.0,
+            rain_now: false,
+            readings: Vec::new(),
+            roads: false,
+        };
+        generate(&mut r, &p, &|_, _| true);
+        let odo_kind = crate::readings::ReadingKind::Odometer.code();
+        let odo_extra = format!(" AND kind = {odo_kind}");
+        let home = poi(HOME);
+        // 바꿀 날과 그날 직전의 배터리 · 주행거리계, 그날 원래 달린 거리 — 지우기 전에 먼저 다 읽는다 (바꿀 날이 이어져 있다)
+        let mut days: Vec<(i64, f64, f64, f64)> = Vec::new();
+        for d in (p.first..=p.last).filter(|&d| road_day(&p, d)) {
+            let (ds, de) = (store.day_start_ms(d), store.day_start_ms(d + 1));
+            if !r.fixes.iter().any(|f| f.0 >= ds && f.0 < de) {
+                continue;
+            }
+            let (from_home, old_km): (i64, f64) = {
+                let conn = store.snapshot()?;
+                let n = conn.query_row(
+                    "SELECT count(*) FROM fix WHERE t_ms >= ?1 AND t_ms < ?2 AND abs(lat - ?3) < 0.0015 AND abs(lon - ?4) < 0.0015",
+                    params![ds, de, home.lat, home.lon],
+                    |r| r.get(0),
+                )?;
+                let km = conn.query_row(
+                    "SELECT coalesce(max(value) - min(value), 0.0) FROM drive_reading WHERE kind = ?1 AND t_ms >= ?2 AND t_ms < ?3",
+                    params![odo_kind, ds, de],
+                    |r| r.get(0),
+                )?;
+                (n, km)
+            };
+            if from_home == 0 {
+                continue;
+            }
+            let soc0 = before("drive_energy", "", ds)?.unwrap_or(80.0);
+            let odo0 = before("drive_reading", &odo_extra, ds)?.unwrap_or(18_240.0);
+            days.push((d, soc0, odo0, old_km));
+        }
+        for (d, soc0, odo0, old_km) in days {
+            let (ds, de) = (store.day_start_ms(d), store.day_start_ms(d + 1));
+            let on = |t: i64| t >= ds && t < de;
+            {
+                let conn = store.lock()?;
+                for t in ["fix", "drive_event", "navi_hint", "drive_people", "drive_energy", "drive_reading"] {
+                    conn.execute(&format!("DELETE FROM {t} WHERE t_ms >= ?1 AND t_ms < ?2"), [ds, de])?;
+                }
+            }
+            // 앞 단계가 이 날에 넣으려던 것은 뺀다 (길 모양으로 만든 하루가 대신 들어간다)
+            g.fixes.retain(|x| !on(x.0));
+            g.events.retain(|x| !on(x.0));
+            g.people.retain(|x| !on(x.0));
+            g.energy.retain(|x| !on(x.0));
+            g.readings.retain(|x| !on(x.0));
+            g.fixes.extend(r.fixes.iter().filter(|x| on(x.0)));
+            g.events.extend(r.events.iter().filter(|x| on(x.0)));
+            g.people.extend(r.people.iter().filter(|x| on(x.0)));
+            // 배터리 · 주행거리계는 이 기기에 있던 그날 직전 값에서 이어지게 옮긴다
+            let soc_gen = r.energy.iter().find(|x| on(x.0)).map_or(soc0, |x| x.1);
+            g.energy.extend(r.energy.iter().filter(|x| on(x.0)).map(|&(t, pct)| (t, (pct + soc0 - soc_gen).clamp(3.0, 100.0))));
+            let odos: Vec<f64> = r.readings.iter().filter(|x| on(x.0) && x.1 == odo_kind).map(|x| x.2).collect();
+            let odo_gen = odos.first().copied().unwrap_or(odo0);
+            g.readings.extend(
+                r.readings.iter().filter(|x| on(x.0)).map(|&(t, k, v)| (t, k, if k == odo_kind { ((v + odo0 - odo_gen) * 10.0).round() / 10.0 } else { v })),
+            );
+            // 길이 휘는 선보다 길다 → 그 뒤 주행거리계를 늘어난 만큼 민다
+            let new_km = odos.last().copied().unwrap_or(odo_gen) - odo_gen;
+            shifts.push((de - 1, 0.0, new_km - old_km));
+            // 바꿔 넣은 주행은 "더한 주행 수"에 세지 않는다 (같은 하루를 길 모양만 바꾼 것이다)
+        }
+    }
     let made = g.trips;
     // 강릉 날은 라벨을 미리 넣지 않는다 (처음 만들 때와 같이 앱이 라벨링한다)
     let new_days: HashSet<i64> = g.labels.keys().copied().filter(|&d| d != gn).collect();
@@ -937,41 +1121,8 @@ pub(crate) fn top_up(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError>
     Ok(made)
 }
 
-/// 시연 데이터를 만든다 (모듈 설명). 반환: 만든 주행 수 (이미 만들었으면 0).
-pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
-    let today = store.local_day(today_ms);
-    let p = plan(today);
-    let (range_lo, range_hi) = (store.day_start_ms(p.first), store.day_start_ms(p.last + 1));
-    let occupied: HashSet<i64> = {
-        let conn = store.lock()?;
-        let seeded: Option<i64> =
-            conn.query_row("SELECT value FROM meta WHERE key = 'demo_seeded'", [], |r| r.get(0)).optional()?;
-        if seeded.is_some() {
-            return Ok(0);
-        }
-        let tz_ms = -store.day_start_ms(0);
-        let mut st = conn.prepare("SELECT DISTINCT (t_ms + ?1) / 86400000 FROM fix WHERE t_ms >= ?2 AND t_ms < ?3")?;
-        let rows = st.query_map([tz_ms, range_lo, range_hi], |r| r.get::<_, i64>(0))?;
-        rows.collect::<Result<_, _>>()?
-    };
-    let free = |a: i64, b: i64| (a..=b).all(|d| !occupied.contains(&d));
-
-    let mut g = Gen {
-        store,
-        rng: Rng(0x5eed_2025),
-        fixes: Vec::with_capacity(600_000),
-        events: Vec::new(),
-        labels: BTreeMap::new(),
-        trips: 0,
-        outing_uses: vec![0; OUTINGS.len()],
-        people_now: 1,
-        people: Vec::new(),
-        soc: 82.0,
-        energy: Vec::new(),
-        odo: 18_240.0,
-        rain_now: false,
-        readings: Vec::new(),
-    };
+/// 시연 기간의 하루하루를 만든다 (DB에는 쓰지 않는다). `free(a, b)`: 그 날들에 이미 기록이 없어 시연 기록을 넣어도 되는가.
+fn generate(g: &mut Gen, p: &Plan, free: &dyn Fn(i64, i64) -> bool) {
     let busan = p.busan.filter(|&b| free(b, b + 2));
     let seorak = p.seorak.filter(|&s| free(s, s + 1));
     let mut d = p.first;
@@ -983,6 +1134,7 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
         if g.soc < 30.0 {
             g.soc = 90.0; // 전날 밤 집에서 충전
         }
+        g.roads = road_day(p, d) && !(Some(d) == busan || Some(d) == seorak);
         g.rain_now = d == p.gangneung || (d as u64).wrapping_mul(2_654_435_761) % 100 < 12;
         g.people_now = match weekday_index(d) {
             0 | 6 => 2,
@@ -1028,6 +1180,45 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
         }
         d += 1;
     }
+}
+
+/// 시연 데이터를 만든다 (모듈 설명). 반환: 만든 주행 수 (이미 만들었으면 0).
+pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
+    let today = store.local_day(today_ms);
+    let p = plan(today);
+    let (range_lo, range_hi) = (store.day_start_ms(p.first), store.day_start_ms(p.last + 1));
+    let occupied: HashSet<i64> = {
+        let conn = store.lock()?;
+        let seeded: Option<i64> =
+            conn.query_row("SELECT value FROM meta WHERE key = 'demo_seeded'", [], |r| r.get(0)).optional()?;
+        if seeded.is_some() {
+            return Ok(0);
+        }
+        let tz_ms = -store.day_start_ms(0);
+        let mut st = conn.prepare("SELECT DISTINCT (t_ms + ?1) / 86400000 FROM fix WHERE t_ms >= ?2 AND t_ms < ?3")?;
+        let rows = st.query_map([tz_ms, range_lo, range_hi], |r| r.get::<_, i64>(0))?;
+        rows.collect::<Result<_, _>>()?
+    };
+    let free = |a: i64, b: i64| (a..=b).all(|d| !occupied.contains(&d));
+
+    let mut g = Gen {
+        store,
+        rng: Rng(0x5eed_2025),
+        fixes: Vec::with_capacity(600_000),
+        events: Vec::new(),
+        labels: BTreeMap::new(),
+        trips: 0,
+        outing_uses: vec![0; OUTINGS.len()],
+        people_now: 1,
+        people: Vec::new(),
+        soc: 82.0,
+        energy: Vec::new(),
+        odo: 18_240.0,
+        rain_now: false,
+        readings: Vec::new(),
+        roads: false,
+    };
+    generate(&mut g, &p, &free);
     let made = g.trips;
     let meta = [("demo_seeded", today), ("demo_from_ms", range_lo), ("demo_to_ms", range_hi), ("demo_topup", TOPUP_VERSION)];
     write_out(store, &mut g, &meta, p.first, p.last, |d| d != p.gangneung && d < today - 30, &[])?;
@@ -1037,8 +1228,9 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
 /// 시연 기록 보충 판 (새 장면을 더할 때마다 올린다). 1 = 평일 출장 · 감자탕 · 국밥 · 가족 계곡 나들이,
 /// 2 = 1판에서 일부 날만 다시 계산하던 것을 시연 기간 전체로 (덧붙일 것은 1판과 같다 — 이미 있으면 건너뛴다),
 /// 3 = 1년 전 강릉 여행에 저녁 횟집(안목항 바다횟집)을 더한다 (그날 시연 기록만 지우고 새로 만든다),
-/// 4 = 크리스마스를 휴일로: 출근 · 출장 대신 집 근처 순두부집 점심 (그날 시연 기록만 지우고 새로 만든다).
-const TOPUP_VERSION: i64 = 4;
+/// 4 = 크리스마스를 휴일로: 출근 · 출장 대신 집 근처 순두부집 점심 (그날 시연 기록만 지우고 새로 만든다),
+/// 5 = 지도를 크게 보여 주는 날(1년 전 강릉 · 크리스마스 · 최근 며칠)의 주행을 실제 길 모양으로 (그날 시연 기록만 바꿔 넣는다).
+const TOPUP_VERSION: i64 = 5;
 
 /// 크리스마스 하루를 만드는 난수 씨앗 (처음 만들 때와 보충할 때 같은 하루가 나오게 따로 둔다)
 const XMAS_SEED: u64 = 0xc4a1_1225;

@@ -665,6 +665,54 @@ fn demo_christmas_is_a_holiday_lunch_at_the_tofu_place() {
     assert_eq!(store.seed_demo_data(demo_today()).unwrap(), 0, "한 번만");
 }
 
+/// 지도를 크게 보여 주는 날(여기서는 크리스마스)의 주행은 실제 길 모양을 따라간다: 모든 점이 길에서 45m 안.
+/// 휘는 선으로 심어 둔 예전 기록도 보충 판 5가 그날만 바꿔 넣고, 주행거리계는 뒤로 가지 않는다.
+#[test]
+fn demo_road_days_follow_the_real_road() {
+    let (_db, store, _, _) = seeded("roads");
+    let road = super::demo::christmas_road();
+    let (ds, de) = (store.day_start_ms(day_num("2025-12-25")), store.day_start_ms(day_num("2025-12-26")));
+    // 점에서 길(꺾은선)까지 거리 (m)
+    let off = |lat: f64, lon: f64| -> f64 {
+        let k = lat.to_radians().cos();
+        let xy = |p: &crate::geo::Point| ((p.lon - lon) * k * 111_195.0, (p.lat - lat) * 111_195.0);
+        road.windows(2)
+            .map(|w| {
+                let ((ax, ay), (bx, by)) = (xy(&w[0]), xy(&w[1]));
+                let (dx, dy) = (bx - ax, by - ay);
+                let t = (-(ax * dx + ay * dy) / (dx * dx + dy * dy).max(1e-9)).clamp(0.0, 1.0);
+                ((ax + dx * t).powi(2) + (ay + dy * t).powi(2)).sqrt()
+            })
+            .fold(f64::MAX, f64::min)
+    };
+    let check = |s: &EodiStore| {
+        let conn = s.lock().unwrap();
+        let mut st = conn.prepare("SELECT lat, lon FROM fix WHERE t_ms >= ?1 AND t_ms < ?2").unwrap();
+        let pts: Vec<(f64, f64)> = st.query_map([ds, de], |r| Ok((r.get(0)?, r.get(1)?))).unwrap().collect::<Result<_, _>>().unwrap();
+        assert!(pts.len() > 100, "그날 주행 점이 있다: {}", pts.len());
+        let worst = pts.iter().map(|&(lat, lon)| off(lat, lon)).fold(0.0, f64::max);
+        assert!(worst < 45.0, "길에서 가장 먼 점 {worst:.0}m");
+        let mut st = conn.prepare("SELECT value FROM drive_reading WHERE kind = ?1 ORDER BY t_ms").unwrap();
+        let odo: Vec<f64> = st
+            .query_map([crate::readings::ReadingKind::Odometer.code()], |r| r.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert!(odo.windows(2).all(|w| w[1] >= w[0] - 0.05), "주행거리계는 뒤로 가지 않는다");
+    };
+    check(&store);
+    let other_before = store.episodes_for_day("2025-12-24".into()).unwrap().len();
+    // 예전 판처럼: 보충 판을 4로 되돌린다 → 길 모양 날들을 다시 만들어 넣는다 (내용은 같다)
+    store.lock().unwrap().execute("UPDATE meta SET value = 4 WHERE key = 'demo_topup'", []).unwrap();
+    assert_eq!(store.seed_demo_data(demo_today()).unwrap(), 0, "바꿔 넣기만 한다 (더한 주행은 없다)");
+    check(&store);
+    let names: Vec<String> =
+        store.episodes_for_day("2025-12-25".into()).unwrap().iter().flat_map(|e| e.facts.stops.iter().map(|x| x.name.clone())).collect();
+    assert_eq!(names, ["금호동 할머니순두부"]);
+    assert_eq!(store.episodes_for_day("2025-12-24".into()).unwrap().len(), other_before, "다른 날은 그대로");
+    assert_eq!(store.seed_demo_data(demo_today()).unwrap(), 0, "한 번만");
+}
+
 /// 보충 판 3: 횟집 없이 심어 둔 예전 시연 기록에도 1년 전 강릉 날만 다시 만들어 저녁 횟집이 들어간다 (다른 날은 그대로).
 #[test]
 fn demo_top_up_adds_the_gangneung_seafood_dinner_to_old_data() {
