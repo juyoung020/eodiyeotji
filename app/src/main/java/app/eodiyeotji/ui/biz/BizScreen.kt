@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.biz
 
+import androidx.compose.ui.platform.LocalConfiguration
 import app.eodiyeotji.ui.common.PressSurface
 import android.content.Context
 import android.content.Intent
@@ -308,14 +309,16 @@ private fun TripRow(t: BizTrip, selected: Boolean, onClick: () -> Unit) {
                 Text(t.weekday, style = EodiTheme.type.meta, color = c.textSecondary)
             }
             Spacer(Modifier.width(16.dp))
+            // 폰(좁은 화면)은 금액 옆 글 칸이 좁아 "경기 안산시 …"로 잘렸다 → 두 줄까지
+            val lines = if (LocalConfiguration.current.screenWidthDp < 600) 2 else 1
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(t.title, style = EodiTheme.type.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(t.title, style = EodiTheme.type.titleSmall, fontWeight = FontWeight.Bold, maxLines = lines, overflow = TextOverflow.Ellipsis)
                 val where = t.stops.firstOrNull()?.name?.ifBlank { null } ?: t.region
                 Text(
                     stringResource(R.string.biz_row_meta, where, durationText(t.driveMin * 60_000), t.distanceKm),
                     style = EodiTheme.type.meta,
                     color = c.textSecondary,
-                    maxLines = 1,
+                    maxLines = lines,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
