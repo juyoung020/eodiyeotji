@@ -552,3 +552,16 @@ impl EodiStore {
 pub fn convoy_energy(ev: bool, pct: f64, range_km: f64) -> crate::convoy::ConvoyEnergy {
     crate::convoy::energy_gauge(ev, pct, range_km)
 }
+
+/// 같이 가기 시연(공모전 판): 함께 가는 차 출발점 (`convoy::demo_start`).
+#[uniffi::export]
+pub fn convoy_demo_start(base: GeoPoint, dest: Option<GeoPoint>, behind_km: f64) -> GeoPoint {
+    let p = crate::convoy::demo_start(base.into(), dest.map(Into::into), behind_km);
+    GeoPoint { lat: p.lat, lon: p.lon }
+}
+
+/// 같이 가기 시연(공모전 판): 함께 가는 차 한 걸음 (`convoy::demo_step`).
+#[uniffi::export]
+pub fn convoy_demo_step(at: GeoPoint, dest: Option<GeoPoint>, speed_mps: f64, dt_s: f64, range_km: f64, ev: bool) -> crate::convoy::ConvoyDemoCar {
+    crate::convoy::demo_step(at.into(), dest.map(Into::into), speed_mps, dt_s, range_km, ev)
+}

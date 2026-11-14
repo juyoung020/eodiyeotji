@@ -126,7 +126,7 @@ class RelayConvoyBackend(private val base: String, private val token: String) : 
 
 /**
  * 중계 서버 주소(`RELAY_URL`)가 없을 때: 이 기기 안에서만 모임을 흉내 낸다 (에뮬레이터 한 대 시연).
- * 디버그 빌드에서 [addFake]로 가짜 차를 넣으면 내 위치 근처에서 목적지 쪽으로 움직인다 (ConvoyRepository의 디버그 브로드캐스트).
+ * 디버그 빌드 · 공모전 판에서 [addFake]로 가짜 차를 넣으면 내 위치 근처에서 목적지 쪽으로 움직인다 (ConvoyRepository의 디버그 브로드캐스트).
  */
 class LocalConvoyBackend : ConvoyBackend {
     override val local = true
@@ -188,7 +188,8 @@ class LocalConvoyBackend : ConvoyBackend {
      * 내 위치를 아직 모르면 목적지 근처(없으면 서울 시청)에서 출발한다.
      */
     fun addFake(name: String, behindKm: Double, speedKmh: Double, ev: Boolean = true, pct: Double = -1.0, rangeKm: Double = -1.0) {
-        if (!BuildConfig.DEBUG) return
+        // 디버그 브로드캐스트 · 공모전 판 시연 차(ConvoyRepository.runDemo)만. 앱마켓 판에는 가짜 차가 없다.
+        if (!BuildConfig.DEBUG && !BuildConfig.CONTEST_DEMO) return
         val d = dest
         val base = me?.let { it.lat to it.lon } ?: d?.let { it.lat + 0.05 to it.lon } ?: (37.5665 to 126.9780)
         // 목적지에서 나로 향하는 방향(위도 · 경도 단위)으로 behindKm만큼 더 간 자리. 목적지가 없으면 북쪽.

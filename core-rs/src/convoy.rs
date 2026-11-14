@@ -341,6 +341,64 @@ pub fn position_shareable_now(store: &EodiStore, p: Point) -> Result<bool, CoreE
     Ok(position_shareable(p, &crate::community::privacy_anchors(&conn)?))
 }
 
+/// 시연(공모전 판)용 함께 가는 차가 한 번 움직인 결과. Kotlin은 이 값을 그대로 중계 서버에 보낸다.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ConvoyDemoCar {
+    pub lat: f64,
+    pub lon: f64,
+    pub heading: f64,
+    pub speed_mps: f64,
+    /// 목적지까지 초 (목적지가 없으면 -1)
+    pub eta_s: i64,
+    pub range_km: f64,
+    pub energy_pct: f64,
+    pub arrived: bool,
+}
+
+/// 시연 차 출발점: [base](내 위치 등)에서 목적지 반대쪽으로 [behind_km]만큼 (음수면 목적지 쪽 = 내 앞). 목적지가 없거나 같은 자리면 북쪽.
+pub fn demo_start(base: Point, dest: Option<Point>, behind_km: f64) -> Point {
+    let km_lon = 111.0 * base.lat.to_radians().cos();
+    let (dlat, dlon) = match dest {
+        Some(d) if haversine_m(base, d) > 1.0 => (base.lat - d.lat, base.lon - d.lon),
+        _ => (1.0, 0.0),
+    };
+    let norm = ((dlat * 111.0).powi(2) + (dlon * km_lon).powi(2)).sqrt().max(1e-9);
+    Point { lat: base.lat + dlat / norm * behind_km, lon: base.lon + dlon / norm * behind_km }
+}
+
+/// 시연 차 한 걸음: [at]에서 목적지로 곧게 [speed_mps] × [dt_s] 만큼 (목적지가 없으면 남쪽으로). 달린 만큼 남은 거리가 준다.
+/// 길 모양은 없다 (시연용). 꽉 찬 주행 가능 거리는 전기차 400km · 연료차 600km로 % 를 만든다.
+pub fn demo_step(at: Point, dest: Option<Point>, speed_mps: f64, dt_s: f64, range_km: f64, ev: bool) -> ConvoyDemoCar {
+    let step = (speed_mps * dt_s).max(0.0);
+    let (next, moved, eta_s, heading, arrived) = match dest {
+        Some(d) => {
+            let dist = haversine_m(at, d);
+            if dist <= step.max(1.0) {
+                (d, dist, 0, if dist > 1.0 { bearing_deg(at, d) } else { 0.0 }, true)
+            } else {
+                let f = step / dist;
+                let p = Point { lat: at.lat + (d.lat - at.lat) * f, lon: at.lon + (d.lon - at.lon) * f };
+                let left = dist - step;
+                let eta = if speed_mps > 0.0 { (left / speed_mps).round() as i64 } else { -1 };
+                (p, step, eta, bearing_deg(at, d), false)
+            }
+        }
+        None => (Point { lat: at.lat - step / 111_000.0, lon: at.lon }, step, -1, 180.0, false),
+    };
+    let range = (range_km - moved / 1000.0).max(0.0);
+    let full = if ev { 400.0 } else { 600.0 };
+    ConvoyDemoCar {
+        lat: next.lat,
+        lon: next.lon,
+        heading,
+        speed_mps: if arrived { 0.0 } else { speed_mps },
+        eta_s,
+        range_km: range,
+        energy_pct: (range / full * 1000.0).round() / 10.0,
+        arrived,
+    }
+}
+
 /// 같이 가기 한 번의 상태 (색 번호 · 지나온 길 · 이미 한 알림). Kotlin은 [ConvoyTracker::update]만 부른다.
 #[derive(Debug, Default)]
 pub struct Tracker {
@@ -695,5 +753,40 @@ mod tests {
         assert_eq!(initial_of(" 민수"), "민");
         assert_eq!(initial_of("kim"), "K");
         assert_eq!(initial_of(""), "?");
+    }
+
+    #[test]
+    fn demo_start_goes_behind_me_away_from_dest() {
+        let d = Point { lat: DEST.0, lon: DEST.1 };
+        let (la, lo) = north(5.0);
+        let me = Point { lat: la, lon: lo };
+        let back = demo_start(me, Some(d), 2.5);
+        let front = demo_start(me, Some(d), -0.8);
+        assert!((haversine_m(back, d) - 7_500.0).abs() < 50.0);
+        assert!((haversine_m(front, d) - 4_200.0).abs() < 50.0);
+        // 목적지가 없으면 북쪽
+        let n = demo_start(me, None, 1.0);
+        assert!(n.lat > me.lat && (haversine_m(n, me) - 1_000.0).abs() < 20.0);
+    }
+
+    #[test]
+    fn demo_step_moves_toward_dest_and_drains_range() {
+        let d = Point { lat: DEST.0, lon: DEST.1 };
+        let (la, lo) = north(3.0);
+        let c = demo_step(Point { lat: la, lon: lo }, Some(d), 12.5, 4.0, 30.0, true);
+        let p = Point { lat: c.lat, lon: c.lon };
+        assert!((haversine_m(p, d) - 2_950.0).abs() < 5.0);
+        assert!((c.heading - 180.0).abs() < 1.0);
+        assert!((c.range_km - 29.95).abs() < 1e-6);
+        assert_eq!(c.energy_pct, 7.5);
+        assert!((c.eta_s - 236).abs() <= 1);
+        assert!(!c.arrived);
+        // 한 걸음보다 가까우면 목적지에 멈춘다
+        let (la, lo) = north(0.03);
+        let c = demo_step(Point { lat: la, lon: lo }, Some(d), 12.5, 4.0, 10.0, false);
+        assert!(c.arrived && c.lat == d.lat && c.lon == d.lon && c.speed_mps == 0.0 && c.eta_s == 0);
+        // 목적지가 없으면 남쪽으로
+        let c = demo_step(d, None, 10.0, 3.0, 100.0, true);
+        assert!(c.lat < d.lat && c.eta_s == -1 && c.heading == 180.0);
     }
 }

@@ -16,6 +16,9 @@ import app.eodiyeotji.core.rust.ConvoyMe
 import app.eodiyeotji.core.rust.ConvoyMemberIn
 import app.eodiyeotji.core.rust.ConvoyMemberView
 import app.eodiyeotji.core.rust.ConvoyTracker
+import app.eodiyeotji.core.rust.GeoPoint
+import app.eodiyeotji.core.rust.convoyDemoStart
+import app.eodiyeotji.core.rust.convoyDemoStep
 import app.eodiyeotji.pleos.CourseGuide
 import app.eodiyeotji.place.blockingWithTimeout
 import app.eodiyeotji.core.EodiCore
@@ -34,6 +37,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -128,8 +132,11 @@ class ConvoyRepository @Inject constructor(
     fun openSheet() = _state.update { it.copy(sheetOpen = true, error = null) }
     fun closeSheet() = _state.update { it.copy(sheetOpen = false, error = null) }
 
-    /** 새 모임 ([dest]가 같이 갈 목적지, 없으면 나중에 장소 창에서 정한다). */
-    fun create(name: String, dest: ConvoyPlace?) = start(name) { backend.create(name, dest) }
+    /**
+     * 새 모임 ([dest]가 같이 갈 목적지, 없으면 나중에 장소 창에서 정한다).
+     * 공모전 판(CONTEST_DEMO)에서는 시연용 차 2대가 몇 초 뒤 저절로 참여한다 ([runDemo]). 코드로 참여할 때는 넣지 않는다.
+     */
+    fun create(name: String, dest: ConvoyPlace?) = start(name, demo = BuildConfig.CONTEST_DEMO) { backend.create(name, dest) }
 
     /** 코드로 참여 (숫자 6자리). */
     fun join(code: String, name: String) = start(name) { backend.join(code.filter { it.isDigit() }, name) }
@@ -157,6 +164,9 @@ class ConvoyRepository @Inject constructor(
         tracker = null
         loop?.cancel()
         loop = null
+        // 시연 차도 같이 나간다 (runDemo의 finally가 중계 서버에서 뺀다)
+        demoJob?.cancel()
+        demoJob = null
         _state.update { ConvoyUiState(local = backend.local, name = it.name) }
         // 서버에 알리는 건 기다리지 않는다 (실패해도 10분 뒤 서버가 지운다)
         scope.launch { runCatching { blockingWithTimeout(NET_TIMEOUT_MS) { backend.leave(s) } } }
@@ -200,7 +210,7 @@ class ConvoyRepository @Inject constructor(
         return navigate()
     }
 
-    private fun start(name: String, open: () -> ConvoySession) {
+    private fun start(name: String, demo: Boolean = false, open: () -> ConvoySession) {
         if (_state.value.phase != ConvoyPhase.IDLE) return
         prefs.edit().putString(KEY_NAME, name).apply()
         _state.update { it.copy(phase = ConvoyPhase.CONNECTING, error = null, name = name) }
@@ -217,6 +227,67 @@ class ConvoyRepository @Inject constructor(
             val wanted = _state.value.dest
             if (s.dest == null && wanted != null) runCatching { blockingWithTimeout(NET_TIMEOUT_MS) { backend.setDest(s, wanted) } }
             loop = scope.launch { run(s) }
+            if (demo) demoJob = scope.launch { runDemo(s) }
+        }
+    }
+
+    private var demoJob: Job? = null
+
+    /** 시연 차 한 대 (중계 서버에서는 진짜 참여자와 똑같이 코드로 들어와 위치를 보낸다). */
+    private class DemoCar(val spec: DemoSpec, val session: ConvoySession, var at: GeoPoint, var rangeKm: Double)
+
+    /**
+     * 공모전 시연용 함께 가는 차 (BuildConfig.CONTEST_DEMO일 때만, 앱마켓 판에는 없다).
+     * 모임을 만들면 [DEMO_CARS] 순서대로 몇 초 뒤 참여해 목적지 쪽으로 달린다. scripts/convoy-fake.ps1을 앱 안으로 옮긴 것.
+     * - 중계 서버가 있으면 코드로 참여(join)하고 위치 · 잔량을 [DEMO_POST_MS]마다 보낸다 → 화면은 실제 사용과 같은 길로 받는다.
+     * - 중계 서버가 없으면 기기 안 모임에 [LocalConvoyBackend.addFake]로 넣는다.
+     * - 움직임(출발점 · 한 걸음 · 남은 거리)은 Rust `convoy::demo_start` · `demo_step`.
+     * - 내가 나가면(또는 모임이 끝나면) 시연 차도 나간다.
+     */
+    private suspend fun runDemo(s: ConvoySession) = withContext(Dispatchers.IO) {
+        val local = backend as? LocalConvoyBackend
+        val cars = mutableListOf<DemoCar>()
+        val startMs = System.currentTimeMillis()
+        var lastPostMs = startMs
+        var next = 0
+        try {
+            while (isActive && session === s) {
+                val now = System.currentTimeMillis()
+                val dest = _state.value.dest?.let { GeoPoint(it.lat, it.lon) }
+                while (next < DEMO_CARS.size && now - startMs >= DEMO_CARS[next].joinAfterMs) {
+                    val spec = DEMO_CARS[next++]
+                    if (local != null) {
+                        local.addFake(spec.name, spec.behindKm, spec.speedKmh, ev = true, rangeKm = spec.rangeKm)
+                        continue
+                    }
+                    val cs = runCatching { blockingWithTimeout(NET_TIMEOUT_MS) { backend.join(s.code, spec.name) } }.getOrNull()
+                    if (cs == null) {
+                        next-- // 다음 바퀴에 다시
+                        break
+                    }
+                    // 출발 기준: 내 위치, 모르면 목적지 북쪽 6km (스크립트와 같다), 둘 다 없으면 서울 시청
+                    val fix = lastFix
+                    val base = fix?.let { GeoPoint(it.lat, it.lon) } ?: dest?.let { GeoPoint(it.lat + 6 / 111.0, it.lon) } ?: GeoPoint(37.5665, 126.9780)
+                    cars += DemoCar(spec, cs, convoyDemoStart(base, dest, spec.behindKm), spec.rangeKm)
+                }
+                if (now - lastPostMs >= DEMO_POST_MS) {
+                    val dt = (now - lastPostMs) / 1000.0
+                    lastPostMs = now
+                    for (c in cars) {
+                        val step = convoyDemoStep(c.at, dest, c.spec.speedKmh / 3.6, dt, c.rangeKm, true)
+                        c.at = GeoPoint(step.lat, step.lon)
+                        c.rangeKm = step.rangeKm
+                        val pos = ConvoyPosition(step.lat, step.lon, step.heading, step.speedMps, step.etaS, now, true, step.energyPct, step.rangeKm)
+                        runCatching { blockingWithTimeout(NET_TIMEOUT_MS) { backend.post(c.session, pos) } }
+                            .onFailure { Log.w(TAG, "시연 차 위치 보내기 실패: ${c.spec.name}", it) }
+                    }
+                }
+                delay(DEMO_TICK_MS)
+            }
+        } finally {
+            withContext(NonCancellable) {
+                cars.forEach { c -> runCatching { blockingWithTimeout(NET_TIMEOUT_MS) { backend.leave(c.session) } } }
+            }
         }
     }
 
@@ -338,5 +409,15 @@ class ConvoyRepository @Inject constructor(
         /** 잔량은 15번에 한 번(약 1분) 읽는다 */
         private const val ENERGY_EVERY_TICKS = 15
         const val DEBUG_ACTION = "app.eodiyeotji.DEBUG_CONVOY"
+
+        /** 시연 차 (공모전 판): 이름 · 몇 ms 뒤 참여 · 목적지 반대쪽으로 몇 km 뒤에서 출발(음수 = 내 앞) · 시속 · 남은 주행 가능 km */
+        private data class DemoSpec(val name: String, val joinAfterMs: Long, val behindKm: Double, val speedKmh: Double, val rangeKm: Double)
+        /** 민수는 30km 남은 전기차 → "배터리 부족" · 같이 충전소 들르기 시연. 지현은 넉넉 (scripts/convoy-fake.ps1 기본값과 같다) */
+        private val DEMO_CARS = listOf(
+            DemoSpec("민수", 3_000, 2.5, 45.0, 30.0),
+            DemoSpec("지현", 6_000, -0.8, 45.0, 180.0),
+        )
+        private const val DEMO_TICK_MS = 1_000L
+        private const val DEMO_POST_MS = 3_000L
     }
 }
