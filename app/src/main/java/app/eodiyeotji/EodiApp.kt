@@ -3,7 +3,13 @@ package app.eodiyeotji
 import android.app.Application
 import android.os.StrictMode
 import app.eodiyeotji.agent.DayLabeler
+import app.eodiyeotji.core.EodiCore
+import app.eodiyeotji.core.seedCommunityDemo
 import app.eodiyeotji.place.PlaceResolver
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
@@ -19,11 +25,20 @@ class EodiApp : Application(), ImageLoaderFactory {
     /** 하루 기록에 LLM 제목·이야기·검색 태그를 뒤에서 붙인다 (하루 1번). */
     @Inject lateinit var dayLabeler: DayLabeler
 
+    @Inject lateinit var core: EodiCore
+
     override fun onCreate() {
         super.onCreate()
         if (BuildConfig.DEBUG) enableStrictMode()
         placeResolver.start()
         dayLabeler.start()
+        // 공모전 판: 커뮤니티 서버가 생기기 전까지 미리 만든 커뮤니티(게시판 · 드라이브 코스 · 리뷰)를 처음 실행 때 넣어 둔다.
+        // Rust가 이미 넣었으면 아무것도 하지 않는다(meta community_seeded). 마켓판(-PCONTEST_DEMO=false)에서는 빠진다.
+        if (BuildConfig.CONTEST_DEMO) {
+            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                runCatching { core.seedCommunityDemo() }
+            }
+        }
         // 이미지 로더는 첫 사진 칸이 그려질 때 UI 스레드에서 만들어지며 디버그 빌드에서 수백 ms 멈췄다 → 미리 뒤에서 만들어 둔다
         // 첫 String.format은 Formatter·로캘 숫자 자료를 읽느라 오래 걸린다 (타임라인 첫 행 요약 줄에서 UI 스레드가 멈췄다) → 같이 미리
         Thread({
