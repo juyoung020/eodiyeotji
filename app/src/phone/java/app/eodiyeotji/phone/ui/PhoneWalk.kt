@@ -108,10 +108,10 @@ internal interface WalkEntryPoint {
     fun location(): LocationSource
 }
 
-// 폰 판 색(PhoneTheme)과 맞춘다: 걸어갈 곳은 초록, 내 차는 파랑, 내 위치는 초록 점
-private val WalkGreen = Color(0xFF16A34A)
-private val CarBlue = Color(0xFF2563EB)
-private const val HereGreen = "#16A34A"
+// 차 판과 같은 색(ui/theme/Color.kt · 지도 MapInk): 걸어갈 곳은 초록, 내 차는 파랑, 내 위치는 초록 점
+private val WalkGreen = Color(0xFF008F4F)
+private val CarBlue = Color(0xFF0064FF)
+private const val HereGreen = "#00A35A"
 
 /**
  * 기록 화면 맨 위 "내 차" 카드: 어디에 언제 세웠는지 + [가게까지 걷기] [내 차 찾기] + "찾았어요".

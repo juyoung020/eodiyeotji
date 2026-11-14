@@ -68,11 +68,11 @@ import org.maplibre.geojson.Feature
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 
-// 폰 판 색(PhoneTheme)과 맞춘다: 안내 판은 짙은 회색, 갈 길은 파랑, 내 위치는 초록
-private val NavInk = Color(0xFF0F172A)
-private val NavDark = Color(0xFF0B1220)
-private const val RouteBlue = "#2563EB"
-private const val HereGreen = "#16A34A"
+// 차 판과 같은 색(ui/theme/Color.kt · 지도 MapInk): 안내 판은 짙은 회색, 갈 길은 파랑, 내 위치는 초록
+private val NavInk = Color(0xFF111827)
+private val NavDark = Color(0xFF111214)
+private const val RouteBlue = "#0064FF"
+private const val HereGreen = "#00A35A"
 
 /**
  * 앱 안 길 안내 화면 (폰): 위 = 다음 안내(화살표 · 남은 거리 · 길 이름), 가운데 = 내 위치를 따라가는 기울어진 지도와 경로,

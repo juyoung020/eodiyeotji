@@ -60,10 +60,10 @@ import app.eodiyeotji.ui.theme.EodiTheme
 /**
  * 폰 화면 크기 비율. 어디였지의 글자·간격 토큰(Type.kt · Theme.kt)은 차 화면(팔 길이)에 맞춰 폰 앱의 약 두 배로 잡혀 있다.
  * 폰 판은 같은 토큰·같은 부품을 그대로 쓰되 화면 전체를 이 비율로 그린다 → 디자인은 같고 크기만 폰에 맞는다.
- *   본문 26sp → 16sp, 가장 작은 글자 20sp → 12.4sp, 하루 제목 48sp → 30sp, 터치 76dp → 47dp, 주행 중 버튼 144dp → 89dp
+ *   본문 26sp → 16.4sp, 가장 작은 글자 20sp → 12.6sp, 하루 제목 48sp → 30sp, 터치 76dp → 48dp(Material 최소), 주행 중 버튼 144dp → 91dp
  * 사용자의 시스템 글자 크기 설정(fontScale)은 그대로 따른다.
  */
-const val PhoneUiScale = 0.62f
+const val PhoneUiScale = 0.632f
 
 /** [PhoneUiScale]을 적용한다. 실제 화면 밀도에서 계산하므로 (새 창에서) 겹쳐 감싸도 두 번 줄지 않는다. */
 @Composable
