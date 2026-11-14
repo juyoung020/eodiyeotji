@@ -1,0 +1,8 @@
+{
+  "name": "convoy-highway",
+  "title": "같이 가기 시연: 영동고속도로 강릉방향(소초졸음쉼터 지난 곳) → 횡성휴게소",
+  "start": "영동고속도로 강릉방향",
+  "segments": [
+    { "type": "drive", "from": "영동고속도로 강릉방향", "to": "횡성휴게소(강릉방향)", "file": "legs/yeongdong-hwy__hoengseong-rest.csv", "distance_m": 15800, "duration_s": 713 }
+  ]
+}
