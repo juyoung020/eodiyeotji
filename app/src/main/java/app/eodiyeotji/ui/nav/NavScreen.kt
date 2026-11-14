@@ -1,4 +1,4 @@
-package app.eodiyeotji.phone.ui
+package app.eodiyeotji.ui.nav
 
 import androidx.compose.ui.draw.clip
 import app.eodiyeotji.ui.common.eodiShadow
@@ -43,7 +43,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import app.eodiyeotji.core.rust.NavRoute
 import app.eodiyeotji.core.rust.NavStep
 import app.eodiyeotji.core.rust.NavTurn
-import app.eodiyeotji.phone.NavUi
+import androidx.compose.runtime.Immutable
+import app.eodiyeotji.core.rust.GeoPoint
+import app.eodiyeotji.core.rust.NavProgress
 import app.eodiyeotji.ui.community.PrimaryPill
 import app.eodiyeotji.ui.community.SecondaryPill
 import app.eodiyeotji.ui.map.MapStyleSource
@@ -76,12 +78,34 @@ private val NavDark = Color(0xFF111214)
 private const val RouteBlue = "#0064FF"
 private const val HereGreen = "#00A35A"
 
+/** 안내 화면 상태. */
+@Immutable
+data class NavUi(
+    /** 안내 중인 곳 이름 (마지막 목적지) */
+    val title: String,
+    val route: NavRoute? = null,
+    val progress: NavProgress? = null,
+    /** 지금 위치 (경로에 붙이기 전) */
+    val me: GeoPoint? = null,
+    val loading: Boolean = true,
+    val error: String? = null,
+    val rerouting: Boolean = false,
+    /** 방금 도착한 곳 (다음 안내를 기다리는 중) */
+    val arrivedAt: String? = null,
+    /** 다음에 안내할 곳 이름 (버튼을 누르면 시작) */
+    val next: String? = null,
+    /** 지금 목적지 다음의 코스 길 (지도에 흐리게, 아직 안내하지 않는 길) */
+    val upcoming: List<GeoPoint> = emptyList(),
+    /** 남은 코스 장소 (맨 앞 = 지금 목적지) */
+    val stops: List<GeoPoint> = emptyList(),
+)
+
 /**
- * 앱 안 길 안내 화면 (폰): 위 = 다음 안내(화살표 · 남은 거리 · 길 이름), 가운데 = 내 위치를 따라가는 기울어진 지도와 경로,
- * 아래 = 도착 예정 시각 · 남은 시간 · 거리 · 종료. 경로 계산 · 진행은 [app.eodiyeotji.phone.PhoneNavigator].
+ * 앱 안 길 안내 화면 (폰 판의 길 안내, 태블릿에 깐 차 판의 시연용 내비): 위 = 다음 안내(화살표 · 남은 거리 · 길 이름), 가운데 = 내 위치를 따라가는 기울어진 지도와 경로,
+ * 아래 = 도착 예정 시각 · 남은 시간 · 거리 · 종료. 경로 계산 · 진행은 폰 판 `PhoneNavigator` · 차 판 `TabletNavigator`.
  */
 @Composable
-fun PhoneNavScreen(nav: NavUi, onEnd: () -> Unit, onNext: () -> Unit) {
+fun NavScreen(nav: NavUi, onEnd: () -> Unit, onNext: () -> Unit) {
     BackHandler(onBack = onEnd)
     Box(Modifier.fillMaxSize().background(NavDark)) {
         NavMap(nav, Modifier.fillMaxSize())

@@ -1,12 +1,11 @@
 package app.eodiyeotji.phone
 
 import android.content.Context
+import app.eodiyeotji.ui.nav.NavUi
 import android.util.Log
-import androidx.compose.runtime.Immutable
 import app.eodiyeotji.BuildConfig
 import app.eodiyeotji.core.LocationFix
 import app.eodiyeotji.core.rust.GeoPoint
-import app.eodiyeotji.core.rust.NavProgress
 import app.eodiyeotji.core.rust.NavRoute
 import app.eodiyeotji.core.rust.NavSession
 import app.eodiyeotji.core.rust.navDirectionsUrl
@@ -36,33 +35,11 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 
-/** 안내 화면 상태. */
-@Immutable
-data class NavUi(
-    /** 안내 중인 곳 이름 (마지막 목적지) */
-    val title: String,
-    val route: NavRoute? = null,
-    val progress: NavProgress? = null,
-    /** 지금 위치 (경로에 붙이기 전) */
-    val me: GeoPoint? = null,
-    val loading: Boolean = true,
-    val error: String? = null,
-    val rerouting: Boolean = false,
-    /** 방금 도착한 곳 (다음 안내를 기다리는 중) */
-    val arrivedAt: String? = null,
-    /** 다음에 안내할 곳 이름 (버튼을 누르면 시작) */
-    val next: String? = null,
-    /** 지금 목적지 다음의 코스 길 (지도에 흐리게, 아직 안내하지 않는 길) */
-    val upcoming: List<GeoPoint> = emptyList(),
-    /** 남은 코스 장소 (맨 앞 = 지금 목적지) */
-    val stops: List<GeoPoint> = emptyList(),
-)
-
 /**
  * 폰 길 안내: 다른 지도 앱으로 넘기지 않고 앱 안에서 직접 안내한다.
  * - 경로: 카카오모빌리티 길찾기 (출발 = 지금 위치, 경유지 포함). 키는 카카오 로컬 API와 같은 REST 키.
  * - 진행 · 다음 안내 · 음성 시점 · 경로 이탈은 Rust `nav.rs`([NavSession])가 위치마다 계산한다.
- * - 음성은 폰 TTS([SpeechOutput]), 화면은 [ui]를 보는 안내 화면(phone/ui/PhoneNavScreen.kt).
+ * - 음성은 폰 TTS([SpeechOutput]), 화면은 [ui]를 보는 안내 화면(ui/nav/NavScreen.kt).
  * - 코스는 한 번에 한 곳씩 안내한다: 지금 목적지에 도착해야 다음 곳이 열리고, 사람이 "다음 곳 안내"를 눌러야 시작한다
  *   (식당 · 카페에서 얼마나 머물지 모르므로). 도착은 [events]로 알린다.
  */

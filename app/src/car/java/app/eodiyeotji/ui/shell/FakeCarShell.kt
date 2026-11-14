@@ -14,6 +14,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import android.app.Activity
+import app.eodiyeotji.platform.TabletNavigator
+import app.eodiyeotji.ui.nav.NavScreen
 import android.content.pm.PackageManager
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -97,6 +99,7 @@ import kotlinx.coroutines.delay
  *   속도(시연 주행의 값), 실내 온도 올리고 내리기.
  * - 이 화면이 떠 있는 동안에는 화면이 꺼지지 않는다 (앱을 벗어나면 기기 설정대로). 대신 서 있는 채로 [SAVER_AFTER_MS] 동안 손대지 않으면
  *   화면 보호기(검은 화면 + 자리를 옮겨 다니는 시계)가 덮는다 — 같은 그림이 오래 켜져 화면에 자국이 남지 않게. 누르면 돌아온다.
+ * - 시연 내비: 앱에서 "안내"를 누르면 앱 자리에 길 안내 화면이 뜨고 차가 그 길을 달리는 것처럼 보인다 (platform/TabletNavigator.kt).
  * - 그림뿐인 것: 주행 가능 거리 · 음악 · 홈 · 내비 · 전화 · 앱 버튼 (눌러도 아무 일도 없다).
  * - 꾸밈 그림(선택): 기기의 `files/shell/panel.png`(주행 정보 화면의 차 그림 · 음악 줄) · `panel_drive.png`(달릴 때의 같은 자리) · `bar.png`(하단 바) · `status.png`(위 상태 줄)가 있으면
  *   직접 그린 것 대신 그 그림을 쓴다. 에뮬레이터 화면에서 오려 넣는 것이라 저장소에는 두지 않는다 (scripts/demo-shell/push_shell.py).
@@ -122,6 +125,7 @@ private val Active = Color(0xFFF2A100)
 @InstallIn(SingletonComponent::class)
 internal interface ShellEntryPoint {
     fun vehicle(): TabletVehicle
+    fun navigator(): TabletNavigator
 }
 
 @Composable
@@ -196,12 +200,35 @@ private fun Shell(content: @Composable () -> Unit) {
             DrivePanel(gear, speed, onGear = vehicle::setGear, art.panel, art.panelDrive, Modifier.width(PanelWidth).fillMaxHeight())
             Column(Modifier.weight(1f)) {
                 StatusBar(art.status, Modifier.fillMaxWidth().height(StatusHeight))
-                Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) { content() }
+                Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
+                    content()
+                    NavOverlay()
+                }
             }
         }
         BottomBar(art.bar, Modifier.fillMaxWidth().height(BarHeight))
     }
 }
+
+/**
+ * 시연 내비: 앱에서 "안내"를 누르면 앱 자리를 길 안내 화면으로 덮는다 (진짜 차에서 내비 앱이 앞으로 나오는 것처럼).
+ * 경로 · 달리는 흉내는 platform/TabletNavigator.kt, 화면은 폰 판 길 안내와 같은 ui/nav/NavScreen.kt.
+ * 안내 상태는 1초마다 바뀌므로 여기서만 읽는다. 그 화면은 폰 크기에 맞춘 것이라 인포 화면에 맞게 [NAV_SCALE]배로 키운다.
+ */
+@Composable
+private fun NavOverlay() {
+    val context = LocalContext.current
+    val navigator = remember { EntryPointAccessors.fromApplication(context.applicationContext, ShellEntryPoint::class.java).navigator() }
+    val nav by navigator.ui.collectAsStateWithLifecycle()
+    val ui = nav ?: return
+    val d = LocalDensity.current
+    CompositionLocalProvider(LocalDensity provides Density(d.density * NAV_SCALE, d.fontScale)) {
+        NavScreen(ui, onEnd = navigator::stop, onNext = {})
+    }
+}
+
+/** 시연 내비 화면을 키우는 배율 (폰 화면용 크기 → 인포 화면) */
+private const val NAV_SCALE = 2.2f
 
 /** 꾸밈 그림: 주행 정보 화면의 윗줄 아래 전부(서 있을 때 [panel], 달릴 때 [panelDrive]) · 하단 바([bar]) · 위 상태 줄([status]). 없으면 null. */
 @Immutable

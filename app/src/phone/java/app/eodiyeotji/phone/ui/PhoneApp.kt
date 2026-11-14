@@ -1,6 +1,7 @@
 package app.eodiyeotji.phone.ui
 
 import app.eodiyeotji.ui.common.eodiShadow
+import app.eodiyeotji.ui.nav.NavScreen
 import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.ui.community.RoundIconButton
 import android.Manifest
@@ -394,7 +395,7 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
 @Composable
 private fun NavOverlay(shell: PhoneShellViewModel) {
     val nav by shell.nav.collectAsStateWithLifecycle()
-    nav?.let { PhoneNavScreen(it, onEnd = shell::endNav, onNext = shell::nextStop) }
+    nav?.let { NavScreen(it, onEnd = shell::endNav, onNext = shell::nextStop) }
 }
 
 /**

@@ -1,6 +1,7 @@
 package app.eodiyeotji.phone
 
 import android.Manifest
+import app.eodiyeotji.ui.nav.NavUi
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent

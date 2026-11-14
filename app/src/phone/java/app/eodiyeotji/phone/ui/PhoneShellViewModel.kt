@@ -59,7 +59,7 @@ class PhoneShellViewModel @Inject constructor(
     val moving: StateFlow<Boolean> = driving.moving
     val passenger: StateFlow<Boolean> = driving.passenger
     /** 앱 안 길 안내 (안내 중이 아니면 null). */
-    val nav: StateFlow<app.eodiyeotji.phone.NavUi?> = navigator.ui
+    val nav: StateFlow<app.eodiyeotji.ui.nav.NavUi?> = navigator.ui
 
     /** 길 안내 화면이 떠 있는지 (읽는 말 자막 자리를 아래로 옮긴다). */
     val navigating: StateFlow<Boolean> = navigator.ui
