@@ -12,7 +12,8 @@ val kakaoRestApiKey: String = Properties().let { props ->
 val relayProps: Properties = Properties().also { props ->
     rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { props.load(it) }
 }
-val relayUrl: String = (relayProps.getProperty("RELAY_URL") ?: System.getenv("RELAY_URL") ?: "").trim().filter { it != '"' && it != '\\' }
+// 주소는 비밀값이 아니므로 기본값을 둔다 (팀원이 local.properties에 RELAY_TOKEN만 넣으면 연결된다). 토큰은 커밋하지 않는다.
+val relayUrl: String = (relayProps.getProperty("RELAY_URL") ?: System.getenv("RELAY_URL") ?: "https://eodi-relay.memo2025.workers.dev").trim().filter { it != '"' && it != '\\' }
 val relayToken: String = (relayProps.getProperty("RELAY_TOKEN") ?: System.getenv("RELAY_TOKEN") ?: "").filter { it.isLetterOrDigit() || it == '-' || it == '_' }
 
 // 구글 Places API (New) 키 (들른 곳 대표 사진, place/PlacePhotoRepository.kt). 구글 클라우드 프로젝트 eodiyeotji에서 Places API (New)만 허용.
