@@ -98,7 +98,7 @@ import kotlinx.coroutines.delay
  * - 이 화면이 떠 있는 동안에는 화면이 꺼지지 않는다 (앱을 벗어나면 기기 설정대로). 대신 서 있는 채로 [SAVER_AFTER_MS] 동안 손대지 않으면
  *   화면 보호기(검은 화면 + 자리를 옮겨 다니는 시계)가 덮는다 — 같은 그림이 오래 켜져 화면에 자국이 남지 않게. 누르면 돌아온다.
  * - 그림뿐인 것: 주행 가능 거리 · 음악 · 홈 · 내비 · 전화 · 앱 버튼 (눌러도 아무 일도 없다).
- * - 꾸밈 그림(선택): 기기의 `files/shell/panel.png`(주행 정보 화면의 차 그림 · 음악 줄) · `bar.png`(하단 바) · `status.png`(위 상태 줄)가 있으면
+ * - 꾸밈 그림(선택): 기기의 `files/shell/panel.png`(주행 정보 화면의 차 그림 · 음악 줄) · `panel_drive.png`(달릴 때의 같은 자리) · `bar.png`(하단 바) · `status.png`(위 상태 줄)가 있으면
  *   직접 그린 것 대신 그 그림을 쓴다. 에뮬레이터 화면에서 오려 넣는 것이라 저장소에는 두지 않는다 (scripts/demo-shell/push_shell.py).
  */
 
@@ -188,12 +188,12 @@ private fun Shell(content: @Composable () -> Unit) {
         value = withContext(Dispatchers.IO) {
             val dir = File(context.filesDir, "shell")
             fun load(name: String): ImageBitmap? = File(dir, name).takeIf { it.isFile }?.let { f -> runCatching { BitmapFactory.decodeFile(f.path)?.asImageBitmap() }.getOrNull() }
-            ShellArt(load("panel.png"), load("bar.png"), load("status.png"))
+            ShellArt(load("panel.png"), load("bar.png"), load("status.png"), load("panel_drive.png"))
         }
     }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.weight(1f)) {
-            DrivePanel(gear, speed, onGear = vehicle::setGear, art.panel, Modifier.width(PanelWidth).fillMaxHeight())
+            DrivePanel(gear, speed, onGear = vehicle::setGear, art.panel, art.panelDrive, Modifier.width(PanelWidth).fillMaxHeight())
             Column(Modifier.weight(1f)) {
                 StatusBar(art.status, Modifier.fillMaxWidth().height(StatusHeight))
                 Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) { content() }
@@ -203,14 +203,17 @@ private fun Shell(content: @Composable () -> Unit) {
     }
 }
 
-/** 꾸밈 그림: 주행 정보 화면의 윗줄 아래 전부([panel]) · 하단 바([bar]) · 위 상태 줄([status]). 없으면 null. */
+/** 꾸밈 그림: 주행 정보 화면의 윗줄 아래 전부(서 있을 때 [panel], 달릴 때 [panelDrive]) · 하단 바([bar]) · 위 상태 줄([status]). 없으면 null. */
 @Immutable
-private class ShellArt(val panel: ImageBitmap?, val bar: ImageBitmap?, val status: ImageBitmap? = null)
+private class ShellArt(val panel: ImageBitmap?, val bar: ImageBitmap?, val status: ImageBitmap? = null, val panelDrive: ImageBitmap? = null)
 
 /** 주행 정보 화면: 주행 가능 거리 · 속도 · 기어(윗줄, 늘 직접 그린다) + 차 그림 · 음악 ([art]가 있으면 그 그림). */
 @Composable
-private fun DrivePanel(gear: String, speedKmh: Float, onGear: (String) -> Unit, art: ImageBitmap?, modifier: Modifier) {
+private fun DrivePanel(gear: String, speedKmh: Float, onGear: (String) -> Unit, parked: ImageBitmap?, driving: ImageBitmap?, modifier: Modifier) {
     val moving = TabletVehicle.isMoving(gear)
+    // 달리는 동안에는 주행 그림(뒤에서 본 차 · 도로)으로 바꾼다. 그 그림이 없으면 서 있는 그림 그대로
+    val bigSpeed = moving && driving != null
+    val art = if (bigSpeed) driving else parked
     Column(modifier.background(PanelBg)) {
         // 윗줄: 자리 · 크기는 Pleos 에뮬레이터의 주행 정보 화면에 맞췄다 (px = dp). 기어 글자는 작지만 누르는 칸은 줄 높이 전체다
         Box(Modifier.fillMaxWidth().height(StatusHeight).background(if (art != null) Color.White else PanelBg)) {
@@ -221,9 +224,12 @@ private fun DrivePanel(gear: String, speedKmh: Float, onGear: (String) -> Unit, 
                 Text("500", color = Color.Black, fontSize = 32.sp)
                 Text(" km", color = Color.Black, fontSize = 25.sp, modifier = Modifier.padding(top = 5.dp))
             }
-            Row(Modifier.align(Alignment.CenterStart).padding(start = 384.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(speedKmh.roundToInt().toString(), color = if (moving) TopInk else TopMuted, fontSize = 32.sp)
-                Text(" km/h", color = TopMuted, fontSize = 25.sp, modifier = Modifier.padding(top = 5.dp))
+            // 달리는 그림을 쓸 때는 속도를 아래에 크게 쓰므로 윗줄의 작은 속도는 뺀다 (에뮬레이터와 같다)
+            if (!bigSpeed) {
+                Row(Modifier.align(Alignment.CenterStart).padding(start = 384.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(speedKmh.roundToInt().toString(), color = if (moving) TopInk else TopMuted, fontSize = 32.sp)
+                    Text(" km/h", color = TopMuted, fontSize = 25.sp, modifier = Modifier.padding(top = 5.dp))
+                }
             }
             Row(Modifier.align(Alignment.CenterEnd).padding(end = 21.dp).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
                 listOf("P", "R", "N", "D").forEach { g ->
@@ -237,7 +243,19 @@ private fun DrivePanel(gear: String, speedKmh: Float, onGear: (String) -> Unit, 
             }
         }
         if (art != null) {
-            Image(art, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.weight(1f).fillMaxWidth())
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                Image(art, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
+                if (bigSpeed) {
+                    // 그림에 찍힌 속도 숫자 자리를 덮고 지금 속도를 쓴다
+                    Column(
+                        Modifier.align(Alignment.TopCenter).width(300.dp).height(156.dp).background(Color.White),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(speedKmh.roundToInt().toString(), color = Color.Black, fontSize = 124.sp, lineHeight = 112.sp, maxLines = 1, softWrap = false, modifier = Modifier.height(108.dp))
+                        Text("km/h", color = Color(0xFF666666), fontSize = 30.sp, maxLines = 1)
+                    }
+                }
+            }
         } else {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
