@@ -1,6 +1,6 @@
 {
   // 이 저장소를 VS Code로 열면 아래 확장 설치를 권한다.
-  // GitLive(TeamHub.teamhub): 팀원이 커밋 전에 고치고 있는 줄과 겹침을 실시간으로 보여 준다 (docs/소통/2026-11-13_김주영_GitLive_협업.md)
+  // GitLive(TeamHub.teamhub): 팀원이 커밋 전에 고치고 있는 줄과 겹침을 실시간으로 보여 준다 (docs/소통/2026-11-13_개발_GitLive_협업.md)
   "recommendations": [
     "TeamHub.teamhub"
   ]

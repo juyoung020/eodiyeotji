@@ -97,7 +97,7 @@ cargo clippy --all-targets -- -D warnings   # 경고 0 유지
    - **자주 푸시한다.** 팀원과 동시에 작업하므로 작업 하나가 끝나 빌드 · 테스트가 통과하면 기다리지 말고 바로 푸시한다. 여러 작업을 모아 두었다가 한꺼번에 올리지 않는다 (오래 묵힐수록 같은 파일이 겹친다).
    - AI 도구로 여러 작업을 병렬로 돌릴 때도, 끝난 작업부터 하나씩 커밋 · 푸시한다.
    - 푸시 전에는 `git pull`로 합치고 `cargo test` · `./gradlew assembleCarDebug assemblePhoneDebug`가 통과하는지 확인한다.
-   - 지금 누가 어떤 파일을 고치는지는 GitLive로 본다 (`docs/소통/2026-11-13_김주영_GitLive_협업.md`).
+   - 지금 누가 어떤 파일을 고치는지는 GitLive로 본다 (`docs/소통/2026-11-13_개발_GitLive_협업.md`).
 3. **커밋에 Claude(또는 다른 AI)를 기여자로 넣지 않는다.** 커밋 메시지에 `Co-Authored-By: Claude …`, `Generated with Claude Code` 같은 줄을 절대 쓰지 않는다. 작성자는 작업한 팀원 본인만 표시돼야 한다.
 4. 커밋 메시지는 한국어로, 무엇을 왜 바꿨는지 쓴다.
 5. **GitHub 이슈는 버그·문의용이다.** 작업 보고, 확인 결과, 같이 정할 것은 이슈 대신 `docs/소통/`에 파일로 남긴다.
