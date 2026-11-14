@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -108,6 +109,7 @@ fun ConvoyEntryChip(modifier: Modifier = Modifier, vm: ConvoyViewModel = hiltVie
 /**
  * 주행 중 큰 카드 1장: 같이 가는 차 모두를 한 줄에 (아바타 · 간격 · 작은 잔량 막대). 부족한 차는 빨강.
  * 누가 부족하면 오른쪽에 큰 버튼 하나 ("같이 충전소 들르기"). 같이 가는 중이 아니면 아무것도 그리지 않는다.
+ * 대열이 떨어지면 차 줄 대신 제안 한 줄 + 큰 버튼 "○○휴게소에서 기다리기" (Rust가 고른 앞 휴게소, 음성으로도 묻는다).
  */
 @Composable
 fun ConvoyDrivingCard(modifier: Modifier = Modifier, vm: ConvoyViewModel = hiltViewModel()) {
@@ -116,7 +118,8 @@ fun ConvoyDrivingCard(modifier: Modifier = Modifier, vm: ConvoyViewModel = hiltV
     val c = EodiTheme.colors
     val narrow = LocalConfiguration.current.screenWidthDp < NARROW_DP
     val scope = rememberCoroutineScope()
-    val showStop = s.low != null && s.waypoint == null
+    val wait = s.wait
+    val showStop = wait == null && s.low != null && s.waypoint == null
     val live = s.members.count { !it.stale } + 1
     Surface(color = c.surface, shape = RoundedCornerShape(EodiTheme.space.radiusL), modifier = modifier) {
         Column(Modifier.padding(horizontal = 28.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -128,6 +131,10 @@ fun ConvoyDrivingCard(modifier: Modifier = Modifier, vm: ConvoyViewModel = hiltV
                     style = EodiTheme.type.label,
                     color = c.accent,
                 )
+            }
+            if (wait != null) {
+                WaitRow(wait.card, wait.action, narrow, onWait = { scope.launch { vm.repo.waitAtRestArea() } }, onDismiss = vm.repo::dismissWait)
+                return@Column
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 if (s.members.isEmpty()) {
@@ -147,6 +154,31 @@ fun ConvoyDrivingCard(modifier: Modifier = Modifier, vm: ConvoyViewModel = hiltV
                     scope.launch { vm.repo.stopTogether() }
                 }
             }
+        }
+    }
+}
+
+/**
+ * 휴게소 대기 제안: 한 줄 ("지현 차와 4.6km 멀어졌어요 · 7.2km 앞 기흥휴게소") + 큰 주 버튼 + "괜찮아요".
+ * 넓은 창은 [글 | 괜찮아요 | 기다리기], 좁은 창은 글 아래 버튼 줄.
+ */
+@Composable
+private fun WaitRow(card: String, action: String, narrow: Boolean, onWait: () -> Unit, onDismiss: () -> Unit) {
+    val c = EodiTheme.colors
+    val text = @Composable { m: Modifier ->
+        Text(card, style = EodiTheme.type.drivingBody, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = m)
+    }
+    if (narrow) {
+        text(Modifier.fillMaxWidth())
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            TonalButton(stringResource(R.string.convoy_wait_dismiss), modifier = Modifier.weight(0.6f), onClick = onDismiss)
+            BigButton(action, primary = true, modifier = Modifier.weight(1f), onClick = onWait)
+        }
+    } else {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            text(Modifier.weight(1f))
+            TonalButton(stringResource(R.string.convoy_wait_dismiss), onClick = onDismiss)
+            BigButton(action, primary = true, modifier = Modifier.widthIn(min = 320.dp, max = 420.dp), onClick = onWait)
         }
     }
 }
@@ -331,7 +363,9 @@ private fun ActiveInfo(s: ConvoyUiState, repo: ConvoyRepository, modifier: Modif
     }
     val navigate: () -> Unit = { scope.launch { navi = repo.navigate() } }
     val stop: () -> Unit = { scope.launch { navi = repo.stopTogether() } }
-    val lowCase = s.low != null && s.waypoint == null
+    val waitAt: () -> Unit = { scope.launch { navi = repo.waitAtRestArea() } }
+    val wait = s.wait
+    val lowCase = wait == null && s.low != null && s.waypoint == null
     Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // 머리: 제목 + 살아 있는 점 "N대 함께" · 코드 칩 · 닫기
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -352,6 +386,7 @@ private fun ActiveInfo(s: ConvoyUiState, repo: ConvoyRepository, modifier: Modif
         s.stopNotice?.let { Note(stringResource(it), c.textSecondary) }
         navi?.let { Note(stringResource(if (it) R.string.convoy_navi_ok else R.string.convoy_navi_fail), if (it) c.textSecondary else c.error) }
         if (s.local) Note(stringResource(R.string.convoy_local), c.textTertiary)
+        wait?.let { Text(it.card, style = EodiTheme.type.bodyStrong, color = c.accent, maxLines = 2, overflow = TextOverflow.Ellipsis) }
         // 차 카드: 나 먼저, 그다음 같이 가는 차들. 남는 높이를 채우고 넘치면 스크롤
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item(key = "me") { MeCard(s.myEnergy) }
@@ -364,13 +399,16 @@ private fun ActiveInfo(s: ConvoyUiState, repo: ConvoyRepository, modifier: Modif
         }
         DestRow(s, onPick = repo::closeSheet)
         // 주 버튼 하나 (상황에 맞게) + 아래 옅은 알약 버튼 줄
-        if (lowCase) {
+        if (wait != null) {
+            BigButton(wait.action, primary = true, modifier = Modifier.fillMaxWidth(), onClick = waitAt)
+        } else if (lowCase) {
             BigButton(stringResource(R.string.convoy_stop_together), primary = true, modifier = Modifier.fillMaxWidth(), onClick = stop)
         } else {
             BigButton(stringResource(R.string.convoy_navigate), primary = true, enabled = s.dest != null, modifier = Modifier.fillMaxWidth(), onClick = navigate)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (lowCase) TonalButton(stringResource(R.string.convoy_navigate_short), enabled = s.dest != null, modifier = Modifier.weight(1f), onClick = navigate)
+            if (wait != null) TonalButton(stringResource(R.string.convoy_wait_dismiss), modifier = Modifier.weight(1f), onClick = repo::dismissWait)
+            if (lowCase || wait != null) TonalButton(stringResource(R.string.convoy_navigate_short), enabled = s.dest != null, modifier = Modifier.weight(1f), onClick = navigate)
             TonalButton(chooser, icon = ShareIcon, modifier = Modifier.weight(1f), onClick = share)
             TonalButton(stringResource(R.string.convoy_leave), modifier = Modifier.weight(1f), onClick = repo::leave)
         }
@@ -404,7 +442,16 @@ private fun DestRow(s: ConvoyUiState, onPick: () -> Unit) {
         } else {
             Column(Modifier.weight(1f).padding(vertical = 12.dp)) {
                 Text(d.name, style = EodiTheme.type.bodyStrong, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                s.waypoint?.let { Text(stringResource(R.string.convoy_waypoint, it.name), style = EodiTheme.type.meta, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                // 다른 차가 휴게소를 올렸으면 "선두가 ○○휴게소에서 기다려요" (Rust convoy_waypoint_note), 아니면 "함께 들를 곳 · ○○"
+                s.waypoint?.let {
+                    Text(
+                        s.waypointNote ?: stringResource(R.string.convoy_waypoint, it.name),
+                        style = EodiTheme.type.meta,
+                        color = if (s.waypointNote != null) c.accent else c.textSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }

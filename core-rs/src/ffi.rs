@@ -394,6 +394,17 @@ impl ConvoyTracker {
     ) -> crate::convoy::ConvoyView {
         self.inner.lock().unwrap_or_else(|e| e.into_inner()).update(now_ms, me, dest, &others)
     }
+
+    /// 휴게소 대기 제안을 거둔다 ("기다리기"를 눌렀거나 "괜찮아요", `convoy::Tracker::dismiss_wait`).
+    pub fn dismiss_wait(&self) {
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).dismiss_wait()
+    }
+}
+
+/// 같이 가기: 받은 함께 들를 곳이 휴게소 · 졸음쉼터면 "선두가 기흥휴게소에서 기다려요", 아니면 None (`convoy::waypoint_wait_note`).
+#[uniffi::export]
+pub fn convoy_waypoint_note(name: String) -> Option<String> {
+    crate::convoy::waypoint_wait_note(&name)
 }
 
 #[uniffi::export]
@@ -564,4 +575,20 @@ pub fn convoy_demo_start(base: GeoPoint, dest: Option<GeoPoint>, behind_km: f64)
 #[uniffi::export]
 pub fn convoy_demo_step(at: GeoPoint, dest: Option<GeoPoint>, speed_mps: f64, dt_s: f64, range_km: f64, ev: bool) -> crate::convoy::ConvoyDemoCar {
     crate::convoy::demo_step(at.into(), dest.map(Into::into), speed_mps, dt_s, range_km, ev)
+}
+
+/// 같이 가기 시연(공모전 판): 대열에서 떨어지는 차 (`convoy::demo_drift`).
+#[uniffi::export]
+#[allow(clippy::too_many_arguments)]
+pub fn convoy_demo_drift(
+    base: GeoPoint,
+    dest: Option<GeoPoint>,
+    from_km: f64,
+    to_km: f64,
+    elapsed_s: f64,
+    ramp_s: f64,
+    speed_mps: f64,
+    range_km: f64,
+) -> crate::convoy::ConvoyDemoCar {
+    crate::convoy::demo_drift(base.into(), dest.map(Into::into), from_km, to_km, elapsed_s, ramp_s, speed_mps, range_km)
 }

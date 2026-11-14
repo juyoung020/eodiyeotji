@@ -16,9 +16,12 @@ import app.eodiyeotji.core.rust.ConvoyMe
 import app.eodiyeotji.core.rust.ConvoyMemberIn
 import app.eodiyeotji.core.rust.ConvoyMemberView
 import app.eodiyeotji.core.rust.ConvoyTracker
+import app.eodiyeotji.core.rust.ConvoyWait
 import app.eodiyeotji.core.rust.GeoPoint
+import app.eodiyeotji.core.rust.convoyDemoDrift
 import app.eodiyeotji.core.rust.convoyDemoStart
 import app.eodiyeotji.core.rust.convoyDemoStep
+import app.eodiyeotji.core.rust.convoyWaypointNote
 import app.eodiyeotji.pleos.CourseGuide
 import app.eodiyeotji.place.blockingWithTimeout
 import app.eodiyeotji.core.EodiCore
@@ -63,8 +66,12 @@ data class ConvoyUiState(
     val focus: ConvoyMemberView? = null,
     /** 배터리 · 연료가 부족한 차 (있으면 "같이 충전소 들르기") */
     val low: ConvoyMemberView? = null,
-    /** 모두 함께 들를 곳 (충전소 · 주유소) */
+    /** 모두 함께 들를 곳 (충전소 · 주유소 · 기다릴 휴게소) */
     val waypoint: ConvoyPlace? = null,
+    /** 다른 차가 올린 휴게소면 "선두가 기흥휴게소에서 기다려요" (Rust `convoy_waypoint_note`), 아니면 null */
+    val waypointNote: String? = null,
+    /** 대열이 떨어졌을 때 "앞 휴게소에서 기다리기" 제안 (Rust [ConvoyTracker]) */
+    val wait: ConvoyWait? = null,
     /** "같이 충전소 들르기" 결과 안내 (문자열 리소스) */
     val stopNotice: Int? = null,
     val geojson: String = "",
@@ -164,6 +171,8 @@ class ConvoyRepository @Inject constructor(
         tracker = null
         loop?.cancel()
         loop = null
+        myWaypoint = null
+        spokenWaypointNote = null
         // 시연 차도 같이 나간다 (runDemo의 finally가 중계 서버에서 뺀다)
         demoJob?.cancel()
         demoJob = null
@@ -210,6 +219,44 @@ class ConvoyRepository @Inject constructor(
         return navigate()
     }
 
+    /**
+     * "○○휴게소에서 기다리기": 제안된 휴게소를 내 내비 경유지로 넣고(목적지가 있으면 목적지 + 경유지, 없으면 그곳으로 안내)
+     * 모임의 "함께 들를 곳"으로 올린다 → 다른 차 화면에 "선두가 ○○휴게소에서 기다려요".
+     */
+    suspend fun waitAtRestArea(): Boolean {
+        val s = session ?: return false
+        val w = _state.value.wait ?: return false
+        withContext(Dispatchers.Default) { tracker?.dismissWait() }
+        val place = ConvoyPlace(w.placeName, w.place.lat, w.place.lon)
+        myWaypoint = place.name
+        _state.update { it.copy(wait = null, waypoint = place, waypointNote = null, stopNotice = R.string.convoy_wait_added) }
+        // 모임에 알리기는 기다리지 않는다 (내비 안내가 먼저)
+        scope.launch {
+            withContext(Dispatchers.IO) { runCatching { blockingWithTimeout(NET_TIMEOUT_MS) { backend.setWaypoint(s, place) } } }
+                .onFailure { Log.w(TAG, "기다릴 곳 올리기 실패", it) }
+        }
+        speech.speak(context.getString(R.string.convoy_tts_wait, place.name))
+        val d = _state.value.dest
+        return runCatching {
+            if (d != null) {
+                navi.requestRouteWithWaypoints(RouteStop(d.name, d.lat, d.lon), listOf(RouteStop(place.name, place.lat, place.lon)))
+            } else {
+                navi.requestRoute(place.name, place.lat, place.lon)
+            }
+        }.getOrDefault(false)
+    }
+
+    /** 휴게소 대기 제안 "괜찮아요" (같은 차가 다시 따라왔다 떨어지기 전에는 다시 묻지 않는다). */
+    fun dismissWait() {
+        _state.update { it.copy(wait = null) }
+        scope.launch { tracker?.dismissWait() }
+    }
+
+    /** 내가 올린 함께 들를 곳 이름 (내 화면에는 "선두가 … 기다려요"를 보이지 않는다) */
+    @Volatile private var myWaypoint: String? = null
+    /** 마지막으로 읽어 준 "선두가 … 기다려요" (같은 곳은 한 번만) */
+    @Volatile private var spokenWaypointNote: String? = null
+
     private fun start(name: String, demo: Boolean = false, open: () -> ConvoySession) {
         if (_state.value.phase != ConvoyPhase.IDLE) return
         prefs.edit().putString(KEY_NAME, name).apply()
@@ -234,7 +281,7 @@ class ConvoyRepository @Inject constructor(
     private var demoJob: Job? = null
 
     /** 시연 차 한 대 (중계 서버에서는 진짜 참여자와 똑같이 코드로 들어와 위치를 보낸다). */
-    private class DemoCar(val spec: DemoSpec, val session: ConvoySession, var at: GeoPoint, var rangeKm: Double)
+    private class DemoCar(val spec: DemoSpec, val session: ConvoySession, var at: GeoPoint, var rangeKm: Double, val joinedMs: Long)
 
     /**
      * 공모전 시연용 함께 가는 차 (BuildConfig.CONTEST_DEMO일 때만, 앱마켓 판에는 없다).
@@ -242,6 +289,7 @@ class ConvoyRepository @Inject constructor(
      * - 중계 서버가 있으면 코드로 참여(join)하고 위치 · 잔량을 [DEMO_POST_MS]마다 보낸다 → 화면은 실제 사용과 같은 길로 받는다.
      * - 중계 서버가 없으면 기기 안 모임에 [LocalConvoyBackend.addFake]로 넣는다.
      * - 움직임(출발점 · 한 걸음 · 남은 거리)은 Rust `convoy::demo_start` · `demo_step`.
+     * - [DemoSpec.driftAfterMs]가 있는 차(지현)는 그만큼 뒤 내 위치 기준으로 차츰 뒤처진다 (`convoy::demo_drift`) → 휴게소 대기 제안 시연.
      * - 내가 나가면(또는 모임이 끝나면) 시연 차도 나간다.
      */
     private suspend fun runDemo(s: ConvoySession) = withContext(Dispatchers.IO) {
@@ -268,13 +316,19 @@ class ConvoyRepository @Inject constructor(
                     // 출발 기준: 내 위치, 모르면 목적지 북쪽 6km (스크립트와 같다), 둘 다 없으면 서울 시청
                     val fix = lastFix
                     val base = fix?.let { GeoPoint(it.lat, it.lon) } ?: dest?.let { GeoPoint(it.lat + 6 / 111.0, it.lon) } ?: GeoPoint(37.5665, 126.9780)
-                    cars += DemoCar(spec, cs, convoyDemoStart(base, dest, spec.behindKm), spec.rangeKm)
+                    cars += DemoCar(spec, cs, convoyDemoStart(base, dest, spec.behindKm), spec.rangeKm, now)
                 }
                 if (now - lastPostMs >= DEMO_POST_MS) {
                     val dt = (now - lastPostMs) / 1000.0
                     lastPostMs = now
+                    val fix = lastFix
                     for (c in cars) {
-                        val step = convoyDemoStep(c.at, dest, c.spec.speedKmh / 3.6, dt, c.rangeKm, true)
+                        val driftS = (now - c.joinedMs - c.spec.driftAfterMs) / 1000.0
+                        val step = if (c.spec.driftAfterMs >= 0 && driftS >= 0 && fix != null) {
+                            convoyDemoDrift(GeoPoint(fix.lat, fix.lon), dest, c.spec.behindKm, DEMO_DRIFT_TO_KM, driftS, DEMO_DRIFT_RAMP_S, c.spec.speedKmh / 3.6, c.rangeKm)
+                        } else {
+                            convoyDemoStep(c.at, dest, c.spec.speedKmh / 3.6, dt, c.rangeKm, true)
+                        }
                         c.at = GeoPoint(step.lat, step.lon)
                         c.rangeKm = step.rangeKm
                         val pos = ConvoyPosition(step.lat, step.lon, step.heading, step.speedMps, step.etaS, now, true, step.energyPct, step.rangeKm)
@@ -349,6 +403,9 @@ class ConvoyRepository @Inject constructor(
         )
         val e = debugEnergy ?: myEnergy
         val myGauge = app.eodiyeotji.core.rust.convoyEnergy(e.ev, e.pct, e.rangeKm)
+        // 다른 차가 올린 휴게소면 "선두가 ○○휴게소에서 기다려요" (내가 올린 곳은 빼고)
+        val wp = g?.waypoint ?: _state.value.waypoint
+        val wpNote = wp?.takeIf { it.name != myWaypoint }?.let { convoyWaypointNote(it.name) }
         _state.update {
             it.copy(
                 dest = dest,
@@ -356,6 +413,8 @@ class ConvoyRepository @Inject constructor(
                 focus = view.focus,
                 low = view.low,
                 waypoint = g?.waypoint ?: it.waypoint,
+                waypointNote = wpNote,
+                wait = view.wait,
                 geojson = view.geojson,
                 bounds = view.bounds?.let { b -> MapBoundsLatLon(b.minLat, b.minLon, b.maxLat, b.maxLon) },
                 offline = group == null,
@@ -364,6 +423,10 @@ class ConvoyRepository @Inject constructor(
         }
         // 알림은 Rust가 정한 것만 (도착 · 3km 넘게 뒤처짐, 60초 간격 · 횟수 제한). 내비 음성과는 SpeechOutput이 오디오 포커스로 비킨다.
         view.speak?.let { speech.speak(it) }
+        if (wpNote != null && wpNote != spokenWaypointNote) {
+            spokenWaypointNote = wpNote
+            speech.speak("$wpNote.")
+        }
         if (view.meArrived) {
             speech.speak(context.getString(R.string.convoy_tts_ended))
             leave()
@@ -410,13 +473,22 @@ class ConvoyRepository @Inject constructor(
         private const val ENERGY_EVERY_TICKS = 15
         const val DEBUG_ACTION = "app.eodiyeotji.DEBUG_CONVOY"
 
-        /** 시연 차 (공모전 판): 이름 · 몇 ms 뒤 참여 · 목적지 반대쪽으로 몇 km 뒤에서 출발(음수 = 내 앞) · 시속 · 남은 주행 가능 km */
-        private data class DemoSpec(val name: String, val joinAfterMs: Long, val behindKm: Double, val speedKmh: Double, val rangeKm: Double)
-        /** 민수는 30km 남은 전기차 → "배터리 부족" · 같이 충전소 들르기 시연. 지현은 넉넉 (scripts/convoy-fake.ps1 기본값과 같다) */
+        /**
+         * 시연 차 (공모전 판): 이름 · 몇 ms 뒤 참여 · 목적지 반대쪽으로 몇 km 뒤에서 출발(음수 = 내 앞) · 시속 · 남은 주행 가능 km
+         * · 참여하고 몇 ms 뒤 대열에서 떨어지기 시작하나 (음수 = 안 떨어짐)
+         */
+        private data class DemoSpec(val name: String, val joinAfterMs: Long, val behindKm: Double, val speedKmh: Double, val rangeKm: Double, val driftAfterMs: Long = -1)
+        /**
+         * 민수는 30km 남은 전기차 → "배터리 부족" · 같이 충전소 들르기 시연. 지현은 넉넉하지만 30초 뒤 차츰 뒤처진다
+         * → "지현 차와 4km 멀어졌어요. 앞 ○○휴게소에서 잠깐 기다릴까요?" 시연 (고속도로 위 · 목적지가 8km 넘게 남았을 때)
+         */
         private val DEMO_CARS = listOf(
             DemoSpec("민수", 3_000, 2.5, 45.0, 30.0),
-            DemoSpec("지현", 6_000, -0.8, 45.0, 180.0),
+            DemoSpec("지현", 6_000, -0.8, 45.0, 180.0, driftAfterMs = 30_000),
         )
+        /** 떨어지는 차: 내 뒤 몇 km까지 · 몇 초에 걸쳐 */
+        private const val DEMO_DRIFT_TO_KM = 4.6
+        private const val DEMO_DRIFT_RAMP_S = 40.0
         private const val DEMO_TICK_MS = 1_000L
         private const val DEMO_POST_MS = 3_000L
     }
