@@ -1,5 +1,7 @@
 package app.eodiyeotji.ui.place
 
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -103,9 +105,11 @@ fun PlacePhotoGallery(name: String, address: String, lat: Double, lon: Double, m
 private fun PlacePhotoViewer(photos: List<PlacePhoto>, start: Int, title: String, repo: PlacePhotoRepository, onDismiss: () -> Unit) {
     val c = EodiTheme.colors
     val pager = rememberPagerState(initialPage = start.coerceIn(0, photos.lastIndex)) { photos.size }
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxSize().background(Color.Black).clickable(onClick = onDismiss)) {
-            HorizontalPager(pager, Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 72.dp)) { i ->
+    // 내 사진 크게 보기(ui/gallery/MyPhotoViews.kt)와 같이: 화면 끝까지 덮고(아래 막대 뒤로 밑 화면이 비치지 않게), 폰은 옆 여백을 줄인다
+    val side = if (LocalConfiguration.current.screenWidthDp < 600) 8.dp else 48.dp
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Box(Modifier.fillMaxSize().background(Color.Black).clickable(onClick = onDismiss).systemBarsPadding()) {
+            HorizontalPager(pager, Modifier.fillMaxSize().padding(horizontal = side, vertical = 72.dp)) { i ->
                 AsyncImage(
                     model = repo.imageRequest(photos[i]),
                     contentDescription = title,
