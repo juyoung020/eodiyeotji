@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.map
 
+import androidx.compose.foundation.layout.offset
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -112,6 +113,8 @@ fun DayMap(
     fitInsets: IntArray? = null,
     /** 출처 글 아래 여백: 지도 아래에 카드 줄을 얹는 화면은 그 위로 올려 카드 · 버튼이 출처(라이선스 표시)를 가리지 않게 */
     attributionBottom: androidx.compose.ui.unit.Dp = 12.dp,
+    /** 출처 글을 아래로 더 내리는 양(px): 지도 위 판이 내려가면 출처도 따라 내려가게 (그릴 때 읽어 다시 짜지 않는다) */
+    attributionShiftY: (() -> Int)? = null,
 ) {
     val description = stringResource(R.string.map_content_description)
     val inPreview = LocalInspectionMode.current
@@ -131,7 +134,7 @@ fun DayMap(
         Box(modifier.background(EodiTheme.colors.surfaceHigh).semantics { contentDescription = description })
         return
     }
-    DayMapContent(data, selectedKey, onSelectKey, photoPins, myPhotos, fitInsets, options, modifier.semantics { contentDescription = description }, attributionBottom)
+    DayMapContent(data, selectedKey, onSelectKey, photoPins, myPhotos, fitInsets, options, modifier.semantics { contentDescription = description }, attributionBottom, attributionShiftY)
 }
 
 @Composable
@@ -145,6 +148,7 @@ private fun DayMapContent(
     baseOptions: MapLibreMapOptions,
     modifier: Modifier,
     attributionBottom: androidx.compose.ui.unit.Dp,
+    attributionShiftY: (() -> Int)?,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current.density
@@ -302,7 +306,9 @@ private fun DayMapContent(
                 stringResource(
                     if (s is MapStyleSpec.Offline && s.offlineOnly == null) R.string.map_attribution else R.string.map_attribution_online,
                 ),
-                Modifier.align(Alignment.BottomEnd).padding(start = 12.dp, top = 12.dp, end = 12.dp, bottom = attributionBottom),
+                Modifier.align(Alignment.BottomEnd)
+                    .offset { androidx.compose.ui.unit.IntOffset(0, attributionShiftY?.invoke() ?: 0) }
+                    .padding(start = 12.dp, top = 12.dp, end = 12.dp, bottom = attributionBottom),
                 small = true,
             )
             null -> Unit

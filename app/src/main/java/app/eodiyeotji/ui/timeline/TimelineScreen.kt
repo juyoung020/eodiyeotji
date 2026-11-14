@@ -546,8 +546,9 @@ private fun CompactDayDetail(
                     photoPins = photoPins,
                     myPhotos = loaded?.mapPhotos.orEmpty(),
                     fitInsets = fit,
-                    // 출처 글은 기본 판 바로 위 (판이 내려가도 지도 위에 남는다)
+                    // 출처 글은 판 바로 위: 판을 내리면 따라 내려간다 (제자리에 두면 넓어진 지도 한가운데에 떠 있었다)
                     attributionBottom = with(density) { (areaPx - restTop).toDp() } + 12.dp,
+                    attributionShiftY = { (panelTop - restTop).roundToInt() },
                 )
                 Surface(
                     color = c.background,
