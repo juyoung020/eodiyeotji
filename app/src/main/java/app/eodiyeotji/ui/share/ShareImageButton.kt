@@ -32,6 +32,8 @@ import app.eodiyeotji.R
 import app.eodiyeotji.ui.community.SecondaryPill
 import app.eodiyeotji.ui.theme.EodiTheme
 import dagger.hilt.android.EntryPointAccessors
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 /** 버튼 모양: 글자 있는 알약(하루 상세) · 동그란 아이콘(기억 카드 · 코스 상세). */
 enum class ShareButtonStyle { PILL, ICON }
@@ -58,9 +60,13 @@ fun ShareImageButton(target: ShareTarget, modifier: Modifier = Modifier, style: 
             widthDp = SHARE_CARD_WIDTH_DP,
             prepare = {
                 val card = deps.core().shareCard(target)
-                card to loadCardPhotos(context.applicationContext, deps.photos(), card)
+                // 사진과 길 그림 밑 지도를 같이 받는다
+                coroutineScope {
+                    val map = async { loadCardMap(context.applicationContext, card) }
+                    Triple(card, loadCardPhotos(context.applicationContext, deps.photos(), card), map.await())
+                }
             },
-            text = { (card, _) -> card.shareText },
+            text = { (card, _, _) -> card.shareText },
             onDone = { data, ok ->
                 val msg = when {
                     !ok -> context.getString(R.string.share_card_failed)
@@ -69,7 +75,7 @@ fun ShareImageButton(target: ShareTarget, modifier: Modifier = Modifier, style: 
                 }
                 notice.notify(context, msg)
             },
-        ) { (card, photos) -> ShareCardView(card, photos) }
+        ) { (card, photos, map) -> ShareCardView(card, photos, map) }
     }
     when (style) {
         ShareButtonStyle.PILL -> SecondaryPill(

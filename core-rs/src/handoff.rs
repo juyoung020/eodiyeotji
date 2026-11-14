@@ -242,6 +242,7 @@ mod tests {
             hidden_count: 0,
             share_text: "t".into(),
             route_url: "u".into(),
+            map_box: None,
         };
         let m = seal_card(&p.key, &card).unwrap();
         assert_eq!(open_card(&p.key, &m).unwrap(), card);

@@ -46,6 +46,10 @@ enum class ShareCardKind { DAY, EPISODE, COURSE }
 @Immutable
 data class SketchPos(val x: Float, val y: Float)
 
+/** 길 그림 칸이 덮는 땅 범위 (이 범위의 지도를 길 그림 밑에 깐다). */
+@Immutable
+data class SketchBox(val south: Double, val west: Double, val north: Double, val east: Double)
+
 @Immutable
 data class ShareCardStop(val order: Int, val name: String, val category: String, val address: String, val lat: Double, val lon: Double, val at: SketchPos)
 
@@ -66,6 +70,7 @@ data class ShareCardData(
     val durationMs: Long,
     val hiddenCount: Int,
     val shareText: String,
+    val mapBox: SketchBox? = null,
 )
 
 /** 카드의 길 그림 칸 가로/세로 (ShareCardView의 칸과 같은 값 — Rust가 이 비율에 맞춰 좌표를 준다). */
@@ -105,6 +110,7 @@ internal fun RShareCard.toModel() = ShareCardData(
     durationMs = durationMs,
     hiddenCount = hiddenCount.toInt(),
     shareText = shareText,
+    mapBox = mapBox?.let { SketchBox(it.south, it.west, it.north, it.east) },
 )
 
 /** 공유 버튼(Compose 함수)에서 Hilt 싱글턴을 꺼낸다. */

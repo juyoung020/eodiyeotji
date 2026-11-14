@@ -240,3 +240,14 @@ fn demo_gangneung_day_episode_and_course_cards() {
     assert!(store.share_card_course("없는 코스".into(), 1.6).is_err());
     assert!(store.share_card_day("2025-13-01".into(), 1.6).is_err());
 }
+
+/// 지도 범위([Frame::bounds])는 그림 칸 전체와 같다: 북서 모서리 = (0, 0), 남동 모서리 = (1, 1).
+#[test]
+fn frame_bounds_cover_the_whole_sketch() {
+    let f = Frame::fit([p(37.50, 126.90), p(37.70, 127.10)].into_iter(), 320.0 / 150.0);
+    let b = f.bounds();
+    let nw = f.place(p(b.north, b.west));
+    let se = f.place(p(b.south, b.east));
+    assert!(nw.x.abs() < 1e-4 && nw.y.abs() < 1e-4, "{nw:?}");
+    assert!((se.x - 1.0).abs() < 1e-4 && (se.y - 1.0).abs() < 1e-4, "{se:?}");
+}

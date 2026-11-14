@@ -63,6 +63,7 @@ import app.eodiyeotji.ui.community.SectionTitle
 import app.eodiyeotji.ui.share.SHARE_CARD_WIDTH_DP
 import app.eodiyeotji.ui.share.ShareCardView
 import app.eodiyeotji.ui.share.ShareIcon
+import app.eodiyeotji.ui.share.loadCardMap
 import app.eodiyeotji.ui.share.loadCardPhotos
 import app.eodiyeotji.ui.share.rememberImageSharer
 import app.eodiyeotji.ui.share.toModel
@@ -150,6 +151,9 @@ private fun InboxSheet(raw: RShareCard, photosRepo: PlacePhotoRepository, onClos
     val card = remember(raw) { raw.toModel() }
     var photos by remember(raw) { mutableStateOf<Map<Int, ImageBitmap>>(emptyMap()) }
     LaunchedEffect(raw) { photos = loadCardPhotos(context.applicationContext, photosRepo, card) }
+    // 길 그림 밑 지도 (예전 판 차가 보낸 카드는 범위가 없어 점 무늬 그대로)
+    var map by remember(raw) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(raw) { map = loadCardMap(context.applicationContext, card) }
     val sharer = rememberImageSharer()
     val c = EodiTheme.colors
     val type = EodiTheme.type
@@ -182,7 +186,7 @@ private fun InboxSheet(raw: RShareCard, photosRepo: PlacePhotoRepository, onClos
                 contentAlignment = Alignment.Center,
             ) {
                 Box(Modifier.width(300.dp).eodiShadow(EodiTheme.elevation.level3, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp))) {
-                    ShareCardView(card, photos)
+                    ShareCardView(card, photos, map)
                 }
             }
             if (raw.routeUrl.isNotBlank()) {
@@ -206,10 +210,10 @@ private fun InboxSheet(raw: RShareCard, photosRepo: PlacePhotoRepository, onClos
                         sharer.share(
                             fileName = "eodiyeotji-car-${card.day}",
                             widthDp = SHARE_CARD_WIDTH_DP,
-                            prepare = { card to photos },
+                            prepare = { Triple(card, photos, map) },
                             text = { it.first.shareText },
                             onDone = { _, ok -> if (ok) onClose() },
-                        ) { (cd, p) -> ShareCardView(cd, p) }
+                        ) { (cd, p, m) -> ShareCardView(cd, p, m) }
                     },
                     Modifier.weight(1f),
                 )

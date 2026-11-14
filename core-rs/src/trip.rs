@@ -16,6 +16,8 @@ pub struct TripConfig {
     /// 이 시간 이상 반경 안에 있으면 머문 곳. 주행 사이 공백도 이 시간 이상이어야 머문 곳.
     pub stay_min_ms: i64,
     /// 앞 주행 끝과 다음 주행 시작이 이 거리 안이면 그 자리에 주차해 있던 것으로 본다.
+    /// 폰 기록은 차가 움직이고 몇 초 뒤에야 주행을 알아채 첫 점이 이미 300m 넘게 가 있기도 해서 넉넉히 둔다
+    /// (실제 기록: 4시간 머문 카페에서 다시 출발한 첫 점이 324m 밖 → 머문 곳이 빠졌다).
     pub park_radius_m: f64,
     /// 이보다 빠르게 움직인 것처럼 보이는 점은 GPS 점프로 본다 (초속 70m = 시속 252km).
     pub max_speed_mps: f64,
@@ -29,7 +31,7 @@ impl Default for TripConfig {
             max_gap_ms: 5 * 60_000,
             stay_radius_m: 150.0,
             stay_min_ms: 10 * 60_000,
-            park_radius_m: 300.0,
+            park_radius_m: 500.0,
             max_speed_mps: 70.0,
             min_trip_m: 300.0,
         }
@@ -337,9 +339,11 @@ mod tests {
         let cfg = TripConfig::default();
         let here = Point { lat: 37.0, lon: 127.0 };
         let near = Point { lat: 37.001, lon: 127.0 }; // 약 111m
+        let late = Point { lat: 37.003, lon: 127.0 }; // 약 333m (폰이 출발을 늦게 알아챈 첫 점)
         let far = Point { lat: 37.01, lon: 127.0 }; // 약 1.1km
         let s = between_stay(here, 0, near, 60 * MIN, &cfg).expect("주차");
         assert_eq!((s.center, s.arrive_ms, s.leave_ms), (here, 0, 60 * MIN));
+        assert!(between_stay(here, 0, late, 60 * MIN, &cfg).is_some());
         assert!(between_stay(here, 0, far, 60 * MIN, &cfg).is_none());
         assert!(between_stay(here, 0, near, 9 * MIN, &cfg).is_none());
     }

@@ -63,10 +63,11 @@ private val SketchHeight = 150.dp
  * 공유 이미지 카드 한 장 ("길 위의 앨범"): 종이 바탕 위에
  * 날짜 · 계절 · 날씨 → 지역 · AI 제목 → 들른 곳 사진(순서 번호) → 작은 길 그림(번호 핀) → 들른 곳 순서 · 거리 · 시간 → "어디였지" 표시.
  * 화면에 띄우지 않고 [ComposableImageShare.render]로 그림만 만든다. 사진은 미리 받은 것([photos], 순서 번호 → 사진)만 쓴다.
+ * [map]은 길 그림 밑에 까는 지도([loadCardMap], 없으면 점 무늬 종이).
  * 동승자·집·회사 정보는 없다 (Rust가 거른 값만 받는다).
  */
 @Composable
-fun ShareCardView(card: ShareCardData, photos: Map<Int, ImageBitmap>) {
+fun ShareCardView(card: ShareCardData, photos: Map<Int, ImageBitmap>, map: ImageBitmap? = null) {
     val c = EodiTheme.colors
     Column(
         Modifier
@@ -105,7 +106,7 @@ fun ShareCardView(card: ShareCardData, photos: Map<Int, ImageBitmap>) {
         }
         if (card.lines.isNotEmpty() || card.stops.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
-            RouteSketch(card)
+            RouteSketch(card, map)
         }
         if (card.stops.isNotEmpty()) {
             Spacer(Modifier.height(14.dp))
@@ -186,19 +187,23 @@ private fun OrderBadge(order: Int, modifier: Modifier = Modifier, size: Int = 24
     }
 }
 
-/** 작은 길 그림: 흰 카드 위 파란 길(코스는 점선) + 번호 핀. 좌표는 Rust가 이 칸 비율에 맞춰 0~1로 준다. */
+/**
+ * 작은 길 그림: 지도([map], 없으면 흰 카드에 점 무늬) 위 파란 길(코스는 점선) + 번호 핀.
+ * 좌표는 Rust가 이 칸 비율에 맞춰 0~1로 주고, 지도도 같은 범위([ShareCardData.mapBox])로 받아 둔 것이라 그대로 겹친다.
+ */
 @Composable
-private fun RouteSketch(card: ShareCardData) {
+private fun RouteSketch(card: ShareCardData, map: ImageBitmap?) {
     val c = EodiTheme.colors
     BoxWithConstraints(
         Modifier.fillMaxWidth().height(SketchHeight).clip(RoundedCornerShape(20.dp)).background(c.surface),
     ) {
         val w = constraints.maxWidth.toFloat()
         val h = constraints.maxHeight.toFloat()
+        if (map != null) Image(map, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
         Canvas(Modifier.fillMaxSize()) {
-            // 종이 위 옅은 점 무늬 (지도 대신 "그림"이라는 표시)
+            // 지도가 없으면 종이 위 옅은 점 무늬 (지도 대신 "그림"이라는 표시)
             val step = 14.dp.toPx()
-            var y = step / 2
+            var y = if (map == null) step / 2 else size.height
             while (y < size.height) {
                 var x = step / 2
                 while (x < size.width) {
@@ -233,11 +238,30 @@ private fun RouteSketch(card: ShareCardData) {
         Text(
             stringResource(if (card.straight) R.string.share_card_course_route else R.string.share_card_route),
             style = text(11.sp, FontWeight.Bold),
-            color = c.textTertiary,
-            modifier = Modifier.padding(start = 12.dp, top = 10.dp),
+            color = if (map != null) c.textSecondary else c.textTertiary,
+            modifier = Modifier
+                .padding(start = 10.dp, top = 8.dp)
+                .then(if (map != null) Modifier.background(c.surface.copy(alpha = 0.85f), CircleShape) else Modifier)
+                .padding(horizontal = 6.dp, vertical = 2.dp),
         )
+        // 지도 출처 (지도를 깔았을 때만)
+        if (map != null) {
+            Text(
+                MAP_CREDIT,
+                style = text(8.sp, FontWeight.Medium),
+                color = c.textSecondary,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 8.dp, bottom = 6.dp)
+                    .background(c.surface.copy(alpha = 0.75f), CircleShape)
+                    .padding(horizontal = 5.dp, vertical = 1.dp),
+            )
+        }
     }
 }
+
+/** 카드 지도의 출처 표기 (앱 지도와 같은 자료: OpenStreetMap). */
+private const val MAP_CREDIT = "© OpenStreetMap"
 
 /** "1 경포해변 › 2 초당할머니순두부 › 3 …" (번호는 코랄). */
 @Composable

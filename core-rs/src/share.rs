@@ -61,6 +61,15 @@ pub struct SketchLine {
     pub points: Vec<SketchPoint>,
 }
 
+/// 길 그림 칸이 덮는 땅 범위 (칸 왼쪽 위 = 북서, 오른쪽 아래 = 남동). 카드가 이 범위의 지도를 길 그림 밑에 깐다.
+#[derive(Debug, Clone, Copy, PartialEq, uniffi::Record, serde::Serialize, serde::Deserialize)]
+pub struct SketchBox {
+    pub south: f64,
+    pub west: f64,
+    pub north: f64,
+    pub east: f64,
+}
+
 /// 카드에 올라가는 들른 곳 하나.
 #[derive(Debug, Clone, PartialEq, uniffi::Record, serde::Serialize, serde::Deserialize)]
 pub struct ShareStop {
@@ -108,6 +117,9 @@ pub struct ShareCard {
     /// 받는 사람이 누르면 카카오맵에서 들른 곳을 순서대로 잇는 운전 경로가 열리는 링크 (들른 곳이 없으면 빈 문자열)
     #[serde(default)]
     pub route_url: String,
+    /// 길 그림 칸이 덮는 땅 범위 (그릴 것이 없으면 None, 예전 판이 보낸 카드에도 없다)
+    #[serde(default)]
+    pub map_box: Option<SketchBox>,
 }
 
 #[uniffi::export]
@@ -261,6 +273,7 @@ impl RawCard {
                 at: frame.place(stop_point(s)),
             })
             .collect();
+        let map_box = (!lines_m.is_empty() || !stop_pts.is_empty()).then(|| frame.bounds());
         let season = season_label(self.day.clone());
         let route_url = crate::handoff::kakao_route_url(&stops);
         let mut share_text = share_text(&self.day, &season, &self.title, &stops, distance_m);
@@ -284,6 +297,7 @@ impl RawCard {
             hidden_count: hidden,
             share_text,
             route_url,
+            map_box,
         }
     }
 }
@@ -332,6 +346,18 @@ impl Frame {
         let dx = (p.lon - self.center.lon) * self.k_lon * M_PER_DEG;
         let dy = (p.lat - self.center.lat) * M_PER_DEG;
         SketchPoint { x: (0.5 + dx * self.sx) as f32, y: (0.5 - dy * self.sy) as f32 }
+    }
+
+    /// 그림 칸 전체(0~1)가 덮는 땅 범위 ([Frame::place]의 역).
+    pub(crate) fn bounds(&self) -> SketchBox {
+        let half_lat = 0.5 / self.sy / M_PER_DEG;
+        let half_lon = 0.5 / self.sx / (self.k_lon * M_PER_DEG);
+        SketchBox {
+            south: self.center.lat - half_lat,
+            west: self.center.lon - half_lon,
+            north: self.center.lat + half_lat,
+            east: self.center.lon + half_lon,
+        }
     }
 
     /// 단순화 허용 오차(m): 그림에서 1px 아래로 보이는 정도.
