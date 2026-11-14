@@ -17,6 +17,7 @@ import app.eodiyeotji.ui.community.RoundIconButton
 import app.eodiyeotji.ui.theme.EodiIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -226,9 +227,23 @@ fun CarLinkSection() {
     SectionTitle(stringResource(R.string.handoff_phone_title), Modifier.padding(start = 4.dp, bottom = 12.dp))
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(EodiTheme.space.radiusM)).background(c.surfaceHigh).padding(20.dp)) {
         if (link != null) {
-            Text(stringResource(R.string.handoff_phone_linked), style = type.bodyStrong)
-            Spacer(Modifier.size(12.dp))
-            SecondaryPill(stringResource(R.string.handoff_phone_unlink), null, { repo.unlink() })
+            // 연결됨: 초록 점 + 글 한 줄, 끊기는 오른쪽 (전에는 회색 칸 안 회색 알약이라 글자만 떠 보였다)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(14.dp).background(c.here, androidx.compose.foundation.shape.CircleShape))
+                Spacer(Modifier.size(14.dp))
+                Text(stringResource(R.string.handoff_phone_linked), style = type.bodyStrong, modifier = Modifier.weight(1f))
+                androidx.compose.material3.Surface(
+                    onClick = { repo.unlink() },
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    color = c.surface,
+                    contentColor = c.textPrimary,
+                    modifier = Modifier.heightIn(min = EodiTheme.space.touch),
+                ) {
+                    Box(Modifier.padding(horizontal = 28.dp), contentAlignment = Alignment.Center) {
+                        Text(stringResource(R.string.handoff_phone_unlink), style = type.label, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    }
+                }
+            }
         } else {
             Text(stringResource(R.string.handoff_phone_hint), style = type.meta, color = c.textSecondary)
             Spacer(Modifier.size(12.dp))

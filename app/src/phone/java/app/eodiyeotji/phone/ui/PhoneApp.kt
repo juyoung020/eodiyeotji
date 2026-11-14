@@ -305,7 +305,8 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
                         headerAction = {
                             // 기록 상태(기록 중 · 권한/알림/배터리 경고, 누르면 설명 시트. 대기 중에는 숨긴다) + 내 장소 + 설정
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                RecordingStatusChip(Modifier.weight(1f, fill = false), quietWhenWaiting = true)
+                                // 경고(권한 · 배터리 최적화)는 머리에서 잘려 "배터리 최적화…"로 보였다 → 머리에는 기록 중 표시만, 경고는 목록 위 한 줄 띠
+                                RecordingStatusChip(Modifier.weight(1f, fill = false), quietWhenWaiting = true, hideWarning = true)
                                 Spacer(Modifier.width(12.dp))
                                 // 날짜로 찾기: 몇 달 전 날도 달력에서 바로 (기록 있는 날만 누를 수 있다)
                                 RoundIconButton(app.eodiyeotji.ui.theme.EodiIcons.Calendar, stringResource(R.string.phone_calendar_open), { calendarOpen = true }, containerColor = EodiTheme.colors.surface, contentColor = EodiTheme.colors.textSecondary, iconSize = 36.dp)
@@ -319,11 +320,18 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
                             !permissions.location -> {
                                 { PermissionWarning(onFix = shell::openAppSettings) }
                             }
-                            // 차를 세워 둔 동안: 내 차 카드 (가게까지 걷기 · 내 차 찾기)
+                            // 차를 세워 둔 동안: 내 차 카드 (가게까지 걷기 · 내 차 찾기). 기록 경고 띠가 있으면 그 아래
                             parked != null && !moving -> {
-                                { parked?.let { ParkedCarCard(it, parkedMemo, onMemo = shell::setParkedMemo, onWalk = { t -> walk = t }, onDismiss = shell::dismissParked) } }
+                                {
+                                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        RecordingStatusChip(banner = true)
+                                        parked?.let { ParkedCarCard(it, parkedMemo, onMemo = shell::setParkedMemo, onWalk = { t -> walk = t }, onDismiss = shell::dismissParked) }
+                                    }
+                                }
                             }
-                            else -> null
+                            else -> {
+                                { RecordingStatusChip(banner = true) }
+                            }
                         },
                     )
                     PhoneTab.ASK -> AgentPanel(onClose = null, viewModel = agent, compact = true)

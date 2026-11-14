@@ -102,14 +102,14 @@ fun RecapListTop(
         // 입구: 한 줄 한 띠에 글자만 (아이콘 · 테두리 알약 네 개가 두 줄을 차지하던 것을 줄였다). 주행 중에는 요약 · 결산만.
         val month = stringResource(R.string.recap_month_entry, state.today.monthValue)
         val year = stringResource(R.string.recap_year_entry)
-        val entries = buildList<Pair<String, () -> Unit>> {
+        val entries = buildList<EntryTile> {
             // 여행 간 날만 모아 보기 (검색의 종류 칩 "여행"을 켠 채로 연다)
-            if (onOpenTrips != null && !state.driving) add(stringResource(R.string.trips_entry) to onOpenTrips)
-            add(month to { viewModel.openRecap(RecapMode.MONTH) })
-            add(year to { viewModel.openRecap(RecapMode.YEAR) })
+            if (onOpenTrips != null && !state.driving) add(EntryTile(stringResource(R.string.trips_entry), app.eodiyeotji.ui.community.CommunityIcons.Flag, onOpenTrips))
+            add(EntryTile(month, EodiIcons.Calendar) { viewModel.openRecap(RecapMode.MONTH) })
+            add(EntryTile(year, EodiIcons.Sparkle) { viewModel.openRecap(RecapMode.YEAR) })
             if (!state.driving) {
-                add(stringResource(R.string.memory_map_entry) to { viewModel.openMemoryMap() })
-                if (onOpenBiz != null) add(stringResource(R.string.biz_entry) to onOpenBiz)
+                add(EntryTile(stringResource(R.string.memory_map_entry), EodiIcons.Map) { viewModel.openMemoryMap() })
+                if (onOpenBiz != null) add(EntryTile(stringResource(R.string.biz_entry), app.eodiyeotji.ui.community.CommunityIcons.Pen, onOpenBiz))
             }
         }
         if (showEntries) EntryStrip(entries)
@@ -157,30 +157,40 @@ internal fun EntryPill(text: String, icon: ImageVector, ai: Boolean, modifier: M
 
 /** 날짜 목록 맨 위 입구 띠: 같은 너비 글자 버튼을 가는 선으로 나눈 한 줄. */
 @Composable
-private fun EntryStrip(entries: List<Pair<String, () -> Unit>>) {
+private fun EntryStrip(entries: List<EntryTile>) {
+    // 폰 홈 바로가기 (차 홈은 왼쪽 레일 "모아보기"가 맡아 그리지 않는다).
+    // 전에는 회색 띠 한 줄에 글자 다섯 개를 칸막이로 나눠 빽빽했다 → 아이콘 타일 + 이름 (폰 앱의 바로가기 줄 모양).
     val c = EodiTheme.colors
-    BoxWithConstraints(Modifier.fillMaxWidth().clip(RoundedCornerShape(EodiTheme.space.radiusM)).background(c.surfaceHigh)) {
-        // 한 칸이 [MinEntryCell]보다 좁아지면(폰 세로) 같은 너비로 나누지 않고 글자만큼 주고 옆으로 민다 (글자가 잘리지 않게)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // 한 칸이 [MinEntryCell]보다 좁아지면 같은 너비로 나누지 않고 옆으로 민다 (글자가 잘리지 않게)
         val scroll = maxWidth / entries.size.coerceAtLeast(1) < MinEntryCell
         Row(
-            Modifier.fillMaxWidth().height(IntrinsicSize.Min).then(if (scroll) Modifier.horizontalScroll(rememberScrollState()) else Modifier),
-            verticalAlignment = Alignment.CenterVertically,
+            Modifier.fillMaxWidth().then(if (scroll) Modifier.horizontalScroll(rememberScrollState()) else Modifier),
+            verticalAlignment = Alignment.Top,
         ) {
-            entries.forEachIndexed { i, (text, onClick) ->
-                if (i > 0) Box(Modifier.width(2.dp).fillMaxHeight().padding(vertical = 18.dp).background(c.outline))
-                Box(
-                    (if (scroll) Modifier else Modifier.weight(1f)).heightIn(min = 76.dp).clickable(role = Role.Button, onClick = onClick)
-                        .padding(horizontal = if (scroll) 24.dp else 6.dp),
-                    contentAlignment = Alignment.Center,
+            entries.forEach { e ->
+                Column(
+                    (if (scroll) Modifier.width(MinEntryCell) else Modifier.weight(1f))
+                        .clip(RoundedCornerShape(EodiTheme.space.radiusM))
+                        .clickable(role = Role.Button, onClick = e.onClick)
+                        .padding(vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text(text, style = EodiTheme.type.label, fontWeight = FontWeight.Bold, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Box(Modifier.size(76.dp).background(c.accentSoft, RoundedCornerShape(EodiTheme.space.radiusM)), contentAlignment = Alignment.Center) {
+                        Icon(e.icon, contentDescription = null, tint = c.accent, modifier = Modifier.size(36.dp))
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Text(e.text, style = EodiTheme.type.caption, fontWeight = FontWeight.SemiBold, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
     }
 }
 
-private val MinEntryCell = 110.dp
+/** 바로가기 타일 하나: 이름 · 아이콘 · 누르면. */
+private class EntryTile(val text: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val onClick: () -> Unit)
+
+private val MinEntryCell = 118.dp
 
 /** 접어 둔 "늘 가던 날": 금색 도장 + 그곳 이름 한 줄. 누르면 다시 편다 (카드는 지우지 않고 접기만 한다). */
 @Composable

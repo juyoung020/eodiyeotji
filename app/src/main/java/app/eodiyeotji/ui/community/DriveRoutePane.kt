@@ -157,10 +157,14 @@ fun DriveRoutePane(viewModel: DriveRouteViewModel = hiltViewModel()) {
     }
 }
 
+/** 이보다 좁으면 폰 세로 화면 (차 화면 · 나눈 창은 이보다 넓다). */
+private val PhoneToolbar = 720.dp
+
 @Composable
 private fun DriveToolbar(sort: DriveRouteSort, onSort: (DriveRouteSort) -> Unit, onShare: () -> Unit) {
     BoxWithConstraints(Modifier.fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = 8.dp, bottom = 16.dp)) {
         val compact = maxWidth < CompactToolbar
+        val phone = maxWidth < PhoneToolbar
         Row(verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
                 ChoiceRow(
@@ -174,7 +178,14 @@ private fun DriveToolbar(sort: DriveRouteSort, onSort: (DriveRouteSort) -> Unit,
                 )
             }
             Spacer(Modifier.width(16.dp))
-            PrimaryPill(
+            // 폰 세로(아주 좁은 창)에서는 "코스 올리기" 알약이 정렬 줄을 밀어 "내 근처"가 잘렸다 → 파란 동그라미 아이콘 버튼
+            if (phone) RoundIconButton(
+                CommunityIcons.Upload,
+                stringResource(R.string.course_share_short),
+                onShare,
+                containerColor = EodiTheme.colors.accent,
+                contentColor = EodiTheme.colors.onAccent,
+            ) else PrimaryPill(
                 stringResource(if (compact) R.string.course_share_short else R.string.course_share_from_record),
                 CommunityIcons.Upload,
                 onShare,

@@ -16,6 +16,16 @@ import app.eodiyeotji.core.PartnerOffer
 import app.eodiyeotji.ui.offers.PlaceCouponBadge
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import kotlin.math.roundToInt
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -495,17 +505,77 @@ private fun CompactDayDetail(
                 MapPhotoPin("s${stay.arriveMs}", p?.name.orEmpty(), p?.address.orEmpty(), stay.center.lat, stay.center.lon, mine)
             }
         }
+        // 지도는 남은 높이 전체에 깔고, 목록 판이 그 위를 덮는다 (지도 앱의 아래 판).
+        // 판 맨 위 손잡이를 끌거나 목록 맨 위에서 아래로 당기면 판이 내려가 지도가 넓어지고, 목록을 올리면 판이 제자리(44%)로 돌아온다.
+        // 지도 크기는 바뀌지 않아(판만 움직임) MapLibre가 다시 그리지 않는다. 길은 기본 판 위쪽에 맞춘다.
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            val mapHeight = maxHeight * CompactMapFraction
-            Column(Modifier.fillMaxSize()) {
+            val density = LocalDensity.current
+            val areaPx = constraints.maxHeight.toFloat()
+            val restTop = areaPx * CompactMapFraction
+            val lowTop = areaPx * CompactMapMaxFraction
+            var panelTop by remember(areaPx) { mutableFloatStateOf(restTop) }
+            val pull = remember(restTop, lowTop) {
+                object : NestedScrollConnection {
+                    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                        if (available.y >= 0f || panelTop <= restTop) return Offset.Zero
+                        val before = panelTop
+                        panelTop = (panelTop + available.y).coerceAtLeast(restTop)
+                        return Offset(0f, panelTop - before)
+                    }
+                    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                        if (available.y <= 0f || source != NestedScrollSource.UserInput || panelTop >= lowTop) return Offset.Zero
+                        val before = panelTop
+                        panelTop = (panelTop + available.y).coerceAtMost(lowTop)
+                        return Offset(0f, panelTop - before)
+                    }
+                }
+            }
+            val panelRadius = EodiTheme.space.radiusL
+            val radiusPx = with(density) { panelRadius.toPx() }
+            val fitBottom = (areaPx - restTop + radiusPx).toInt()
+            val fit = remember(fitBottom) { intArrayOf(0, 0, 0, fitBottom) }
+            Box(Modifier.fillMaxSize()) {
                 DayMap(
                     data = loaded?.map,
                     selectedKey = selectedEntry,
                     onSelectKey = onMapSelect,
-                    modifier = Modifier.fillMaxWidth().height(mapHeight),
+                    modifier = Modifier.fillMaxSize(),
                     photoPins = photoPins,
                     myPhotos = loaded?.mapPhotos.orEmpty(),
+                    fitInsets = fit,
+                    // 출처 글은 기본 판 바로 위 (판이 내려가도 지도 위에 남는다)
+                    attributionBottom = with(density) { (areaPx - restTop).toDp() } + 12.dp,
                 )
+                Surface(
+                    color = c.background,
+                    contentColor = c.textPrimary,
+                    shape = RoundedCornerShape(topStart = panelRadius, topEnd = panelRadius),
+                    shadowElevation = 6.dp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // 판 높이 = 판 위치 아래 전부 (끄는 동안 목록 끝이 화면 밖으로 밀려나지 않게)
+                        .layout { m, cs ->
+                            val top = panelTop.roundToInt().coerceIn(0, cs.maxHeight)
+                            val h = cs.maxHeight - top
+                            val p = m.measure(cs.copy(minHeight = h, maxHeight = h))
+                            layout(cs.maxWidth, cs.maxHeight) { p.place(0, top) }
+                        }
+                        .nestedScroll(pull),
+                ) {
+                Column(Modifier.fillMaxSize()) {
+                // 손잡이: 끌어서 판을 올리고 내린다
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .draggable(
+                            orientation = Orientation.Vertical,
+                            state = rememberDraggableState { d -> panelTop = (panelTop + d).coerceIn(restTop, lowTop) },
+                        )
+                        .padding(top = 12.dp, bottom = 4.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(Modifier.size(width = 64.dp, height = 8.dp).background(c.outline, CircleShape))
+                }
                 Box(Modifier.fillMaxWidth().weight(1f)) {
                     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                     when (detail) {
@@ -520,7 +590,7 @@ private fun CompactDayDetail(
                             selectedKey = selectedEntry,
                             onClick = onEntryClick,
                             headerCount = 1,
-                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 20.dp, bottom = space.page + bottom),
+                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = space.page + bottom),
                             header = {
                                 item(key = "__day-head", contentType = "head") {
                                     Column(Modifier.padding(start = 4.dp, end = 4.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -561,13 +631,18 @@ private fun CompactDayDetail(
                         )
                     }
                 }
+                }
+                }
             }
         }
     }
 }
 
-/** 폰 하루 상세에서 지도가 차지하는 높이 (제목 줄 아래 남은 높이 기준). */
+/** 폰 하루 상세에서 목록 판이 평소 시작하는 높이 (제목 줄 아래 남은 높이 기준). 위는 지도. */
 private const val CompactMapFraction = 0.44f
+
+/** 판을 끝까지 내렸을 때 판이 시작하는 높이: 지도를 크게 보되 판 머리(요약 · 통계 한 줄)는 남긴다. */
+private const val CompactMapMaxFraction = 0.78f
 
 /**
  * 앱 이름 (앱 표시 그림은 왼쪽 레일 맨 위에 있다). 검색 칸([search])이 있으면 이름 옆을 검색 칸이 채우고,

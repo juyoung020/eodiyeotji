@@ -205,6 +205,10 @@ fun RecordingStatusChip(
     quietWhenWaiting: Boolean = false,
     /** true면 경고가 아닐 때 점만 (좁은 창 머리: 글자가 검색 칸 자리를 먹었다). 읽어 주기 설명은 그대로 */
     dotOnly: Boolean = false,
+    /** 폰 판 머리: 경고는 그리지 않는다 (긴 경고 글이 머리에서 잘렸다 → [banner] 줄이 맡는다) */
+    hideWarning: Boolean = false,
+    /** 폰 판 목록 위 띠: 경고일 때만 한 줄 전체로 그린다 (점 + 경고 글 두 줄까지 + ›). 아니면 아무것도 그리지 않는다 */
+    banner: Boolean = false,
     viewModel: RecordingStatusViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -218,7 +222,30 @@ fun RecordingStatusChip(
     val label = stringResource(headline.short())
     val c = EodiTheme.colors
     val warn = headline.isWarning()
+    if (hideWarning && warn) return
+    if (banner && !warn) return
     val a11y = stringResource(R.string.status_a11y, label)
+    if (banner) {
+        Row(
+            modifier
+                .fillMaxWidth()
+                .heightIn(min = EodiTheme.space.touch)
+                .clip(RoundedCornerShape(EodiTheme.space.radiusM))
+                .background(c.staySoft)
+                .clickable(role = Role.Button) { open = true }
+                .semantics(mergeDescendants = true) { contentDescription = a11y }
+                .padding(horizontal = 24.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            StatusDot(headline, 14.dp, pulse = false)
+            Spacer(Modifier.width(14.dp))
+            Text(label, style = EodiTheme.type.label, fontWeight = FontWeight.Bold, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(12.dp))
+            Text("›", style = EodiTheme.type.title, color = c.textTertiary)
+        }
+        if (open) RecordingStatusSheet(state, viewModel, onClose = { open = false })
+        return
+    }
     Box(
         modifier
             .heightIn(min = EodiTheme.space.touch)

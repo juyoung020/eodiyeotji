@@ -573,7 +573,7 @@ private fun ResultRow(
             val canNavi = r.place != null && (r.kind == SearchRowKind.PLACE || r.kind == SearchRowKind.DAY || r.kind == SearchRowKind.REVIEW)
             if (canNavi) {
                 Spacer(Modifier.width(8.dp))
-                RowAction(EodiIcons.Navi, stringResource(R.string.search_navigate), filled = true) { onNavigate(r) }
+                RowAction(EodiIcons.Navi, stringResource(R.string.search_navigate), filled0 = true) { onNavigate(r) }
             }
         }
     }
@@ -606,8 +606,11 @@ private val RowThumb = 96.dp
 
 /** 줄 오른쪽 작은 동작 (76dp 동그라미 + 아래 이름). */
 @Composable
-private fun RowAction(icon: ImageVector, label: String, filled: Boolean, tint: Color? = null, onClick: () -> Unit) {
+private fun RowAction(icon: ImageVector, label: String, filled0: Boolean, tint: Color? = null, onClick: () -> Unit) {
     val c = EodiTheme.colors
+    // 폰 판: 줄마다 진한 파란 동그라미가 반복돼 목록이 버튼 더미처럼 보였다 → 옅은 파랑 바탕 + 파란 아이콘 (차 판은 그대로)
+    val filled = filled0 && app.eodiyeotji.BuildConfig.FLAVOR != "phone"
+    val tonal = filled0 && !filled
     Column(
         Modifier
             .widthIn(min = 84.dp)
@@ -617,7 +620,7 @@ private fun RowAction(icon: ImageVector, label: String, filled: Boolean, tint: C
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
-            Modifier.size(64.dp).background(if (filled) c.accent else c.surfaceHigh, CircleShape),
+            Modifier.size(64.dp).background(if (filled) c.accent else if (tonal) c.accentSoft else c.surfaceHigh, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(icon, null, tint = tint ?: if (filled) c.onAccent else c.accent, modifier = Modifier.size(30.dp))
