@@ -37,7 +37,10 @@ fun rememberSearchSlot(
     barHeight: Dp = 88.dp,
     resultsPadding: PaddingValues = PaddingValues(bottom = 24.dp),
 ): SearchSlot {
-    val state by viewModel.state.collectAsStateWithLifecycle()
+    // 검색 상태 전체(글자 · 결과)는 아래 검색 칸 · 결과 안에서만 읽는다: 여기서 읽으면 한 글자 칠 때마다 이 칸을 부른 화면 전체가 다시 그려진다.
+    // 여기서는 검색이 열렸는지만 본다.
+    val active by remember(viewModel) { viewModel.state.map { it.active }.distinctUntilChanged() }
+        .collectAsStateWithLifecycle(viewModel.state.value.active)
     // 에이전트 상태 전체를 읽으면 듣는 소리 크기 · 답 글자가 바뀔 때마다 이 칸을 부른 홈 화면 전체가 다시 그려진다
     // → 받아쓰기 중인지만 따로 보고, 목소리 상태는 이 칸에서 받아쓰는 동안만 읽는다.
     val dictatingNow by remember(agent) { agent.state.map { it.voice.dictating }.distinctUntilChanged() }.collectAsStateWithLifecycle(false)
@@ -80,8 +83,9 @@ fun rememberSearchSlot(
         VoiceUi()
     }
     return SearchSlot(
-        active = state.active,
+        active = active,
         bar = { m ->
+            val state by viewModel.state.collectAsStateWithLifecycle()
             SearchField(
                 query = state.query,
                 active = state.active,
@@ -97,6 +101,7 @@ fun rememberSearchSlot(
             )
         },
         results = { m ->
+            val state by viewModel.state.collectAsStateWithLifecycle()
             SearchResults(
                 state = state,
                 actions = actions,
