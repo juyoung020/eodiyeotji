@@ -161,12 +161,14 @@ fn chip_periods_and_text_dates_intersect() {
 fn sundubu_finds_the_place_and_the_gangneung_day() {
     let a = find("순두부");
     let places = group(&a, SearchGroupKind::Places).expect("장소");
-    assert_eq!(places.rows[0].title, "초당할머니순두부");
+    // 순두부집은 두 곳: 1년 전 강릉의 초당할머니순두부, 크리스마스에 간 집 근처 금호동 할머니순두부
+    let titles: Vec<&str> = places.rows.iter().map(|r| r.title.as_str()).collect();
+    assert!(titles.contains(&"초당할머니순두부") && titles.contains(&"금호동 할머니순두부"), "{titles:?}");
     assert_eq!(places.rows[0].kind, SearchRowKind::Place);
     assert!(places.rows[0].place.is_some() && places.rows[0].day.is_some());
     let days = group(&a, SearchGroupKind::Days).expect("날짜");
-    assert_eq!(days.rows[0].day.as_deref(), Some("2025-11-06"), "1년 전 강릉 여행: {:?}", days.rows[0]);
-    assert!(days.rows[0].date_line.starts_with("작년 11월 6일"), "{}", days.rows[0].date_line);
+    let gangneung = days.rows.iter().find(|r| r.day.as_deref() == Some("2025-11-06")).expect("1년 전 강릉 여행");
+    assert!(gangneung.date_line.starts_with("작년 11월 6일"), "{}", gangneung.date_line);
     assert_eq!(a.ask_ai, Some(AskAi { text: "순두부".into(), primary: false }));
     assert_eq!(a.groups[0].kind, SearchGroupKind::Places, "낱말이 있으면 장소가 먼저");
 }

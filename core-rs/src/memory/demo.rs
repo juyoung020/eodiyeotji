@@ -12,6 +12,7 @@
 //! - 여행: 정확히 1년 전 같은 날짜에 강릉 가족 당일 여행 (집 → 횡성휴게소 → 경포해변 → 초당할머니순두부 →
 //!   안목해변 카페거리 → 안목항 바다횟집 → 집), 8월 첫 금요일부터 2박 3일 부산 (해운대·감천문화마을·자갈치시장·광안리),
 //!   10월 18일 이후 첫 토요일부터 1박 2일 설악산 단풍 (내린천휴게소 → 설악산 소공원 → 속초 숙소 → 속초관광수산시장).
+//! - 크리스마스(시연 기간 안의 12월 25일): 휴일이라 출근 · 출장 없이 점심에 집 근처 순두부집(금호동 할머니순두부)에 둘이 다녀온다.
 //! - 위치 점: 시내 1초, 고속도로(직선 30km 넘는 구간) 4초 간격, 도로처럼 휘는 길 + GPS 흔들림 2m. 주행마다 시작·끝 신호.
 //!   2026-11-06 기준 1년치 약 39만 점, 주행 745개 (PC 릴리즈 빌드 0.3초, 디버그 1초).
 //! - 장소 이름: 카카오처럼 이름·분류·지번 주소를 붙인다 (출처 Kakao).
@@ -88,6 +89,7 @@ const POIS: &[Poi] = &[
     ("판교테크노밸리 스타트업캠퍼스", "업무시설", "경기 성남시 분당구 삼평동 694", 37.4110, 127.0990),
     ("대전컨벤션센터", "컨벤션센터", "대전 유성구 도룡동 4-19", 36.3755, 127.3880),
     ("안목항 바다횟집", "횟집", "강원 강릉시 견소동 274", 37.7690, 128.9520),
+    ("금호동 할머니순두부", "두부전문점", "서울 성동구 금호동2가 511", 37.5480, 127.0190),
 ];
 
 const HOME: usize = 0;
@@ -136,6 +138,7 @@ const NAMYANG: usize = 42;
 const PANGYO: usize = 43;
 const DCC: usize = 44;
 const SEAFOOD: usize = 45;
+const SUNDUBU: usize = 46;
 
 type Via = &'static [(f64, f64)];
 
@@ -462,6 +465,8 @@ pub(crate) struct Plan {
     pub busan: Option<i64>,
     /// 설악산 1박 2일 첫날 (토요일)
     pub seorak: Option<i64>,
+    /// 크리스마스 (시연 기간 안의 가장 최근 12월 25일): 집 근처 순두부집 점심
+    pub christmas: Option<i64>,
 }
 
 pub(crate) fn plan(today: i64) -> Plan {
@@ -482,7 +487,9 @@ pub(crate) fn plan(today: i64) -> Plan {
         .into_iter()
         .map(|yy| first_weekday(days_from_civil(yy, 10, 18), 6))
         .find(|&s| free(s, s + 1, &taken));
-    Plan { first, last, gangneung, busan, seorak }
+    taken.extend(seorak.map(|s| (s, s + 1)));
+    let christmas = [ly, ly - 1].into_iter().map(|yy| days_from_civil(yy, 12, 25)).find(|&x| free(x, x, &taken));
+    Plan { first, last, gangneung, busan, seorak, christmas }
 }
 
 struct Label {
@@ -721,6 +728,19 @@ impl Gen<'_> {
         );
     }
 
+    /// 크리스마스(휴일): 출근 없이 점심에 집 근처 순두부집에 다녀온다.
+    fn christmas(&mut self, d: i64) {
+        let m = self.rng.below(25);
+        let t = self.at(d, 11, 30 + m);
+        self.route(t, HOME, &[(SUNDUBU, NO_VIA, 65), (HOME, NO_VIA, 0)]);
+        self.label(
+            d,
+            "크리스마스 점심, 집 근처 순두부집",
+            "크리스마스 낮에 집 근처 금호동 할머니순두부에서 따뜻한 순두부로 점심을 먹고 돌아왔다.",
+            &["크리스마스", "성탄절", "순두부", "맛집", "점심", "휴일"],
+        );
+    }
+
     fn busan(&mut self, d: i64) {
         let t = self.at(d, 7, 30);
         self.route(t, HOME, &[(ANSEONG, BS_OUT1, 20), (HAEUNDAE, BS_OUT2, 150), (PARADISE, NO_VIA, 0)]);
@@ -877,6 +897,38 @@ pub(crate) fn top_up(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError>
         g.odo = before("drive_reading", &format!(" AND kind = {}", crate::readings::ReadingKind::Odometer.code()), gs)?.unwrap_or(18_240.0);
         g.gangneung(gn);
     }
+    // 4) 크리스마스에 순두부집이 없으면 (출근 · 출장으로 심어 둔 예전 시연 기록) 그날만 다시 만든다.
+    //    그날이 시연 기록일 때만 (시연 집에서 출발한 점이 있다) — 실제 기록이 있는 날은 건드리지 않는다.
+    if let Some(x) = p.christmas {
+        let (xs, xe) = (store.day_start_ms(x), store.day_start_ms(x + 1));
+        let near = |at: Point| -> Result<bool, CoreError> {
+            let n: i64 = store.snapshot()?.query_row(
+                "SELECT count(*) FROM fix WHERE t_ms >= ?1 AND t_ms < ?2 AND abs(lat - ?3) < 0.0015 AND abs(lon - ?4) < 0.0015",
+                params![xs, xe, at.lat, at.lon],
+                |r| r.get(0),
+            )?;
+            Ok(n > 0)
+        };
+        if near(poi(HOME))? && !near(poi(SUNDUBU))? {
+            {
+                let conn = store.lock()?;
+                for t in ["fix", "drive_event", "navi_hint", "drive_people", "drive_energy", "drive_reading"] {
+                    conn.execute(&format!("DELETE FROM {t} WHERE t_ms >= ?1 AND t_ms < ?2"), [xs, xe])?;
+                }
+                conn.execute(
+                    "UPDATE day_memory SET title = NULL, summary = '', tags = '', enriched_sig = NULL, retry_at_ms = 0 WHERE day = ?1",
+                    [x],
+                )?;
+                conn.execute("UPDATE episode SET title = NULL, tags = '' WHERE day = ?1", [x])?;
+            }
+            g.people_now = 2;
+            g.rain_now = false;
+            g.soc = before("drive_energy", "", xs)?.unwrap_or(80.0).max(40.0);
+            g.odo = before("drive_reading", &format!(" AND kind = {}", crate::readings::ReadingKind::Odometer.code()), xs)?.unwrap_or(18_240.0);
+            g.rng = Rng(XMAS_SEED);
+            g.christmas(x);
+        }
+    }
     let made = g.trips;
     // 강릉 날은 라벨을 미리 넣지 않는다 (처음 만들 때와 같이 앱이 라벨링한다)
     let new_days: HashSet<i64> = g.labels.keys().copied().filter(|&d| d != gn).collect();
@@ -950,10 +1002,28 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
             d += 2;
             continue;
         } else {
+            let xmas = Some(d) == p.christmas;
+            let mark = (g.fixes.len(), g.events.len(), g.people.len(), g.energy.len(), g.readings.len(), g.trips, g.soc, g.odo);
             match weekday_index(d) {
                 6 => g.weekend(d, true),
                 0 => g.weekend(d, false),
                 _ => g.weekday(d),
+            }
+            if xmas {
+                // 크리스마스는 휴일: 위에서 만든 평소 하루(출근 · 출장)는 버리고 순두부집 점심으로 바꾼다.
+                // 평소 하루를 먼저 만들었다 버리는 까닭: 그날 쓰는 난수 개수가 그대로여야 다른 날의 기록이 이전 판과 같다.
+                g.fixes.truncate(mark.0);
+                g.events.truncate(mark.1);
+                g.people.truncate(mark.2);
+                g.energy.truncate(mark.3);
+                g.readings.truncate(mark.4);
+                (g.trips, g.soc, g.odo) = (mark.5, mark.6, mark.7);
+                g.labels.remove(&d);
+                let main = std::mem::replace(&mut g.rng, Rng(XMAS_SEED));
+                g.people_now = 2;
+                g.rain_now = false;
+                g.christmas(d);
+                g.rng = main;
             }
         }
         d += 1;
@@ -966,8 +1036,12 @@ pub(crate) fn seed(store: &EodiStore, today_ms: i64) -> Result<u32, CoreError> {
 
 /// 시연 기록 보충 판 (새 장면을 더할 때마다 올린다). 1 = 평일 출장 · 감자탕 · 국밥 · 가족 계곡 나들이,
 /// 2 = 1판에서 일부 날만 다시 계산하던 것을 시연 기간 전체로 (덧붙일 것은 1판과 같다 — 이미 있으면 건너뛴다),
-/// 3 = 1년 전 강릉 여행에 저녁 횟집(안목항 바다횟집)을 더한다 (그날 시연 기록만 지우고 새로 만든다).
-const TOPUP_VERSION: i64 = 3;
+/// 3 = 1년 전 강릉 여행에 저녁 횟집(안목항 바다횟집)을 더한다 (그날 시연 기록만 지우고 새로 만든다),
+/// 4 = 크리스마스를 휴일로: 출근 · 출장 대신 집 근처 순두부집 점심 (그날 시연 기록만 지우고 새로 만든다).
+const TOPUP_VERSION: i64 = 4;
+
+/// 크리스마스 하루를 만드는 난수 씨앗 (처음 만들 때와 보충할 때 같은 하루가 나오게 따로 둔다)
+const XMAS_SEED: u64 = 0xc4a1_1225;
 
 /// 만든 주행을 DB에 쓰고, 장소 이름 · 하루 요약 · 기억을 다시 만들고, 라벨이 필요한 날 중 [label_day]가 참인 날의 LLM 라벨을 미리 넣는다.
 /// [shifts]: (덧붙인 주행 끝, 쓴 배터리 %p, 달린 km) — 보충 때 그 뒤 기록을 옮긴다.

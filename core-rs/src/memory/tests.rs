@@ -644,6 +644,27 @@ fn perf_memory_demo_year() {
     assert!(pct(&mut times, 0.99) < 20.0);
 }
 
+/// 크리스마스는 휴일: 출근 · 출장 없이 집 근처 순두부집 점심 하나. 예전 판(출근 · 출장)으로 심어 둔 기록도 보충 판 4가 그날만 바꾼다.
+#[test]
+fn demo_christmas_is_a_holiday_lunch_at_the_tofu_place() {
+    let (_db, store, _, _) = seeded("xmas");
+    let names = |s: &EodiStore| -> Vec<String> {
+        s.episodes_for_day("2025-12-25".into()).unwrap().iter().flat_map(|e| e.facts.stops.iter().map(|x| x.name.clone())).collect()
+    };
+    assert_eq!(names(&store), ["금호동 할머니순두부"]);
+    let other_before = store.episodes_for_day("2025-12-24".into()).unwrap().len();
+    // 예전 판처럼: 순두부집 근처 점을 지우고 보충 판을 3으로 되돌린다
+    {
+        let conn = store.lock().unwrap();
+        conn.execute("DELETE FROM fix WHERE abs(lat - 37.5480) < 0.0015 AND abs(lon - 127.0190) < 0.0015", []).unwrap();
+        conn.execute("UPDATE meta SET value = 3 WHERE key = 'demo_topup'", []).unwrap();
+    }
+    assert!(store.seed_demo_data(demo_today()).unwrap() > 0, "크리스마스 날을 다시 만든다");
+    assert_eq!(names(&store), ["금호동 할머니순두부"]);
+    assert_eq!(store.episodes_for_day("2025-12-24".into()).unwrap().len(), other_before, "다른 날은 그대로");
+    assert_eq!(store.seed_demo_data(demo_today()).unwrap(), 0, "한 번만");
+}
+
 /// 보충 판 3: 횟집 없이 심어 둔 예전 시연 기록에도 1년 전 강릉 날만 다시 만들어 저녁 횟집이 들어간다 (다른 날은 그대로).
 #[test]
 fn demo_top_up_adds_the_gangneung_seafood_dinner_to_old_data() {
