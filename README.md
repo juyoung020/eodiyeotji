@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 # 🚗 어디였지
 
@@ -15,7 +15,7 @@
 
 <br>
 
-<img src="docs/images/demo-2026-11-07g.gif" width="760" alt="Pleos 에뮬레이터 시연: 기록 → 말로 찾기 → 회상 → 코스 공유">
+<img src="docs/images/cover-2026-11-14.gif" width="760" alt="Pleos 에뮬레이터 시연: 말로 찾기 → 그날로 돌아가기 → 같이 가기 휴게소 제안">
 
 <sub>Pleos Connect 에뮬레이터 실제 화면 · 시연 영상은 [`video/`](video/)</sub>
 
