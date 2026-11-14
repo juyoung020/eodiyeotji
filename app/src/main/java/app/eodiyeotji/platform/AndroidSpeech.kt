@@ -188,7 +188,8 @@ class AndroidSpeechOutput @Inject constructor(@ApplicationContext private val co
     private val main = Handler(Looper.getMainLooper())
     private val audio = context.getSystemService(AudioManager::class.java)
     private val attributes = AudioAttributes.Builder()
-        .setUsage(AudioAttributes.USAGE_ASSISTANT)
+        // 미디어 소리로 낸다: 비서 소리(USAGE_ASSISTANT)는 갤럭시 탭에서 따로 있는 음량이 0이면 소리 없이 재생된다
+        .setUsage(AudioAttributes.USAGE_MEDIA)
         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
         .build()
 
@@ -260,15 +261,32 @@ class AndroidSpeechOutput @Inject constructor(@ApplicationContext private val co
             engine.speak(text, TextToSpeech.QUEUE_ADD, null, "eodi-$my")
             return
         }
-        tts = TextToSpeech(context) { status ->
+        start(text, my, engine = null)
+    }
+
+    /**
+     * 읽기 엔진을 만들고 [text]를 읽는다. [engine]이 null이면 기기 기본 엔진.
+     * 기본 엔진에 한국어가 없으면 (갤럭시 탭의 삼성 TTS에 한국어 음성이 안 깔린 때) 구글 엔진으로 한 번 바꿔 본다 — 안 그러면 소리 없이 끝난다.
+     */
+    private fun start(text: String, my: Int, engine: String?) {
+        val listener = TextToSpeech.OnInitListener { status ->
             main.post {
                 if (status != TextToSpeech.SUCCESS) {
-                    Log.w(TAG, "TTS 엔진 없음")
+                    Log.w(TAG, "TTS 엔진 없음 (${engine ?: "기본"})")
                     done(my)
                     return@post
                 }
+                val korean = tts?.setLanguage(Locale.KOREA) ?: TextToSpeech.LANG_NOT_SUPPORTED
+                if (korean == TextToSpeech.LANG_MISSING_DATA || korean == TextToSpeech.LANG_NOT_SUPPORTED) {
+                    if (engine == null && tts?.engines.orEmpty().any { it.name == GOOGLE_TTS }) {
+                        Log.w(TAG, "기본 TTS 엔진에 한국어가 없음 → 구글 엔진으로")
+                        runCatching { tts?.shutdown() }
+                        start(text, my, GOOGLE_TTS)
+                        return@post
+                    }
+                    Log.w(TAG, "TTS 엔진에 한국어 음성이 없음 (${engine ?: "기본"})")
+                }
                 ready = true
-                tts?.language = Locale.KOREA
                 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String?) = Unit
                     override fun onDone(utteranceId: String?) = main.post { done(turnOf(utteranceId)) }.let { }
@@ -278,6 +296,7 @@ class AndroidSpeechOutput @Inject constructor(@ApplicationContext private val co
                 if (seq == my) play(text)
             }
         }
+        tts = if (engine == null) TextToSpeech(context, listener) else TextToSpeech(context, listener, engine)
     }
 
     private fun turnOf(utteranceId: String?): Int = utteranceId?.removePrefix("eodi-")?.toIntOrNull() ?: -1
@@ -306,5 +325,8 @@ class AndroidSpeechOutput @Inject constructor(@ApplicationContext private val co
         const val MAX_WAIT_MS = 8_000L
         /** 읽기 앞 묵음 (Pleos 음성 안내 가이드 권장 150~200ms) */
         const val PREROLL_MS = 150L
+
+        /** 기본 엔진에 한국어가 없을 때 대신 쓸 엔진 (구글 음성 서비스) */
+        const val GOOGLE_TTS = "com.google.android.tts"
     }
 }

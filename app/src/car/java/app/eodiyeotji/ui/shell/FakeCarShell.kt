@@ -185,7 +185,10 @@ private fun Shell(content: @Composable () -> Unit) {
     val context = LocalContext.current
     // 기어 · 속도는 가짜 차(platform/TabletVehicle.kt)가 들고 있다: D · R이면 앱이 주행 중으로 보고 시연 주행을 기록한다
     val vehicle = remember { EntryPointAccessors.fromApplication(context.applicationContext, ShellEntryPoint::class.java).vehicle() }
-    val gear by vehicle.gear.collectAsStateWithLifecycle()
+    val realGear by vehicle.gear.collectAsStateWithLifecycle()
+    // 시연 내비가 달리는 동안에는 기어를 D로 보인다 (보이는 것만)
+    val navDriving by vehicle.navDriving.collectAsStateWithLifecycle()
+    val gear = if (navDriving) "D" else realGear
     val speed by vehicle.speedKmh.collectAsStateWithLifecycle()
     // 꾸밈 그림 (있을 때만, 읽기는 IO 스레드에서)
     val art by produceState(ShellArt(null, null)) {
@@ -355,7 +358,10 @@ private fun CarSketch(modifier: Modifier) {
 private fun ScreenSaver(touched: Long, onWake: () -> Unit) {
     val context = LocalContext.current
     val vehicle = remember { EntryPointAccessors.fromApplication(context.applicationContext, ShellEntryPoint::class.java).vehicle() }
-    val gear by vehicle.gear.collectAsStateWithLifecycle()
+    val realGear by vehicle.gear.collectAsStateWithLifecycle()
+    // 시연 내비가 달리는 동안도 주행 중으로 본다 (화면 보호기를 띄우지 않는다)
+    val navDriving by vehicle.navDriving.collectAsStateWithLifecycle()
+    val gear = if (navDriving) "D" else realGear
     var on by remember { mutableStateOf(false) }
     // 누를 때마다([touched]) · 기어가 바뀔 때마다 기다림을 다시 시작한다
     LaunchedEffect(touched, gear) {

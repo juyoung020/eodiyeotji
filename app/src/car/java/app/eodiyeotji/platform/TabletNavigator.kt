@@ -101,6 +101,7 @@ class TabletNavigator @Inject constructor(
         job?.cancel()
         job = null
         _ui.value = null
+        vehicle.navDriving.value = false
         vehicle.speedKmh.value = 0f
         speech.stop()
         if (was != null && was.arrivedAt == null) _events.tryEmit(NaviEvent.RouteCancelled)
@@ -119,6 +120,7 @@ class TabletNavigator @Inject constructor(
             progress = session.update(START.lat, START.lon),
             stops = stops.map { GeoPoint(it.lat, it.lon) },
         )
+        vehicle.navDriving.value = true
         job = scope.launch {
             _events.tryEmit(NaviEvent.RouteStarted(stops.first().name))
             _events.tryEmit(NaviEvent.Destination(NaviPoi(target.name, target.address, target.lat, target.lon)))
@@ -161,6 +163,7 @@ class TabletNavigator @Inject constructor(
                 }
                 if (p.arrived) break
             }
+            vehicle.navDriving.value = false
             vehicle.speedKmh.value = 0f
             _ui.value = _ui.value?.copy(arrivedAt = target.name, next = null)
             speech.speak("${target.name}에 도착했어요.")

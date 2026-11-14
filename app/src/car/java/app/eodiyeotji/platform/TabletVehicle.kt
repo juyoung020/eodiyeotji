@@ -41,6 +41,12 @@ class TabletVehicle @Inject constructor(
     private val _gear = MutableStateFlow("P")
     val gear: StateFlow<String> = _gear.asStateFlow()
 
+    /**
+     * 시연 내비가 달리는 흉내를 내는 중인가 (platform/TabletNavigator.kt). 그동안 인포 화면은 기어를 D로 보인다.
+     * 보이는 것만 바뀐다: 진짜 기어([gear])는 그대로라 앱이 주행 중으로 바뀌거나 시연 주행을 기록하지 않는다.
+     */
+    val navDriving = MutableStateFlow(false)
+
     /** 지금 속도 (km/h, 시연 주행의 값). 서 있으면 0. */
     val speedKmh = MutableStateFlow(0f)
 
