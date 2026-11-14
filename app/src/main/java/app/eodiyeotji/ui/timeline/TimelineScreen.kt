@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.timeline
 
+import androidx.compose.ui.platform.LocalConfiguration
 import app.eodiyeotji.ui.common.eodiShadow
 import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.ui.community.RoundIconButton
@@ -1376,7 +1377,8 @@ private fun EntryRow(
     val bg by animateColorAsState(if (selected) c.accentSoft else Color.Transparent, tween(SelectMs), label = "entry-bg")
     val edge by animateColorAsState(if (selected) c.accent else Color.Transparent, tween(SelectMs), label = "entry-edge")
     val shape = RoundedCornerShape(EodiTheme.space.radiusM)
-    val compact = LocalCompactEntries.current
+    // 폰(좁은 화면)도 좁은 판처럼: 오른쪽 대표 사진(96dp)을 두면 제목 칸이 80dp 남짓이라 "마포구 / 동교동"처럼 이름이 꺾였다
+    val compact = LocalCompactEntries.current || LocalConfiguration.current.screenWidthDp < 600
     // 누르기 = 고르기, 길게 누르기 = ⋯ 메뉴 (기록 고치기)
     Surface(
         color = bg,

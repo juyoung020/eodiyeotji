@@ -147,7 +147,7 @@ fun ParkedCarCard(
                 }
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("내 차 · $time 주차 · ${parkedFor(now - car.tMs)}", style = type.label, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("$time 주차 · ${parkedFor(now - car.tMs)}", style = type.label, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(car.name.ifBlank { "주차한 곳" }, style = type.bodyStrong, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 SecondaryPill("찾았어요", null, onDismiss)
@@ -182,13 +182,13 @@ fun ParkedCarCard(
     }
 }
 
-/** "12분째" · "2시간 10분째" · "1일째". */
+/** "12분째" · "2시간째" · "1일째" (한 줄에 들어가게 짧게: "내 차 · 오후 6:43 주차 · 2…"로 잘렸다 — 내 차인 것은 P 표시가 말한다). */
 private fun parkedFor(ms: Long): String {
     val m = (ms / 60_000).coerceAtLeast(0)
     return when {
         m < 1 -> "방금"
         m < 60 -> "${m}분째"
-        m < 24 * 60 -> if (m % 60 == 0L) "${m / 60}시간째" else "${m / 60}시간 ${m % 60}분째"
+        m < 24 * 60 -> "${m / 60}시간째"
         else -> "${m / (24 * 60)}일째"
     }
 }

@@ -1,5 +1,6 @@
 package app.eodiyeotji.ui.memorymap
 
+import androidx.compose.ui.platform.LocalConfiguration
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -157,8 +158,11 @@ fun MemoryMapOverlay(viewModel: RecapViewModel) {
                     .semantics { contentDescription = backLabel },
                 contentAlignment = Alignment.Center,
             ) { Icon(EodiIcons.Back, contentDescription = null, tint = Moon, modifier = Modifier.size(36.dp)) }
-            Spacer(Modifier.width(20.dp))
-            Text(stringResource(R.string.memory_map_title), style = EodiTheme.type.bodyStrong, fontWeight = FontWeight.Bold, color = Moon)
+            // 폰처럼 좁은 화면에서는 제목을 뺀다: 오른쪽 위 달 표시(폭 고정)와 겹쳐 "기억 지도2026년 6월"로 붙어 보였다
+            if (LocalConfiguration.current.screenWidthDp >= WIDE_DP) {
+                Spacer(Modifier.width(20.dp))
+                Text(stringResource(R.string.memory_map_title), style = EodiTheme.type.bodyStrong, fontWeight = FontWeight.Bold, color = Moon)
+            }
         }
     }
 }
@@ -431,6 +435,9 @@ private suspend fun buildStyle(context: Context, data: MemoryMap): String = with
 
 /** 지금 그리는 달 칸 폭: "2025년 11월" + 여유. 글자가 바뀔 때 칸이 줄었다 늘며 잘리지 않게 고정. */
 private val MONTH_LABEL_W = 220.dp
+
+/** 이 폭(dp)부터 제목과 달 표시를 한 줄에 같이 둔다 (차 · 태블릿). */
+private const val WIDE_DP = 600
 
 /** 재생 조작 동그라미 버튼 (뒤로 버튼과 같은 76dp 터치 크기). */
 @Composable
