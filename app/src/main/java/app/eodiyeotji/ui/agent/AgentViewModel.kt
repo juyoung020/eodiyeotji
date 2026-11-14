@@ -173,6 +173,14 @@ class AgentViewModel @Inject constructor(
     private val note = MutableStateFlow<String?>(null)
     private val followUp = MutableStateFlow(false)
     private val followUpCourses = MutableStateFlow(false)
+    /**
+     * 말로 시작한 대화: 마이크를 한 번 누르면, 답을 소리로 읽고 다 읽은 뒤 마이크를 다시 누르지 않아도 이어서 듣는다
+     * ("이전에 갔던 바다 어디였지" → "그때 먹었던 순두부찌개 식당은?" → "거기로 안내해 줘").
+     * 이어 듣다가 말이 없거나, 손으로 묻거나, 듣기를 취소 · 닫으면 끝난다.
+     */
+    private var voiceChat = false
+    /** 바로 다음 [ask]는 말로 한 질문이다 (검색 칸 마이크로 한 질문을 넘겨받을 때, [spokenNext]) */
+    private var spokenNext = false
     /** 검색 칸 받아쓰기 중 (알아들은 말을 묻지 않고 [dictated]로 넘긴다) */
     private val dictating = MutableStateFlow(false)
     private val _dictated = MutableSharedFlow<String>(extraBufferCapacity = 1)
@@ -261,6 +269,7 @@ class AgentViewModel @Inject constructor(
             speech.stop()
         } else {
             dictating.value = false
+            voiceChat = true
             listen(followUp = false)
         }
     }
@@ -283,6 +292,7 @@ class AgentViewModel @Inject constructor(
 
     /** 듣기 취소 (× 버튼). */
     fun cancelVoice() {
+        voiceChat = false
         followUp.value = false
         dictating.value = false
         speech.cancel()
@@ -301,7 +311,17 @@ class AgentViewModel @Inject constructor(
         }
     }
 
-    fun ask(utterance: String) = ask(utterance, replace = false)
+    /** 검색 칸 마이크로 한 질문을 곧 [ask]로 넘긴다: 그 질문부터 말로 이어 가는 대화([voiceChat])로 본다. */
+    fun spokenNext() {
+        spokenNext = true
+    }
+
+    /** 글로 묻는다 (검색 칸 · 추천 질문 칩). 말로 이어 가던 대화는 여기서 끝난다 — 답을 읽거나 다시 듣지 않는다 ([spokenNext] 뒤가 아니면). */
+    fun ask(utterance: String) {
+        voiceChat = spokenNext
+        spokenNext = false
+        ask(utterance, replace = false)
+    }
 
     /** [replace]: 지금 차례를 대화에 남기지 않고 바꾼다 (실패한 질문 다시 묻기). */
     private fun ask(utterance: String, replace: Boolean) {
@@ -402,6 +422,7 @@ class AgentViewModel @Inject constructor(
         actionJob?.cancel()
         tts.stop()
         speech.cancel()
+        voiceChat = false
         followUp.value = false
         turn.value = null
         history.value = emptyList()
@@ -433,8 +454,8 @@ class AgentViewModel @Inject constructor(
         dictating.value = false
         this.followUp.value = followUp
         followUpCourses.value = courses
-        // 이어 듣기는 한마디("응")라 짧게 기다린다
-        if (followUp) speech.start(FOLLOW_UP_LISTEN_MS) else speech.start()
+        // 이어 듣기는 한마디("응")라 짧게 기다린다. 말로 이어 가는 대화는 다음 질문을 통째로 말하므로 처음처럼 넉넉히 듣는다.
+        if (followUp && !voiceChat) speech.start(FOLLOW_UP_LISTEN_MS) else speech.start()
     }
 
     private fun onSpeech(r: SpeechResult) {
@@ -452,12 +473,18 @@ class AgentViewModel @Inject constructor(
         val wasFollowUp = followUp.value
         followUp.value = false
         when (r) {
-            is SpeechResult.Final -> ask(r.text)
-            // 답 뒤에 이어 듣다가 아무 말이 없으면 조용히 끝낸다 (운전자가 화면 버튼을 누를 수도 있다)
-            SpeechResult.NoSpeech -> if (!wasFollowUp) showNote(MSG_NO_SPEECH)
-            is SpeechResult.Failed -> if (!wasFollowUp) {
-                showNote(r.message)
-                if (driving.isDriving.value) tts.speak(r.message)
+            is SpeechResult.Final -> ask(r.text, replace = false)
+            // 답 뒤에 이어 듣다가 아무 말이 없으면 조용히 끝낸다 (운전자가 화면 버튼을 누를 수도 있다). 말로 이어 가던 대화도 여기서 끝난다.
+            SpeechResult.NoSpeech -> {
+                voiceChat = false
+                if (!wasFollowUp) showNote(MSG_NO_SPEECH)
+            }
+            is SpeechResult.Failed -> {
+                voiceChat = false
+                if (!wasFollowUp) {
+                    showNote(r.message)
+                    if (driving.isDriving.value) tts.speak(r.message)
+                }
             }
         }
     }
@@ -474,9 +501,10 @@ class AgentViewModel @Inject constructor(
     /**
      * 답이 끝났다: 운전 중이면 짧은 답을 읽고, 이어서 고를 것(안내 제안·추천 코스)이 있으면 한 번 더 듣는다
      * ("응" → 안내 시작, "2번으로 가자"). 정차 중에는 읽지 않는다 (화면 스피커 버튼으로 [speakAnswer]).
+     * 말로 시작한 대화([voiceChat])면 정차 중에도 읽고, 고를 것이 없어도 다 읽은 뒤 이어서 듣는다 (마이크는 처음 한 번만).
      */
     private fun speakIfDriving(id: Long) {
-        if (!driving.isDriving.value) return
+        if (!driving.isDriving.value && !voiceChat) return
         val t = turn.value?.takeIf { it.id == id } ?: return
         // 소리로 읽을 글: 화면 기호는 말로 ("♥ 513" → "하트 513")
         val text = (t.error ?: t.answer).replace("♥", "하트 ")
@@ -484,8 +512,9 @@ class AgentViewModel @Inject constructor(
         val choice = t.error == null && t.action is ActionState.Idle && (t.proposals.isNotEmpty() || t.courses.isNotEmpty())
         val courses = t.courses.size > 1
         tts.speak(text) {
-            // 다 읽은 뒤에도 같은 질문 화면이고 운전 중일 때만
-            if (choice && turn.value?.id == id && driving.isDriving.value && !speech.needsMicPermission()) listen(followUp = true, courses = courses)
+            // 다 읽은 뒤에도 같은 질문 화면일 때만: 말로 이어 가는 대화면 늘, 아니면 운전 중에 고를 것이 있을 때
+            val again = voiceChat || (choice && driving.isDriving.value)
+            if (again && turn.value?.id == id && !speech.needsMicPermission()) listen(followUp = true, courses = courses)
         }
     }
 

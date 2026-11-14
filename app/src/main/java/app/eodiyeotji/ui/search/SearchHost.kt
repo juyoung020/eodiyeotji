@@ -19,7 +19,12 @@ import app.eodiyeotji.ui.agent.AgentViewModel
 import app.eodiyeotji.ui.agent.VoiceUi
 import app.eodiyeotji.ui.community.CommunityTab
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withTimeoutOrNull
+
+/** 말로 한 검색이 질문인지 알려 줄 검색 결과를 이만큼 기다린다 (기기 안 검색이라 보통 수 ms) */
+private const val SPOKEN_QUESTION_WAIT_MS = 1_500L
 
 /**
  * 화면(내 기록 · 커뮤니티)에 끼울 검색 자리를 만든다: 검색 칸 + 결과 + 말로 찾기.
@@ -47,11 +52,22 @@ fun rememberSearchSlot(
     var dictatingHere by remember { mutableStateOf(false) }
     LaunchedEffect(scope) { viewModel.setScope(scope) }
     val vm by rememberUpdatedState(viewModel)
+    val actionsNow by rememberUpdatedState(actions)
     LaunchedEffect(agent) {
         agent.dictated.collect { text ->
             if (dictatingHere) {
                 dictatingHere = false
                 vm.submit(text)
+                // 말로 한 것이 질문("이전에 갔던 바다 어디였지")이면 결과 목록에서 멈추지 않고 바로 AI에게 넘긴다.
+                // 그 뒤로는 답을 읽고 이어서 들으므로 마이크는 처음 한 번만 누르면 된다 (낱말 검색 "순두부"는 결과 목록 그대로).
+                val q = text.trim()
+                val ai = withTimeoutOrNull(SPOKEN_QUESTION_WAIT_MS) { vm.state.first { it.answer?.askAi?.text == q } }?.answer?.askAi
+                if (ai?.primary == true) {
+                    vm.remember()
+                    vm.hide()
+                    agent.spokenNext()
+                    actionsNow.askAi(ai.text)
+                }
             }
         }
     }
