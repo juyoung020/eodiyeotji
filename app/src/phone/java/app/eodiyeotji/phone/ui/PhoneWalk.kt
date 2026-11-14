@@ -295,12 +295,13 @@ fun PhoneWalkScreen(target: WalkTarget, onClose: () -> Unit, onFoundCar: () -> U
 @Composable
 private fun WalkBanner(guide: WalkGuide?, target: WalkTarget, accent: Color) {
     // 화살표는 가장 가까운 쪽으로 돌도록 이어 붙인 각도로 움직인다
-    var unwrapped by remember { mutableStateOf(0f) }
+    // (그리는 도중에 상태를 바꾸면 한 번 더 그리게 되므로, 상태가 아닌 칸에 담아 둔다)
+    val unwrapped = remember { floatArrayOf(0f) }
     guide?.let { g ->
-        val d = (((g.relativeDeg.toFloat() - unwrapped) % 360f) + 540f) % 360f - 180f
-        if (kotlin.math.abs(d) > 0.5f) unwrapped += d
+        val d = (((g.relativeDeg.toFloat() - unwrapped[0]) % 360f) + 540f) % 360f - 180f
+        if (kotlin.math.abs(d) > 0.5f) unwrapped[0] += d
     }
-    val angle by animateFloatAsState(unwrapped, label = "walk-arrow")
+    val angle by animateFloatAsState(unwrapped[0], label = "walk-arrow")
     Row(
         Modifier.fillMaxWidth().eodiShadow(EodiTheme.elevation.level2, RoundedCornerShape(24.dp)).clip(RoundedCornerShape(24.dp)).background(accent, RoundedCornerShape(24.dp)).padding(20.dp),
         verticalAlignment = Alignment.CenterVertically,

@@ -234,15 +234,15 @@ class PhoneNavigator @Inject constructor(
         return s
     }
 
-    /** 지금 위치: 새 위치를 잠깐 기다리고, 안 오면 기기가 마지막으로 안 위치(2분 안의 것)를 쓴다. */
+    /** 지금 위치: 방금([FRESH_FIX_MS] 안) 안 위치가 있으면 기다리지 않고 바로 쓴다. 없으면 새 위치를 잠깐 기다리고, 안 오면 기기가 마지막으로 안 위치(2분 안의 것)를 쓴다. */
     private suspend fun currentFix(): LocationFix? =
-        withTimeoutOrNull(FIX_TIMEOUT_MS) { location.updates().first() } ?: lastKnown()
+        lastKnown(FRESH_FIX_MS) ?: withTimeoutOrNull(FIX_TIMEOUT_MS) { location.updates().first() } ?: lastKnown()
 
     @android.annotation.SuppressLint("MissingPermission")
-    private fun lastKnown(): LocationFix? {
+    private fun lastKnown(maxAgeMs: Long = LAST_KNOWN_MAX_AGE_MS): LocationFix? {
         val lm = context.getSystemService(android.location.LocationManager::class.java) ?: return null
         val l = runCatching { lm.getProviders(true).mapNotNull { lm.getLastKnownLocation(it) }.maxByOrNull { it.time } }.getOrNull() ?: return null
-        if (System.currentTimeMillis() - l.time > LAST_KNOWN_MAX_AGE_MS) return null
+        if (System.currentTimeMillis() - l.time > maxAgeMs) return null
         return LocationFix(l.latitude, l.longitude, l.time, l.accuracy)
     }
 
@@ -254,5 +254,8 @@ class PhoneNavigator @Inject constructor(
         const val TAG = "EodiPhoneNavi"
         const val FIX_TIMEOUT_MS = 4_000L
         const val LAST_KNOWN_MAX_AGE_MS = 2 * 60_000L
+        
+        /** 이 안에 안 위치는 새 위치를 기다리지 않고 바로 쓴다 (안내 시작이 몇 초 빨라진다) */
+        const val FRESH_FIX_MS = 10_000L
     }
 }
