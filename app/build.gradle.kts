@@ -72,8 +72,8 @@ android {
         applicationId = "app.eodiyeotji"
         minSdk = 28
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.7.0"
+        versionCode = 8
+        versionName = "0.8.0"
         // 에뮬레이터(x86_64)와 실기기(차·폰 arm64)만 만든다
         ndk { abiFilters += listOf("x86_64", "arm64-v8a") }
         val useRelay = relayUrl.isNotEmpty()
