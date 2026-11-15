@@ -393,8 +393,8 @@ brand_bg = bg_from(grab(os.path.join(AI, "vid_A.mp4"), 3.8, "open_last"), "brand
 add("brand", [seg_still("brand", brand_bg, 2.8)])
 add("rec", [seg_app("rec_a", "startrec", 2.4, 3.6, ca=A0, cb=(760, 300, 2.0)),
             seg_app("rec_b", "firstrun", 7.5, 3.4, ca=A0, cb=(1560, 470, 1.7)),
-            seg_app("rec_c", "voice", 2.6, 13.4, ca=(1700, 300, 1.6), cb=(2050, 640, 1.4), audio=True, appvol=8.0)],
-    [("k02", 0, 0.3), ("k03", 2, 0.0)], ("01", "기록은 알아서, 찾을 땐 말로"))
+            seg_app("rec_c", "voice", 4.0, 8.1, ca=(1700, 300, 1.6), cb=(2050, 640, 1.4), audio=True, appvol=8.0)],
+    [("k02", 0, 0.3), ("k03", 1, 0.6)], ("01", "기록은 알아서, 찾을 땐 말로"))
 add("drive", [seg_ai("drive", "vid_H2.mp4", 0, 3.2, ("recall", 5.0)),
               seg_app("dr_a", "oneline", 4.6, 10.2, ca=(1700, 300, 1.6), cb=(1850, 560, 1.32), audio=True, appvol=8.0),
               seg_app("dr_b", "roadside", 4.2, 9.2, ca=DRV, cb=(1450, 520, 1.3), audio=True, appvol=8.0),
@@ -624,7 +624,7 @@ def acard(t0, t1, lines):
         blit(cv, sp.im, 120 - sp.m, 880 + sp.m + 40 * (1 - ease_out(p)), 0.9 + 0.1 * ease_back(p, 1.5), a, 0.0, 1.0)
     els.append((t0, t1, draw))
 
-v1 = P[("rec", 2)]; bubble(v1 + 1.5, v1 + 4.6, "작년에 비 오던 날 넷이서 간 바다 어디였지?")
+v1 = P[("rec", 2)]; bubble(v1 + 0.1, v1 + 2.6, "작년에 비 오던 날 넷이서 간 바다 어디였지?")
 # acard(v1 + 5.9, sc_by["rec"]["end"] - 0.1, ["횡성휴게소, 경포해변, 초당할머니순두부에", "들렀어요. 그 코스로 안내할까요?"])
 d1 = P[("drive", 1)]; bubble(d1 + 0.2, d1 + 3.4, "작년 강릉 여행 그대로, 순두부집만 빼고 안내해 줘")
 v2 = P[("drive", 2)]; bubble(v2 + 0.1, v2 + 1.8, "졸려")
