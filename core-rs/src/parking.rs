@@ -44,8 +44,10 @@ impl ParkedCar {
 
 #[uniffi::export]
 impl EodiStore {
-    /// 지금 "주행 중"인데 내 차가 여기 없는가 — 이번 이동이 마지막으로 차를 세운 자리에서 멀리(`transit::CAR_FAR_M`)서 시작했다.
-    /// 지하철 · 버스 · 남의 차를 탄 것이라 폰 판이 운전 중 화면 대신 동승자 화면을 쓴다. 달리는 중이 아니거나 차를 세운 적이 없으면 false.
+    /// 지금 "주행 중"인데 내 차는 다른 곳에 서 있고 지하철을 탄 것으로 보이는가 — 이번 이동이 차를 세운 자리에서 떨어진
+    /// (`transit::away_from_car`) 역 앞에서 시작했다. 폰 판이 운전 중 화면 대신 동승자 화면으로 시작한다.
+    /// 운전자를 동승자로 잘못 보는 쪽이 더 위험해서 좁게 잡는다: 역이 아닌 데서 탄 버스 · 택시, 멀리 가서 모는 렌터카는 false
+    /// (화면의 "동승자예요"로 바꾼다). 달리는 중이 아니거나 차를 세운 적이 없어도 false.
     pub fn riding_without_car(&self) -> Result<bool, CoreError> {
         let conn = self.snapshot()?;
         let last: Option<(i64, i64)> = conn
@@ -72,7 +74,7 @@ impl EodiStore {
             }
         };
         let Some(car) = at("SELECT lat, lon FROM fix WHERE t_ms <= ?1 ORDER BY t_ms DESC LIMIT 1", car_end)? else { return Ok(false) };
-        Ok(haversine_m(car, here) > crate::transit::CAR_FAR_M)
+        Ok(crate::transit::away_from_car(car, here) && crate::subway::near_station(here, RIDE_STATION_M))
     }
 
     /// 지금 주차 중이면 주차한 자리. 달리는 중이거나 기록이 없으면 None.
@@ -139,6 +141,9 @@ impl EodiStore {
         Ok(Some(car))
     }
 }
+
+/// 이번 이동의 첫 위치가 역에서 이만큼 안이면 역에서 탄 것으로 본다 (첫 위치는 역을 나선 뒤에 잡히기도 한다).
+const RIDE_STATION_M: f64 = 400.0;
 
 /// 시각 [t]에 시작한 이동이 지하철 이동으로 판정돼 있는가.
 fn transit_started_at(conn: &rusqlite::Connection, t: i64) -> Result<bool, CoreError> {

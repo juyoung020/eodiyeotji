@@ -1304,10 +1304,8 @@ impl EodiStore {
 /// 바로 뒤 차 주행이 역 근처에서 시작하고 이 이동이 거기서 멀리서 끝났으면 그 역에서 내린 것으로 본다 ([TRANSIT_JOIN_MS] 안일 때만).
 /// 돌려주는 둘째 값 = 내린 역 뒤에 기록된 점들 (역에서 목적지까지 걸은 길). 다음 차 주행의 역까지 이었으면 비어 있다.
 fn transit_ride(k: usize, real: &[usize], trips: &[TripRow], hidden: &crate::edits::Hidden, next_start: Option<(Point, i64)>) -> Option<(crate::subway::Ride, Vec<Point>)> {
-    use crate::geo::haversine_m;
-    use crate::transit::CAR_FAR_M;
     let t = &trips[real[k]];
-    let car = |p: Point, far_from: Point, gap_ms: i64| haversine_m(p, far_from) > CAR_FAR_M && gap_ms <= TRANSIT_JOIN_MS;
+    let car = |p: Point, far_from: Point, gap_ms: i64| crate::transit::away_from_car(p, far_from) && gap_ms <= TRANSIT_JOIN_MS;
     // 기록 안에서 탄 역 · 내린 역: 기록에는 역까지 걸어간 길이 섞여 있다 (내려서 박물관까지 걸은 700m 등)
     // → 역 바로 앞을 지난 첫 점 · 마지막 점을 쓴다
     let at_station = |p: &&Point| crate::subway::near_station(**p, crate::transit::STATION_AT_M);

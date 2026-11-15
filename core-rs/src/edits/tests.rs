@@ -745,11 +745,20 @@ fn a_ride_that_starts_far_from_the_parked_car_is_not_my_car() {
     store.ingest(vec![GeoFix { lat: EMART.3, lon: EMART.4, t_ms: t, accuracy_m: 10.0 }]).unwrap();
     assert!(!store.riding_without_car().unwrap());
     store.mark_drive_event(DriveEvent::End, t + MIN).unwrap();
-    // 12km 떨어진 곳에서 "주행" 시작 (아직 안 끝남) → 내 차가 아니다
+    // 12km 떨어진 역(쌍문역) 앞에서 "주행" 시작 (아직 안 끝남) → 내 차가 아니다
     let t = t + HOUR;
     store.mark_drive_event(DriveEvent::Start, t).unwrap();
-    store.ingest(vec![GeoFix { lat: 37.66, lon: 127.04, t_ms: t, accuracy_m: 10.0 }]).unwrap();
+    store.ingest(vec![GeoFix { lat: 37.6486, lon: 127.0347, t_ms: t, accuracy_m: 10.0 }]).unwrap();
     assert!(store.riding_without_car().unwrap());
+    store.mark_drive_event(DriveEvent::End, t + MIN).unwrap();
+    // 역이 아닌 곳에서 시작(버스 · 택시일 수도, 운전일 수도) · 제주에서 렌터카 → 운전 중 화면 그대로
+    for (k, (lat, lon)) in [(37.60, 127.10), (33.5067, 126.4930)].into_iter().enumerate() {
+        let t = t + (k as i64 + 1) * HOUR;
+        store.mark_drive_event(DriveEvent::Start, t).unwrap();
+        store.ingest(vec![GeoFix { lat, lon, t_ms: t, accuracy_m: 10.0 }]).unwrap();
+        assert!(!store.riding_without_car().unwrap(), "{lat},{lon}");
+        store.mark_drive_event(DriveEvent::End, t + MIN).unwrap();
+    }
 }
 
 #[test]

@@ -26,6 +26,11 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $adb = "$SdkRoot\platform-tools\adb.exe"
 $base = 'http://127.0.0.1:8088'
+# 폰도 adb에 붙어 있으면 "more than one device"로 멈춘다 → 에뮬레이터를 고른다 (ANDROID_SERIAL을 정해 뒀으면 그대로)
+if (-not $env:ANDROID_SERIAL) {
+    $emu = @((& $adb devices) -match '^emulator-\d+\s+device')
+    if ($emu.Count -gt 0) { $env:ANDROID_SERIAL = ($emu[0] -split '\s+')[0] }
+}
 & $adb forward tcp:8088 tcp:8088 | Out-Null
 
 function Invoke-Vc([string]$path) {

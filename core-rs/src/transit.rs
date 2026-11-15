@@ -4,6 +4,7 @@
 //! - **신호 모양:** 지하 · 역 사이에서는 위치가 끊겼다가 다음 역에서 나타난다 → [JUMP_GAP_MS] 넘게 끊긴 뒤
 //!   [JUMP_MIN_M] 넘게 떨어진 점이 [MIN_JUMPS]번 이상 (차는 1초마다 이어서 들어온다. 터널 한두 번은 이 수에 못 미친다).
 //! - **내 차가 아님:** 출발점이 마지막으로 차를 세운 자리에서 [CAR_FAR_M] 넘게 떨어져 있다 (차는 세운 자리에서만 출발한다).
+//!   단 [CAR_FAR_MAX_M]보다 멀면 근거로 쓰지 않는다 — 제주에서 렌터카를 모는 것처럼 다른 차를 모는 경우다.
 //! - **역:** 출발 · 도착점이 역에서 [STATION_AT_M] 안이거나(`subway` 모듈의 역 표), 장소 이름이 역이다 ("쌍문역", "치킨뱅이 서울역점").
 //!
 //! 신호 모양이 맞고, 나머지 둘 중 하나가 맞으면 지하철 이동이다. 틀리면 사용자가 주행 ⋯ 메뉴에서 바꾼다 (`set_trip_transit`).
@@ -20,6 +21,16 @@ pub(crate) const JUMP_MIN_M: f64 = 300.0;
 pub(crate) const MIN_JUMPS: u32 = 3;
 /// 차를 세운 자리에서 이만큼 넘게 떨어져 출발했으면 내 차가 아니다 (늦게 깨어난 출발을 잇는 거리 `drivedetect`와 같다)
 pub(crate) const CAR_FAR_M: f64 = 1_500.0;
+
+/// 차를 세운 자리에서 이보다도 멀면 "내 차가 아니다"의 근거로 쓰지 않는다: 비행기 · 기차로 멀리 가서 렌터카를 몰거나(제주),
+/// 돌아와서 집에 둔 차를 모는 경우다. 그때는 차 주행으로 두고, 세운 자리도 그 차를 따라간다.
+pub(crate) const CAR_FAR_MAX_M: f64 = 60_000.0;
+
+/// 차를 세운 자리 [car]에서 [p]가 "내 차가 여기 없다"고 볼 만큼 떨어져 있는가 ([CAR_FAR_M] 초과 ~ [CAR_FAR_MAX_M] 이하).
+pub(crate) fn away_from_car(car: Point, p: Point) -> bool {
+    let d = haversine_m(car, p);
+    d > CAR_FAR_M && d <= CAR_FAR_MAX_M
+}
 
 /// 출발 · 도착점이 역에서 이만큼 안이면 역에서 타고 내린 것으로 본다
 pub(crate) const STATION_AT_M: f64 = 200.0;
@@ -40,7 +51,7 @@ pub(crate) fn is_transit(jumps: u32, start: Point, end: Point, car_at: Option<Po
     if jumps < MIN_JUMPS {
         return false;
     }
-    let far_from_car = car_at.is_some_and(|c| haversine_m(c, start) > CAR_FAR_M);
+    let far_from_car = car_at.is_some_and(|c| away_from_car(c, start));
     let at_station = |p: Point| crate::subway::near_station(p, STATION_AT_M);
     far_from_car || at_station(start) || at_station(end) || station_name(start_name) || station_name(end_name)
 }
@@ -79,6 +90,8 @@ mod tests {
         assert!(!is_transit(4, start, end, Some(at(200.0)), "응봉동 현대아파트", "센터원빌딩"));
         // 뛴 점 + 차에서 12km 떨어진 출발
         assert!(is_transit(4, start, end, Some(at(12_000.0)), "", ""));
+        // 차에서 400km 떨어진 곳(제주 렌터카 · 돌아와서 집 차): 뛴 점이 있어도 "내 차가 아님"의 근거가 아니다
+        assert!(!is_transit(4, start, end, Some(at(400_000.0)), "", ""));
         // 뛴 점 + 역 (차를 역 앞에 세우고 탄 경우)
         assert!(is_transit(3, start, end, Some(at(200.0)), "치킨뱅이 서울역점", ""));
         assert!(is_transit(3, start, end, None, "", "쌍문역"));
