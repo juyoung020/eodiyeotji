@@ -66,7 +66,8 @@ pub(crate) const DAY_MS: i64 = 86_400_000;
 /// 3: 들른 곳 수(`stay_count`)를 하루 출발·도착 머문 곳 뺀 수로, 주행 수(`trip_count`)를 타임라인 주행 줄 수로.
 /// 4: 머문 곳 이름이 없는 날의 `stop_names`를 그날 주행 출발·도착 장소 이름으로 채운다.
 /// 5: 주차 반경을 300m → 500m로 (`TripConfig::park_radius_m`) → 머문 곳이 늘 수 있다.
-const DAY_RULES: i64 = 5;
+/// 6: 지하철로 간 곳은 다음 출발이 1.5km 안이면 머문 곳으로 (`TRANSIT_WALK_M`).
+const DAY_RULES: i64 = 6;
 /// 이보다 짧게(거리·시간 둘 다) 움직인 주행은 타임라인에서 숨긴다 (거리 합에는 들어간다). 에뮬레이터 위치 재생 · 주차장 안 이동.
 pub const BLIP_M: f64 = 500.0;
 pub const BLIP_MS: i64 = 60_000;
@@ -1259,8 +1260,12 @@ impl EodiStore {
                 }
             }
             // 주행 사이 머문 곳·지금 머무는 중인 곳은 중심이 이 주행의 도착점이라 도착점의 장소 이름을 쓴다.
+            // 지하철로 간 곳은 역에서 걸어 들어가고 걸어 나온다 (이촌역 ↔ 국립중앙박물관 700m) → 이 이동이나 다음 이동이 지하철이면
+            // 다음 출발이 걸을 만한 거리([TRANSIT_WALK_M]) 안일 때 그곳에 머문 것으로 본다 (차는 세운 자리 반경 그대로).
+            let walk_cfg = trip::TripConfig { park_radius_m: TRANSIT_WALK_M, ..self.cfg };
+            let stay_cfg = if transit || next_start.is_some_and(|(_, start_ms)| hidden.transit(start_ms)) { &walk_cfg } else { &self.cfg };
             let after = match next_start {
-                Some((p, leave)) => trip::between_stay(t.end, t.end_ms, p, leave, &self.cfg),
+                Some((p, leave)) => trip::between_stay(t.end, t.end_ms, p, leave, stay_cfg),
                 None if ended || trailing_jitter => Some(Stay { center: t.end, arrive_ms: t.end_ms, leave_ms: t.end_ms }),
                 None => None,
             };
@@ -1301,6 +1306,9 @@ fn transit_ride(k: usize, real: &[usize], trips: &[TripRow], hidden: &crate::edi
     let to = next_start.filter(|&(p, start_ms)| !hidden.transit(start_ms) && car(p, t.end, start_ms - t.end_ms)).map_or(alight, |(p, _)| p);
     crate::subway::ride(from, to).or_else(|| crate::subway::ride(board, alight))
 }
+
+/// 지하철로 간 곳에서 다음 출발까지 걸을 만한 거리 (역 ↔ 목적지).
+const TRANSIT_WALK_M: f64 = 1_500.0;
 
 /// 지하철 이동 앞뒤의 차 주행과 이 시간 안에 이어져야 같은 나들이로 보고 역까지 잇는다.
 const TRANSIT_JOIN_MS: i64 = 3 * 3_600_000;

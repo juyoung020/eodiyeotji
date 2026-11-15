@@ -751,3 +751,22 @@ fn a_ride_that_starts_far_from_the_parked_car_is_not_my_car() {
     store.ingest(vec![GeoFix { lat: 37.66, lon: 127.04, t_ms: t, accuracy_m: 10.0 }]).unwrap();
     assert!(store.riding_without_car().unwrap());
 }
+
+#[test]
+fn a_place_reached_by_subway_is_a_stay_even_when_the_way_back_starts_at_the_station() {
+    let db = TempDb::new("transit-stay");
+    let store = db.open();
+    let parked = drive(&store, kst(2026, 10, 5, 13, 0), HOME, EMART, 10.0);
+    let far: Spot = ("", "", "", 37.6600, 127.0400);
+    let museum: Spot = ("", "", "", 37.6200, 127.0300);
+    // 지하철로 박물관까지 → 40분 머묾 → 700m 떨어진 역에서 다시 지하철
+    let arrived = subway(&store, parked + 40 * MIN, far, museum);
+    let station: Spot = ("", "", "", 37.6200 + 700.0 / 111_195.0, 127.0300);
+    let back = arrived + 40 * MIN;
+    let now = subway(&store, back, station, far) + HOUR;
+    assert_eq!(store.classify_transit(now).unwrap(), 2);
+    let d = store.day_detail("2026-10-05".into()).unwrap();
+    assert_eq!(d.transits.len(), 2);
+    let visit = d.stays.iter().find(|s| s.arrive_ms == arrived).expect("박물관에 머문 곳");
+    assert_eq!(visit.leave_ms, back);
+}
