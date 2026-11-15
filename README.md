@@ -41,7 +41,9 @@
 |---|---|
 | **앱 이름** | 어디였지 (팀 Car-pe Diem) · 패키지 `app.eodiyeotji` |
 | **한 줄 소개** | 차가 알아서 기록한 길을, 말 한마디로 다시 찾고 그대로 안내받는 드라이브 기억 앱 |
-| **APK** | [`Car-pe-Diem_eodiyeotji_release.apk`](https://github.com/juyoung020/eodiyeotji/releases/download/submission-3/Car-pe-Diem_eodiyeotji_release.apk) (62MB, [Releases `submission-3`](https://github.com/juyoung020/eodiyeotji/releases/tag/submission-3) · 안내 [`apk/`](apk/)) |
+| **APK (차 판 · 심사용)** | [`Car-pe-Diem_eodiyeotji_release.apk`](https://github.com/juyoung020/eodiyeotji/releases/download/submission-3/Car-pe-Diem_eodiyeotji_release.apk) (62MB) → Pleos Connect 에뮬레이터 |
+| **APK (폰 판)** | [`Car-pe-Diem_eodiyeotji_phone_release.apk`](https://github.com/juyoung020/eodiyeotji/releases/download/submission-3/Car-pe-Diem_eodiyeotji_phone_release.apk) (50MB) → 일반 Android 폰 · 내린 뒤 내 차 찾기 · 사진 연결 |
+| **릴리즈 페이지** | [Releases `submission-3`](https://github.com/juyoung020/eodiyeotji/releases/tag/submission-3) · 설치 안내 [`apk/`](apk/) |
 | **테스트 환경** | Pleos Connect 에뮬레이터 v2.1.0 (Android API 34, x86_64, 2560 × 1440) |
 | **필요한 설정** | **없습니다.** 설치만 하면 AI · 장소 검색 · 같이 가기까지 동작합니다 (클라우드 중계 서버 사용) |
 | **시연 영상** | [`video/v15_112s.mp4`](video/v15_112s.mp4) (1분 52초, 1차 제출 최종본) |
@@ -49,7 +51,7 @@
 ### 실행하기
 
 ```powershell
-adb install -r Car-pe-Diem_eodiyeotji_release.apk
+adb install -r Car-pe-Diem_eodiyeotji_release.apk         # 차 판 → 에뮬레이터 (폰 판은 _phone_release.apk를 폰에)
 adb shell monkey -p app.eodiyeotji -c android.intent.category.LAUNCHER 1   # 또는 앱 목록에서 "어디였지"
 ```
 
