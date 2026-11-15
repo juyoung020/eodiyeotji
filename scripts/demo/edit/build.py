@@ -17,7 +17,7 @@ SCENE_DIRS = [os.path.join(REPO, "build", "demo", d, "scenes") for d in
 # recall: retake-keep 은 정차 중 첫 화면에서 뜸 → 주행 중 카드가 뜨는 retake-tts
 # review: retake-fix (경로선 끊김 수정본)
 # recall: retake-recall 은 회상 횟수 제한으로 카드가 안 떠서 쓰지 않는다 → 주행 중 카드가 뜨는 retake-tts
-SCENE_PIN = {"recall": "retake-recall4",
+SCENE_PIN = {"recall": "retake-recall6",
              "review": "retake-fix"}
 
 
@@ -398,8 +398,8 @@ add("rec", [seg_app("rec_a", "startrec", 2.4, 3.6, ca=A0, cb=(760, 300, 2.0)),
 add("drive", [seg_ai("drive", "vid_H2.mp4", 0, 3.2, ("recall", 5.0)),
               seg_app("dr_a", "oneline", 4.6, 10.2, ca=(1700, 300, 1.6), cb=(1850, 560, 1.32), audio=True, appvol=8.0),
               seg_app("dr_b", "roadside", 4.2, 9.2, ca=DRV, cb=(1450, 520, 1.3), audio=True, appvol=8.0),
-              seg_app("dr_c", "recall", 124.8, 5.0, ca=DRV, cb=(1500, 420, 1.3), audio=True, appvol=8.0)],  # retake-recall4: 앱 음성 125.4–128.9초
-    [("k04", 0, 0.3)], ("02", "운전 중엔 음성으로"))
+              seg_app("dr_c", "recall", 11.8, 7.6, ca=DRV, cb=(1500, 420, 1.3), audio=True, appvol=8.0)],  # retake-recall6: 경포해변 카드 약 15초~, 앱 음성 15.7–18.6초
+    [("k04", 0, 0.3), ("k04b", 3, 0.2)], ("02", "운전 중엔 음성으로"))
 def seg_blog(name, D=5.2):
     """휴대폰 속 가상의 광고 가득한 블로그 글 (blog_phone.py)"""
     # 사진: AI 실사 풍경(vid_F)을 여러 구도로 잘라 쓴다 (앱 화면 조각은 쓰지 않는다)
@@ -472,6 +472,7 @@ SUBS = {
     "k02": "시동만 걸면, 갔던 길은|[차가 알아서] 저장합니다",
     "k03": "찾을 땐 [말 한마디]|AI가 내 기록에서 [바로] 찾아 줍니다",
     "k04": "운전 중에도 [말로]|코스를 다시 짜고, 졸리면 [쉼터]까지",
+    "k04b": "예전에 들른 곳을 지나면,|차가 [먼저] 꺼내 줍니다",
     "k05": "여행 코스를 찾으면, [광고만] 가득하죠",
     "k06": "여기선 차가 [실제로 달린 기록]만 코스가 됩니다|좋아요 많은 후기를 고르면, [그대로 안내]",
     "k07": "같이 갈 땐, 일행 차가 [어디쯤]인지|연료는 [얼마나] 남았는지,|어느 [휴게소]에 들를지 함께",
