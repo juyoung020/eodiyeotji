@@ -141,6 +141,7 @@ fn running_trip_end_waits_and_nearby_points_share_one_place() {
     assert!(d.entries.iter().all(|e| match e {
         crate::store::DayEntry::Trip { trip, .. } => trip.start_place.is_some() && trip.end_place.is_some(),
         crate::store::DayEntry::Stay { stay } => stay.place.is_some(),
+        crate::store::DayEntry::Transit { .. } => true,
     }));
 
     // 다음 날 같은 주차장에 또 가면 다시 묻지 않고 같은 이름

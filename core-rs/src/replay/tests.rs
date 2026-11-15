@@ -34,6 +34,7 @@ fn day(trips: Vec<TripSummary>, stays: Vec<StaySummary>) -> DayDetail {
         day: "2025-11-06".into(),
         trips,
         stays,
+        transits: Vec::new(),
         summary: DaySummary {
             replayable: false,
             day: "2025-11-06".into(),

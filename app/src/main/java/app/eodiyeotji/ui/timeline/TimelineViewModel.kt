@@ -53,6 +53,7 @@ internal val DayEntry.key: String
     get() = when (this) {
         is DayEntry.Trip -> "t${trip.startMs}"
         is DayEntry.Stay -> "s${stay.arriveMs}"
+        is DayEntry.Transit -> "t${trip.startMs}"
     }
 
 /** 오른쪽(넓은 창) 또는 단독(좁은 창)으로 보이는 하루 상세. */

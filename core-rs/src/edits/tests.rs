@@ -639,3 +639,60 @@ fn hiding_a_day_story_falls_back_to_rule_title_and_story_and_survives_reopen() {
     assert_eq!(day(&store).title, rule.title, "다시 열어도 숨긴 채");
     assert!(store.hide_day_story("2026-13-01".into(), NOW).is_err(), "틀린 날짜");
 }
+
+/// 지하철 흉내: a에서 b까지 역 5개. 역마다 6초 간격 같은 자리 다섯 점, 역 사이 60초는 위치가 없다. 반환: 도착 시각.
+fn subway(store: &EodiStore, t0: i64, a: Spot, b: Spot) -> i64 {
+    let mut fixes = Vec::new();
+    for s in 0..5i64 {
+        let f = s as f64 / 4.0;
+        for k in 0..5 {
+            fixes.push(GeoFix { lat: a.3 + (b.3 - a.3) * f, lon: a.4 + (b.4 - a.4) * f, t_ms: t0 + s * 90_000 + k * 6_000, accuracy_m: 100.0 });
+        }
+    }
+    let end = fixes.last().unwrap().t_ms;
+    store.mark_drive_event(DriveEvent::Start, t0).unwrap();
+    store.ingest(fixes).unwrap();
+    store.mark_drive_event(DriveEvent::End, end).unwrap();
+    end
+}
+
+#[test]
+fn a_subway_ride_far_from_the_parked_car_becomes_transit_and_can_be_switched_back() {
+    let db = TempDb::new("transit");
+    let store = db.open();
+    // 집 → 이마트(차를 세움). 그 뒤 12km 떨어진 회사 근처에서 지하철로 한강 건너까지
+    let parked = drive(&store, kst(2026, 10, 5, 13, 0), HOME, EMART, 10.0);
+    let far: Spot = ("", "", "", 37.6600, 127.0400);
+    let across: Spot = ("", "", "", 37.6200, 127.0300);
+    let ride = parked + 40 * MIN;
+    // "지금" = 내린 지 한 시간 뒤 (처음에는 사흘 전까지만 거슬러 본다)
+    let now = subway(&store, ride, far, across) + HOUR;
+    let day = "2026-10-05";
+    let before = store.day_detail(day.into()).unwrap();
+    assert_eq!(before.trips.len(), 2);
+    let car_km = before.trips[0].distance_m;
+
+    assert_eq!(store.classify_transit(now).unwrap(), 1);
+    assert_eq!(store.classify_transit(now).unwrap(), 0, "이미 본 주행은 다시 보지 않는다");
+    let d = store.day_detail(day.into()).unwrap();
+    assert_eq!((d.trips.len(), d.transits.len()), (1, 1));
+    assert_eq!(d.transits[0].start_ms, ride);
+    assert!((d.summary.distance_m - car_km).abs() < 1.0, "지하철 거리는 합계에서 빠진다");
+    assert!(d.entries.iter().any(|e| matches!(e, DayEntry::Transit { trip } if trip.start_ms == ride)));
+    let map = store.day_map(day.into()).unwrap();
+    assert!(map.geojson.contains(&format!(r#""kind":"transit","key":"t{ride}""#)));
+    assert!(store.hidden_records().unwrap().is_empty(), "숨긴 기록 목록에는 안 나온다");
+    // 주차 자리는 차를 세운 이마트 그대로
+    let car = store.parked_car().unwrap().expect("주차 중");
+    assert!(haversine_m(Point { lat: car.lat, lon: car.lon }, Point { lat: EMART.3, lon: EMART.4 }) < 50.0);
+
+    // 사용자가 "차로 이동한 거예요" → 다시 차 주행, 다시 훑어도 그대로
+    store.set_trip_transit(ride, false, now).unwrap();
+    let d = store.day_detail(day.into()).unwrap();
+    assert_eq!((d.trips.len(), d.transits.len()), (2, 0));
+    assert_eq!(store.classify_transit(now).unwrap(), 0);
+    // 반대로 차 주행을 손으로 지하철 이동으로
+    store.set_trip_transit(ride, true, now).unwrap();
+    assert_eq!(store.day_detail(day.into()).unwrap().transits.len(), 1);
+    assert!(store.set_trip_transit(ride + 1, false, now).is_err());
+}

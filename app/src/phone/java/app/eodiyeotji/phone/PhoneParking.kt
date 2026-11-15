@@ -2,6 +2,7 @@ package app.eodiyeotji.phone
 
 import android.content.Context
 import app.eodiyeotji.core.EodiCore
+import app.eodiyeotji.core.classifyTransit
 import app.eodiyeotji.core.rust.ParkedCar
 import app.eodiyeotji.core.rust.parkedFromJson
 import app.eodiyeotji.core.rust.parkedLatest
@@ -72,6 +73,8 @@ class PhoneParking @Inject constructor(
     }
 
     suspend fun refresh() {
+        // 방금 끝난 "주행"이 지하철이었으면 차는 움직이지 않았다 → 먼저 가려낸 뒤 주차 자리를 읽는다
+        runCatching { core.classifyTransit() }
         val own = runCatching { core.parkedCar() }.getOrNull()
         val latest = parkedLatest(received(), own)
         val car = latest?.takeIf { it.tMs > prefs.getLong(K_DISMISSED, 0) }

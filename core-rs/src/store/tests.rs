@@ -376,6 +376,7 @@ fn entries_merge_trips_and_stays_in_time_order() {
         .map(|e| match e {
             DayEntry::Trip { trip, .. } => ('T', trip.start_ms),
             DayEntry::Stay { stay } => ('S', stay.arrive_ms),
+            DayEntry::Transit { trip } => ('X', trip.start_ms),
         })
         .collect();
     assert_eq!(kinds.iter().map(|k| k.0).collect::<String>(), "TSSTS", "{kinds:?}");

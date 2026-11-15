@@ -562,6 +562,9 @@ sealed interface DayEntry {
     /** [repeat] = 같은 길을 이어서 달린 횟수 (Rust가 한 줄로 묶음, 1 = 한 번) */
     data class Trip(val trip: TripSummary, val repeat: Int = 1) : DayEntry
     data class Stay(val stay: StaySummary) : DayEntry
+
+    /** 지하철 이동 (Rust `transit`): 차 주행이 아니라 거리 · 운전 시간 합계에 들지 않는다 */
+    data class Transit(val trip: TripSummary) : DayEntry
 }
 
 /** 하루 상세. [entries]는 주행·머문 곳을 시간순으로 섞은 목록, [trips]·[stays]는 종류별 목록(지도용). */
@@ -667,6 +670,7 @@ private fun RDayDetail.toModel() = DayDetail(
         when (it) {
             is RDayEntry.Trip -> DayEntry.Trip(it.trip.toModel(), it.repeat.toInt())
             is RDayEntry.Stay -> DayEntry.Stay(it.stay.toModel())
+            is RDayEntry.Transit -> DayEntry.Transit(it.trip.toModel())
         }
     },
     trips = trips.map { it.toModel() },

@@ -27,6 +27,7 @@ import app.eodiyeotji.core.renamePlace
 import app.eodiyeotji.core.setDayTitle
 import app.eodiyeotji.core.setMyAnchor
 import app.eodiyeotji.core.setPlaceSaved
+import app.eodiyeotji.core.setTripTransit
 import app.eodiyeotji.place.PlaceCandidates
 import app.eodiyeotji.pleos.CourseGuide
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -43,7 +44,8 @@ import kotlinx.coroutines.launch
 /** 메뉴를 연 대상: 주행 · 머문 곳 · 하루. */
 @Immutable
 sealed interface EditTarget {
-    data class Trip(val trip: TripSummary) : EditTarget
+    /** [transit] = 지하철 이동으로 판정된 것 (메뉴가 "차로 이동한 거예요" 하나로 바뀐다) */
+    data class Trip(val trip: TripSummary, val transit: Boolean = false) : EditTarget
     data class Stay(val stay: StaySummary) : EditTarget
     data class Day(val summary: DaySummary) : EditTarget
 }
@@ -165,6 +167,10 @@ class PlaceEditViewModel @Inject constructor(
             is EditTarget.Day -> core.hideDay(target.summary.day)
         }
     }
+
+    /** 주행 ↔ 지하철 이동 바꾸기 (자동 판정이 틀렸을 때). */
+    fun setTransit(target: EditTarget.Trip, transit: Boolean) =
+        act(if (transit) R.string.notice_transit_on else R.string.notice_transit_off) { core.setTripTransit(target.trip.startMs, transit) }
 
     fun askDelete(target: EditTarget) {
         _state.update { it.copy(menu = null, confirmDelete = target) }

@@ -265,6 +265,11 @@ internal class DayMapController(
         )
         addLine(LineLayer(TRIP_CASING, SOURCE_ID).withFilter(isTrip).withProperties(*roundLine, lineWidth(widthByZoom(CASING_W))))
         addLine(LineLayer(TRIP_LINE, SOURCE_ID).withFilter(isTrip).withProperties(*roundLine, lineWidth(widthByZoom(LINE_W))))
+        // 지하철 이동: 회색 점선 (차 주행 선 아래 느낌으로 가늘게, 누르는 대상은 아니다)
+        addLine(
+            LineLayer(TRANSIT_LINE, SOURCE_ID).withFilter(isTransit)
+                .withProperties(lineJoin(Property.LINE_JOIN_ROUND), lineCap(Property.LINE_CAP_BUTT), lineWidth(widthByZoom(LINE_W)), lineDasharray(arrayOf(1.6f, 1.2f)), lineColor(TRANSIT_COLOR)),
+        )
         addLine(LineLayer(TRIP_SEL_CASING, SOURCE_ID).withFilter(NOTHING).withProperties(*roundLine, lineWidth(widthByZoom(SEL_CASING_W))))
         addLine(LineLayer(TRIP_SEL, SOURCE_ID).withFilter(NOTHING).withProperties(*roundLine, lineWidth(widthByZoom(SEL_LINE_W))))
         // 한 문장 코스로 다시 짠 길: 흰 테두리 + 점선 (그날 달린 길은 흐리게 뒤에 남는다)
@@ -721,6 +726,8 @@ internal class DayMapController(
         const val TRIP_SEL_CASING = "eodi-trip-sel-casing"
         const val TRIP_SEL = "eodi-trip-sel"
         const val TRIP_ARROW = "eodi-trip-arrow"
+        const val TRANSIT_LINE = "eodi-transit"
+        const val TRANSIT_COLOR = "#7A8696"
         const val TRIP_LABEL = "eodi-trip-label"
         const val END_DOT = "eodi-end-dot"
         const val END_FLAG = "eodi-end-flag"
@@ -808,6 +815,7 @@ internal class DayMapController(
         val isOpen: Expression = eq(get("open"), literal(true))
         val hasOrder: Expression = has("order")
         val isPlan: Expression = eq(get("kind"), literal("plan"))
+        val isTransit: Expression = eq(get("kind"), literal("transit"))
         val isFaded: Expression = has("faded")
         val isSkipped: Expression = has("skipped")
     }

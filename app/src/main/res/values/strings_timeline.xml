@@ -35,6 +35,7 @@
     <string name="timeline_kind_stay">머문 곳</string>
     <!-- 예: 주행 12.4km · 32분 -->
     <string name="timeline_trip_line">주행 %1$s · %2$s</string>
+    <string name="timeline_transit">지하철 이동 · %1$s</string>
     <!-- 예: 머문 곳 1시간 23분 -->
     <string name="timeline_stay_line">머문 곳 %1$s</string>
     <string name="timeline_stay_open">도착 · 아직 머무는 중</string>

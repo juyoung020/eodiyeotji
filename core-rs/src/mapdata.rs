@@ -5,6 +5,7 @@
 //!
 //! # GeoJSON 형식 (FeatureCollection)
 //! - 주행: `LineString`, properties `{"kind":"trip","key":"t<start_ms>","start_ms":..,"end_ms":..,"distance_m":..}`
+//! - 지하철 이동(`transit` 모듈): 주행과 같은 모양에 `"kind":"transit"` (점선으로 그린다, 길 위 라벨 · 깃발 없음)
 //! - 머문 곳: `Point`, properties `{"kind":"stay","dwell":..,("tag":..,)"key":"s<arrive_ms>","arrive_ms":..,"leave_ms":..,"open":true|false}`
 //! - 장소 이름(`places` 모듈): 머문 곳 properties에 `"order"`(그날 들른 곳 순서, 도착 시각순 1부터 — 들른 곳
 //!   [`crate::store::visit_indices`]에만 있고, 그날 출발 · 도착 머문 곳(집)에는 없다)와
@@ -68,6 +69,16 @@ pub fn day_map(d: &DayDetail) -> DayMap {
         sep(&mut out, &mut first);
         let mut eb = Bounds::default();
         trip_feature(&mut out, t, &mut eb);
+        if let Some(r) = eb.get() {
+            b.merge(r);
+            entries.push(EntryBounds { key: format!("t{}", t.start_ms), bounds: r });
+        }
+    }
+    // 지하철 이동: 점선으로 그릴 선 (`kind: "transit"`). 길 위 라벨 · 출발 도착 깃발은 차 주행에만 붙는다
+    for t in &d.transits {
+        sep(&mut out, &mut first);
+        let mut eb = Bounds::default();
+        line_feature(&mut out, t, "transit", &mut eb);
         if let Some(r) = eb.get() {
             b.merge(r);
             entries.push(EntryBounds { key: format!("t{}", t.start_ms), bounds: r });
@@ -242,6 +253,10 @@ fn dwell_text(s: &StaySummary) -> String {
 }
 
 fn trip_feature(out: &mut String, t: &TripSummary, b: &mut Bounds) {
+    line_feature(out, t, "trip", b)
+}
+
+fn line_feature(out: &mut String, t: &TripSummary, kind: &str, b: &mut Bounds) {
     let pts = trip_points(t);
     out.push_str(r#"{"type":"Feature","geometry":{"type":"LineString","coordinates":["#);
     for (i, &(lat, lon)) in pts.iter().enumerate() {
@@ -253,7 +268,7 @@ fn trip_feature(out: &mut String, t: &TripSummary, b: &mut Bounds) {
     }
     let _ = write!(
         out,
-        r#"]}},"properties":{{"kind":"trip","key":"t{}","start_ms":{},"end_ms":{},"distance_m":{:.1}"#,
+        r#"]}},"properties":{{"kind":"{kind}","key":"t{}","start_ms":{},"end_ms":{},"distance_m":{:.1}"#,
         t.start_ms, t.start_ms, t.end_ms, t.distance_m
     );
     if let Some(p) = &t.start_place {
@@ -373,6 +388,7 @@ mod tests {
             day: "2026-11-05".into(),
             trips,
             stays,
+            transits: Vec::new(),
             summary: DaySummary {
                 replayable: false,
                 day: "2026-11-05".into(),

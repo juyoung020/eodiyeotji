@@ -194,6 +194,7 @@ fun TimelineRoute(
                     when (e) {
                         is DayEntry.Trip -> EditTarget.Trip(e.trip)
                         is DayEntry.Stay -> EditTarget.Stay(e.stay)
+                        is DayEntry.Transit -> EditTarget.Trip(e.trip, transit = true)
                     },
                 )
             },
@@ -1204,7 +1205,7 @@ internal fun EntryList(
         itemsIndexed(
             entries,
             key = { _, e -> e.key },
-            contentType = { _, e -> if (e is DayEntry.Trip) "trip" else "stay" },
+            contentType = { _, e -> if (e is DayEntry.Stay) "stay" else "trip" },
         ) { i, e ->
             val key = e.key
             val selected = key == selectedKey
@@ -1213,6 +1214,7 @@ internal fun EntryList(
             when (e) {
                 is DayEntry.Trip -> TripRow(e.trip, e.repeat, rail, selected, onClick = { onClick(key) }, onMore = onMore)
                 is DayEntry.Stay -> StayRow(e.stay, rail, selected, onClick = { onClick(key) }, onMore = onMore, offers = offers[key].orEmpty(), myPhotos = myPhotos[key])
+                is DayEntry.Transit -> TripRow(e.trip, 1, rail, selected, onClick = { onClick(key) }, onMore = onMore, transit = true)
             }
         }
     }
@@ -1226,7 +1228,7 @@ private data class Rail(val first: Boolean, val last: Boolean)
  * [repeat] ≥ 2면 같은 길을 이어 달린 주행들을 Rust가 이 한 줄로 묶은 것 → 둘째 줄 끝에 "같은 길 3번".
  */
 @Composable
-private fun TripRow(trip: TripSummary, repeat: Int, rail: Rail, selected: Boolean, onClick: () -> Unit, onMore: (() -> Unit)? = null) {
+private fun TripRow(trip: TripSummary, repeat: Int, rail: Rail, selected: Boolean, onClick: () -> Unit, onMore: (() -> Unit)? = null, transit: Boolean = false) {
     val c = EodiTheme.colors
     val places = tripPlacesText(trip)
     val repeatText = if (repeat > 1) " · " + stringResource(R.string.timeline_trip_repeat, repeat) else ""
@@ -1241,9 +1243,15 @@ private fun TripRow(trip: TripSummary, repeat: Int, rail: Rail, selected: Boolea
             distanceText(trip.distanceM),
             durationText(trip.endMs - trip.startMs),
         ) + repeatText,
-        sub = if (places != null) tripStatsText(trip) + repeatText else stringResource(R.string.place_pending),
-        subPending = places == null,
-        navi = trip.hasNaviPlace,
+        // 지하철 이동은 둘째 줄 앞에 "지하철 이동"을 붙이고 선을 회색 점선으로 그린다 (차 주행과 한눈에 갈리게)
+        sub = when {
+            transit -> stringResource(R.string.timeline_transit, tripStatsText(trip))
+            places != null -> tripStatsText(trip) + repeatText
+            else -> stringResource(R.string.place_pending)
+        },
+        subPending = places == null && !transit,
+        navi = trip.hasNaviPlace && !transit,
+        transit = transit,
         here = false,
         selected = selected,
         onClick = onClick,
@@ -1374,6 +1382,7 @@ private fun EntryRow(
     onMore: (() -> Unit)? = null,
     badge: (@Composable () -> Unit)? = null,
     below: (@Composable () -> Unit)? = null,
+    transit: Boolean = false,
 ) {
     val c = EodiTheme.colors
     val type = EodiTheme.type
@@ -1401,7 +1410,7 @@ private fun EntryRow(
                 Text(timeSub, style = type.caption, color = timeSubColor, maxLines = 1)
             }
             // 선 + 노드
-            RailCell(kind, rail, selected, Modifier.width(if (compact) RailColumnCompact else RailColumn).fillMaxHeight())
+            RailCell(kind, rail, selected, Modifier.width(if (compact) RailColumnCompact else RailColumn).fillMaxHeight(), transit)
             // 내용
             Column(
                 Modifier.weight(1f).padding(top = RowPadV, bottom = RowPadV, end = 20.dp),
@@ -1454,10 +1463,10 @@ private fun EntryRow(
 
 /** 세로 선과 노드를 한 번에 그린다 (Canvas 하나 → 행마다 레이아웃 노드를 늘리지 않는다). */
 @Composable
-private fun RailCell(kind: EntryKind, rail: Rail, selected: Boolean, modifier: Modifier) {
+private fun RailCell(kind: EntryKind, rail: Rail, selected: Boolean, modifier: Modifier, transit: Boolean = false) {
     val c = EodiTheme.colors
     val nodeColor = when (kind) {
-        EntryKind.Trip -> c.trip
+        EntryKind.Trip -> if (transit) c.textTertiary else c.trip
         EntryKind.Stay -> c.stay
         EntryKind.Here -> c.here
     }
@@ -1466,7 +1475,7 @@ private fun RailCell(kind: EntryKind, rail: Rail, selected: Boolean, modifier: M
         EntryKind.Stay -> c.staySoft
         EntryKind.Here -> c.hereSoft
     }
-    val lineColor = if (kind == EntryKind.Trip) c.trip else c.outline
+    val lineColor = if (kind == EntryKind.Trip && !transit) c.trip else if (transit) c.textTertiary else c.outline
     val ringFill = c.surface
     val selectedHalo = if (selected) nodeColor.copy(alpha = 0.22f) else Color.Transparent
     Box(modifier, contentAlignment = Alignment.TopCenter) {
@@ -1474,7 +1483,11 @@ private fun RailCell(kind: EntryKind, rail: Rail, selected: Boolean, modifier: M
             val cx = size.width / 2
             val cy = (RowPadV + FirstLine / 2).toPx()
             val lw = 5.dp.toPx()
-            val dashed = if (kind == EntryKind.Trip) null else PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 9.dp.toPx()))
+            val dashed = when {
+                transit -> PathEffect.dashPathEffect(floatArrayOf(10.dp.toPx(), 7.dp.toPx()))
+                kind == EntryKind.Trip -> null
+                else -> PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 9.dp.toPx()))
+            }
             val cap = if (kind == EntryKind.Trip) StrokeCap.Butt else StrokeCap.Round
             if (!rail.first) drawLine(lineColor, Offset(cx, 0f), Offset(cx, cy), lw, cap, dashed)
             if (!rail.last) drawLine(lineColor, Offset(cx, cy), Offset(cx, size.height), lw, cap, dashed)

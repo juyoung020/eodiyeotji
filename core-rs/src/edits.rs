@@ -82,6 +82,13 @@ pub(crate) const DROP_V7: &str = "DROP TABLE hidden; DROP TABLE saved_place;";
 const KIND_TRIP: i64 = 0;
 const KIND_STAY: i64 = 1;
 const KIND_DAY: i64 = 2;
+/// 지하철 이동으로 판정한 주행 (`transit` 모듈): 차 기록에서는 숨긴 주행처럼 빠지고, 하루 상세 · 지도에 따로 나온다.
+/// '숨긴 기록' 목록에는 나오지 않는다.
+pub(crate) const KIND_TRANSIT: i64 = 3;
+/// 여기까지 끝난 주행은 지하철인지 이미 봤다 (meta 표).
+const META_TRANSIT_JUDGED: &str = "transit_judged_ms";
+/// 처음 볼 때 거슬러 보는 기간.
+const TRANSIT_LOOKBACK_MS: i64 = 3 * 86_400_000;
 
 /// 이름을 고칠 때 옛 이름이 이 글자 수 이상이어야 그 이름이 든 AI 제목을 지운다 (한 글자로 많은 날을 지우지 않게).
 const MIN_OLD_NAME_CHARS: usize = 2;
@@ -161,6 +168,77 @@ impl EodiStore {
         Ok(())
     }
 
+    /// 주행 하나를 지하철 이동으로 바꾸거나(`transit` = true, 지금 보이는 주행이어야 한다) 차 주행으로 되돌린다
+    /// (`start_ms` = 그 이동의 출발 시각). 맞는 것이 없으면 `InvalidInput`.
+    pub fn set_trip_transit(&self, start_ms: i64, transit: bool, now_ms: i64) -> Result<(), CoreError> {
+        let mut conn = self.lock()?;
+        self.flush_all(&mut conn)?;
+        let t = if transit { Some(self.visible_trip(&conn, start_ms)?) } else { None };
+        let tx = conn.transaction()?;
+        match t {
+            Some(t) => insert_hidden(&tx, KIND_TRANSIT, t.start_ms, t.end_ms, &trip_label(&t), now_ms, false)?,
+            None => {
+                if tx.execute("DELETE FROM hidden WHERE kind = ?1 AND from_ms = ?2", [KIND_TRANSIT, start_ms])? == 0 {
+                    return Err(CoreError::InvalidInput(format!("transit {start_ms} not found")));
+                }
+            }
+        }
+        self.after_edit(&tx, start_ms, start_ms)?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// 끝난 주행 중 아직 보지 않은 것을 훑어 지하철 이동을 가려낸다 (규칙은 `transit` 모듈). 반환: 새로 지하철 이동으로 바꾼 수.
+    /// 폰 판이 주행이 끝날 때와 앱을 켤 때 부른다 (차는 차 신호로 주행을 잡으니 부르지 않는다).
+    pub fn classify_transit(&self, now_ms: i64) -> Result<u32, CoreError> {
+        let mut conn = self.lock()?;
+        let from = crate::recap::get_meta(&conn, META_TRANSIT_JUDGED)?.unwrap_or(now_ms - TRANSIT_LOOKBACK_MS);
+        // 새로 끝난 주행이 없으면 할 일이 없다 (기록이 바뀔 때마다 불려서, 여기서 바로 돌아가야 싸다)
+        let last_end: i64 = conn
+            .query_row("SELECT max(t_ms) FROM drive_event WHERE kind = ?1", [crate::store::KIND_END], |r| r.get::<_, Option<i64>>(0))?
+            .unwrap_or(i64::MIN);
+        if last_end <= from {
+            return Ok(0);
+        }
+        self.flush_all(&mut conn)?;
+        // 지금 달리는 중이면 마지막 주행은 아직 안 끝났다 → 다음에 본다
+        let driving = conn
+            .query_row("SELECT kind FROM drive_event ORDER BY t_ms DESC, kind DESC LIMIT 1", [], |r| r.get::<_, i64>(0))
+            .optional()?
+            .is_some_and(|k| k == crate::store::KIND_START);
+        // 차를 세운 자리를 알려면 앞 주행이 필요하다 → 하루 더 앞에서부터 읽는다 (보이는 주행 = 차 주행)
+        let (d0, d1) = (self.local_day(from) - 1, self.local_day(now_ms));
+        let trips: Vec<TripSummary> = self.day_records(&conn, d0, d1)?.into_values().flat_map(|(trips, _)| trips).collect();
+        let last = trips.len().saturating_sub(1);
+        let name = |p: &Option<PlaceLabel>| p.as_ref().map_or(String::new(), |p| p.name.clone());
+        let mut car_at: Option<Point> = None;
+        let mut found: Vec<&TripSummary> = Vec::new();
+        for (i, t) in trips.iter().enumerate() {
+            let done = !(driving && i == last);
+            let mut is_transit = false;
+            if done && t.end_ms > from {
+                let fixes: Vec<(i64, Point)> = conn
+                    .prepare_cached("SELECT t_ms, lat, lon FROM fix WHERE t_ms BETWEEN ?1 AND ?2 ORDER BY t_ms")?
+                    .query_map([t.start_ms, t.end_ms], |r| Ok((r.get(0)?, Point { lat: r.get(1)?, lon: r.get(2)? })))?
+                    .collect::<Result<_, _>>()?;
+                is_transit = crate::transit::is_transit(crate::transit::jumps(&fixes), Point::from(t.start), car_at, &name(&t.start_place), &name(&t.end_place));
+            }
+            if is_transit {
+                found.push(t);
+            } else {
+                car_at = Some(Point::from(t.end));
+            }
+        }
+        let tx = conn.transaction()?;
+        for t in &found {
+            insert_hidden(&tx, KIND_TRANSIT, t.start_ms, t.end_ms, &trip_label(t), now_ms, false)?;
+            self.after_edit(&tx, t.start_ms, t.start_ms)?;
+        }
+        crate::recap::set_meta(&tx, META_TRANSIT_JUDGED, last_end)?;
+        tx.commit()?;
+        Ok(found.len() as u32)
+    }
+
     /// 하루 제목을 사용자가 고친다 (`day` = "YYYY-MM-DD"). 앞뒤 공백을 자르고, 비었거나 None이면 사용자 제목을 지운다.
     /// [DAY_TITLE_MAX]자를 넘거나 틀린 날짜면 `InvalidInput`. 검색 색인도 새 제목으로 다시 쓴다.
     pub fn set_day_title(&self, day: String, title: Option<String>) -> Result<(), CoreError> {
@@ -234,7 +312,7 @@ impl EodiStore {
     pub fn hidden_records(&self) -> Result<Vec<HiddenRecord>, CoreError> {
         let conn = self.snapshot()?;
         let mut st = conn.prepare_cached(
-            "SELECT id, kind, from_ms, to_ms, label, hidden_ms FROM hidden WHERE permanent = 0 ORDER BY hidden_ms DESC, id DESC",
+            "SELECT id, kind, from_ms, to_ms, label, hidden_ms FROM hidden WHERE permanent = 0 AND kind <> 3 ORDER BY hidden_ms DESC, id DESC",
         )?;
         let rows = st.query_map([], |r| {
             let (kind, from_ms): (i64, i64) = (r.get(1)?, r.get(2)?);
@@ -261,7 +339,7 @@ impl EodiStore {
         self.flush(&mut conn)?;
         let tx = conn.transaction()?;
         let row: Option<(i64, i64)> = tx
-            .query_row("SELECT from_ms, to_ms FROM hidden WHERE id = ?1 AND permanent = 0", [id], |r| {
+            .query_row("SELECT from_ms, to_ms FROM hidden WHERE id = ?1 AND permanent = 0 AND kind <> 3", [id], |r| {
                 Ok((r.get(0)?, r.get(1)?))
             })
             .optional()?;
@@ -441,9 +519,14 @@ impl Hidden {
         self.0.iter().any(|&(k, a, b)| (k == kind || k == KIND_DAY) && a <= t && t <= b)
     }
 
-    /// 출발 시각이 `start_ms`인 주행이 숨었는지.
+    /// 출발 시각이 `start_ms`인 주행이 숨었는지 (지하철 이동으로 바뀐 것도 차 기록에서는 숨은 것이다).
     pub(crate) fn trip(&self, start_ms: i64) -> bool {
-        self.covers(KIND_TRIP, start_ms)
+        self.covers(KIND_TRIP, start_ms) || self.transit(start_ms)
+    }
+
+    /// 출발 시각이 `start_ms`인 주행이 지하철 이동인지 (숨긴 날 · 숨긴 주행이면 아니다 — 그건 아예 안 보인다).
+    pub(crate) fn transit(&self, start_ms: i64) -> bool {
+        !self.covers(KIND_TRIP, start_ms) && self.0.iter().any(|&(k, a, _)| k == KIND_TRANSIT && a == start_ms)
     }
 
     /// 도착 시각이 `arrive_ms`인 머문 곳이 숨었는지.

@@ -46,6 +46,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.eodiyeotji.BuildConfig
 import app.eodiyeotji.R
 import app.eodiyeotji.core.AnchorRole
 import app.eodiyeotji.core.PlaceCard
@@ -104,12 +105,19 @@ private fun EditMenu(target: EditTarget, card: PlaceCard?, vm: PlaceEditViewMode
             Spacer(Modifier.height(24.dp))
             val items: List<MenuItem> = when (target) {
                 is EditTarget.Stay -> stayItems(target, card, vm)
-                is EditTarget.Trip -> listOf(
-                    MenuItem(CommunityIcons.Pen, stringResource(R.string.edit_rename_start)) { vm.startRename(PlaceSpot.tripStart(target.trip)) },
-                    MenuItem(CommunityIcons.Pen, stringResource(R.string.edit_rename_end)) { vm.startRename(PlaceSpot.tripEnd(target.trip)) },
-                    MenuItem(PlacesIcons.Hide, stringResource(R.string.edit_hide_trip)) { vm.hide(target) },
-                    MenuItem(PlacesIcons.Trash, stringResource(R.string.edit_delete_trip), danger = true) { vm.askDelete(target) },
-                )
+                // 지하철 이동은 차 기록이 아니라 "차로 이동한 거예요"로 되돌리기만 있다
+                is EditTarget.Trip -> if (target.transit) {
+                    listOf(MenuItem(EodiIcons.Navi, stringResource(R.string.edit_transit_off)) { vm.setTransit(target, false) })
+                } else {
+                    listOfNotNull(
+                        MenuItem(CommunityIcons.Pen, stringResource(R.string.edit_rename_start)) { vm.startRename(PlaceSpot.tripStart(target.trip)) },
+                        MenuItem(CommunityIcons.Pen, stringResource(R.string.edit_rename_end)) { vm.startRename(PlaceSpot.tripEnd(target.trip)) },
+                        // 폰은 위치만 보고 주행을 잡아 지하철을 차로 잘못 잡을 수 있다 (차는 차 신호로 잡는다)
+                        MenuItem(PlacesIcons.Hide, stringResource(R.string.edit_transit_on)) { vm.setTransit(target, true) }.takeIf { BuildConfig.FLAVOR == "phone" },
+                        MenuItem(PlacesIcons.Hide, stringResource(R.string.edit_hide_trip)) { vm.hide(target) },
+                        MenuItem(PlacesIcons.Trash, stringResource(R.string.edit_delete_trip), danger = true) { vm.askDelete(target) },
+                    )
+                }
                 // 지우기(되돌릴 수 없음)는 항상 맨 끝 줄
                 is EditTarget.Day -> listOf(
                     MenuItem(CommunityIcons.Pen, stringResource(R.string.edit_day_title)) { vm.startDayTitle(target.summary) },
@@ -166,7 +174,7 @@ private fun MenuHeader(target: EditTarget, card: PlaceCard?, onClose: () -> Unit
                 Triple(stringResource(R.string.edit_menu_stay), name, listOfNotNull(clockText(target.stay.arriveMs), visits).joinToString(" · "))
             }
             is EditTarget.Trip -> Triple(
-                stringResource(R.string.edit_menu_trip),
+                stringResource(if (target.transit) R.string.edit_menu_transit else R.string.edit_menu_trip),
                 tripPlacesText(target.trip) ?: stringResource(R.string.edit_menu_trip),
                 "${clockText(target.trip.startMs)} – ${clockText(target.trip.endMs)}",
             )

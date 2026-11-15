@@ -11,6 +11,11 @@
 
     <!-- 메뉴 제목 -->
     <string name="edit_menu_trip">이 주행</string>
+    <string name="edit_menu_transit">지하철 이동</string>
+    <string name="edit_transit_on">지하철로 이동한 거예요</string>
+    <string name="edit_transit_off">차로 이동한 거예요</string>
+    <string name="notice_transit_on">지하철 이동으로 바꿨어요 · 운전 거리에서 뺐어요</string>
+    <string name="notice_transit_off">차 주행으로 바꿨어요</string>
     <string name="edit_menu_stay">이 장소</string>
     <string name="edit_menu_day">이 날</string>
     <string name="edit_unknown_place">이름 모르는 곳</string>

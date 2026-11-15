@@ -168,6 +168,8 @@ pub enum DayEntry {
     /// `repeat` = 같은 길을 이어서 달린 횟수 (1 = 한 번). 2 이상이면 뒤 주행들은 이 줄에 묶여 따로 나오지 않는다.
     Trip { trip: TripSummary, repeat: u32 },
     Stay { stay: StaySummary },
+    /// 지하철 이동 (`transit` 모듈): 차 주행이 아니라 거리 · 운전 시간 합계에 들지 않는다.
+    Transit { trip: TripSummary },
 }
 
 /// 하루 상세 (trips는 출발 시각순, stays는 도착 시각순).
@@ -176,6 +178,8 @@ pub struct DayDetail {
     pub day: String,
     pub trips: Vec<TripSummary>,
     pub stays: Vec<StaySummary>,
+    /// 그날 지하철 이동 (출발 시각순, `trips`에는 없다)
+    pub transits: Vec<TripSummary>,
     /// 그날 요약. `day_summaries`가 그날에 돌려주는 값과 같다.
     /// 기록이 없는 날은 개수·합계가 0이고 first_ms = last_ms = 0.
     pub summary: DaySummary,
@@ -302,7 +306,7 @@ impl EodiStore {
         (summary.title, summary.tags) = crate::memory::day_title(&conn, d)?;
         (summary.story, summary.ai_story) = crate::memory::day_story(&conn, d, self.tz_minutes())?;
         let entries = acc.entries();
-        Ok(DayDetail { day: format_day(d), trips: acc.trips, stays: acc.stays, summary, entries })
+        Ok(DayDetail { day: format_day(d), trips: acc.trips, stays: acc.stays, transits: acc.transits, summary, entries })
     }
 
     /// 저장된 위치 점 수 (디버그·검증용).
@@ -646,6 +650,8 @@ pub(crate) type DayRecords = (Vec<TripSummary>, Vec<StaySummary>);
 struct DayAcc {
     trips: Vec<TripSummary>,
     stays: Vec<StaySummary>,
+    /// 지하철 이동 (하루 상세에만 쓴다)
+    transits: Vec<TripSummary>,
 }
 
 impl DayAcc {
@@ -706,6 +712,7 @@ impl DayAcc {
             .into_iter()
             .map(|(i, repeat)| (self.trips[i].start_ms, 0, DayEntry::Trip { trip: self.trips[i].clone(), repeat }))
             .chain(self.stays.iter().map(|s| (s.arrive_ms, 1, DayEntry::Stay { stay: s.clone() })))
+            .chain(self.transits.iter().map(|t| (t.start_ms, 0, DayEntry::Transit { trip: t.clone() })))
             .collect();
         keyed.sort_by_key(|(t, k, _)| (*t, *k));
         keyed.into_iter().map(|(_, _, e)| e).collect()
@@ -1209,8 +1216,10 @@ impl EodiStore {
             let next_start = real.get(k + 1).map(|&n| (trips[n].start, trips[n].start_ms)).or(next);
             let t = &mut trips[i];
             let end_place = label(t.seg_start, REF_END, t.end_ms);
-            if let Some(d) = trip_day(t.start_ms) {
-                days.entry(d).or_default().trips.push(TripSummary {
+            // 지하철 이동은 차 주행 목록에서 빠지고 따로 모은다
+            let transit = hidden.transit(t.start_ms);
+            if let Some(d) = if transit { in_range(t.start_ms) } else { trip_day(t.start_ms) } {
+                let summary = TripSummary {
                     start_ms: t.start_ms,
                     end_ms: t.end_ms,
                     distance_m: t.distance_m,
@@ -1219,7 +1228,9 @@ impl EodiStore {
                     path: std::mem::take(&mut t.path).into_iter().map(gp).collect(),
                     start_place: label(t.seg_start, REF_START, t.start_ms),
                     end_place: end_place.clone(),
-                });
+                };
+                let acc = days.entry(d).or_default();
+                if transit { acc.transits.push(summary) } else { acc.trips.push(summary) }
             }
             // 주행 안 머문 곳(드라이브스루 등)은 그 주행의 일부라 주행을 숨기면 같이 숨는다.
             let trip_hidden = hidden.trip(t.start_ms);

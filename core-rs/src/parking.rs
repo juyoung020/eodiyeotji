@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::geo::{bearing_deg, haversine_m, Point};
 use crate::places::PLACE_RADIUS_M;
-use crate::store::{CoreError, EodiStore, KIND_END, KIND_START};
+use crate::store::{CoreError, EodiStore, KIND_END};
 
 /// 내비 목적지는 주차 지점에서 이 거리(m) 안일 때만 "걸어서 갈 곳"으로 본다.
 pub const WALK_DEST_MAX_M: f64 = 2_000.0;
@@ -47,15 +47,30 @@ impl EodiStore {
     /// 지금 주차 중이면 주차한 자리. 달리는 중이거나 기록이 없으면 None.
     pub fn parked_car(&self) -> Result<Option<ParkedCar>, CoreError> {
         let conn = self.snapshot()?;
-        let last: Option<(i64, i64)> = conn
-            .query_row("SELECT t_ms, kind FROM drive_event ORDER BY t_ms DESC, kind DESC LIMIT 1", [], |r| {
-                Ok((r.get(0)?, r.get(1)?))
-            })
-            .optional()?;
-        let end_ms = match last {
-            Some((t, k)) if k == KIND_END => t,
-            Some((_, k)) if k == KIND_START => return Ok(None),
-            _ => return Ok(None),
+        // 지하철 이동(`transit` 모듈)은 차가 움직인 것이 아니다 → 그 구간의 신호는 건너뛰고 그 앞 차 주행의 끝을 본다
+        let mut before = i64::MAX;
+        let end_ms = loop {
+            let last: Option<(i64, i64)> = conn
+                .query_row("SELECT t_ms, kind FROM drive_event WHERE t_ms < ?1 ORDER BY t_ms DESC, kind DESC LIMIT 1", [before], |r| {
+                    Ok((r.get(0)?, r.get(1)?))
+                })
+                .optional()?;
+            match last {
+                Some((t, k)) if k == KIND_END => {
+                    let transit_from: Option<i64> = conn
+                        .query_row(
+                            "SELECT from_ms FROM hidden WHERE kind = ?1 AND from_ms <= ?2 AND to_ms >= ?2 LIMIT 1",
+                            [crate::edits::KIND_TRANSIT, t],
+                            |r| r.get(0),
+                        )
+                        .optional()?;
+                    match transit_from {
+                        Some(from) => before = from,
+                        None => break t,
+                    }
+                }
+                _ => return Ok(None),
+            }
         };
         let Some((t_ms, lat, lon)) = conn
             .query_row("SELECT t_ms, lat, lon FROM fix WHERE t_ms <= ?1 ORDER BY t_ms DESC LIMIT 1", [end_ms], |r| {

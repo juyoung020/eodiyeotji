@@ -90,6 +90,14 @@ suspend fun EodiCore.homeOffice(): HomeOffice = coreCall("homeOffice") {
 }
 
 suspend fun EodiCore.hideTrip(startMs: Long) = edit { rust.hideTrip(startMs, System.currentTimeMillis()) }
+/** 주행을 지하철 이동으로 바꾸거나([transit] = true) 차 주행으로 되돌린다. */
+suspend fun EodiCore.setTripTransit(startMs: Long, transit: Boolean) = edit { rust.setTripTransit(startMs, transit, System.currentTimeMillis()) }
+
+/** 끝난 주행 중 지하철 이동을 가려낸다 (폰 판, Rust `transit`). 바뀐 것이 있을 때만 화면에 알린다. */
+suspend fun EodiCore.classifyTransit(): Int = coreCall("classifyTransit") {
+    rust.classifyTransit(System.currentTimeMillis()).toInt().also { if (it > 0) notifyChanged() }
+}
+
 suspend fun EodiCore.hideStay(arriveMs: Long) = edit { rust.hideStay(arriveMs, System.currentTimeMillis()) }
 suspend fun EodiCore.hideDay(day: String) = edit { rust.hideDay(day, System.currentTimeMillis()) }
 suspend fun EodiCore.deleteTrip(startMs: Long) = edit { rust.deleteTrip(startMs) }
