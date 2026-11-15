@@ -138,7 +138,7 @@ private fun DayReplayScreen(state: ReplayUiState, onClose: () -> Unit, onNavigat
             .pointerInput(Unit) { detectTapGestures { } },
     ) {
         when {
-            r != null -> Player(r, state.roadPhotos, onClose, onNavigate)
+            r != null -> Player(r, state.roadPhotos, state.stayPhotos, onClose, onNavigate)
             state.failed -> Center(stringResource(R.string.replay_failed))
             else -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                 app.eodiyeotji.ui.common.EodiLoader(size = 64.dp, kind = app.eodiyeotji.ui.common.LoaderKind.Tension, dark = true)
@@ -170,7 +170,7 @@ private fun Center(text: String) {
  * 날아간 뒤(전체 화면, [FLIGHT_MS]) 사진으로 넘어간다. 누르면 멈춤/다시 재생, 옆으로 밀거나 화살표로 이전 · 다음.
  */
 @Composable
-private fun Player(r: DayReplay, roadPhotos: List<MapPhotoSpot>, onClose: () -> Unit, onNavigate: () -> Unit) {
+private fun Player(r: DayReplay, roadPhotos: List<MapPhotoSpot>, stayPhotos: Map<Long, String>, onClose: () -> Unit, onNavigate: () -> Unit) {
     val n = r.scenes.size
     val last = n + 1
     var step by remember(r) { mutableIntStateOf(0) }
@@ -232,7 +232,7 @@ private fun Player(r: DayReplay, roadPhotos: List<MapPhotoSpot>, onClose: () -> 
             Crossfade(targetState = if (step > 0 && !arrived) -1 else step, animationSpec = tween(FADE_MS), label = "replay-scene") { s ->
                 when {
                     s == 0 -> IntroCard(r, wide)
-                    s > 0 -> r.scenes.getOrNull(s - 1)?.let { SceneCard(r, it, paused, wide) }
+                    s > 0 -> r.scenes.getOrNull(s - 1)?.let { SceneCard(r, it, stayPhotos[it.stop.arriveMs], paused, wide) }
                     else -> Box(Modifier.fillMaxSize())
                 }
             }
@@ -390,9 +390,10 @@ private fun IntroCard(r: DayReplay, wide: Boolean) {
  * 들른 곳 장면: 지도는 덮지 않는다 (좁은 창에서는 사진 위 · 글 아래로 쌓는다). 왼쪽 아래에 사진 카드(화면 폭 28%, 둥근 모서리 · 그림자, 천천히 다가가는 켄 번스),
  * 그 옆에 시각 · 이름 · 머문 시간 · 하루 줄. 글 뒤에는 아래로 짙어지는 스크림(글 자리 78% 이상 → 흰 글 대비 4.5:1 넘게).
  * 집 · 회사 · 회사 건물처럼 사진이 맥락과 어긋나는 곳(Rust `show_photo` = false)은 사진 없이 글만.
+ * 그곳에서 찍은 내 사진([mine])이 있으면 장소 사진 대신 그 사진을 쓴다 (장소 사진을 못 찾는 곳도 빈 칸이 되지 않는다).
  */
 @Composable
-private fun SceneCard(r: DayReplay, s: ReplayScene, paused: Boolean, wide: Boolean) {
+private fun SceneCard(r: DayReplay, s: ReplayScene, mine: String?, paused: Boolean, wide: Boolean) {
     val kb = remember(s) { Animatable(0f) }
     LaunchedEffect(s, paused) {
         if (!paused && s.showPhoto) kb.animateTo(1f, tween(((1f - kb.value) * KEN_BURNS_MS).toInt().coerceAtLeast(1), easing = LinearEasing))
@@ -413,15 +414,16 @@ private fun SceneCard(r: DayReplay, s: ReplayScene, paused: Boolean, wide: Boole
                     .clip(shape)
                     .background(Color(0xFF1C222C)),
             ) {
-                PlaceThumbnail(
+                val move = Modifier.fillMaxSize().graphicsLayer {
+                    val k = kb.value
+                    scaleX = 1.04f + 0.10f * k
+                    scaleY = scaleX
+                    translationX = dir * size.width * 0.02f * k
+                    translationY = -dir * size.height * 0.015f * k
+                }
+                if (mine != null) MyPhotoImage(mine, move, sizePx = ROAD_PHOTO_PX) else PlaceThumbnail(
                     s.stop.name, s.stop.address, s.stop.lat, s.stop.lon,
-                    modifier = Modifier.fillMaxSize().graphicsLayer {
-                        val k = kb.value
-                        scaleX = 1.04f + 0.10f * k
-                        scaleY = scaleX
-                        translationX = dir * size.width * 0.02f * k
-                        translationY = -dir * size.height * 0.015f * k
-                    },
+                    modifier = move,
                     fallback = { Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFF2A3140), Night)))) },
                     loading = { PhotoLoadingPlaceholder(Color(0xFF1C222C)) },
                 )

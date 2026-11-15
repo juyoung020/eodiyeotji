@@ -12,6 +12,7 @@ import app.eodiyeotji.core.EodiCore
 import app.eodiyeotji.core.LatLon
 import app.eodiyeotji.core.PlaceCard
 import app.eodiyeotji.core.PlaceLabel
+import app.eodiyeotji.core.PlaceSource
 import app.eodiyeotji.core.PlaceSpot
 import app.eodiyeotji.core.StaySummary
 import app.eodiyeotji.core.TripSummary
@@ -112,7 +113,14 @@ class PlaceEditViewModel @Inject constructor(
                 return@launch
             }
             _state.update { it.copy(menu = null, rename = RenameState(card)) }
-            val list = runCatching { candidates.near(card.lat, card.lon) }.getOrDefault(emptyList())
+            val near = runCatching { candidates.near(card.lat, card.lon) }.getOrDefault(emptyList())
+            // 내가 정한 집 · 회사 자리면 "집" · "회사"를 맨 앞 후보로 (카카오 후보에는 없는 이름 — 기억 요약이 쓰는 이름과 같다)
+            val mine = when (card.role) {
+                AnchorRole.HOME -> ANCHOR_HOME
+                AnchorRole.OFFICE -> ANCHOR_OFFICE
+                else -> null
+            }?.takeIf { card.label?.name != it }
+            val list = if (mine != null) listOf(PlaceLabel(mine, "", card.label?.address.orEmpty(), PlaceSource.USER)) + near else near
             _state.update { s -> s.copy(rename = s.rename?.takeIf { it.card.id == card.id }?.copy(candidates = list) ?: s.rename) }
         }
     }
@@ -221,5 +229,7 @@ class PlaceEditViewModel @Inject constructor(
     private companion object {
         const val TAG = "EodiEdit"
         const val NOTICE_MS = 3_000L
+        const val ANCHOR_HOME = "집"
+        const val ANCHOR_OFFICE = "회사"
     }
 }

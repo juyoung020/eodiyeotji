@@ -37,6 +37,8 @@ data class ReplayUiState(
     val driving: Boolean = false,
     /** 그날 달리는 중에 찍은 내 사진 (들른 곳 사진은 뺀다): 비행이 그 자리를 지날 때 띄운다 */
     val roadPhotos: List<MapPhotoSpot> = emptyList(),
+    /** 들른 곳에서 찍은 내 사진 (도착 시각 → 그곳의 첫 사진): 장면 사진으로 장소 사진보다 먼저 쓴다 */
+    val stayPhotos: Map<Long, String> = emptyMap(),
     @StringRes val note: Int? = null,
 )
 
@@ -80,8 +82,11 @@ class ReplayViewModel @Inject constructor(
                 // 무드등을 그날 하늘빛으로 (정차 중에만 열리는 화면, 닫으면 되돌린다)
                 launch { runCatching { mood.tint(moodColor(r.sky)) } }
                 launch {
-                    val road = gallery.dayPhotos(day).spots.filter { it.stayArriveMs == null }
-                    _state.update { if (it.day == day) it.copy(roadPhotos = road) else it }
+                    val spots = gallery.dayPhotos(day).spots
+                    val road = spots.filter { it.stayArriveMs == null }
+                    val stay = HashMap<Long, String>()
+                    for (p in spots) p.stayArriveMs?.let { stay.putIfAbsent(it, p.uri) }
+                    _state.update { if (it.day == day) it.copy(roadPhotos = road, stayPhotos = stay) else it }
                 }
                 prefetchPhotos(r)
             } catch (e: CancellationException) {

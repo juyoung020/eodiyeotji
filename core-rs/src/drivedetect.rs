@@ -5,6 +5,9 @@
 //!   주행 시작 시각은 빨라지기 직전 마지막 점(출발한 자리)으로 거슬러 잡고, 그사이 점들은 함께 돌려준다([DriveEdgeOut::backlog]).
 //! - **끝:** 반경 80m 안에서 4분 넘게 머물면 끝. 끝 시각은 그 자리에 처음 선 시각이다.
 //!   위치가 10분 넘게 안 들어오면(지하 주차장 등) 마지막 위치 시각으로 끝낸다.
+//! - **늦게 깨어난 출발:** 서 있는 동안 저전력 위치가 한동안 안 오다가, 이미 떠난 뒤에야 첫 점이 오는 때가 있다
+//!   (실제 기록: 28분 주차 뒤 첫 점이 814m 밖). 그러면 서 있던 자리를 감지 전 점 맨 앞에 넣어 길이 그 자리에서 이어지게 한다
+//!   (시각은 시속 30km로 거슬러 잡는다, 1.5km 넘게 떨어졌으면 차가 아닌 이동일 수 있어 잇지 않는다).
 //! - **흔들림:** 정확도가 100m보다 나쁜 점은 버리고, 속도는 10초 넘게 떨어진 두 점 사이 거리로 잰다
 //!   (두 점의 정확도 합보다 덜 움직였으면 0). 기기가 잰 속도(GPS)가 있으면 둘 중 큰 값. 시속 250km를 넘는 점은 튄 점이라 버린다.
 //! - **배터리:** 서 있을 때는 저전력(드물게) 위치만 받는다. 빠른 점이 보이거나 처음 자리에서 250m 넘게 멀어지면
@@ -34,6 +37,8 @@ pub struct DetectorConfig {
     pub probe_move_m: f64,
     pub probe_ms: i64,
     pub backlog_window_ms: i64,
+    pub bridge_max_m: f64,
+    pub bridge_speed_mps: f64,
 }
 
 impl Default for DetectorConfig {
@@ -53,6 +58,8 @@ impl Default for DetectorConfig {
             probe_move_m: 250.0,
             probe_ms: 2 * 60_000,
             backlog_window_ms: 15 * 60_000,
+            bridge_max_m: 1_500.0,
+            bridge_speed_mps: 30.0 / 3.6,
         }
     }
 }
@@ -347,11 +354,22 @@ impl Detector {
     }
 
     fn start(&mut self, dep: Sample) -> DriveEdgeOut {
-        let backlog: Vec<GeoFix> = self.backlog.drain(..).filter(|b| b.t_ms >= dep.t_ms).collect();
+        let mut backlog: Vec<GeoFix> = self.backlog.drain(..).filter(|b| b.t_ms >= dep.t_ms).collect();
+        let mut t_ms = dep.t_ms;
+        // 늦게 깨어난 출발: 출발점이 서 있던 자리에서 떨어져 있으면 그 자리를 맨 앞에 넣는다
+        if let Some(r) = self.rest {
+            let gap = dep.dist(&r);
+            let t = dep.t_ms - (gap / self.cfg.bridge_speed_mps * 1000.0) as i64;
+            // 주행 끝 판정까지 기록된 점들(끝 시각 + stop_dwell_ms)보다 뒤여야 순서가 안 꼬인다
+            if gap > dep.acc + r.acc + SAME_SPOT_SLACK_M && gap <= self.cfg.bridge_max_m && t > r.t_ms + self.cfg.stop_dwell_ms {
+                backlog.insert(0, GeoFix { lat: r.p.lat, lon: r.p.lon, t_ms: t, accuracy_m: r.acc as f32 });
+                t_ms = t;
+            }
+        }
         self.driving = true;
         self.stop_anchor = None;
         self.reset_idle();
-        DriveEdgeOut { active: true, t_ms: dep.t_ms, backlog }
+        DriveEdgeOut { active: true, t_ms, backlog }
     }
 
     fn end(&mut self, t_ms: i64, at: Option<Sample>) -> DriveEdgeOut {
@@ -433,6 +451,38 @@ mod tests {
         assert!(!start.backlog.is_empty());
         assert!(start.backlog.iter().all(|b| b.t_ms >= start.t_ms));
         assert!(d.is_driving() && d.high_rate(0));
+    }
+
+    #[test]
+    fn a_late_first_fix_after_parking_bridges_back_to_the_parking_spot() {
+        let mut d = Detector::default();
+        let mut e = Vec::new();
+        // 달려서 주차 (주행 끝)
+        let m = drive(&mut d, 0, 120, 0.0, 40.0, &mut e);
+        park(&mut d, 120, 300, m, 2.0, &mut e);
+        assert_eq!(e.len(), 2, "{e:?}");
+        // 28분 동안 위치가 안 오다가, 800m 떠난 뒤에야 첫 점이 온다 → 그 뒤로 1초 간격
+        let from = 420 + 28 * 60;
+        drive(&mut d, from, 90, m + 800.0, 40.0, &mut e);
+        assert_eq!(e.len(), 3, "{e:?}");
+        let start = &e[2];
+        assert!(start.active);
+        // 맨 앞 점 = 주차한 자리 (선 순간을 거슬러 잡아 20m쯤 앞), 시각은 첫 점보다 96초쯤 앞 (800m ÷ 시속 30km)
+        let first = start.backlog.first().unwrap();
+        assert!(((first.lat - LAT0) * M_PER_DEG - m).abs() < 30.0, "{first:?}");
+        assert_eq!(first.t_ms, start.t_ms);
+        let lead = (fix(from, 0.0, 5.0).t_ms - start.t_ms) / 1000;
+        assert!((90..=102).contains(&lead), "lead {lead}s");
+        assert!(start.backlog.windows(2).all(|w| w[0].t_ms < w[1].t_ms));
+
+        // 3km 떨어져서 나타나면 (걸어서 · 지하철로 옮겨 간 뒤 다른 차) 잇지 않는다
+        let mut d = Detector::default();
+        let mut e = Vec::new();
+        let m = drive(&mut d, 0, 120, 0.0, 40.0, &mut e);
+        park(&mut d, 120, 300, m, 2.0, &mut e);
+        drive(&mut d, from, 90, m + 3_000.0, 40.0, &mut e);
+        let start = &e[2];
+        assert!(((start.backlog.first().unwrap().lat - LAT0) * M_PER_DEG - m) > 2_900.0);
     }
 
     #[test]
