@@ -17,7 +17,7 @@
 
 <img src="docs/images/cover-demo.gif" width="820" alt="Pleos 에뮬레이터 실제 화면: 자동 기록 → 말로 찾기(바다 어디였지?) → 그날로 돌아가기 3D → 그 코스로 안내 → 커뮤니티 코스 → 같이 가기 · 휴게소 제안">
 
-<sub>Pleos Connect 에뮬레이터 실제 화면 · 시연 영상 <a href="https://drive.google.com/file/d/1LbC3kTn-DGzsEkcswo6zNULr2yW9Gg2V/view">v15 (1분 52초) 바로 보기</a></sub>
+<sub>Pleos Connect 에뮬레이터 실제 화면 · 시연 영상 <a href="https://youtu.be/eUZIXO1q7Zo">YouTube (1분 52초)</a></sub>
 
 </div>
 
@@ -46,7 +46,7 @@
 | **릴리즈 페이지** | [Releases `submission-3`](https://github.com/juyoung020/eodiyeotji/releases/tag/submission-3) · 설치 안내 [`apk/`](apk/) |
 | **테스트 환경** | Pleos Connect 에뮬레이터 v2.1.0 (Android API 34, x86_64, 2560 × 1440) |
 | **필요한 설정** | **없습니다.** 설치만 하면 AI · 장소 검색 · 같이 가기까지 동작합니다 (클라우드 중계 서버 사용) |
-| **시연 영상** | [▶ 바로 보기 (Google Drive)](https://drive.google.com/file/d/1LbC3kTn-DGzsEkcswo6zNULr2yW9Gg2V/view) · [내려받기 (mp4, 32MB)](https://github.com/juyoung020/eodiyeotji/raw/main/video/v15_112s.mp4) — 1분 52초, 1차 제출 최종본 |
+| **시연 영상** | [▶ YouTube에서 보기](https://youtu.be/eUZIXO1q7Zo) (1분 52초, 1차 제출 최종본) |
 
 ### 실행하기
 
