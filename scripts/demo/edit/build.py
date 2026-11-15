@@ -508,8 +508,8 @@ def static(t0, t1, sp, x, y, ox=0.5, oy=0.5, fade=0.2, rise=10):
 
 TAG = pill("실제 Pleos 에뮬레이터 화면", size=20, wght=600, fg=(225, 232, 245, 255), outline=(255, 255, 255, 60), fill=(8, 12, 24, 205), h=38, padx=16)
 TAGD = pill("실제 Pleos 에뮬레이터 화면 · 시연 기록 데이터", size=20, wght=600, fg=(225, 232, 245, 255), outline=(255, 255, 255, 60), fill=(8, 12, 24, 205), h=38, padx=16)
-AIT = pill("AI 생성", size=20, wght=600, fg=(225, 232, 245, 255), outline=(255, 255, 255, 60), fill=(8, 12, 24, 205), h=38, padx=16)
-AITC = pill("AI 생성", size=20, wght=600, fg=(225, 232, 245, 255), outline=(255, 255, 255, 60), fill=(8, 12, 24, 205), h=38, padx=16)
+AIT = pill("AI 생성 장면", size=20, wght=600, fg=(225, 232, 245, 255), outline=(255, 255, 255, 60), fill=(8, 12, 24, 205), h=38, padx=16)
+AITC = pill("AI 생성 장면", size=20, wght=600, fg=(225, 232, 245, 255), outline=(255, 255, 255, 60), fill=(8, 12, 24, 205), h=38, padx=16)
 
 
 def tag(t0, t1, sp, right=True):
