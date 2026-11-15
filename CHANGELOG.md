@@ -17,6 +17,8 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-15
+
 ### Added
 - 코스 상세에 제휴 혜택 배너: 작은 "쿠폰 1곳" 칩 대신 사진 바로 아래 "이 코스 제휴 혜택 · 주문진수산시장 5,000원 할인 + 쿠폰 받기"(받은 뒤 "받은 쿠폰 보기")를 보이고, "추천 순위는 제휴와 상관없이 실제 방문과 하트로 정해요"를 함께 둔다.
 - 폰: 지하철을 타고 있는 동안에도 지하철 이동으로 바뀐다 (전에는 내린 뒤에야 판정했다). 타는 동안 내 차 주차 카드도 그대로 보인다. "차로 이동한 거예요"로 되돌린 주행은 다시 지하철로 판정하지 않는다.
@@ -308,7 +310,8 @@
 - 앱 아키텍처 설계 (Rust 코어 + Kotlin UI)와 Rust 코어 시작 (경로 단순화 · 머문 곳 감지 · 코스 구간)
 - 백로그 · 기획서 초안 v0, 프로젝트 규칙 (`CLAUDE.md`)
 
-[Unreleased]: https://github.com/juyoung020/eodiyeotji/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/juyoung020/eodiyeotji/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/juyoung020/eodiyeotji/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/juyoung020/eodiyeotji/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/juyoung020/eodiyeotji/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/juyoung020/eodiyeotji/compare/v0.4.0...v0.5.0
