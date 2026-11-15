@@ -769,4 +769,13 @@ fn a_place_reached_by_subway_is_a_stay_even_when_the_way_back_starts_at_the_stat
     assert_eq!(d.transits.len(), 2);
     let visit = d.stays.iter().find(|s| s.arrive_ms == arrived).expect("박물관에 머문 곳");
     assert_eq!(visit.leave_ms, back);
+    // 이름이 붙으면 그날 제목이 지하철로 다녀온 곳이 된다
+    for q in store.pending_places(1000).unwrap() {
+        if haversine_m(Point { lat: q.lat, lon: q.lon }, Point { lat: museum.3, lon: museum.4 }) < 200.0 {
+            let label = PlaceLabel { name: "국립중앙박물관".into(), category: "박물관".into(), address: String::new(), source: PlaceSource::Kakao };
+            store.set_place_name(PlaceName { id: q.id, label }).unwrap();
+        }
+    }
+    let d = store.day_detail("2026-10-05".into()).unwrap();
+    assert_eq!(d.summary.title.as_deref(), Some("지하철 나들이 · 국립중앙박물관"));
 }

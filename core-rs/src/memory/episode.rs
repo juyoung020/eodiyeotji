@@ -268,6 +268,8 @@ struct StayRec {
 struct DayRec {
     trips: Vec<TripRec>,
     stays: Vec<StayRec>,
+    /// 지하철로 가서 머문 곳 이름 (차 주행 묶음에는 안 들어간다 → 하루 규칙 제목에만 쓴다)
+    transit_stops: Vec<String>,
 }
 
 struct PlaceInfo {
@@ -293,6 +295,7 @@ fn load_records(store: &EodiStore, conn: &Connection, days: &BTreeSet<i64>) -> R
     let mut out = BTreeMap::new();
     for (d0, d1) in ranges(days) {
         let recs = store.day_records(conn, d0, d1)?;
+        let mut transit_stops = store.day_transit_stops(conn, d0, d1)?;
         // 장소 잇기 (kind, t_ms) → place_id. 그 범위 날짜에 속한 주행은 3일 전 이후에 시작했다.
         let refs: HashMap<(i64, i64), i64> = {
             let mut st = conn.prepare_cached(
@@ -329,6 +332,7 @@ fn load_records(store: &EodiStore, conn: &Connection, days: &BTreeSet<i64>) -> R
                         place: refs.get(&(REF_STAY, s.arrive_ms)).or_else(|| refs.get(&(REF_END, s.arrive_ms))).copied(),
                     })
                     .collect(),
+                transit_stops: transit_stops.remove(&d).unwrap_or_default(),
             };
             out.insert(d, rec);
         }
@@ -553,8 +557,21 @@ fn rebuild_day(tx: &Connection, ctx: &Ctx, d: i64, rec: Option<&DayRec>) -> Resu
             ])?;
         }
     }
+    // 지하철로 다녀온 곳이 있는 날은 그곳이 그날의 제목이다 (차 주행 묶음만 보면 "쌍문역 들름"처럼 역까지 간 것만 남는다)
+    let transit_title = rec.and_then(|r| transit_rule_title(&r.transit_stops));
     if built.is_empty() {
-        tx.execute("DELETE FROM day_memory WHERE day = ?1", [d])?;
+        match &transit_title {
+            Some(t) => {
+                tx.execute(
+                    "INSERT INTO day_memory (day, needs_llm, sig, rule_title) VALUES (?1, 0, '', ?2)
+                     ON CONFLICT (day) DO UPDATE SET needs_llm = 0, sig = '', rule_title = excluded.rule_title",
+                    params![d, t],
+                )?;
+            }
+            None => {
+                tx.execute("DELETE FROM day_memory WHERE day = ?1", [d])?;
+            }
+        }
         return Ok(());
     }
     let notable: Vec<&Built> = built.iter().filter(|b| b.notable).collect();
@@ -566,7 +583,7 @@ fn rebuild_day(tx: &Connection, ctx: &Ctx, d: i64, rec: Option<&DayRec>) -> Resu
         })
         .collect::<Vec<_>>()
         .join("|");
-    let rule_title = day_rule_title(&built);
+    let rule_title = transit_title.or_else(|| day_rule_title(&built));
     tx.execute(
         "INSERT INTO day_memory (day, needs_llm, sig, rule_title) VALUES (?1, ?2, ?3, ?4)
          ON CONFLICT (day) DO UPDATE SET needs_llm = excluded.needs_llm, sig = excluded.sig, rule_title = excluded.rule_title",
@@ -574,6 +591,17 @@ fn rebuild_day(tx: &Connection, ctx: &Ctx, d: i64, rec: Option<&DayRec>) -> Resu
     )?;
     reindex_day(tx, d)?;
     Ok(())
+}
+
+/// 지하철로 다녀온 날의 규칙 제목: "지하철 나들이 · 국립중앙박물관 동관" (이름은 앞에서 둘까지). 그런 곳이 없으면 None.
+fn transit_rule_title(stops: &[String]) -> Option<String> {
+    let mut names: Vec<&str> = Vec::new();
+    for n in stops {
+        if !names.contains(&n.as_str()) && names.len() < 2 {
+            names.push(n);
+        }
+    }
+    (!names.is_empty()).then(|| format!("지하철 나들이 · {}", names.join(" · ")))
 }
 
 /// 하루 규칙 제목 (상위 모듈 설명).

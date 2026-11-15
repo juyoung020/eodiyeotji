@@ -67,7 +67,8 @@ pub(crate) const DAY_MS: i64 = 86_400_000;
 /// 4: 머문 곳 이름이 없는 날의 `stop_names`를 그날 주행 출발·도착 장소 이름으로 채운다.
 /// 5: 주차 반경을 300m → 500m로 (`TripConfig::park_radius_m`) → 머문 곳이 늘 수 있다.
 /// 6: 지하철로 간 곳은 다음 출발이 1.5km 안이면 머문 곳으로 (`TRANSIT_WALK_M`).
-const DAY_RULES: i64 = 6;
+/// 7: 지하철로 다녀온 날의 규칙 제목 ("지하철 나들이 · …", `memory`).
+const DAY_RULES: i64 = 7;
 /// 이보다 짧게(거리·시간 둘 다) 움직인 주행은 타임라인에서 숨긴다 (거리 합에는 들어간다). 에뮬레이터 위치 재생 · 주차장 안 이동.
 pub const BLIP_M: f64 = 500.0;
 pub const BLIP_MS: i64 = 60_000;
@@ -653,6 +654,8 @@ struct DayAcc {
     stays: Vec<StaySummary>,
     /// 지하철 이동 (하루 상세에만 쓴다)
     transits: Vec<TripSummary>,
+    /// 지하철로 가서 머문 곳 이름 (도착순, 하루 규칙 제목에 쓴다)
+    transit_stops: Vec<String>,
 }
 
 impl DayAcc {
@@ -1142,6 +1145,11 @@ impl EodiStore {
         Ok(self.collect_days(conn, d0, d1, false)?.into_iter().map(|(d, a)| (d, (a.trips, a.stays))).collect())
     }
 
+    /// 날짜별로 지하철로 가서 머문 곳 이름 (없는 날은 빠진다). 하루 규칙 제목용 (`memory`).
+    pub(crate) fn day_transit_stops(&self, conn: &Connection, d0: i64, d1: i64) -> Result<BTreeMap<i64, Vec<String>>, CoreError> {
+        Ok(self.collect_days(conn, d0, d1, false)?.into_iter().filter(|(_, a)| !a.transit_stops.is_empty()).map(|(d, a)| (d, a.transit_stops)).collect())
+    }
+
     /// 현지 날짜 d0..=d1에 속한 주행(출발 날짜)과 머문 곳(도착 날짜)을 날짜별로 모은다. 기록 없는 날은 빠진다.
     /// 숨긴 주행·머문 곳(`edits::Hidden`)은 뺀다.
     fn collect_days(
@@ -1235,11 +1243,13 @@ impl EodiStore {
                 let acc = days.entry(d).or_default();
                 match ride {
                     // 지하철 이동은 받은 위치(역 사이가 비어 곧은 선) 대신 역을 따라 간 길로 보인다
-                    Some(r) if transit => {
+                    Some((r, walk)) if transit => {
                         let station = |name: &str| Some(PlaceLabel { name: name.into(), category: "지하철역".into(), address: String::new(), source: places::PlaceSource::Osm });
-                        let path: Vec<GeoPoint> = r.path.into_iter().map(gp).collect();
+                        // 내린 역에서 목적지까지 걸은 길도 이어 그린다 (기록에 남은 만큼)
+                        let walked: f64 = walk.windows(2).map(|w| crate::geo::haversine_m(w[0], w[1])).sum();
+                        let path: Vec<GeoPoint> = r.path.into_iter().chain(walk).map(gp).collect();
                         acc.transits.push(TripSummary {
-                            distance_m: r.length_m,
+                            distance_m: r.length_m + walked,
                             start: path[0],
                             end: path[path.len() - 1],
                             path,
@@ -1271,7 +1281,11 @@ impl EodiStore {
             };
             if let Some(s) = after {
                 if let Some(d) = stay_day(s.arrive_ms) {
-                    days.entry(d).or_default().stays.push(stay_summary(&s, end_place));
+                    let acc = days.entry(d).or_default();
+                    if let Some(name) = end_place.as_ref().map(|p| p.name.trim()).filter(|n| transit && !n.is_empty()) {
+                        acc.transit_stops.push(name.to_owned());
+                    }
+                    acc.stays.push(stay_summary(&s, end_place));
                 }
             }
         }
@@ -1288,7 +1302,8 @@ impl EodiStore {
 /// 지하철 이동([real]의 [k]번째)을 역을 따라 간 길로 (`subway::ride`). 지하라 기록이 없는 앞뒤도 잇는다:
 /// 바로 앞 차 주행이 역 근처에서 끝났고 이 이동이 거기서 멀리서 시작했으면 그 역에서 탄 것으로,
 /// 바로 뒤 차 주행이 역 근처에서 시작하고 이 이동이 거기서 멀리서 끝났으면 그 역에서 내린 것으로 본다 ([TRANSIT_JOIN_MS] 안일 때만).
-fn transit_ride(k: usize, real: &[usize], trips: &[TripRow], hidden: &crate::edits::Hidden, next_start: Option<(Point, i64)>) -> Option<crate::subway::Ride> {
+/// 돌려주는 둘째 값 = 내린 역 뒤에 기록된 점들 (역에서 목적지까지 걸은 길). 다음 차 주행의 역까지 이었으면 비어 있다.
+fn transit_ride(k: usize, real: &[usize], trips: &[TripRow], hidden: &crate::edits::Hidden, next_start: Option<(Point, i64)>) -> Option<(crate::subway::Ride, Vec<Point>)> {
     use crate::geo::haversine_m;
     use crate::transit::CAR_FAR_M;
     let t = &trips[real[k]];
@@ -1303,8 +1318,13 @@ fn transit_ride(k: usize, real: &[usize], trips: &[TripRow], hidden: &crate::edi
         .map(|j| &trips[real[j]])
         .filter(|p| !hidden.transit(p.start_ms) && car(p.end, t.start, t.start_ms - p.end_ms))
         .map_or(board, |p| p.end);
-    let to = next_start.filter(|&(p, start_ms)| !hidden.transit(start_ms) && car(p, t.end, start_ms - t.end_ms)).map_or(alight, |(p, _)| p);
-    crate::subway::ride(from, to).or_else(|| crate::subway::ride(board, alight))
+    let to_car = next_start.filter(|&(p, start_ms)| !hidden.transit(start_ms) && car(p, t.end, start_ms - t.end_ms)).map(|(p, _)| p);
+    let walk: Vec<Point> = match (to_car, t.path.iter().rposition(|p| at_station(&p))) {
+        (None, Some(i)) => t.path[i + 1..].to_vec(),
+        _ => Vec::new(),
+    };
+    let to = to_car.unwrap_or(alight);
+    crate::subway::ride(from, to).or_else(|| crate::subway::ride(board, alight)).map(|r| (r, walk))
 }
 
 /// 지하철로 간 곳에서 다음 출발까지 걸을 만한 거리 (역 ↔ 목적지).
