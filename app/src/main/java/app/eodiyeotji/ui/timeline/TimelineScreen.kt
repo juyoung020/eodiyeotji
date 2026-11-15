@@ -536,13 +536,26 @@ private fun CompactDayDetail(
             }
             val panelRadius = EodiTheme.space.radiusL
             val radiusPx = with(density) { panelRadius.toPx() }
-            val fitBottom = (areaPx - restTop + radiusPx).toInt()
+            // 지도 빈 곳을 한 번 누르면 판이 내려가 지도가 넓어지고, 한 번 더 누르면 제자리로 온다 (끌지 않아도 되게).
+            // 누른 것이 길 · 핀이면 그 항목을 고르기만 한다.
+            val panelScope = rememberCoroutineScope()
+            var mapWide by remember(areaPx) { mutableStateOf(false) }
+            val onMapTap: (String?) -> Unit = { key ->
+                onMapSelect(key)
+                if (key == null) {
+                    mapWide = panelTop < (restTop + lowTop) / 2
+                    val to = if (mapWide) lowTop else restTop
+                    panelScope.launch { androidx.compose.animation.core.animate(panelTop, to, animationSpec = tween(PanelTapMs)) { v, _ -> panelTop = v } }
+                }
+            }
+            // 넓힌 지도에서는 길을 넓어진 지도 전체에 맞춘다
+            val fitBottom = (areaPx - (if (mapWide) lowTop else restTop) + radiusPx).toInt()
             val fit = remember(fitBottom) { intArrayOf(0, 0, 0, fitBottom) }
             Box(Modifier.fillMaxSize()) {
                 DayMap(
                     data = loaded?.map,
                     selectedKey = selectedEntry,
-                    onSelectKey = onMapSelect,
+                    onSelectKey = onMapTap,
                     modifier = Modifier.fillMaxSize(),
                     photoPins = photoPins,
                     myPhotos = loaded?.mapPhotos.orEmpty(),
@@ -648,6 +661,9 @@ private const val CompactMapFraction = 0.44f
 
 /** 판을 끝까지 내렸을 때 판이 시작하는 높이: 지도를 크게 보되 판 머리(요약 · 통계 한 줄)는 남긴다. */
 private const val CompactMapMaxFraction = 0.78f
+
+/** 지도를 눌러 판을 내리고 올리는 시간 (ms). */
+private const val PanelTapMs = 220
 
 /**
  * 앱 이름 (앱 표시 그림은 왼쪽 레일 맨 위에 있다). 검색 칸([search])이 있으면 이름 옆을 검색 칸이 채우고,
