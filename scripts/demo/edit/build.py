@@ -37,7 +37,12 @@ NOTO = r"C:\Windows\Fonts\NotoSansKR-VF.ttf"
 OUT = sys.argv[1]
 WORK = os.path.join(REPO, r"build\demo\edit\work6"); os.makedirs(WORK, exist_ok=True)
 W, H, FPS = 1920, 1080, 30
-DISP = (824, 592, 306, 126)    # 실사 영상 속 센터 디스플레이 (1080p 좌표)
+# AI 실사(1280x720) 오른쪽 아래 생성 도구 워터마크(x 1135~1245, y 578~655)가 안 보이게 16:9 로 잘라 키운다
+AICROP = (1120, 630, 5, 30)    # w, h, x, y (원본 720p 좌표) → x 5~1125, y 30~660
+_k = W / AICROP[0]
+DISP0 = (549.3, 394.7, 204, 84)   # 원본 720p 좌표의 센터 디스플레이
+DISP = (round((DISP0[0] - AICROP[2]) * _k), round((DISP0[1] - AICROP[3]) * _k), round(DISP0[2] * _k), round(DISP0[3] * _k))
+AIVF = f"crop={AICROP[0]}:{AICROP[1]}:{AICROP[2]}:{AICROP[3]},scale={W}:{H}:flags=lanczos"
 
 # ---------------------------------------------------------------- 색 (숏폼과 같은 팔레트)
 WHITE = (255, 255, 255, 255); INK = (10, 15, 28, 255); BLUE = (0, 100, 255, 255)
@@ -314,13 +319,13 @@ def seg_ai(name, clip, a, l, screen=None, speed=1.0):
     o = os.path.join(WORK, name + ".mp4"); x, y, w, h = DISP; n = l / speed
     if screen:
         sc, t = screen
-        fc = (f"[0:v]scale={W}:{H},setpts=(PTS-STARTPTS)/{speed},fps={FPS}[bg];"
+        fc = (f"[0:v]{AIVF},setpts=(PTS-STARTPTS)/{speed},fps={FPS}[bg];"
               f"[1:v]crop=1704:700:856:300,scale={w}:{h},eq=brightness=-0.08:contrast=0.85:saturation=0.85,gblur=sigma=1.0,"
               f"perspective=x0=W*0.02:y0=0:x1=W*0.98:y1=0:x2=0:y2=H:x3=W:y3=H:sense=destination,setpts=PTS-STARTPTS[sc];"
               f"[bg][sc]overlay={x}:{y}:shortest=0[v];anullsrc=r=48000:cl=stereo,atrim=0:{n}[a]")
         ins = ["-ss", str(a), "-t", str(l), "-i", os.path.join(AI, clip), "-ss", str(t), "-t", str(n + 1), "-i", scene_file(sc)]
     else:
-        fc = f"[0:v]scale={W}:{H},setpts=(PTS-STARTPTS)/{speed},fps={FPS}[v];anullsrc=r=48000:cl=stereo,atrim=0:{n}[a]"
+        fc = f"[0:v]{AIVF},setpts=(PTS-STARTPTS)/{speed},fps={FPS}[v];anullsrc=r=48000:cl=stereo,atrim=0:{n}[a]"
         ins = ["-ss", str(a), "-t", str(l), "-i", os.path.join(AI, clip)]
     run(["ffmpeg", "-y", "-v", "error", *ins, "-filter_complex", fc, "-map", "[v]", "-map", "[a]", "-t", f"{n:.3f}", *enc(o)])
     return o
@@ -399,7 +404,7 @@ def seg_blog(name, D=5.2):
     # 사진: AI 실사 풍경(vid_F)을 여러 구도로 잘라 쓴다 (앱 화면 조각은 쓰지 않는다)
     ph = []
     for t in (0.3, 1.5, 2.7, 3.9, 4.9):
-        f = Image.open(grab(os.path.join(AI, "vid_F.mp4"), t, f"bp_f{t}")).convert("RGB")
+        f = Image.open(grab(os.path.join(AI, "vid_F.mp4"), t, f"bp_f{t}")).convert("RGB").crop((AICROP[2], AICROP[3], AICROP[2] + AICROP[0], AICROP[3] + AICROP[1]))
         ph += [f, f.crop((0, 0, f.width * 2 // 3, f.height * 2 // 3)), f.crop((f.width // 3, f.height // 3, f.width, f.height))]
     random_order = [0, 4, 8, 1, 12, 5, 9, 13, 2, 10]
     o = os.path.join(WORK, name + ".mp4")
