@@ -44,6 +44,37 @@ impl ParkedCar {
 
 #[uniffi::export]
 impl EodiStore {
+    /// 지금 "주행 중"인데 내 차가 여기 없는가 — 이번 이동이 마지막으로 차를 세운 자리에서 멀리(`transit::CAR_FAR_M`)서 시작했다.
+    /// 지하철 · 버스 · 남의 차를 탄 것이라 폰 판이 운전 중 화면 대신 동승자 화면을 쓴다. 달리는 중이 아니거나 차를 세운 적이 없으면 false.
+    pub fn riding_without_car(&self) -> Result<bool, CoreError> {
+        let conn = self.snapshot()?;
+        let last: Option<(i64, i64)> = conn
+            .query_row("SELECT t_ms, kind FROM drive_event ORDER BY t_ms DESC, kind DESC LIMIT 1", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .optional()?;
+        let Some((start_ms, crate::store::KIND_START)) = last else { return Ok(false) };
+        let at = |sql: &str, t: i64| -> Result<Option<Point>, CoreError> {
+            Ok(conn.query_row(sql, [t], |r| Ok(Point { lat: r.get(0)?, lon: r.get(1)? })).optional()?)
+        };
+        let Some(here) = at("SELECT lat, lon FROM fix WHERE t_ms >= ?1 ORDER BY t_ms LIMIT 1", start_ms)? else { return Ok(false) };
+        // 마지막 차 주행의 끝 (지하철 이동은 건너뛴다)
+        let mut before = start_ms;
+        let car_end = loop {
+            let end: Option<i64> = conn
+                .query_row("SELECT t_ms FROM drive_event WHERE kind = ?1 AND t_ms < ?2 ORDER BY t_ms DESC LIMIT 1", [KIND_END, before], |r| r.get(0))
+                .optional()?;
+            let Some(t) = end else { return Ok(false) };
+            let transit_from: Option<i64> = conn
+                .query_row("SELECT from_ms FROM hidden WHERE kind = ?1 AND from_ms <= ?2 AND to_ms >= ?2 LIMIT 1", [crate::edits::KIND_TRANSIT, t], |r| r.get(0))
+                .optional()?;
+            match transit_from {
+                Some(from) => before = from,
+                None => break t,
+            }
+        };
+        let Some(car) = at("SELECT lat, lon FROM fix WHERE t_ms <= ?1 ORDER BY t_ms DESC LIMIT 1", car_end)? else { return Ok(false) };
+        Ok(haversine_m(car, here) > crate::transit::CAR_FAR_M)
+    }
+
     /// 지금 주차 중이면 주차한 자리. 달리는 중이거나 기록이 없으면 None.
     pub fn parked_car(&self) -> Result<Option<ParkedCar>, CoreError> {
         let conn = self.snapshot()?;

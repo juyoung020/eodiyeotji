@@ -266,10 +266,10 @@ internal class DayMapController(
         addLine(LineLayer(TRIP_CASING, SOURCE_ID).withFilter(isTrip).withProperties(*roundLine, lineWidth(widthByZoom(CASING_W))))
         addLine(LineLayer(TRIP_LINE, SOURCE_ID).withFilter(isTrip).withProperties(*roundLine, lineWidth(widthByZoom(LINE_W))))
         // 지하철 이동: 회색 점선 (차 주행 선 아래 느낌으로 가늘게, 누르는 대상은 아니다)
-        addLine(LineLayer(TRANSIT_CASING, SOURCE_ID).withFilter(isTransit).withProperties(*roundLine, lineWidth(widthByZoom(CASING_W))))
+        addLine(LineLayer(TRANSIT_CASING, SOURCE_ID).withFilter(isTransit).withProperties(*roundLine, lineWidth(widthByZoom(TRANSIT_CASING_W))))
         addLine(
             LineLayer(TRANSIT_LINE, SOURCE_ID).withFilter(isTransit)
-                .withProperties(lineJoin(Property.LINE_JOIN_ROUND), lineCap(Property.LINE_CAP_BUTT), lineWidth(widthByZoom(LINE_W)), lineDasharray(arrayOf(1.1f, 0.9f)), lineColor(TRANSIT_COLOR)),
+                .withProperties(lineJoin(Property.LINE_JOIN_ROUND), lineCap(Property.LINE_CAP_BUTT), lineWidth(widthByZoom(TRANSIT_W)), lineDasharray(arrayOf(1.6f, 1.2f)), lineColor(TRANSIT_COLOR)),
         )
         addLine(LineLayer(TRIP_SEL_CASING, SOURCE_ID).withFilter(NOTHING).withProperties(*roundLine, lineWidth(widthByZoom(SEL_CASING_W))))
         addLine(LineLayer(TRIP_SEL, SOURCE_ID).withFilter(NOTHING).withProperties(*roundLine, lineWidth(widthByZoom(SEL_LINE_W))))
@@ -774,6 +774,10 @@ internal class DayMapController(
         /** 경로 굵기(dp, 줌 13 기준). 멀리서는 가늘게, 가까이서는 굵게 ([widthByZoom]). */
         const val LINE_W = 7f
         const val CASING_W = 11.5f
+
+        /** 지하철 이동 점선: 차 주행 선보다 가늘게 */
+        const val TRANSIT_W = 4f
+        const val TRANSIT_CASING_W = 7f
         const val SHADOW_W = 15f
         const val SEL_LINE_W = 10f
         const val SEL_CASING_W = 15f

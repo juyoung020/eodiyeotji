@@ -103,6 +103,9 @@ class EodiCore @Inject constructor(
     /** 지금 주차 중이면 주차한 자리 (+ 이번에 가려던 곳). 달리는 중이면 null. */
     suspend fun parkedCar(): app.eodiyeotji.core.rust.ParkedCar? = coreCall("parkedCar") { store.parkedCar() }
 
+    /** 지금 "주행 중"인데 내 차는 다른 곳에 서 있는가 (지하철 · 버스 · 남의 차, 폰 판). */
+    suspend fun ridingWithoutCar(): Boolean = coreCall("ridingWithoutCar") { store.ridingWithoutCar() }
+
     /** 지금 탄 인원 기록 (좌석 센서, 주행 중). */
     suspend fun setDrivePeople(tMs: Long, people: Int) = coreCall("setDrivePeople") { store.setDrivePeople(tMs, people.toUInt()) }
 

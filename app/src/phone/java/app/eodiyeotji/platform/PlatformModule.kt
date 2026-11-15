@@ -25,7 +25,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -61,6 +63,7 @@ abstract class PlatformModule {
 class PhoneDrivingStatePort @Inject constructor(
     signals: PhoneDriveSignals,
     manual: ManualDrivingStatePort,
+    private val core: app.eodiyeotji.core.EodiCore,
 ) : DrivingStatePort {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val passengerFlag = MutableStateFlow(false)
@@ -80,10 +83,28 @@ class PhoneDrivingStatePort @Inject constructor(
     init {
         // 주행이 끝나면 동승자 표시를 푼다 (다음 주행은 다시 운전 중 화면부터)
         scope.launch { moving.collect { if (!it) passengerFlag.value = false } }
+        // 내 차는 다른 곳에 서 있는데 "주행"이 잡혔으면 지하철 · 버스 · 남의 차다 → 운전 중 화면 대신 동승자 화면으로 시작한다.
+        // 출발 기록이 저장되기를 기다려 두 번 본다 (주행 판정 직후에는 아직 없을 수 있다).
+        scope.launch {
+            moving.collectLatest { on ->
+                if (!on) return@collectLatest
+                for (wait in AWAY_CHECKS_MS) {
+                    delay(wait)
+                    if (runCatching { core.ridingWithoutCar() }.getOrDefault(false)) {
+                        passengerFlag.value = true
+                        break
+                    }
+                }
+            }
+        }
     }
 
     fun setPassenger(value: Boolean) {
         passengerFlag.value = value && moving.value
+    }
+
+    private companion object {
+        val AWAY_CHECKS_MS = longArrayOf(5_000, 25_000)
     }
 }
 

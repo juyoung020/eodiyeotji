@@ -696,3 +696,22 @@ fn a_subway_ride_far_from_the_parked_car_becomes_transit_and_can_be_switched_bac
     assert_eq!(store.day_detail(day.into()).unwrap().transits.len(), 1);
     assert!(store.set_trip_transit(ride + 1, false, now).is_err());
 }
+
+#[test]
+fn a_ride_that_starts_far_from_the_parked_car_is_not_my_car() {
+    let db = TempDb::new("away");
+    let store = db.open();
+    let parked = drive(&store, kst(2026, 10, 5, 13, 0), HOME, EMART, 10.0);
+    assert!(!store.riding_without_car().unwrap(), "주차 중");
+    // 차를 세운 자리에서 다시 출발하면 내 차
+    let t = parked + 40 * MIN;
+    store.mark_drive_event(DriveEvent::Start, t).unwrap();
+    store.ingest(vec![GeoFix { lat: EMART.3, lon: EMART.4, t_ms: t, accuracy_m: 10.0 }]).unwrap();
+    assert!(!store.riding_without_car().unwrap());
+    store.mark_drive_event(DriveEvent::End, t + MIN).unwrap();
+    // 12km 떨어진 곳에서 "주행" 시작 (아직 안 끝남) → 내 차가 아니다
+    let t = t + HOUR;
+    store.mark_drive_event(DriveEvent::Start, t).unwrap();
+    store.ingest(vec![GeoFix { lat: 37.66, lon: 127.04, t_ms: t, accuracy_m: 10.0 }]).unwrap();
+    assert!(store.riding_without_car().unwrap());
+}

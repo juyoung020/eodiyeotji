@@ -1214,10 +1214,12 @@ impl EodiStore {
         let stay_day = |t: i64| in_range(t).filter(|_| !hidden.stay(t));
         for (k, &i) in real.iter().enumerate() {
             let next_start = real.get(k + 1).map(|&n| (trips[n].start, trips[n].start_ms)).or(next);
-            let t = &mut trips[i];
+            let t = &trips[i];
             let end_place = label(t.seg_start, REF_END, t.end_ms);
             // 지하철 이동은 차 주행 목록에서 빠지고 따로 모은다
             let transit = hidden.transit(t.start_ms);
+            let ride = if transit { transit_ride(k, &real, &trips, &hidden, next_start) } else { None };
+            let t = &mut trips[i];
             if let Some(d) = if transit { in_range(t.start_ms) } else { trip_day(t.start_ms) } {
                 let summary = TripSummary {
                     start_ms: t.start_ms,
@@ -1230,7 +1232,24 @@ impl EodiStore {
                     end_place: end_place.clone(),
                 };
                 let acc = days.entry(d).or_default();
-                if transit { acc.transits.push(summary) } else { acc.trips.push(summary) }
+                match ride {
+                    // 지하철 이동은 받은 위치(역 사이가 비어 곧은 선) 대신 역을 따라 간 길로 보인다
+                    Some(r) if transit => {
+                        let station = |name: &str| Some(PlaceLabel { name: name.into(), category: "지하철역".into(), address: String::new(), source: places::PlaceSource::Osm });
+                        let path: Vec<GeoPoint> = r.path.into_iter().map(gp).collect();
+                        acc.transits.push(TripSummary {
+                            distance_m: r.length_m,
+                            start: path[0],
+                            end: path[path.len() - 1],
+                            path,
+                            start_place: station(r.from),
+                            end_place: station(r.to),
+                            ..summary
+                        });
+                    }
+                    _ if transit => acc.transits.push(summary),
+                    _ => acc.trips.push(summary),
+                }
             }
             // 주행 안 머문 곳(드라이브스루 등)은 그 주행의 일부라 주행을 숨기면 같이 숨는다.
             let trip_hidden = hidden.trip(t.start_ms);
@@ -1260,6 +1279,31 @@ impl EodiStore {
         Ok(days)
     }
 }
+
+/// 지하철 이동([real]의 [k]번째)을 역을 따라 간 길로 (`subway::ride`). 지하라 기록이 없는 앞뒤도 잇는다:
+/// 바로 앞 차 주행이 역 근처에서 끝났고 이 이동이 거기서 멀리서 시작했으면 그 역에서 탄 것으로,
+/// 바로 뒤 차 주행이 역 근처에서 시작하고 이 이동이 거기서 멀리서 끝났으면 그 역에서 내린 것으로 본다 ([TRANSIT_JOIN_MS] 안일 때만).
+fn transit_ride(k: usize, real: &[usize], trips: &[TripRow], hidden: &crate::edits::Hidden, next_start: Option<(Point, i64)>) -> Option<crate::subway::Ride> {
+    use crate::geo::haversine_m;
+    use crate::transit::CAR_FAR_M;
+    let t = &trips[real[k]];
+    let car = |p: Point, far_from: Point, gap_ms: i64| haversine_m(p, far_from) > CAR_FAR_M && gap_ms <= TRANSIT_JOIN_MS;
+    // 기록 안에서 탄 역 · 내린 역: 기록에는 역까지 걸어간 길이 섞여 있다 (내려서 박물관까지 걸은 700m 등)
+    // → 역 바로 앞을 지난 첫 점 · 마지막 점을 쓴다
+    let at_station = |p: &&Point| crate::subway::near_station(**p, crate::transit::STATION_AT_M);
+    let board = t.path.iter().find(at_station).copied().unwrap_or(t.start);
+    let alight = t.path.iter().rev().find(at_station).copied().unwrap_or(t.end);
+    let from = k
+        .checked_sub(1)
+        .map(|j| &trips[real[j]])
+        .filter(|p| !hidden.transit(p.start_ms) && car(p.end, t.start, t.start_ms - p.end_ms))
+        .map_or(board, |p| p.end);
+    let to = next_start.filter(|&(p, start_ms)| !hidden.transit(start_ms) && car(p, t.end, start_ms - t.end_ms)).map_or(alight, |(p, _)| p);
+    crate::subway::ride(from, to).or_else(|| crate::subway::ride(board, alight))
+}
+
+/// 지하철 이동 앞뒤의 차 주행과 이 시간 안에 이어져야 같은 나들이로 보고 역까지 잇는다.
+const TRANSIT_JOIN_MS: i64 = 3 * 3_600_000;
 
 /// 현지 날짜 번호 → "YYYY-MM-DD" (그레고리력, Howard Hinnant의 civil_from_days).
 pub(crate) fn format_day(day: i64) -> String {

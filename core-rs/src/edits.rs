@@ -221,7 +221,7 @@ impl EodiStore {
                     .prepare_cached("SELECT t_ms, lat, lon FROM fix WHERE t_ms BETWEEN ?1 AND ?2 ORDER BY t_ms")?
                     .query_map([t.start_ms, t.end_ms], |r| Ok((r.get(0)?, Point { lat: r.get(1)?, lon: r.get(2)? })))?
                     .collect::<Result<_, _>>()?;
-                is_transit = crate::transit::is_transit(crate::transit::jumps(&fixes), Point::from(t.start), car_at, &name(&t.start_place), &name(&t.end_place));
+                is_transit = crate::transit::is_transit(crate::transit::jumps(&fixes), Point::from(t.start), Point::from(t.end), car_at, &name(&t.start_place), &name(&t.end_place));
             }
             if is_transit {
                 found.push(t);

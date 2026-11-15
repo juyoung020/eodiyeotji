@@ -45,6 +45,7 @@ pub mod share;
 pub mod speech_text;
 pub mod store;
 pub mod sync;
+pub mod subway;
 pub mod transit;
 pub mod trip;
 #[cfg(test)]
