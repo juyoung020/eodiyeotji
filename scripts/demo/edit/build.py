@@ -1,4 +1,4 @@
-"""시연영상 v10 편집 (1920x1080 30fps) — 핵심: "차가 알아서 남긴 기록 하나로, 출장 정산부터 여행 · 추억 · 같이 가기까지".
+"""시연영상 v11 편집 (1920x1080 30fps) — 핵심: "차가 알아서 남긴 기록 하나로, 출장 정산부터 여행 · 추억 · 같이 가기까지".
 디자인은 숏폼 v7과 같은 언어: 흰 글자 + 잉크 외곽선 + 그림자, 핵심어만 브랜드 블루 상자, 블루 번호 칩, 말풍선 · 앱 카드, 블루 사선 전환.
 사용법: python -X utf8 build.py OUT.mp4   (내레이션은 build/demo/edit/vo/t_KEY.wav, 대본은 lines.tsv — 자막 시각은 음성 길이에서 계산)"""
 import os, subprocess, sys, math, wave
@@ -17,7 +17,7 @@ SCENE_DIRS = [os.path.join(REPO, "build", "demo", d, "scenes") for d in
 # recall: retake-keep 은 정차 중 첫 화면에서 뜸 → 주행 중 카드가 뜨는 retake-tts
 # review: retake-fix (경로선 끊김 수정본)
 # recall: retake-recall 은 회상 횟수 제한으로 카드가 안 떠서 쓰지 않는다 → 주행 중 카드가 뜨는 retake-tts
-SCENE_PIN = {"recall": "retake-tts",
+SCENE_PIN = {"recall": "retake-recall4",
              "review": "retake-fix"}
 
 
@@ -392,7 +392,7 @@ add("rec", [seg_app("rec_a", "startrec", 2.4, 4.0, ca=A0, cb=(760, 300, 2.0)),
 add("drive", [seg_ai("drive", "vid_H2.mp4", 0, 3.2, ("recall", 5.0)),
               seg_app("dr_a", "oneline", 4.6, 17.0, ca=(1700, 300, 1.6), cb=(1850, 560, 1.32), audio=True, appvol=8.0),
               seg_app("dr_b", "roadside", 2.6, 10.8, ca=DRV, cb=(1450, 520, 1.3), audio=True, appvol=8.0),
-              seg_app("dr_c", "recall", 125.6, 5.0, ca=DRV, cb=(1500, 420, 1.3), audio=True, appvol=8.0, afade=0.12, afade_st=0.75)],  # 앱 음성 시작(126.4초)에 0.12초 페이드인
+              seg_app("dr_c", "recall", 124.8, 5.0, ca=DRV, cb=(1500, 420, 1.3), audio=True, appvol=8.0)],  # retake-recall4: 앱 음성 125.4–128.9초
     [("k04", 0, 0.3)], ("02", "운전 중엔 음성으로"))
 def seg_blog(name, D=5.2):
     """휴대폰 속 가상의 광고 가득한 블로그 글 (blog_phone.py)"""
