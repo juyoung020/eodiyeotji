@@ -1,6 +1,8 @@
 # video/ — 홍보 영상 버전별 모음
 
-만든 순서대로 모아 둔 홍보 영상이다. 최신은 **v14** (`v14_91s_1080p.mp4` 고화질, `v14_91s.mp4` 가벼운 판).
+**YouTube에서 보기** — 시연 영상(1분 52초): https://www.youtube.com/watch?v=eUZlXO1q7Zo · 숏폼: https://youtube.com/shorts/k-rxJf7Fy2Y
+
+만든 순서대로 모아 둔 영상이다. 최신은 **v15** (`v15_112s.mp4`, 1차 제출 시연영상).
 저장소가 무거워지지 않게 버전마다 가벼운 판(720p~1080p, 10~30MB)만 두고, 고화질 원본(40~80MB)은 최신판만 둔다.
 나레이션은 임시 음성(TTS)이다. 영상 제작 소스(Remotion)와 고화질 원본은 개발 담당 PC의 `Desktop\eodiyeotji-promo`에 있다.
 
