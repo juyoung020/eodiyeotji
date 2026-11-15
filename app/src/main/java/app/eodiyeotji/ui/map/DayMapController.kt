@@ -266,9 +266,10 @@ internal class DayMapController(
         addLine(LineLayer(TRIP_CASING, SOURCE_ID).withFilter(isTrip).withProperties(*roundLine, lineWidth(widthByZoom(CASING_W))))
         addLine(LineLayer(TRIP_LINE, SOURCE_ID).withFilter(isTrip).withProperties(*roundLine, lineWidth(widthByZoom(LINE_W))))
         // 지하철 이동: 회색 점선 (차 주행 선 아래 느낌으로 가늘게, 누르는 대상은 아니다)
+        addLine(LineLayer(TRANSIT_CASING, SOURCE_ID).withFilter(isTransit).withProperties(*roundLine, lineWidth(widthByZoom(CASING_W))))
         addLine(
             LineLayer(TRANSIT_LINE, SOURCE_ID).withFilter(isTransit)
-                .withProperties(lineJoin(Property.LINE_JOIN_ROUND), lineCap(Property.LINE_CAP_BUTT), lineWidth(widthByZoom(LINE_W)), lineDasharray(arrayOf(1.6f, 1.2f)), lineColor(TRANSIT_COLOR)),
+                .withProperties(lineJoin(Property.LINE_JOIN_ROUND), lineCap(Property.LINE_CAP_BUTT), lineWidth(widthByZoom(LINE_W)), lineDasharray(arrayOf(1.1f, 0.9f)), lineColor(TRANSIT_COLOR)),
         )
         addLine(LineLayer(TRIP_SEL_CASING, SOURCE_ID).withFilter(NOTHING).withProperties(*roundLine, lineWidth(widthByZoom(SEL_CASING_W))))
         addLine(LineLayer(TRIP_SEL, SOURCE_ID).withFilter(NOTHING).withProperties(*roundLine, lineWidth(widthByZoom(SEL_LINE_W))))
@@ -460,6 +461,7 @@ internal class DayMapController(
     private fun applyPalette(s: Style, p: MapPalette) {
         val stayColor = switchCase(isSkipped, color(SKIPPED_COLOR), isOpen, color(p.openStay), color(p.stay))
         s.getLayer(TRIP_CASING)?.setProperties(lineColor(p.casing))
+        s.getLayer(TRANSIT_CASING)?.setProperties(lineColor(p.casing))
         s.getLayer(TRIP_LINE)?.setProperties(lineColor(p.trip))
         s.getLayer(TRIP_SEL_CASING)?.setProperties(lineColor(p.casing))
         s.getLayer(TRIP_SEL)?.setProperties(lineColor(p.trip))
@@ -527,6 +529,9 @@ internal class DayMapController(
         s.getLayer(TRIP_SHADOW)?.setProperties(lineOpacity(tripDim))
         s.getLayer(TRIP_CASING)?.setProperties(lineOpacity(tripDim))
         s.getLayer(TRIP_LINE)?.setProperties(lineOpacity(tripDim))
+        // 지하철 이동: 고른 것만 또렷하게
+        s.getLayer(TRANSIT_CASING)?.setProperties(lineOpacity(keepPicked))
+        s.getLayer(TRANSIT_LINE)?.setProperties(lineOpacity(keepPicked))
         s.getLayer(TRIP_ARROW)?.setProperties(iconOpacity(switchCase(isFaded, literal(1f - t), keepPicked)))
         s.getLayer(PLAN_CASING)?.setProperties(lineOpacity(t))
         s.getLayer(PLAN_LINE)?.setProperties(lineOpacity(t))
@@ -647,7 +652,13 @@ internal class DayMapController(
         val nw = m.projection.fromScreenLocation(PointF(e[0].toFloat(), e[1].toFloat()))
         val se = m.projection.fromScreenLocation(PointF((mapView.width - e[2]).toFloat(), (mapView.height - e[3]).toFloat()))
         val shown = { lat: Double, lon: Double -> lat in se.latitude..nw.latitude && lon in nw.longitude..se.longitude }
-        if (shown(b.minLat, b.minLon) && shown(b.maxLat, b.maxLon)) return
+        // 다 보여도 너무 작게 보이면(먼 축척에서 고른 짧은 구간 — 장소 카드 밑에 깔려 안 보이기도 한다) 그 범위로 다가간다
+        val a = m.projection.toScreenLocation(LatLng(b.maxLat, b.minLon))
+        val z = m.projection.toScreenLocation(LatLng(b.minLat, b.maxLon))
+        val span = maxOf(kotlin.math.abs(z.x - a.x), kotlin.math.abs(z.y - a.y))
+        val isLine = b.minLat != b.maxLat || b.minLon != b.maxLon
+        val tiny = isLine && span < TINY_SPAN * minOf(mapView.width - e[0] - e[2], mapView.height - e[1] - e[3])
+        if (shown(b.minLat, b.minLon) && shown(b.maxLat, b.maxLon) && !tiny) return
         val target = if (b.minLat == b.maxLat && b.minLon == b.maxLon) {
             CameraUpdateFactory.newLatLngZoom(LatLng(b.minLat, b.minLon), MAX_FIT_ZOOM.coerceAtMost(m.cameraPosition.zoom.coerceAtLeast(REVEAL_MIN_ZOOM)))
         } else {
@@ -727,6 +738,7 @@ internal class DayMapController(
         const val TRIP_SEL = "eodi-trip-sel"
         const val TRIP_ARROW = "eodi-trip-arrow"
         const val TRANSIT_LINE = "eodi-transit"
+        const val TRANSIT_CASING = "eodi-transit-casing"
         const val TRANSIT_COLOR = "#7A8696"
         const val TRIP_LABEL = "eodi-trip-label"
         const val END_DOT = "eodi-end-dot"
@@ -807,6 +819,9 @@ internal class DayMapController(
         const val MAX_ZOOM = 18.0
         const val REVEAL_MIN_ZOOM = 14.0
         const val REVEAL_MS = 400
+
+        /** 고른 구간이 지도 짧은 변의 이 비율보다 작게 보이면 다가간다 */
+        const val TINY_SPAN = 0.15f
 
         val isTrip: Expression = eq(get("kind"), literal("trip"))
         val isStay: Expression = eq(get("kind"), literal("stay"))
