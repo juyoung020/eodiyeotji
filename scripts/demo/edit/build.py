@@ -11,7 +11,7 @@ REPO = r"C:\Users\user one\Desktop\eodiyeotji"
 # 장면 폴더: 앞쪽 폴더에 그 장면 mp4 가 있으면 그것을 쓴다 (mp4 · wav 는 같은 폴더에서).
 # 새 녹화 폴더는 이 목록 맨 앞에 넣는다. 폴더가 없거나 그 장면이 없으면 다음 폴더로 넘어간다.
 SCENE_DIRS = [os.path.join(REPO, "build", "demo", d, "scenes") for d in
-              ("retake-gallery", "retake-road", "retake-voice", "retake-keep", "retake-fix", "retake-tts", "retake-1115c", "retake-1115", "final-1115")]
+              ("retake-coupon", "retake-gallery", "retake-road", "retake-voice", "retake-keep", "retake-fix", "retake-tts", "retake-1115c", "retake-1115", "final-1115")]
 # 장면별로 폴더를 못 박을 때: 장면 이름 → 폴더 이름 (목록 순서보다 우선)
 # roadside: retake-keep · retake-tts 둘 다 마이크 권한 창이 화면을 가림 → final-1115 (앱 음성은 끊김 녹음이라 끄고 화면 문구 카드만)
 # recall: retake-keep 은 정차 중 첫 화면에서 뜸 → 주행 중 카드가 뜨는 retake-tts
@@ -417,8 +417,12 @@ SOFT = {"mem_b.mp4"}   # 지도 → 사진 뷰어는 부드럽게 (블로그 →
 add("course", [seg_blog("blog"),
                seg_app("rv_a", "review", 0.3, 4.4, ca=A0, cb=(1650, 480, 1.25)),
                seg_app("rv_b", "review", 17.6, 2.8, ca=(1500, 640, 1.2), cb=(1500, 700, 1.32)),
-               seg_app("rv_c", "review", 25.0, 1.8, ca=A0, cb=(1600, 600, 1.15))],
-    [("k05", 0, 0.5), ("k06", 1, 0.5)], ("03", "블로그 대신, 달린 코스"))
+               seg_app("rv_c", "review", 25.0, 1.8, ca=A0, cb=(1600, 600, 1.15)),
+               # 제휴 쿠폰 (retake-coupon): 혜택 배너 확대 → 쿠폰 창 → 받았어요 · 쿠폰 번호
+               seg_app("cp_a", "coupon", 15.8, 3.2, ca=(1900, 640, 1.2), cb=(2170, 990, 2.1)),
+               seg_app("cp_b", "coupon", 22.0, 2.4, ca=(1694, 690, 1.35), cb=(1694, 690, 1.5)),
+               seg_app("cp_c", "coupon", 30.8, 3.0, ca=(1694, 690, 1.5), cb=(1780, 760, 2.1))],
+    [("k05", 0, 0.5), ("k06", 1, 0.5), ("k06b", 4, 0.3)], ("03", "블로그 대신, 달린 코스"))
 add("convoy", [seg_app("cv_a", "convoy", 16.0, 3.0, ca=A0, cb=(1350, 700, 1.45)),
                seg_app("cv_b", "convoy", 24.5, 4.5, ca=(1700, 600, 1.2), cb=(1950, 560, 1.4)),
                seg_app("cv_c", "convoy", 89.9, 6.2, ca=DRV, cb=(1600, 700, 1.25), audio=True, appvol=8.0)],
@@ -475,6 +479,7 @@ SUBS = {
     "k04b": "예전에 들른 곳을 지나면,|차가 [먼저] 꺼내 줍니다",
     "k05": "여행 코스를 찾으면, [광고만] 가득하죠",
     "k06": "여기선 차가 [실제로 달린 기록]만 코스가 됩니다|좋아요 많은 후기를 고르면, [그대로 안내]",
+    "k06b": "코스 위 제휴 매장은 [쿠폰]으로 손님을 맞고,|여행자는 [할인]을 받습니다",
     "k07": "같이 갈 땐, 일행 차가 [어디쯤]인지|연료는 [얼마나] 남았는지,|어느 [휴게소]에 들를지 함께",
     "k08": "다녀와선, 폰 갤러리 사진이|그날 그 길 위에 남아 [추억]으로",
     "k09": "덤으로, 회사 차라면|[출장 경비 정산]까지 자동",
@@ -582,7 +587,9 @@ fact(P[("drive", 2)] + 0.3, P[("drive", 3)], "주행 중 · 큰 카드 + 음성"
 fact(P[("drive", 3)] + 0.3, sc_by["drive"]["end"], "주행 중 · 지나가면 회상")
 fact(P[("course", 1)] + 0.3, P[("course", 2)], "✓ 차가 확인한 주행 기록 · ♥ 좋아요")
 fact(P[("course", 2)] + 0.3, P[("course", 3)], "♥ 좋아요 · ✓ 직접 달린 기록 배지")
-fact(P[("course", 3)] + 0.3, sc_by["course"]["end"], "고르면 그대로 차 내비 안내")
+fact(P[("course", 3)] + 0.3, P[("course", 4)], "고르면 그대로 차 내비 안내")
+fact(P[("course", 4)] + 0.3, P[("course", 6)], "제휴 매장 쿠폰 · 여행자 할인")
+fact(P[("course", 6)] + 0.2, sc_by["course"]["end"], "추천 순위는 제휴와 무관 · 실제 방문과 하트로")
 fact(P[("convoy", 0)] + 0.3, P[("convoy", 1)], "정차 중 · 6자리 코드로 함께")
 fact(P[("convoy", 1)] + 0.3, sc_by["convoy"]["end"], "일행 위치 · 배터리 · 연료 · 휴게소 공유")
 fact(P[("memory", 0)] + 0.4, sc_by["memory"]["end"], "폰 갤러리 사진 → 그날 지도에 자동으로")
@@ -655,7 +662,7 @@ nums = [(plain_text("0.4초", 92, 900, (120, 180, 255, 255), 0.6), plain_text("�
         (plain_text("1ms 안쪽", 92, 900, (120, 180, 255, 255), 0.6), plain_text("기기 안 기억 검색", 30, 600, (220, 228, 240, 255)))]
 note = plain_text("Rust 엔진 · release 빌드 에뮬레이터 측정", 22, 500, (130, 150, 185, 255))
 sdks = [pill(x, size=26, wght=700, fg=WHITE, outline=(110, 160, 255, 255), fill=(0, 100, 255, 70), h=52) for x in ("Vehicle", "NaviHelper", "FusedLocation", "TextToSpeech", "SpeechToText")]
-biz = text_block("개인 [플러스 구독]  ·  법인 [차량 대당 구독]", size=40, wght=800, stroke=5)
+biz = text_block("개인 [플러스 구독]  ·  법인 [차량 대당 구독]  ·  [제휴 매장 쿠폰]", size=40, wght=800, stroke=5)
 def tech(cv, t):
     lt = t - t0t - 0.2; A = 1 - ease_in((t - (t1t - 0.25)) / 0.25)
     def rise(sp, y, d0, ox=0.5, x=W / 2):
