@@ -328,7 +328,8 @@ private fun PhoneHome(shell: PhoneShellViewModel) {
                                 { PermissionWarning(onFix = shell::openAppSettings) }
                             }
                             // 차를 세워 둔 동안: 내 차 카드 (가게까지 걷기 · 내 차 찾기). 기록 경고 띠가 있으면 그 아래
-                            parked != null && !moving -> {
+                            // 지하철 · 버스로 움직이는 동안(동승자 화면)에도 차는 서 있다 → 카드를 그대로 둔다
+                            parked != null && (!moving || passenger) -> {
                                 {
                                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                         RecordingStatusChip(banner = true)

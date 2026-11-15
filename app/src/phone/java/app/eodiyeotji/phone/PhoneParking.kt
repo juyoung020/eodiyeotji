@@ -13,6 +13,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,6 +37,8 @@ class PhoneParking @Inject constructor(
     /** 지금 보여 줄 주차 위치 (없으면 null). */
     val car: StateFlow<ParkedCar?> = _car.asStateFlow()
     private val _memo = MutableStateFlow("")
+    @Volatile private var lastClassify = -CLASSIFY_GAP_MS
+    @Volatile private var pendingClassify: kotlinx.coroutines.Job? = null
 
     /** 지금 주차의 층 · 자리 메모 (없으면 ""). */
     val memo: StateFlow<String> = _memo.asStateFlow()
@@ -73,8 +76,18 @@ class PhoneParking @Inject constructor(
     }
 
     suspend fun refresh() {
-        // 방금 끝난 "주행"이 지하철이었으면 차는 움직이지 않았다 → 먼저 가려낸 뒤 주차 자리를 읽는다
-        runCatching { core.classifyTransit() }
+        // 방금 끝났거나 타고 있는 "주행"이 지하철이면 차는 움직이지 않았다 → 먼저 가려낸 뒤 주차 자리를 읽는다.
+        // 주행 중에는 기록이 몇 초마다 바뀐다 → [CLASSIFY_GAP_MS]에 한 번만 보고, 건너뛴 것은 조금 뒤에 한 번 더 본다.
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastClassify >= CLASSIFY_GAP_MS) {
+            lastClassify = now
+            runCatching { core.classifyTransit() }
+        } else if (pendingClassify?.isActive != true) {
+            pendingClassify = scope.launch {
+                delay(CLASSIFY_GAP_MS - (now - lastClassify))
+                refresh()
+            }
+        }
         val own = runCatching { core.parkedCar() }.getOrNull()
         val latest = parkedLatest(received(), own)
         val car = latest?.takeIf { it.tMs > prefs.getLong(K_DISMISSED, 0) }
@@ -90,5 +103,6 @@ class PhoneParking @Inject constructor(
         const val K_MEMO = "memo"
         const val K_MEMO_T = "memo_t"
         const val MEMO_MAX = 40
+        const val CLASSIFY_GAP_MS = 30_000L
     }
 }

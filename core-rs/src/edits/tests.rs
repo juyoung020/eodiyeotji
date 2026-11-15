@@ -642,6 +642,15 @@ fn hiding_a_day_story_falls_back_to_rule_title_and_story_and_survives_reopen() {
 
 /// 지하철 흉내: a에서 b까지 역 5개. 역마다 6초 간격 같은 자리 다섯 점, 역 사이 60초는 위치가 없다. 반환: 도착 시각.
 fn subway(store: &EodiStore, t0: i64, a: Spot, b: Spot) -> i64 {
+    let fixes = subway_fixes(t0, a, b);
+    let end = fixes.last().unwrap().t_ms;
+    store.mark_drive_event(DriveEvent::Start, t0).unwrap();
+    store.ingest(fixes).unwrap();
+    store.mark_drive_event(DriveEvent::End, end).unwrap();
+    end
+}
+
+fn subway_fixes(t0: i64, a: Spot, b: Spot) -> Vec<GeoFix> {
     let mut fixes = Vec::new();
     for s in 0..5i64 {
         let f = s as f64 / 4.0;
@@ -649,11 +658,38 @@ fn subway(store: &EodiStore, t0: i64, a: Spot, b: Spot) -> i64 {
             fixes.push(GeoFix { lat: a.3 + (b.3 - a.3) * f, lon: a.4 + (b.4 - a.4) * f, t_ms: t0 + s * 90_000 + k * 6_000, accuracy_m: 100.0 });
         }
     }
-    let end = fixes.last().unwrap().t_ms;
-    store.mark_drive_event(DriveEvent::Start, t0).unwrap();
+    fixes
+}
+
+#[test]
+fn a_subway_ride_is_recognized_while_still_riding() {
+    let db = TempDb::new("transit-live");
+    let store = db.open();
+    let parked = drive(&store, kst(2026, 10, 5, 13, 0), HOME, EMART, 10.0);
+    let far: Spot = ("", "", "", 37.6600, 127.0400);
+    let across: Spot = ("", "", "", 37.6200, 127.0300);
+    let ride = parked + 40 * MIN;
+    // 타는 중: 시작 신호와 점만 있고 끝 신호는 아직 없다
+    let fixes = subway_fixes(ride, far, across);
+    let seen = fixes.last().unwrap().t_ms;
+    store.mark_drive_event(DriveEvent::Start, ride).unwrap();
     store.ingest(fixes).unwrap();
+    assert_eq!(store.classify_transit(seen).unwrap(), 1, "타는 중에도 지하철로 바뀐다");
+    assert_eq!(store.classify_transit(seen + MIN).unwrap(), 0);
+    assert_eq!(store.day_detail("2026-10-05".into()).unwrap().transits.len(), 1);
+    let emart = Point { lat: EMART.3, lon: EMART.4 };
+    let car = store.parked_car().unwrap().expect("차는 세운 자리에 그대로");
+    assert!(haversine_m(Point { lat: car.lat, lon: car.lon }, emart) < 50.0);
+    // 더 가서 내림: 끝 시각이 늘어나도 한 줄 그대로이고 주차 자리도 그대로
+    let more = subway_fixes(seen + 90_000, across, ("", "", "", 37.5900, 127.0200));
+    let end = more.last().unwrap().t_ms;
+    store.ingest(more).unwrap();
     store.mark_drive_event(DriveEvent::End, end).unwrap();
-    end
+    assert_eq!(store.classify_transit(end + MIN).unwrap(), 0);
+    let d = store.day_detail("2026-10-05".into()).unwrap();
+    assert_eq!((d.trips.len(), d.transits.len()), (1, 1));
+    let car = store.parked_car().unwrap().expect("주차 중");
+    assert!(haversine_m(Point { lat: car.lat, lon: car.lon }, emart) < 50.0);
 }
 
 #[test]

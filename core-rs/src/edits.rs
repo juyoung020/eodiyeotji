@@ -85,6 +85,8 @@ const KIND_DAY: i64 = 2;
 /// 지하철 이동으로 판정한 주행 (`transit` 모듈): 차 기록에서는 숨긴 주행처럼 빠지고, 하루 상세 · 지도에 따로 나온다.
 /// '숨긴 기록' 목록에는 나오지 않는다.
 pub(crate) const KIND_TRANSIT: i64 = 3;
+/// 사용자가 "차로 이동한 거예요"로 되돌린 주행 (출발 시각만 쓴다): 다시 지하철로 판정하지 않는다. 화면에는 아무 영향이 없다.
+const KIND_CAR_SAID: i64 = 4;
 /// 여기까지 끝난 주행은 지하철인지 이미 봤다 (meta 표).
 const META_TRANSIT_JUDGED: &str = "transit_judged_ms";
 /// 처음 볼 때 거슬러 보는 기간.
@@ -176,11 +178,15 @@ impl EodiStore {
         let t = if transit { Some(self.visible_trip(&conn, start_ms)?) } else { None };
         let tx = conn.transaction()?;
         match t {
-            Some(t) => insert_hidden(&tx, KIND_TRANSIT, t.start_ms, t.end_ms, &trip_label(&t), now_ms, false)?,
+            Some(t) => {
+                tx.execute("DELETE FROM hidden WHERE kind = ?1 AND from_ms = ?2", [KIND_CAR_SAID, start_ms])?;
+                insert_hidden(&tx, KIND_TRANSIT, t.start_ms, t.end_ms, &trip_label(&t), now_ms, false)?
+            }
             None => {
                 if tx.execute("DELETE FROM hidden WHERE kind = ?1 AND from_ms = ?2", [KIND_TRANSIT, start_ms])? == 0 {
                     return Err(CoreError::InvalidInput(format!("transit {start_ms} not found")));
                 }
+                insert_hidden(&tx, KIND_CAR_SAID, start_ms, start_ms, "", now_ms, true)?;
             }
         }
         self.after_edit(&tx, start_ms, start_ms)?;
@@ -188,35 +194,44 @@ impl EodiStore {
         Ok(())
     }
 
-    /// 끝난 주행 중 아직 보지 않은 것을 훑어 지하철 이동을 가려낸다 (규칙은 `transit` 모듈). 반환: 새로 지하철 이동으로 바꾼 수.
-    /// 폰 판이 주행이 끝날 때와 앱을 켤 때 부른다 (차는 차 신호로 주행을 잡으니 부르지 않는다).
+    /// 아직 보지 않은 주행을 훑어 지하철 이동을 가려낸다 (규칙은 `transit` 모듈). 반환: 새로 지하철 이동으로 바꾼 수.
+    /// 지금 진행 중인 이동도 근거가 모이면 바로 바꾼다 (타고 있는 동안 화면에 지하철로 보이게) — 끝날 때까지 부를 때마다 다시 본다.
+    /// 폰 판이 기록이 바뀔 때(주행 중에는 30초에 한 번)와 앱을 켤 때 부른다 (차는 차 신호로 주행을 잡으니 부르지 않는다).
     pub fn classify_transit(&self, now_ms: i64) -> Result<u32, CoreError> {
         let mut conn = self.lock()?;
         let from = crate::recap::get_meta(&conn, META_TRANSIT_JUDGED)?.unwrap_or(now_ms - TRANSIT_LOOKBACK_MS);
-        // 새로 끝난 주행이 없으면 할 일이 없다 (기록이 바뀔 때마다 불려서, 여기서 바로 돌아가야 싸다)
         let last_end: i64 = conn
             .query_row("SELECT max(t_ms) FROM drive_event WHERE kind = ?1", [crate::store::KIND_END], |r| r.get::<_, Option<i64>>(0))?
             .unwrap_or(i64::MIN);
-        if last_end <= from {
-            return Ok(0);
-        }
-        self.flush_all(&mut conn)?;
-        // 지금 달리는 중이면 마지막 주행은 아직 안 끝났다 → 다음에 본다
         let driving = conn
             .query_row("SELECT kind FROM drive_event ORDER BY t_ms DESC, kind DESC LIMIT 1", [], |r| r.get::<_, i64>(0))
             .optional()?
             .is_some_and(|k| k == crate::store::KIND_START);
+        // 새로 끝난 주행도, 진행 중인 이동도 없으면 할 일이 없다 (기록이 바뀔 때마다 불려서, 여기서 바로 돌아가야 싸다)
+        if last_end <= from && !driving {
+            return Ok(0);
+        }
+        self.flush_all(&mut conn)?;
+        // 진행 중에 지하철로 바뀐 이동은 그때의 끝 시각이 적혀 있다 → 지금 끝 시각으로 맞춘다 (주차 자리 계산이 이 범위를 본다)
+        conn.execute(
+            "UPDATE hidden SET to_ms = (SELECT end_ms FROM trip WHERE start_ms = hidden.from_ms)
+             WHERE kind = ?1 AND EXISTS (SELECT 1 FROM trip WHERE start_ms = hidden.from_ms AND end_ms <> hidden.to_ms)",
+            [KIND_TRANSIT],
+        )?;
+        let car_said: Vec<i64> = conn
+            .prepare_cached("SELECT from_ms FROM hidden WHERE kind = ?1")?
+            .query_map([KIND_CAR_SAID], |r| r.get(0))?
+            .collect::<Result<_, _>>()?;
         // 차를 세운 자리를 알려면 앞 주행이 필요하다 → 하루 더 앞에서부터 읽는다 (보이는 주행 = 차 주행)
         let (d0, d1) = (self.local_day(from) - 1, self.local_day(now_ms));
         let trips: Vec<TripSummary> = self.day_records(&conn, d0, d1)?.into_values().flat_map(|(trips, _)| trips).collect();
-        let last = trips.len().saturating_sub(1);
         let name = |p: &Option<PlaceLabel>| p.as_ref().map_or(String::new(), |p| p.name.clone());
         let mut car_at: Option<Point> = None;
         let mut found: Vec<&TripSummary> = Vec::new();
-        for (i, t) in trips.iter().enumerate() {
-            let done = !(driving && i == last);
+        for t in &trips {
             let mut is_transit = false;
-            if done && t.end_ms > from {
+            // 진행 중인 이동은 끝 시각이 늘 from보다 뒤라 끝날 때까지 부를 때마다 다시 본다
+            if t.end_ms > from && !car_said.contains(&t.start_ms) {
                 let fixes: Vec<(i64, Point)> = conn
                     .prepare_cached("SELECT t_ms, lat, lon FROM fix WHERE t_ms BETWEEN ?1 AND ?2 ORDER BY t_ms")?
                     .query_map([t.start_ms, t.end_ms], |r| Ok((r.get(0)?, Point { lat: r.get(1)?, lon: r.get(2)? })))?

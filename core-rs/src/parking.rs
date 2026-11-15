@@ -100,6 +100,8 @@ impl EodiStore {
                         None => break t,
                     }
                 }
+                // 지금 타고 있는 것이 지하철이면 차는 그대로 서 있다
+                Some((t, _)) if transit_started_at(&conn, t)? => before = t,
                 _ => return Ok(None),
             }
         };
@@ -136,6 +138,11 @@ impl EodiStore {
         }
         Ok(Some(car))
     }
+}
+
+/// 시각 [t]에 시작한 이동이 지하철 이동으로 판정돼 있는가.
+fn transit_started_at(conn: &rusqlite::Connection, t: i64) -> Result<bool, CoreError> {
+    Ok(conn.query_row("SELECT 1 FROM hidden WHERE kind = ?1 AND from_ms = ?2 LIMIT 1", [crate::edits::KIND_TRANSIT, t], |_| Ok(())).optional()?.is_some())
 }
 
 fn nearest_named(conn: &rusqlite::Connection, at: Point) -> Result<Option<String>, CoreError> {
