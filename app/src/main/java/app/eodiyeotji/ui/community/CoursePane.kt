@@ -3,7 +3,7 @@ package app.eodiyeotji.ui.community
 import androidx.compose.ui.platform.LocalConfiguration
 import app.eodiyeotji.ui.common.PressSurface
 import app.eodiyeotji.ui.common.agoText
-import app.eodiyeotji.ui.offers.CourseCouponBadge
+import app.eodiyeotji.ui.offers.CourseCouponBanner
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -206,6 +206,11 @@ internal fun CourseDetailScreen(
                                     } else {
                                         Text(p.title, style = EodiTheme.type.title, modifier = Modifier.semantics { heading() })
                                     }
+                                    // 제휴 혜택은 사진 바로 아래 (스크롤 없이 보이게)
+                                    if (d.course.offers.placeCount > 0) {
+                                        Spacer(Modifier.height(14.dp))
+                                        CourseCouponBanner(d.course.offers)
+                                    }
                                     if (p.body.isNotBlank()) {
                                         Spacer(Modifier.height(12.dp))
                                         Text(p.body, style = EodiTheme.type.body, color = colors.textPrimary)
@@ -217,7 +222,6 @@ internal fun CourseDetailScreen(
                                     ) {
                                         VisitChip(d.course.visit)
                                         InfoChip(courseStatsText(p.stops.size, p.distanceM, p.durationMs))
-                                        CourseCouponBadge(d.course.offers)
                                     }
                                     if (p.tags.isNotEmpty()) {
                                         Spacer(Modifier.height(14.dp))

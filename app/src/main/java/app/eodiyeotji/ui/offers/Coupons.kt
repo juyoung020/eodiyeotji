@@ -196,6 +196,62 @@ fun CouponBadge(text: String, offers: List<PartnerOffer>, modifier: Modifier = M
     }
 }
 
+/**
+ * 코스 상세의 제휴 혜택 배너: "이 코스 제휴 혜택 · 주문진수산시장 상인회 · 5,000원 할인" + 쿠폰 받기.
+ * 칩보다 크게 보여 혜택을 바로 알게 하되, 아래에 "추천 순위는 제휴와 상관없다"를 함께 둔다.
+ * 쿠폰이 없거나 운전 중이면 그리지 않는다 (운전 중에는 쿠폰 창을 띄우지 않는다).
+ */
+@Composable
+fun CourseCouponBanner(offers: CourseOffers, modifier: Modifier = Modifier) {
+    if (offers.placeCount <= 0 || offers.offers.isEmpty()) return
+    val host = LocalCoupons.current ?: return
+    val driving by host.isDriving.collectAsStateWithLifecycle()
+    if (driving) return
+    val claimed by host.claimed.collectAsStateWithLifecycle()
+    val c = EodiTheme.colors
+    val type = EodiTheme.type
+    val first = offers.offers.first()
+    val allMine = offers.offers.all { o -> claimed.any { it.offer.id == o.id } }
+    var open by rememberSaveable { mutableStateOf(false) }
+    val shape = RoundedCornerShape(EodiTheme.space.radiusM)
+    Row(
+        modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(c.couponSoft)
+            .border(2.dp, c.coupon.copy(alpha = 0.35f), shape)
+            .clickable(role = Role.Button, onClickLabel = stringResource(R.string.coupon_open)) { open = true }
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(56.dp).background(c.surface, CircleShape), contentAlignment = Alignment.Center) {
+            Icon(CouponIcons.Ticket, null, tint = c.coupon, modifier = Modifier.size(32.dp))
+        }
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(stringResource(R.string.coupon_banner_kicker), style = type.caption, fontWeight = FontWeight.Bold, color = c.coupon, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val extra = offers.placeCount - 1
+            val more = if (extra > 0) " " + stringResource(R.string.coupon_banner_more, extra) else ""
+            Text(
+                "${first.placeName} ${first.badge}$more",
+                style = type.bodyStrong,
+                fontWeight = FontWeight.ExtraBold,
+                color = c.couponInk,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(stringResource(R.string.coupon_banner_note), style = type.caption, color = c.textSecondary, maxLines = 2)
+        }
+        Spacer(Modifier.width(16.dp))
+        if (allMine) {
+            SecondaryPill(stringResource(R.string.coupon_banner_claimed), EodiIcons.Check, { open = true })
+        } else {
+            PrimaryPill(stringResource(R.string.coupon_claim), CouponIcons.Ticket, { open = true })
+        }
+    }
+    if (open) CouponSheet(offers.offers, host, offers.placeCount, onDismiss = { open = false })
+}
+
 // ---------------------------------------------------------------- 쿠폰 창
 
 /** 쿠폰 창. 폰은 아래 시트, 차는 화면 가운데 카드 (대화상자 창 — 카드 안 배지에서 열어도 화면 전체를 덮게). */

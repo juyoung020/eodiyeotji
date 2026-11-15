@@ -17,6 +17,12 @@
     <string name="coupon_partner_note">제휴 매장이 주는 혜택이에요. 추천 순위는 제휴와 상관없이 실제 방문과 하트로 정해요.</string>
     <string name="coupon_close">닫기</string>
 
+    <!-- 코스 상세 혜택 배너 -->
+    <string name="coupon_banner_kicker">이 코스 제휴 혜택</string>
+    <string name="coupon_banner_more">외 %1$d곳</string>
+    <string name="coupon_banner_claimed">받은 쿠폰 보기</string>
+    <string name="coupon_banner_note">추천 순위는 제휴와 상관없이 실제 방문과 하트로 정해요</string>
+
     <!-- 내 장소 › 쿠폰함 -->
     <string name="places_tab_coupons">쿠폰함</string>
     <!-- 왼쪽 레일 배지와 같은 숫자 (받은 쿠폰 장 수) -->
