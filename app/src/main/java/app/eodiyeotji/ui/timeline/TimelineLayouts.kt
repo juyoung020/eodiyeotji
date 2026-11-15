@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -108,6 +109,8 @@ internal fun WideHome(
     val share: (() -> Unit)? = loaded?.shareEpisode?.let { id -> { onShare(id) } }
     // 전체 시간표 (주행 줄 · 쿠폰 · 내 사진 · 고치기까지): 들른 곳 카드 끝의 버튼으로 연다
     var sheet by remember(summary?.day) { mutableStateOf(false) }
+    // 시간표가 열려 있으면 뒤로 가기는 시간표만 닫는다 (전에는 앱이 닫혔다)
+    BackHandler(enabled = sheet) { sheet = false }
     // 이미 고른 곳을 한 번 더 누르면(지도 핀 · 아래 카드) 그곳 화면을 연다: 큰 사진 · 별점 · 안내
     val openPlace = LocalOpenPlace.current
     fun openStay(key: String): Boolean {
