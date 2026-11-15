@@ -32,7 +32,7 @@ AI = os.path.join(REPO, r"build\demo\ai")
 VO = os.path.join(REPO, r"build\demo\edit\vo")
 MUSIC = r"C:\Users\user one\Desktop\shortform_raw\bgm\2_vlog_sunny_travel_diary.mp3"
 MUSIC_VOL = 0.30
-VO_TEMPO = 1.06   # 내레이션 템포 (사용자: 1.12는 조금 빠름)
+VO_TEMPO = 1.08   # 내레이션 템포 (사용자: 1.12는 빠름, 1.06은 살짝 느림)
 ICON_FG = os.path.join(REPO, r"app\src\main\res\mipmap-xxxhdpi\ic_launcher_foreground.png")
 NOTO = r"C:\Windows\Fonts\NotoSansKR-VF.ttf"
 OUT = sys.argv[1]
@@ -484,11 +484,16 @@ CAP_Y = 1004       # 자막 아랫선
 els, sfx, vo_in, delays = [], [], [], []
 
 
-def caption(t0, t1, text, y=CAP_Y, size=50):
+CAPS = []   # 자막은 모아 두었다가 겹치지 않게 정리한 뒤 그린다
+
+
+def caption(t0, t1, text, y=CAP_Y, size=50, fin=True, fout=True):
+    """fin/fout=False 면 페이드 없이 바로 나타나고/사라진다 (이어지는 자막끼리 잔상 없이 교체)"""
     sp = text_block(text, size=size)
     def draw(cv, t):
-        a = ease_out((t - t0) / 0.12) * (1 - ease_in((t - (t1 - 0.10)) / 0.10))
-        s = 0.9 + 0.1 * ease_back((t - t0) / 0.22, 2.2); dy = 12 * (1 - ease_out((t - t0) / 0.2))
+        a = (ease_out((t - t0) / 0.12) if fin else 1.0) * ((1 - ease_in((t - (t1 - 0.10)) / 0.10)) if fout else 1.0)
+        p_ = (t - t0) / 0.22 if fin else 1.0
+        s = 0.9 + 0.1 * ease_back(p_, 2.2); dy = 12 * (1 - ease_out((t - t0) / 0.2)) if fin else 0
         hc = sp.im.height - 2 * sp.m
         blit(cv, sp.im, W / 2, y - hc / 2 + dy, s, a)
     els.append((t0, t1, draw))
@@ -517,7 +522,7 @@ def tag(t0, t1, sp, right=True):
 
 def fact(t0, t1, text):
     sp = pill(text, size=24, wght=700)
-    static(t0, t1, sp, 28 - sp.m, 28 - sp.m, 0, 0, rise=0)
+    static(t0, min(t1, t0 + 4.0), sp, 28 - sp.m, 28 - sp.m, 0, 0, rise=0)   # 사실 칩도 앞 4초만 (앱 배너와 겹침 줄임)
 
 
 def wipe(tc, d_=0.5):
@@ -540,15 +545,18 @@ for sc in S:
         L = dur(f); t0 = P[(sc["name"], pi)] + off
         vo_in += ["-i", f]; delays.append(int(t0 * 1000))
         chunks = SUBS[key].split("|"); w = [len(c.replace("[", "").replace("]", "")) for c in chunks]; acc = t0
-        for c, wc in zip(chunks, w):
-            d_ = L * wc / sum(w); caption(acc + 0.03, acc + d_ + 0.12, c); acc += d_
+        for jj, (c, wc) in enumerate(zip(chunks, w)):
+            d_ = L * wc / sum(w)
+            last = jj == len(chunks) - 1
+            # 같은 내레이션 안의 다음 자막과는 같은 순간에 바로 교체 (겹치는 시간 0)
+            caption(acc + 0.03, acc + d_ + (0.15 if last else 0.03), c, fin=(jj == 0), fout=last); acc += d_
         print(f"{key}: {t0:.1f}-{t0 + L:.1f}  (장면 {sc['name']} {sc['t']:.1f}-{sc['end']:.1f})")
 
 # 장 칩 + 전환
 for sc in S:
     if sc["chap"]:
         num, lab = sc["chap"]; cp = chip(num, lab)
-        static(sc["t"] + 0.25, sc["end"] - 0.05, cp, W / 2, 62, rise=14)
+        static(sc["t"] + 0.25, min(sc["end"] - 0.05, sc["t"] + 4.0), cp, W / 2, 62, rise=14)  # 장 칩은 앞 4초만 (앱 읽어 주기 배너와 겹치지 않게)
         wipe(sc["t"] + XS / 2)
 wipe(sc_by["tech"]["t"] + XS / 2)
 
