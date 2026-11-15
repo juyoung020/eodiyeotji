@@ -26,6 +26,7 @@
 param(
     [switch]$Final,
     [switch]$CaptureAudio,
+    [switch]$KeepAudio,   # 디버그판: 장면마다 앱 음성 출력을 무음으로 깨워 둔다 (에뮬레이터 첫머리 끊김 방지, record/AudioKeepAliveReceiver.kt)
     [switch]$SkipBuild,
     [switch]$SkipInstall,
     [switch]$EditOnly,
@@ -78,6 +79,7 @@ function Stop-Navi { $null = Invoke-Adb $Car shell am force-stop --user 10 $Navi
 $script:Rec = $null
 $script:AudioProc = $null
 function Begin-Scene([string]$Name, [string]$Dev, [string]$Size) {
+    if ($KeepAudio -and $Dev -eq $Car) { $null = Invoke-Adb $Car shell am broadcast --user 10 -n "$CarPkg/.record.AudioKeepAliveReceiver" --ez on true; Start-Sleep 1 }
     Step "장면: $Name"
     $script:Marks[$Name] = [ordered]@{}
     if ($CaptureAudio) {
@@ -265,7 +267,7 @@ if (-not $EditOnly) {
         Start-Sleep 1
         Type-CarHangul $Car 'ㄱㅕㅇㅍㅗ'
         Start-Sleep 1.5
-        Tap-Text $Car '^경포해변$' -Region '1000,300,1750,500'
+        Tap-Text $Car '^경포해변$' -Region '1000,300,2520,500'   # 오늘 기록(경포도립공원)이 앞 칸에 올 수 있다
         Start-Sleep 2.5
         Tap-Text $Car '^같이 가기$' -Region '1440,600,2560,900'
         Start-Sleep 1.5

@@ -8,6 +8,11 @@
             android:name=".record.DemoSeedReceiver"
             android:exported="true" />
 
+        <!-- 시연 녹화: 앱 음성 출력을 무음으로 깨워 두기 (사용법은 record/AudioKeepAliveReceiver.kt) -->
+        <receiver
+            android:name=".record.AudioKeepAliveReceiver"
+            android:exported="true" />
+
         <!-- 테스트로 쌓인 하루 기록 지우기 (사용법은 record/DeleteDayReceiver.kt) -->
         <receiver
             android:name=".record.DeleteDayReceiver"
