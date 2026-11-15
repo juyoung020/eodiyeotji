@@ -205,7 +205,7 @@ class ConvoyRepository @Inject constructor(
         val low = st.low ?: return false
         val d = st.dest
         val from = lastFix?.let { LatLon(it.lat, it.lon) } ?: LatLon(low.lat, low.lon)
-        val ev = lastGroup?.members?.firstOrNull { it.id == low.id }?.ev ?: true
+        val ev = lastGroup?.members?.firstOrNull { it.id == low.id }?.ev ?: false
         val stop = d?.let { core.convoyEnergyStop(from, LatLon(it.lat, it.lon), ev) }
         if (d == null || stop == null) {
             val ok = runCatching { navi.openPlaceSearch(context.getString(if (ev) R.string.convoy_search_charger else R.string.convoy_search_gas)) }.getOrDefault(false)
@@ -307,7 +307,7 @@ class ConvoyRepository @Inject constructor(
                 while (next < DEMO_CARS.size && now - startMs >= DEMO_CARS[next].joinAfterMs) {
                     val spec = DEMO_CARS[next++]
                     if (local != null) {
-                        local.addFake(spec.name, spec.behindKm, spec.speedKmh, ev = true, rangeKm = spec.rangeKm)
+                        local.addFake(spec.name, spec.behindKm, spec.speedKmh, ev = false, pct = spec.rangeKm / DEMO_FULL_RANGE_KM * 100, rangeKm = spec.rangeKm)
                         continue
                     }
                     val cs = runCatching { blockingWithTimeout(NET_TIMEOUT_MS) { backend.join(s.code, spec.name) } }.getOrNull()
@@ -329,11 +329,11 @@ class ConvoyRepository @Inject constructor(
                         val step = if (c.spec.driftAfterMs >= 0 && driftS >= 0 && fix != null) {
                             convoyDemoDrift(GeoPoint(fix.lat, fix.lon), dest, c.spec.behindKm, DEMO_DRIFT_TO_KM, driftS, DEMO_DRIFT_RAMP_S, c.spec.speedKmh / 3.6, c.rangeKm)
                         } else {
-                            convoyDemoStep(c.at, dest, c.spec.speedKmh / 3.6, dt, c.rangeKm, true)
+                            convoyDemoStep(c.at, dest, c.spec.speedKmh / 3.6, dt, c.rangeKm, false)
                         }
                         c.at = GeoPoint(step.lat, step.lon)
                         c.rangeKm = step.rangeKm
-                        val pos = ConvoyPosition(step.lat, step.lon, step.heading, step.speedMps, step.etaS, now, true, step.energyPct, step.rangeKm)
+                        val pos = ConvoyPosition(step.lat, step.lon, step.heading, step.speedMps, step.etaS, now, false, step.energyPct, step.rangeKm)
                         runCatching { blockingWithTimeout(NET_TIMEOUT_MS) { backend.post(c.session, pos) } }
                             .onFailure { Log.w(TAG, "시연 차 위치 보내기 실패: ${c.spec.name}", it) }
                     }
@@ -459,7 +459,7 @@ class ConvoyRepository @Inject constructor(
                     i.getStringExtra("name") ?: "민수",
                     i.getFloatExtra("behind_km", 2f).toDouble(),
                     i.getFloatExtra("speed_kmh", 45f).toDouble(),
-                    ev = i.getBooleanExtra("ev", true),
+                    ev = i.getBooleanExtra("ev", false),
                     pct = i.getFloatExtra("pct", -1f).toDouble(),
                     rangeKm = i.getFloatExtra("range_km", -1f).toDouble(),
                 )
@@ -481,9 +481,11 @@ class ConvoyRepository @Inject constructor(
          * 시연 차 (공모전 판): 이름 · 몇 ms 뒤 참여 · 목적지 반대쪽으로 몇 km 뒤에서 출발(음수 = 내 앞) · 시속 · 남은 주행 가능 km
          * · 참여하고 몇 ms 뒤 대열에서 떨어지기 시작하나 (음수 = 안 떨어짐)
          */
+        /** 시연 차(연료차) 꽉 찬 주행 가능 거리 (Rust `convoy::demo_step`의 연료 600km와 같다) */
+        private const val DEMO_FULL_RANGE_KM = 600.0
         private data class DemoSpec(val name: String, val joinAfterMs: Long, val behindKm: Double, val speedKmh: Double, val rangeKm: Double, val driftAfterMs: Long = -1)
         /**
-         * 민수는 30km 남은 전기차 → "배터리 부족" · 같이 충전소 들르기 시연. 지현은 넉넉하지만 30초 뒤 차츰 뒤처진다
+         * 민수는 30km 남은 연료차 → "연료 부족" · 같이 주유소 들르기 시연. 지현은 넉넉하지만 30초 뒤 차츰 뒤처진다
          * → "지현 차와 4km 멀어졌어요. 앞 ○○휴게소에서 잠깐 기다릴까요?" 시연 (고속도로 위 · 목적지가 8km 넘게 남았을 때)
          */
         private val DEMO_CARS = listOf(

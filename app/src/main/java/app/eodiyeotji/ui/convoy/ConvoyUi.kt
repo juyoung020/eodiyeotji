@@ -156,14 +156,14 @@ fun ConvoyDrivingCard(modifier: Modifier = Modifier, vm: ConvoyViewModel = hiltV
                     s.members.take(if (narrow) 2 else 4).forEach { m -> DriveMember(m, Modifier.weight(1f)) }
                 }
                 if (showStop && !narrow) {
-                    BigButton(stringResource(R.string.convoy_stop_together), primary = true, modifier = Modifier.width(300.dp)) {
+                    BigButton(stringResource(if (s.low?.gauge?.ev == true) R.string.convoy_stop_together else R.string.convoy_stop_together_gas), primary = true, modifier = Modifier.width(300.dp)) {
                         scope.launch { vm.repo.stopTogether() }
                     }
                 }
             }
             // 좁은 창(세로 · 나눈 화면)에서는 버튼을 아래 한 줄로
             if (showStop && narrow) {
-                BigButton(stringResource(R.string.convoy_stop_together), primary = true, modifier = Modifier.fillMaxWidth()) {
+                BigButton(stringResource(if (s.low?.gauge?.ev == true) R.string.convoy_stop_together else R.string.convoy_stop_together_gas), primary = true, modifier = Modifier.fillMaxWidth()) {
                     scope.launch { vm.repo.stopTogether() }
                 }
             }
@@ -415,7 +415,7 @@ private fun ActiveInfo(s: ConvoyUiState, repo: ConvoyRepository, modifier: Modif
         if (wait != null) {
             BigButton(wait.action, primary = true, modifier = Modifier.fillMaxWidth(), onClick = waitAt)
         } else if (lowCase) {
-            BigButton(stringResource(R.string.convoy_stop_together), primary = true, modifier = Modifier.fillMaxWidth(), onClick = stop)
+            BigButton(stringResource(if (s.low?.gauge?.ev == true) R.string.convoy_stop_together else R.string.convoy_stop_together_gas), primary = true, modifier = Modifier.fillMaxWidth(), onClick = stop)
         } else {
             BigButton(stringResource(R.string.convoy_navigate), primary = true, enabled = s.dest != null, modifier = Modifier.fillMaxWidth(), onClick = navigate)
         }
@@ -526,7 +526,7 @@ private fun EnergyBar(g: ConvoyEnergy?, low: Boolean, dim: Boolean, color: Color
     val c = EodiTheme.colors
     val frac = g?.frac ?: -1.0
     val known = frac >= 0.0
-    val ev = g?.ev ?: true
+    val ev = g?.ev ?: false
     val tint = when { dim || !known -> c.textTertiary; low -> c.error; else -> color }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(if (ev) BoltIcon else FuelIcon, stringResource(if (ev) R.string.convoy_battery else R.string.convoy_fuel), tint = tint, modifier = Modifier.size(if (compact) 24.dp else 26.dp))

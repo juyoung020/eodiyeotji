@@ -28,8 +28,9 @@
     <string name="convoy_tts_ended">목적지에 도착해 같이 가기를 끝냈어요.</string>
     <string name="convoy_map_description">같이 가는 차들의 위치 지도</string>
     <string name="convoy_stop_together">같이 충전소 들르기</string>
+    <string name="convoy_stop_together_gas">같이 주유소 들르기</string>
     <string name="convoy_stop_added">함께 들를 곳으로 넣고 내비에 경유지로 보냈어요</string>
-    <string name="convoy_stop_none">기록에 들른 충전소가 없어 내비에서 찾아요</string>
+    <string name="convoy_stop_none">기록에 들른 주유소 · 충전소가 없어 내비에서 찾아요</string>
     <string name="convoy_waypoint">함께 들를 곳 · %s</string>
     <string name="convoy_search_charger">전기차 충전소</string>
     <string name="convoy_search_gas">주유소</string>
