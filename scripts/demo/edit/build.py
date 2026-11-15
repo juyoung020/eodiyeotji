@@ -1,4 +1,4 @@
-"""시연영상 v11 편집 (1920x1080 30fps) — 핵심: "차가 알아서 남긴 기록 하나로, 출장 정산부터 여행 · 추억 · 같이 가기까지".
+"""시연영상 final5 편집 (1920x1080 30fps) — 핵심: "차가 알아서 남긴 기록 하나로, 출장 정산부터 여행 · 추억 · 같이 가기까지".
 디자인은 숏폼 v7과 같은 언어: 흰 글자 + 잉크 외곽선 + 그림자, 핵심어만 브랜드 블루 상자, 블루 번호 칩, 말풍선 · 앱 카드, 블루 사선 전환.
 사용법: python -X utf8 build.py OUT.mp4   (내레이션은 build/demo/edit/vo/t_KEY.wav, 대본은 lines.tsv — 자막 시각은 음성 길이에서 계산)"""
 import os, subprocess, sys, math, wave
@@ -11,7 +11,7 @@ REPO = r"C:\Users\user one\Desktop\eodiyeotji"
 # 장면 폴더: 앞쪽 폴더에 그 장면 mp4 가 있으면 그것을 쓴다 (mp4 · wav 는 같은 폴더에서).
 # 새 녹화 폴더는 이 목록 맨 앞에 넣는다. 폴더가 없거나 그 장면이 없으면 다음 폴더로 넘어간다.
 SCENE_DIRS = [os.path.join(REPO, "build", "demo", d, "scenes") for d in
-              ("retake-road", "retake-voice", "retake-keep", "retake-fix", "retake-tts", "retake-1115c", "retake-1115", "final-1115")]
+              ("retake-gallery", "retake-road", "retake-voice", "retake-keep", "retake-fix", "retake-tts", "retake-1115c", "retake-1115", "final-1115")]
 # 장면별로 폴더를 못 박을 때: 장면 이름 → 폴더 이름 (목록 순서보다 우선)
 # roadside: retake-keep · retake-tts 둘 다 마이크 권한 창이 화면을 가림 → final-1115 (앱 음성은 끊김 녹음이라 끄고 화면 문구 카드만)
 # recall: retake-keep 은 정차 중 첫 화면에서 뜸 → 주행 중 카드가 뜨는 retake-tts
@@ -32,6 +32,7 @@ AI = os.path.join(REPO, r"build\demo\ai")
 VO = os.path.join(REPO, r"build\demo\edit\vo")
 MUSIC = r"C:\Users\user one\Desktop\shortform_raw\bgm\2_vlog_sunny_travel_diary.mp3"
 MUSIC_VOL = 0.30
+VO_TEMPO = 1.12      # 내레이션 빠르기 (앱 음성은 그대로)
 ICON_FG = os.path.join(REPO, r"app\src\main\res\mipmap-xxxhdpi\ic_launcher_foreground.png")
 NOTO = r"C:\Windows\Fonts\NotoSansKR-VF.ttf"
 OUT = sys.argv[1]
@@ -389,14 +390,14 @@ def add(name, files, vos=(), chap=None):
 
 add("open", [seg_ai("open", "vid_A.mp4", 0, 4.0, ("startrec", 1.0), speed=0.85)], [("k01", 0, 0.3)])
 brand_bg = bg_from(grab(os.path.join(AI, "vid_A.mp4"), 3.8, "open_last"), "brand_bg")
-add("brand", [seg_still("brand", brand_bg, 3.2)])
-add("rec", [seg_app("rec_a", "startrec", 2.4, 4.0, ca=A0, cb=(760, 300, 2.0)),
+add("brand", [seg_still("brand", brand_bg, 2.8)])
+add("rec", [seg_app("rec_a", "startrec", 2.4, 3.6, ca=A0, cb=(760, 300, 2.0)),
             seg_app("rec_b", "firstrun", 7.5, 3.4, ca=A0, cb=(1560, 470, 1.7)),
-            seg_app("rec_c", "voice", 2.6, 15.0, ca=(1700, 300, 1.6), cb=(1650, 480, 1.45), audio=True, appvol=8.0)],
+            seg_app("rec_c", "voice", 2.6, 13.4, ca=(1700, 300, 1.6), cb=(2050, 640, 1.4), audio=True, appvol=8.0)],
     [("k02", 0, 0.3), ("k03", 2, 0.0)], ("01", "기록은 알아서, 찾을 땐 말로"))
 add("drive", [seg_ai("drive", "vid_H2.mp4", 0, 3.2, ("recall", 5.0)),
-              seg_app("dr_a", "oneline", 4.6, 17.0, ca=(1700, 300, 1.6), cb=(1850, 560, 1.32), audio=True, appvol=8.0),
-              seg_app("dr_b", "roadside", 2.6, 10.8, ca=DRV, cb=(1450, 520, 1.3), audio=True, appvol=8.0),
+              seg_app("dr_a", "oneline", 4.6, 10.2, ca=(1700, 300, 1.6), cb=(1850, 560, 1.32), audio=True, appvol=8.0),
+              seg_app("dr_b", "roadside", 4.2, 9.2, ca=DRV, cb=(1450, 520, 1.3), audio=True, appvol=8.0),
               seg_app("dr_c", "recall", 124.8, 5.0, ca=DRV, cb=(1500, 420, 1.3), audio=True, appvol=8.0)],  # retake-recall4: 앱 음성 125.4–128.9초
     [("k04", 0, 0.3)], ("02", "운전 중엔 음성으로"))
 def seg_blog(name, D=5.2):
@@ -411,31 +412,38 @@ def seg_blog(name, D=5.2):
     return blog_phone.make(o, font, [ph[k % len(ph)] for k in random_order], W, H, FPS, D)
 
 
-HARD = {"rv_a.mp4"}      # 블로그 → 커뮤니티는 하드컷
+HARD = {"rv_a.mp4"}
+SOFT = {"mem_b.mp4"}   # 지도 → 사진 뷰어는 부드럽게 (블로그 → 커뮤니티는 HARD 하드컷)
 add("course", [seg_blog("blog"),
                seg_app("rv_a", "review", 0.3, 4.4, ca=A0, cb=(1650, 480, 1.25)),
-               seg_app("rv_b", "review", 17.6, 6.4, ca=(1500, 640, 1.2), cb=(1500, 700, 1.32)),
-               seg_app("rv_c", "review", 25.0, 4.0, ca=A0, cb=(1600, 600, 1.15))],
+               seg_app("rv_b", "review", 17.6, 2.8, ca=(1500, 640, 1.2), cb=(1500, 700, 1.32)),
+               seg_app("rv_c", "review", 25.0, 1.8, ca=A0, cb=(1600, 600, 1.15))],
     [("k05", 0, 0.5), ("k06", 1, 0.5)], ("03", "블로그 대신, 달린 코스"))
 add("convoy", [seg_app("cv_a", "convoy", 16.0, 3.0, ca=A0, cb=(1350, 700, 1.45)),
-               seg_app("cv_b", "convoy", 24.5, 5.5, ca=(1700, 600, 1.2), cb=(1950, 560, 1.4)),
+               seg_app("cv_b", "convoy", 24.5, 4.5, ca=(1700, 600, 1.2), cb=(1950, 560, 1.4)),
                seg_app("cv_c", "convoy", 89.9, 6.2, ca=DRV, cb=(1600, 700, 1.25), audio=True, appvol=8.0)],
     [("k07", 0, 0.25)], ("04", "같이 가기"))
-add("memory", [seg_app("mem_a", "replay", 8.0, 9.0, sp=2, ca=A0, cb=(1700, 640, 1.3)),
-               seg_phone("mem_b", 9.5, 4.0)], [("k08", 0, 0.3)], ("05", "폰 갤러리 · 여행 추억"))
+# 05: 실제 기능 녹화(retake-gallery) — 그날 지도 위 '내 사진' 핀으로 확대 → 사진 뷰어 1/11 → 4/11
+MEM_PIN = (1764, 892)                       # 경포해변 사진 핀 (원본 2560x1440 좌표)
+MEM_CAM = (1740, 860, 3.4)
+add("memory", [seg_app("mem_a", "gallery", 9.0, 4.4, ca=A0, cb=MEM_CAM),
+               seg_app("mem_b", "gallery", 13.8, 1.9, ca=(1750, 700, 1.15), cb=(1750, 700, 1.22)),
+               seg_app("mem_c", "gallery", 16.2, 1.3, ca=(1750, 700, 1.2)),
+               seg_app("mem_e", "gallery", 21.2, 1.4, ca=(1750, 700, 1.2), cb=(1750, 700, 1.28))],
+    [("k08", 0, 0.3)], ("05", "폰 갤러리 · 여행 추억"))
 add("biz", [seg_app("biz_a", "biz", 11.0, 3.6, ca=A0, cb=(1640, 400, 1.5)),
-            seg_app("biz_b", "biz", 14.8, 3.5, ca=(2000, 640, 1.3), cb=(2050, 700, 1.45))], [("k09", 0, 0.3)], ("+", "덤으로, 출장 정산"))
+            seg_app("biz_b", "biz", 14.8, 3.0, ca=(2000, 640, 1.3), cb=(2050, 700, 1.45))], [("k09", 0, 0.3)], ("+", "덤으로, 출장 정산"))
 tech_bg = bg_from(grab(scene_file("review"), 3, "tech_src"), "tech_bg")
-add("tech", [seg_still("tech", tech_bg, 7.6)], [("k10", 0, 0.3)])
+add("tech", [seg_still("tech", tech_bg, 6.6)], [("k10", 0, 0.3)])
 end_bg = bg_from(grab(os.path.join(AI, "vid_F.mp4"), 4.9, "f_last"), "end_bg")
-add("end", [seg_ai("fin", "vid_F.mp4", 0, 3.8), seg_still("endcard", end_bg, 5.0)], [("k11", 0, 0.3)])
+add("end", [seg_ai("fin", "vid_F.mp4", 0, 3.4), seg_still("endcard", end_bg, 5.0)], [("k11", 0, 0.3)])
 
 # ---------------------------------------------------------------- 디졸브로 이어 붙이기
 XS, XI = 0.40, 0.25
 clips = []
 for sc in S:
     for pi, p in enumerate(sc["files"]):
-        clips.append((p, 0 if not clips else (0.04 if os.path.basename(p) in HARD else (XS if pi == 0 else XI))))
+        clips.append((p, 0 if not clips else (0.04 if os.path.basename(p) in HARD else (0.5 if os.path.basename(p) in SOFT else (XS if pi == 0 else XI)))))
 starts = []; t = 0.0
 for i, (p, tr) in enumerate(clips):
     t = t - tr if i else 0.0; starts.append(t); t += dur(p)
@@ -527,7 +535,9 @@ def wipe(tc, d_=0.5):
 # 내레이션 + 자막
 for sc in S:
     for key, pi, off in sc["vos"]:
-        f = os.path.join(VO, f"t_{key}.wav"); L = dur(f); t0 = P[(sc["name"], pi)] + off
+        f0 = os.path.join(VO, f"t_{key}.wav"); f = os.path.join(WORK, f"vo_{key}_fast.wav")
+        run(["ffmpeg", "-y", "-v", "error", "-i", f0, "-af", f"atempo={VO_TEMPO}", f])   # 내레이션만 빠르게 (음높이 유지)
+        L = dur(f); t0 = P[(sc["name"], pi)] + off
         vo_in += ["-i", f]; delays.append(int(t0 * 1000))
         chunks = SUBS[key].split("|"); w = [len(c.replace("[", "").replace("]", "")) for c in chunks]; acc = t0
         for c, wc in zip(chunks, w):
@@ -549,7 +559,7 @@ for sc in S:
         nm = os.path.basename(p)
         if nm in ("open.mp4", "drive.mp4"): tag(t0, t1, AITC, right=False)
         elif nm == "fin.mp4": tag(t0, t1, AIT, right=False)
-        elif nm in ("rec_b.mp4", "rec_c.mp4", "biz_a.mp4", "biz_b.mp4", "mem_a.mp4"): tag(t0, t1, TAGD)
+        elif nm in ("rec_b.mp4", "rec_c.mp4", "biz_a.mp4", "biz_b.mp4", "mem_a.mp4", "mem_b.mp4", "mem_c.mp4", "mem_e.mp4"): tag(t0, t1, TAGD)
         elif nm == "blog.mp4": tag(t0, t1, pill("연출 화면 · 가상의 블로그", size=20, wght=600, fg=(225, 232, 245, 255), outline=(255, 255, 255, 60), fill=(8, 12, 24, 205), h=38, padx=16), right=False)
         elif nm in ("brand.mp4", "tech.mp4", "endcard.mp4"): pass
         else: tag(t0, t1, TAG)
@@ -566,7 +576,18 @@ fact(P[("course", 2)] + 0.3, P[("course", 3)], "♥ 좋아요 · ✓ 직접 달�
 fact(P[("course", 3)] + 0.3, sc_by["course"]["end"], "고르면 그대로 차 내비 안내")
 fact(P[("convoy", 0)] + 0.3, P[("convoy", 1)], "정차 중 · 6자리 코드로 함께")
 fact(P[("convoy", 1)] + 0.3, sc_by["convoy"]["end"], "일행 위치 · 배터리 · 연료 · 휴게소 공유")
-fact(P[("memory", 1)] + 0.3, sc_by["memory"]["end"], "폰 앱 연동")
+fact(P[("memory", 0)] + 0.4, sc_by["memory"]["end"], "폰 갤러리 사진 → 그날 지도에 자동으로")
+# 사진 핀 강조: 확대가 끝날 즈음 파란 원 펄스 1회
+_vw, _vh = 2560 / MEM_CAM[2], 1440 / MEM_CAM[2]
+_x0 = min(2560 - _vw, max(0, MEM_CAM[0] - _vw / 2)); _y0 = min(1296 - _vh, max(0, MEM_CAM[1] - _vh / 2))
+PIN_XY = ((MEM_PIN[0] - _x0) * W / _vw, (MEM_PIN[1] - _y0) * H / _vh)
+_pr = ring(70, 6, (0, 100, 255)); _pg = glow(150, alpha=0.35, col=(0, 100, 255))
+def pin_pulse(cv, t, t0=P[("memory", 0)] + 3.0):
+    q = (t - t0) / 1.1
+    if 0 < q < 1:
+        blit(cv, _pg, *PIN_XY, 0.8 + 0.4 * ease_out(q), 0.8 * (1 - q))
+        blit(cv, _pr, *PIN_XY, 0.7 + 1.0 * ease_out(q), 1 - q)
+els.append((P[("memory", 0)] + 3.0, P[("memory", 0)] + 4.2, pin_pulse))
 fact(P[("biz", 0)] + 0.4, sc_by["biz"]["end"], "출장 2건 · 134.2km · 경비 24,600원 · 출장별 경비 내역")
 
 # 블로그 대비: 가운데 큰 헤드라인
@@ -598,8 +619,8 @@ def acard(t0, t1, lines):
 v1 = P[("rec", 2)]; bubble(v1 + 1.5, v1 + 4.6, "작년에 비 오던 날 넷이서 간 바다 어디였지?")
 # acard(v1 + 5.9, sc_by["rec"]["end"] - 0.1, ["횡성휴게소, 경포해변, 초당할머니순두부에", "들렀어요. 그 코스로 안내할까요?"])
 d1 = P[("drive", 1)]; bubble(d1 + 0.2, d1 + 3.4, "작년 강릉 여행 그대로, 순두부집만 빼고 안내해 줘")
-v2 = P[("drive", 2)]; bubble(v2 + 0.3, v2 + 2.6, "졸려")
-acard(v2 + 4.8, P[("drive", 3)] + 0.2, ["7km 앞에 삽교졸음쉼터 강릉방향이 있어요.", "약 5분 걸리는데, 안내할까요?"])
+v2 = P[("drive", 2)]; bubble(v2 + 0.1, v2 + 1.8, "졸려")
+acard(v2 + 3.2, P[("drive", 3)] + 0.2, ["7km 앞에 삽교졸음쉼터 강릉방향이 있어요.", "약 5분 걸리는데, 안내할까요?"])
 c3 = P[("convoy", 2)]; acard(c3 + 0.5, sc_by["convoy"]["end"] - 0.05, ["지현 차와 3.3킬로미터 멀어졌어요.", "10킬로미터 앞 횡성휴게소에서 잠깐 기다릴까요?"])
 
 # 브랜드 공개 (k02) — 아이콘 + 이름 + 기록에서 나오는 네 가지
