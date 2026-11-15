@@ -160,13 +160,15 @@ pub fn energy_gauge(ev: bool, pct: f64, range_km: f64) -> ConvoyEnergy {
     } else {
         -1.0
     };
-    // 남은 거리와 %를 둘 다 알면 같이 보여 준다 ("120km · 30%"): 일행 배터리를 한눈에
+    // 연료차는 "연료 30% · 180km 주행 가능", 전기차만 "배터리 30% · 120km" (일행 잔량을 한눈에, 연료차가 대부분이라 연료가 기본)
+    let what = if ev { "배터리" } else { "연료" };
+    let km = |r: f64| if ev { format!("{}km", r.round() as i64) } else { format!("{}km 주행 가능", r.round() as i64) };
     let text = if range_km >= 0.0 && pct >= 0.0 {
-        format!("{}km · {}%", range_km.round() as i64, pct.round().clamp(0.0, 100.0) as i64)
+        format!("{what} {}% · {}", pct.round().clamp(0.0, 100.0) as i64, km(range_km))
     } else if range_km >= 0.0 {
-        format!("{}km", range_km.round() as i64)
+        km(range_km)
     } else if pct >= 0.0 {
-        format!("{}%", pct.round() as i64)
+        format!("{what} {}%", pct.round().clamp(0.0, 100.0) as i64)
     } else {
         String::new()
     };
@@ -274,7 +276,9 @@ pub fn member_view(m: &ConvoyMemberIn, color: u32, me: Option<&ConvoyMe>, dest: 
     let range = known_range(m);
     // 끊긴 차는 잔량이 지금 값이 아니므로 "부족"으로 치지 않는다 (지도 테두리 · 목록 빨강 · 충전소 제안 · 알림이 한 규칙을 따른다)
     let low = !arrived && !stale && is_low(m.energy_pct, range, to_dest_m);
-    let energy = if m.range_km >= 0.0 {
+    let energy = if m.range_km >= 0.0 && m.energy_pct >= 0.0 {
+        format!("{what} {}% · {}km", m.energy_pct.round().clamp(0.0, 100.0) as i64, m.range_km.round() as i64)
+    } else if m.range_km >= 0.0 {
         format!("{what} {}km", m.range_km.round() as i64)
     } else if m.energy_pct >= 0.0 {
         format!("{what} {}%", m.energy_pct.round() as i64)
@@ -460,7 +464,7 @@ pub fn demo_step(at: Point, dest: Option<Point>, speed_mps: f64, dt_s: f64, rang
 pub fn demo_drift(base: Point, dest: Option<Point>, from_km: f64, to_km: f64, elapsed_s: f64, ramp_s: f64, speed_mps: f64, range_km: f64) -> ConvoyDemoCar {
     let k = if ramp_s > 0.0 { (elapsed_s / ramp_s).clamp(0.0, 1.0) } else { 1.0 };
     let at = demo_start(base, dest, from_km + (to_km - from_km) * k);
-    demo_step(at, dest, speed_mps, 0.0, range_km, true)
+    demo_step(at, dest, speed_mps, 0.0, range_km, false)
 }
 
 /// 기다릴 곳 후보: 기기에 넣어 둔 휴게소 · 졸음쉼터 (공공데이터, 한 번만 읽는다).
@@ -991,9 +995,12 @@ mod tests {
     #[test]
     fn energy_gauge_fills_by_percent_then_range() {
         let g = energy_gauge(true, 30.0, 120.0);
-        assert!((g.frac - 0.3).abs() < 1e-9 && g.text == "120km · 30%" && g.ev);
+        assert!((g.frac - 0.3).abs() < 1e-9 && g.text == "배터리 30% · 120km" && g.ev);
         let r = energy_gauge(false, -1.0, 300.0);
-        assert!((r.frac - 0.5).abs() < 1e-9 && r.text == "300km");
+        assert!((r.frac - 0.5).abs() < 1e-9 && r.text == "300km 주행 가능");
+        // 연료차는 연료 % + 주행 가능 거리
+        assert_eq!(energy_gauge(false, 30.0, 180.0).text, "연료 30% · 180km 주행 가능");
+        assert_eq!(energy_gauge(false, 12.0, -1.0).text, "연료 12%");
         let u = energy_gauge(true, -1.0, -1.0);
         assert!(u.frac < 0.0 && u.text.is_empty());
         assert_eq!(energy_gauge(true, 150.0, -1.0).frac, 1.0);
