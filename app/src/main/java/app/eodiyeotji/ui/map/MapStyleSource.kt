@@ -119,22 +119,33 @@ internal object MapStyleSource {
         null
     }
 
-    /** 오프라인 스타일의 배경 바로 위에 온라인 밑그림 소스·레이어를 끼운다. 배경이 없으면 그대로 돌려준다. */
+    /**
+     * 오프라인 스타일의 배경 바로 위에 온라인 밑그림 소스·레이어를 끼운다. 배경이 없으면 그대로 돌려준다.
+     * 밑그림의 글자(symbol) 레이어는 오프라인 첫 글자 레이어 바로 앞에 둔다: 지도 화면은 경로선을 "첫 symbol 레이어 아래"에
+     * 까는데, 밑그림 글자가 배경 바로 위에 있으면 경로선이 오프라인 땅(earth) 아래로 깔려 오프라인 지도 구역에서 선이 끊겨 보였다.
+     */
     private fun withUnderlay(styleJson: String, underlay: JSONObject): String {
         val style = JSONObject(styleJson)
         val layers = style.getJSONArray("layers")
+        val (labels, shapes) = underlayLayers(underlay).partition { it.optString("type") == "symbol" }
         val merged = JSONArray()
         var inserted = false
+        var labelsPut = false
         for (i in 0 until layers.length()) {
             val layer = layers.getJSONObject(i)
+            if (inserted && !labelsPut && layer.optString("type") == "symbol") {
+                labels.forEach { merged.put(it) }
+                labelsPut = true
+            }
             merged.put(layer)
             if (!inserted && layer.optString("type") == "background") {
                 layer.optJSONObject("paint")?.put("background-color", LAND)
-                underlayLayers(underlay).forEach { merged.put(it) }
+                shapes.forEach { merged.put(it) }
                 inserted = true
             }
         }
         if (!inserted) return styleJson
+        if (!labelsPut) labels.forEach { merged.put(it) }
         style.getJSONObject("sources").put(ONLINE_SOURCE, underlay.getJSONObject("source"))
         style.put("layers", merged)
         return style.toString()
